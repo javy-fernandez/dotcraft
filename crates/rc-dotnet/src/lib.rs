@@ -7,18 +7,22 @@
 //! process tree) on `cancel()`/`stop()` or when dropped. The `async fn` variants take a
 //! [`CancelToken`] and a callback instead.
 
+pub mod build;
 pub mod diagnostics;
 pub mod launch;
 pub mod msbuild;
 pub mod process;
 pub mod project;
+pub mod run;
 pub mod sdk;
 pub mod solution;
 
+pub use build::{BuildAction, BuildEvent, BuildRequest, BuildResult, start_build};
 pub use diagnostics::{Diagnostic, Severity};
 pub use launch::{LaunchProfile, LaunchSettings};
 pub use msbuild::ProjectProperties;
 pub use process::{CancelToken, OpHandle, OutputLine, Stream, kill_tree, strip_ansi};
 pub use project::ProjectInfo;
+pub use run::{LaunchPlan, RunEvent, RunHandle, RunRequest, start_run};
 pub use sdk::{Dotnet, RuntimeInfo, SdkInfo};
 pub use solution::{ProjectRef, Solution, SolutionItem};
