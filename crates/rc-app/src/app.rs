@@ -44,6 +44,10 @@ pub struct DotCraftApp {
     pub notices: Vec<Notice>,
     pub insight: Insight,
     pub runner: Runner,
+    pub files: crate::search::Files,
+    pub search_everywhere: Option<crate::search::SearchEverywhere>,
+    pub find_bar: Option<crate::search::FindBar>,
+    pub find_in_files: Option<crate::search::FindInFiles>,
     pub terminals: rc_term::Terminals,
     pub focus_terminal: bool,
     /// Results shown in the Find tool window (usages, implementations…).
@@ -104,6 +108,10 @@ impl DotCraftApp {
             notices: Vec::new(),
             insight: Insight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
+            files: crate::search::Files::new(),
+            search_everywhere: None,
+            find_bar: None,
+            find_in_files: None,
             terminals: rc_term::Terminals::new(),
             focus_terminal: false,
             find_results: None,
@@ -164,6 +172,7 @@ impl DotCraftApp {
         self.settings.add_recent(ws.key_path().to_path_buf());
         let _ = self.settings.save();
         self._watcher = FileWatcher::new(&ws.root, self.fs_inbox.sender()).ok();
+        self.files.open(&ws.root, self.waker.clone());
         let session = Session::load(ws.key_path());
         let projects = match &ws.kind {
             rc_core::WorkspaceKind::Project(p) => vec![p.clone()],
@@ -187,6 +196,10 @@ impl DotCraftApp {
         self.insight.stop();
         self.runner.stop_all();
         self.runner.clear();
+        self.files.close();
+        self.find_in_files = None;
+        self.search_everywhere = None;
+        self.find_bar = None;
         self.terminals = rc_term::Terminals::new();
         self.find_results = None;
         self.docs.list.clear();
@@ -467,6 +480,33 @@ impl DotCraftApp {
                 crate::ui::run_windows::handle_outputs(self, outs);
             }
             Action::StopRun => self.runner.stop_all(),
+            Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => {
+                if self.workspace.is_some() {
+                    let tab = match action {
+                        Action::GotoFile => crate::search::SeTab::Files,
+                        Action::GotoClass => crate::search::SeTab::Types,
+                        Action::GotoSymbol => crate::search::SeTab::Symbols,
+                        _ => crate::search::SeTab::All,
+                    };
+                    // The selected text (or the word at the caret) pre-fills the search.
+                    let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.contains('\n')).unwrap_or_default();
+                    self.search_everywhere = Some(crate::search::SearchEverywhere::new(tab, text));
+                }
+            }
+            Action::FindInFiles | Action::ReplaceInFiles => {
+                if let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) {
+                    let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.is_empty() && !t.contains('\n'));
+                    let fif = self.find_in_files.get_or_insert_with(|| crate::search::FindInFiles::new(&root, self.waker.clone(), String::new()));
+                    if let Some(t) = text {
+                        fif.query = t;
+                    }
+                    fif.show_replace = action == Action::ReplaceInFiles;
+                    fif.focus = true;
+                    fif.search();
+                    self.find_results = None;
+                    self.dock.show(ToolWindow::Find);
+                }
+            }
             Action::ZoomIn => self.set_zoom(ctx, self.settings.ui_zoom + 0.1),
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
             Action::ZoomReset => self.set_zoom(ctx, 1.0),
@@ -483,7 +523,7 @@ impl DotCraftApp {
             }
             other => {
                 // Not available yet in this build: say so instead of doing nothing.
-                if matches!(other, Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol | Action::FindInFiles | Action::ReplaceInFiles | Action::RecentLocations | Action::Debug | Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::RunToCursor | Action::Evaluate | Action::Commit) {
+                if matches!(other, Action::RecentLocations | Action::Debug | Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::RunToCursor | Action::Evaluate | Action::Commit) {
                     self.notify(tr("This action is not available yet"), false);
                 }
             }
@@ -677,6 +717,11 @@ impl DotCraftApp {
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();
         self.report_fs_to_server(&events);
+        if let Some(index) = &self.files.index
+            && !events.is_empty()
+        {
+            index.apply(&events);
+        }
         for ev in events {
             let p = ev.path().to_path_buf();
             self.explorer.invalidate(&p);

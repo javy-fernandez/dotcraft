@@ -42,6 +42,12 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
             }
             structure(app, ui);
         }
+        ToolWindow::Find if app.find_results.is_none() && app.find_in_files.is_some() => {
+            if header(ui, tr("Find in Files")) {
+                app.toggle_tool(tw);
+            }
+            find_in_files(app, ui);
+        }
         ToolWindow::Find if app.find_results.is_some() => {
             let title = app.find_results.as_ref().map(|(t, r)| format!("{t} ({})", r.len())).unwrap_or_default();
             if header(ui, &title) {
@@ -173,6 +179,124 @@ fn find_results(app: &mut DotCraftApp, ui: &mut Ui) {
     });
     if let Some(t) = open {
         app.open_at(&t.path, t.line, t.col);
+    }
+}
+
+fn find_in_files(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let Some(mut f) = app.find_in_files.take() else { return };
+    f.poll();
+    if f.searching() {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+    }
+    let mut rerun = false;
+    let mut replace_all = false;
+    ui.horizontal(|ui| {
+        ui.add_space(10.0);
+        let te = ui.add(egui::TextEdit::singleline(&mut f.query).hint_text(tr("Text to find")).desired_width(280.0));
+        if std::mem::take(&mut f.focus) {
+            te.request_focus();
+        }
+        rerun |= te.changed();
+        for (flag, icon, tip) in [(&mut f.case, rc_kit::ico::MATCH_CASE, tr("Match Case")), (&mut f.word, rc_kit::ico::WHOLE_WORDS, tr("Words")), (&mut f.regex, rc_kit::ico::REGEX, tr("Regex"))] {
+            if theme::icon_tab(ui, icon, tip, *flag).clicked() {
+                *flag = !*flag;
+                rerun = true;
+            }
+        }
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new(tr("File mask:")).size(12.5).color(p.text_muted));
+        rerun |= ui.add(egui::TextEdit::singleline(&mut f.mask).hint_text("*.cs").desired_width(120.0)).changed();
+        if ui.add(egui::Button::selectable(f.show_replace, tr("Replace"))).clicked() {
+            f.show_replace = !f.show_replace;
+        }
+    });
+    if f.show_replace {
+        ui.horizontal(|ui| {
+            ui.add_space(10.0);
+            ui.add(egui::TextEdit::singleline(&mut f.replace).hint_text(tr("Replace with")).desired_width(280.0));
+            replace_all = ui.add_enabled(f.match_count() > 0 && f.summary.is_some(), egui::Button::new(tr("Replace All"))).clicked();
+        });
+    }
+    let status = match (&f.error, &f.summary) {
+        (Some(e), _) => e.clone(),
+        (None, Some(s)) => rc_kit::i18n::trf("{n} matches in {files} files", &[("n", &s.matches), ("files", &s.files_matched)]) + if s.truncated { " +" } else { "" },
+        (None, None) if f.query.is_empty() => String::new(),
+        (None, None) => tr("Searching…").to_string(),
+    };
+    ui.horizontal(|ui| {
+        ui.add_space(12.0);
+        ui.label(egui::RichText::new(status).size(12.5).color(if f.error.is_some() { p.error } else { p.text_muted }));
+    });
+    let root = f.root().to_path_buf();
+    let mut open = None;
+    egui::ScrollArea::vertical().id_salt("fif_results").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for file in &f.results {
+            let name = file.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+            let dir = file.rel.rsplit_once('/').map(|(d, _)| d.to_string()).unwrap_or_default();
+            list_row(ui, 0, rc_kit::icons::for_file(&name), &name, &format!("{dir}  {}", file.match_count()), false);
+            for l in &file.lines {
+                // The line with its matches highlighted.
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(240.0), 24.0), Sense::click());
+                if resp.hovered() {
+                    ui.painter().rect_filled(r.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+                }
+                let x = r.left() + 30.0;
+                ui.painter().text(pos2(x, r.center().y), Align2::LEFT_CENTER, format!("{}", l.line + 1), FontId::monospace(12.0), p.muted);
+                let text = l.text.trim_end();
+                let lead = text.len() - text.trim_start().len();
+                let lead_chars = text[..lead].chars().count() as u32;
+                let mut job = egui::text::LayoutJob::default();
+                let chars: Vec<char> = text.trim_start().chars().collect();
+                let mut k = 0usize;
+                for rg in &l.ranges {
+                    let (a, b) = ((rg.start.saturating_sub(lead_chars)) as usize, (rg.end.saturating_sub(lead_chars)) as usize);
+                    let (a, b) = (a.min(chars.len()), b.min(chars.len()));
+                    if a > k {
+                        job.append(&chars[k..a].iter().collect::<String>(), 0.0, egui::TextFormat { font_id: FontId::monospace(12.5), color: p.text, ..Default::default() });
+                    }
+                    if b > a {
+                        job.append(&chars[a..b].iter().collect::<String>(), 0.0, egui::TextFormat { font_id: FontId::monospace(12.5), color: p.text, background: rc_kit::theme::scheme(p.dark).search_result, ..Default::default() });
+                    }
+                    k = b.max(k);
+                }
+                if k < chars.len() {
+                    job.append(&chars[k..].iter().collect::<String>(), 0.0, egui::TextFormat { font_id: FontId::monospace(12.5), color: p.text, ..Default::default() });
+                }
+                let g = ui.painter().layout_job(job);
+                ui.painter().galley(pos2(x + 44.0, r.center().y - g.size().y / 2.0), g, p.text);
+                if resp.clicked() {
+                    open = Some((file.path.clone(), l.line as usize, l.ranges.first().map_or(0, |r| r.start as usize)));
+                }
+            }
+        }
+    });
+    if rerun {
+        f.search();
+    }
+    if replace_all {
+        if let Ok(q) = rc_search::Query::new(f.options()) {
+            let mut files = 0;
+            for file in &f.results {
+                if let Some(i) = app.docs.index_of(&file.path) {
+                    // Open files change through their editor (undoable).
+                    let doc = &mut app.docs.list[i];
+                    let edits = rc_search::compute_edits(&doc.editor.buffer.rope().to_string(), &q, &f.replace);
+                    doc.editor.apply_text_edits(edits.into_iter().map(|e| rc_text::Change::new(e.range.start, e.range.end, e.text)).collect());
+                    files += 1;
+                } else if rc_search::replace_in_file(&file.path, &q, &f.replace).is_ok() {
+                    files += 1;
+                }
+            }
+            app.notify(rc_kit::i18n::trf("Replaced in {n} files", &[("n", &files)]), false);
+        }
+        f.search();
+    }
+    let _ = root;
+    app.find_in_files = Some(f);
+    if let Some((path, line, col)) = open {
+        app.open_at(&path, line, col);
     }
 }
 

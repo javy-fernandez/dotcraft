@@ -194,8 +194,7 @@ pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
         for (i, r) in app.runner.runs.iter().enumerate() {
-            let icon = if r.running() { r.config.icon() } else { ico::KILL };
-            let (resp, closed) = theme::tab(ui, i == active, Some(icon), &r.name, true);
+            let (resp, closed) = theme::tab(ui, i == active, Some(r.config.icon()), &r.name, true);
             if resp.clicked() {
                 app.runner.active_run = i;
             }

@@ -1,0 +1,29 @@
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+0 results	0 resultados	0 résultat	0 resultados	0 Ergebnisse	0 wyników	0 个结果	0 件
+Actions	Acciones	Actions	Ações	Aktionen	Akcje	操作	アクション
+All	Todo	Tout	Tudo	Alle	Wszystko	全部	すべて
+File mask:	Máscara de archivo:	Masque de fichier :	Máscara de arquivo:	Dateimaske:	Maska plików:	文件掩码:	ファイルマスク:
+Files	Archivos	Fichiers	Arquivos	Dateien	Pliki	文件	ファイル
+Match Case	Coincidir mayúsculas	Respecter la casse	Diferenciar maiúsculas	Groß-/Kleinschreibung	Uwzględniaj wielkość liter	区分大小写	大文字と小文字を区別
+Next Occurrence	Siguiente coincidencia	Occurrence suivante	Próxima ocorrência	Nächstes Vorkommen	Następne wystąpienie	下一个匹配项	次の出現箇所
+Nothing found	No se encontró nada	Aucun résultat	Nada encontrado	Nichts gefunden	Nic nie znaleziono	未找到任何内容	見つかりません
+Previous Occurrence	Coincidencia anterior	Occurrence précédente	Ocorrência anterior	Vorheriges Vorkommen	Poprzednie wystąpienie	上一个匹配项	前の出現箇所
+Regex	Expresión regular	Expression régulière	Expressão regular	Regulärer Ausdruck	Wyrażenie regularne	正则表达式	正規表現
+Replace All	Reemplazar todo	Tout remplacer	Substituir tudo	Alle ersetzen	Zamień wszystko	全部替换	すべて置換
+Replace with	Reemplazar por	Remplacer par	Substituir por	Ersetzen durch	Zamień na	替换为	置換後の文字列
+Replace	Reemplazar	Remplacer	Substituir	Ersetzen	Zamień	替换	置換
+Replaced in {n} files	Reemplazado en {n} archivos	Remplacé dans {n} fichiers	Substituído em {n} arquivos	In {n} Dateien ersetzt	Zamieniono w plikach: {n}	已在 {n} 个文件中替换	{n} ファイルで置換しました
+Search files, types, symbols and actions	Busca archivos, tipos, símbolos y acciones	Rechercher des fichiers, types, symboles et actions	Pesquise arquivos, tipos, símbolos e ações	Dateien, Typen, Symbole und Aktionen suchen	Szukaj plików, typów, symboli i akcji	搜索文件、类型、符号和操作	ファイル、型、シンボル、アクションを検索
+Searching…	Buscando…	Recherche…	Pesquisando…	Wird gesucht…	Wyszukiwanie…	正在搜索…	検索中…
+Symbols	Símbolos	Symboles	Símbolos	Symbole	Symbole	符号	シンボル
+Text to find	Texto a buscar	Texte à rechercher	Texto a localizar	Zu suchender Text	Tekst do znalezienia	要查找的文本	検索する文字列
+Type a class, interface or struct name	Escribe el nombre de una clase, interfaz o estructura	Saisissez un nom de classe, d'interface ou de structure	Digite o nome de uma classe, interface ou struct	Namen einer Klasse, Schnittstelle oder Struktur eingeben	Wpisz nazwę klasy, interfejsu lub struktury	键入类、接口或结构的名称	クラス、インターフェイス、構造体の名前を入力
+Type a file name, path or name:line	Escribe un nombre de archivo, una ruta o nombre:línea	Saisissez un nom de fichier, un chemin ou nom:ligne	Digite um nome de arquivo, caminho ou nome:linha	Dateinamen, Pfad oder Name:Zeile eingeben	Wpisz nazwę pliku, ścieżkę lub nazwa:wiersz	键入文件名、路径或 名称:行	ファイル名、パス、または 名前:行 を入力
+Type a member name	Escribe el nombre de un miembro	Saisissez un nom de membre	Digite o nome de um membro	Membernamen eingeben	Wpisz nazwę składowej	键入成员名称	メンバー名を入力
+Type an action name	Escribe el nombre de una acción	Saisissez un nom d'action	Digite o nome de uma ação	Aktionsnamen eingeben	Wpisz nazwę akcji	键入操作名称	アクション名を入力
+Type to search	Escribe para buscar	Tapez pour rechercher	Digite para pesquisar	Zum Suchen tippen	Wpisz, aby wyszukać	键入以搜索	入力して検索
+Types	Tipos	Types	Tipos	Typen	Typy	类型	型
+Words	Palabras	Mots	Palavras	Wörter	Słowa	全字匹配	単語
+{n} matches in {files} files	{n} coincidencias en {files} archivos	{n} correspondances dans {files} fichiers	{n} ocorrências em {files} arquivos	{n} Treffer in {files} Dateien	Dopasowania: {n} w plikach: {files}	{files} 个文件中有 {n} 个匹配项	{files} ファイルで {n} 件一致
+{n} occurrences replaced	{n} coincidencias reemplazadas	{n} occurrences remplacées	{n} ocorrências substituídas	{n} Vorkommen ersetzt	Zamieniono wystąpienia: {n}	已替换 {n} 处	{n} 件を置換しました
+{n} results	{n} resultados	{n} résultats	{n} resultados	{n} Ergebnisse	Wyniki: {n}	{n} 个结果	{n} 件

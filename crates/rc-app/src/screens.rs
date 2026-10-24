@@ -115,3 +115,82 @@ fn ten_project_solution_opens_and_its_session_is_restored() {
     assert!(app.dock.is_open(crate::toolwindow::ToolWindow::Problems));
     assert!(app.explorer.expanded.contains("sf:/src"));
 }
+
+fn run_frames(h: &mut Harness<'static, DotCraftApp>, what: &str, mut done: impl FnMut(&DotCraftApp) -> bool) {
+    let start = std::time::Instant::now();
+    while start.elapsed() < std::time::Duration::from_secs(240) {
+        h.run_steps(1);
+        if done(h.state()) {
+            h.run_steps(3);
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    }
+    panic!("timed out waiting for {what}");
+}
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; writes tool window captures to target/snapshots"]
+fn screens_tools() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    let test_file = std::fs::read_dir(fixtures().join("Shop/tests/Shop.Core.XunitTests")).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e == "cs")).unwrap();
+    app.open_file(&test_file);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    // Tests.
+    {
+        let app = h.state_mut();
+        app.runner.selected = app.runner.configs.iter().position(|c| c.name == "All Tests").unwrap();
+        let outs = app.runner.run_selected();
+        crate::ui::run_windows::handle_outputs(app, outs);
+    }
+    run_frames(&mut h, "tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    h.render().unwrap().save(out.join("tests-dark.png")).unwrap();
+    // Build.
+    {
+        let app = h.state_mut();
+        let target = app.workspace.as_ref().unwrap().ws.key_path().to_path_buf();
+        let outs = app.runner.build(&target, rc_dotnet::BuildAction::Build);
+        crate::ui::run_windows::handle_outputs(app, outs);
+    }
+    run_frames(&mut h, "build", |a| a.runner.build.as_ref().is_some_and(|b| b.result.is_some()));
+    h.render().unwrap().save(out.join("build-dark.png")).unwrap();
+    // Run Shop.Cli.
+    {
+        let app = h.state_mut();
+        app.runner.selected = app.runner.configs.iter().position(|c| c.name.starts_with("Shop.Cli")).unwrap();
+        let outs = app.runner.run_selected();
+        crate::ui::run_windows::handle_outputs(app, outs);
+    }
+    run_frames(&mut h, "run", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    h.render().unwrap().save(out.join("run-dark.png")).unwrap();
+    // Search Everywhere and the find bar.
+    {
+        let app = h.state_mut();
+        app.pending.push(rc_editor::Action::GotoFile);
+    }
+    h.run_steps(2);
+    h.state_mut().search_everywhere.as_mut().unwrap().text = "pricalc".into();
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("search-dark.png")).unwrap();
+    {
+        let app = h.state_mut();
+        app.search_everywhere = None;
+        app.find_bar = Some(crate::search::FindBar { query: "Assert".into(), replace: Some("Check".into()), focus: true, ..Default::default() });
+    }
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("findbar-dark.png")).unwrap();
+    // Terminal.
+    {
+        let app = h.state_mut();
+        app.find_bar = None;
+        app.open_terminal(None);
+    }
+    run_frames(&mut h, "terminal", |a| a.terminals.active().is_some_and(|t| t.session.screen_lines().iter().any(|l| !l.trim().is_empty())));
+    h.render().unwrap().save(out.join("terminal-dark.png")).unwrap();
+}

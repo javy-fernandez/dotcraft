@@ -4,6 +4,7 @@ mod app;
 mod convert;
 mod insight;
 mod runner;
+mod search;
 #[cfg(test)]
 mod runner_tests;
 #[cfg(test)]

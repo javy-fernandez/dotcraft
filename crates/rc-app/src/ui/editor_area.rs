@@ -129,6 +129,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         }
         editor_rect.min.y = banner.bottom();
     }
+    let bar_h = crate::ui::search_popup::find_bar(app, ui, editor_rect);
+    editor_rect.min.y += bar_h;
     let mut ed_ui = ui.new_child(egui::UiBuilder::new().max_rect(editor_rect));
     ed_ui.set_clip_rect(editor_rect.intersect(ui.clip_rect()));
     let focus = std::mem::take(&mut app.focus_editor);
@@ -167,7 +169,36 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
             Action::NextError | Action::PreviousError => {
                 doc.editor.next_diagnostic(a == Action::NextError);
             }
-            Action::Escape => {}
+            Action::Escape => {
+                if app.find_bar.is_some() {
+                    app.find_bar = None;
+                    doc.editor.search_matches.clear();
+                    doc.editor.current_match = None;
+                }
+            }
+            Action::Find | Action::Replace => {
+                let sel = doc.editor.selected_text();
+                let bar = app.find_bar.get_or_insert_with(Default::default);
+                if !sel.is_empty() && !sel.contains('\n') {
+                    bar.query = sel;
+                }
+                if a == Action::Replace && bar.replace.is_none() {
+                    bar.replace = Some(String::new());
+                }
+                bar.focus = true;
+            }
+            Action::FindNext | Action::FindPrevious => {
+                let n = doc.editor.search_matches.len();
+                if n > 0 {
+                    let cur = doc.editor.current_match.unwrap_or(0);
+                    let next = if a == Action::FindNext { (cur + 1) % n } else { (cur + n - 1) % n };
+                    let (s, e) = doc.editor.search_matches[next];
+                    let keep = doc.editor.search_matches.clone();
+                    doc.editor.select_range(s, e);
+                    doc.editor.search_matches = keep;
+                    doc.editor.current_match = Some(next);
+                }
+            }
             other => insight_actions.push(other),
         }
     }

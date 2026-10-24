@@ -891,6 +891,12 @@ impl Insight {
         self.format = Some((doc.editor.id, doc.editor.buffer.version(), p));
     }
 
+    /// `workspace/symbol` for Search Everywhere (`None` when the server is not ready).
+    pub fn workspace_symbols(&self, query: &str) -> Option<Pending<Value>> {
+        let s = self.session.as_ref().filter(|s| s.is_initialized())?;
+        Some(s.client.request_raw("workspace/symbol", json!({ "query": query })))
+    }
+
     pub fn did_save(&mut self, path: &Path) {
         if let Some(s) = &mut self.session {
             s.did_save(path);

@@ -7,6 +7,7 @@ pub mod explorer;
 pub mod header;
 pub mod status;
 pub mod run_windows;
+pub mod search_popup;
 pub mod stripes;
 pub mod toolwindows;
 pub mod welcome;
@@ -83,6 +84,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         theme::fixed_island(ui, &p, |ui| editor_area::show(app, ui, editor_actions));
     });
     dialogs::show(app, &ctx);
+    search_popup::show(app, &ctx);
     if cfg!(target_os = "windows") {
         rc_kit::window_chrome::resize_edges(&ctx);
     }
