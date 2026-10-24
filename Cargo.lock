@@ -3068,6 +3068,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rc-vcs"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "proptest",
+ "rc-core",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "read-fonts"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
