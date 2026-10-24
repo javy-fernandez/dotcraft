@@ -1,0 +1,112 @@
+//! Offscreen captures of the whole window (wgpu, no input sent to any real window), for
+//! visual review and the README. Run with `cargo test -p rc-app screens -- --ignored`;
+//! images go to `target/snapshots/`.
+
+use crate::app::DotCraftApp;
+use egui::vec2;
+use egui_kittest::Harness;
+use rc_core::{Settings, Waker};
+use std::path::{Path, PathBuf};
+
+pub fn fixtures() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures").canonicalize().unwrap()
+}
+
+/// An app with its own data folder (never the user's settings or sessions).
+pub fn test_app(home: &Path, dark: bool) -> DotCraftApp {
+    // SAFETY: tests that read DOTCRAFT_HOME set it to the same kind of temp folder first.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home) };
+    let mut settings = Settings::default();
+    settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
+    DotCraftApp::with_settings(settings, Waker::noop(), None)
+}
+
+pub fn harness(app: DotCraftApp, size: egui::Vec2) -> Harness<'static, DotCraftApp> {
+    let mut first = true;
+    let mut frame = eframe::Frame::_new_kittest();
+    let mut h = Harness::builder().with_size(size).build_ui_state(
+        move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            let ctx = ui.ctx().clone();
+            eframe::App::logic(app, &ctx, &mut frame);
+            let bounds = ctx.content_rect();
+            let mut root = ui.new_child(egui::UiBuilder::new().max_rect(bounds));
+            root.set_clip_rect(bounds);
+            eframe::App::ui(app, &mut root, &mut frame);
+        },
+        app,
+    );
+    h.run_steps(4);
+    h
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes window captures to target/snapshots"]
+fn screens() {
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let suffix = if dark { "dark" } else { "light" };
+        // Welcome screen with a couple of recent projects.
+        let mut app = test_app(home.path(), dark);
+        app.settings.recent_workspaces = vec![fixtures().join("Shop/Shop.sln"), fixtures().join("TenProjects/TenProjects.slnx")];
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        h.render().unwrap().save(out.join(format!("welcome-{suffix}.png"))).unwrap();
+
+        // A solution with files open.
+        let mut app = test_app(home.path(), dark);
+        app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+        app.explorer.expanded.insert(format!("proj:{}", fixtures().join("Shop/src/Shop.Api/Shop.Api.csproj").display()));
+        app.explorer.expanded.insert(format!("deps:{}", fixtures().join("Shop/src/Shop.Api/Shop.Api.csproj").display()));
+        app.open_file(&fixtures().join("Shop/src/Shop.Api/Program.cs"));
+        app.open_file(&fixtures().join("Shop/src/Shop.Api/Controllers/WeatherForecastController.cs"));
+        app.open_file(&fixtures().join("Shop/src/Shop.Api/Shop.Api.csproj"));
+        app.docs.activate(1);
+        app.locate_active();
+        let mut h = harness(app, vec2(1440.0, 900.0));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("workspace-{suffix}.png"))).unwrap();
+    }
+}
+
+/// Phase 1 closure: a 10-project solution opens with every project in the explorer, and the
+/// session (open tabs, caret, folds, tool windows, expanded nodes) is restored on reopen.
+#[test]
+fn ten_project_solution_opens_and_its_session_is_restored() {
+    use egui_kittest::kittest::Queryable;
+    let home = tempfile::tempdir().unwrap();
+    let sln = fixtures().join("TenProjects/TenProjects.slnx");
+    let file_a = fixtures().join("TenProjects/src/Module03/Class1.cs");
+    let file_b = fixtures().join("TenProjects/src/Module07/Class1.cs");
+
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(&sln);
+    let w = app.workspace.as_ref().unwrap();
+    assert_eq!(w.solution.as_ref().unwrap().projects().len(), 10);
+    app.open_file(&file_a);
+    app.open_file(&file_b);
+    app.docs.list[0].editor.goto(2, 8);
+    app.dock.toggle(crate::toolwindow::ToolWindow::Problems);
+    app.docs.activate(0);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    // Every project is listed under the expanded "src" solution folder.
+    for i in 1..=10 {
+        assert!(h.query_all_by_label(&format!("Module{i:02}")).count() >= 1, "Module{i:02} not in the explorer");
+    }
+    h.run_steps(2);
+    let mut app = h.into_state();
+    app.close_workspace();
+
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(&sln);
+    assert_eq!(app.docs.list.len(), 2);
+    assert_eq!(app.docs.active, Some(0));
+    assert_eq!(app.docs.list[0].path, file_a.canonicalize().unwrap());
+    assert_eq!(app.docs.list[0].editor.caret_line_col(), (2, 8));
+    assert!(app.dock.is_open(crate::toolwindow::ToolWindow::Problems));
+    assert!(app.explorer.expanded.contains("sf:/src"));
+}

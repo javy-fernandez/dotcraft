@@ -998,7 +998,8 @@ fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keym
                 let Some(action) = keymap.lookup(key, modifiers) else { continue };
                 if action.is_editing() {
                     exec(ui, state, config, action, out);
-                } else {
+                } else if !action.is_ide() {
+                    // IDE-wide shortcuts are handled by the application for every focus.
                     out.actions.push(action);
                 }
             }
@@ -1336,6 +1337,19 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         _ => {}
     }
     let _ = config;
+}
+
+/// Runs an editing action on `state` from outside the widget (native menu, actions popup).
+/// Returns the code-insight actions it could not handle itself.
+pub fn run_action(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action) -> Vec<Action> {
+    let response = ui.interact(Rect::NOTHING, Id::new("dotcraft_editor_action"), Sense::hover());
+    let mut out = EditorOutput { response, actions: Vec::new(), events: Vec::new(), accepted_completion: None };
+    if action.is_editing() {
+        exec(ui, state, config, action, &mut out);
+    } else {
+        out.actions.push(action);
+    }
+    out.actions
 }
 
 fn refilter_completion(state: &mut EditorState) {

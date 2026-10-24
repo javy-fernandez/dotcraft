@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Module01/Module01.csproj" />
+    <Project Path="src/Module02/Module02.csproj" />
+    <Project Path="src/Module03/Module03.csproj" />
+    <Project Path="src/Module04/Module04.csproj" />
+    <Project Path="src/Module05/Module05.csproj" />
+    <Project Path="src/Module06/Module06.csproj" />
+    <Project Path="src/Module07/Module07.csproj" />
+    <Project Path="src/Module08/Module08.csproj" />
+    <Project Path="src/Module09/Module09.csproj" />
+    <Project Path="src/Module10/Module10.csproj" />
+  </Folder>
+</Solution>

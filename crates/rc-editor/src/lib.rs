@@ -14,4 +14,4 @@ pub use keymap::{Action, Keymap, KeymapKind};
 pub use popup::{Completion, CompletionItem, Hover, Popups, Signature, SignatureHelp};
 pub use popups_view::{accept as accept_completion, expand_snippet, render_doc};
 pub use state::{BreakpointKind, Diagnostic, EditorEvent, EditorState, GutterIcon, InlayHint, LineChange, Severity};
-pub use view::{EditorConfig, EditorOutput, EditorView};
+pub use view::{EditorConfig, EditorOutput, EditorView, run_action};

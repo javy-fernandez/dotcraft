@@ -1,0 +1,618 @@
+//! The application: workspace, open documents, tool window layout, settings and session, and
+//! the frame loop that ties them together.
+
+use crate::docs::Docs;
+use crate::native_menu::{MenuCommand, NativeMenu};
+use crate::toolwindow::{Dock, ToolWindow};
+use crate::ui::dialogs::Dialog;
+use crate::ui::explorer::{ExplorerAction, ExplorerState};
+use egui::{Context, Ui};
+use rc_core::session::{OpenFile, Session};
+use rc_core::settings::{KeymapChoice, ThemeChoice};
+use rc_core::watch::{FileWatcher, FsEvent};
+use rc_core::{Inbox, Settings, Waker, Workspace};
+use rc_dotnet::Solution;
+use rc_editor::{Action, EditorConfig, Keymap, KeymapKind};
+use rc_kit::i18n::{self, Lang, tr, trf};
+use std::path::{Path, PathBuf};
+
+/// A message in the status bar / notification balloon.
+#[derive(Clone, Debug)]
+pub struct Notice {
+    pub text: String,
+    pub error: bool,
+    pub at: f64,
+}
+
+pub struct WorkspaceState {
+    pub ws: Workspace,
+    pub solution: Option<Solution>,
+    pub solution_error: Option<String>,
+}
+
+pub struct DotCraftApp {
+    pub settings: Settings,
+    pub keymap: Keymap,
+    pub editor_config: EditorConfig,
+    pub workspace: Option<WorkspaceState>,
+    pub docs: Docs,
+    pub dock: Dock,
+    pub explorer: ExplorerState,
+    pub dialog: Option<Dialog>,
+    pub notices: Vec<Notice>,
+    pub native_menu: Option<NativeMenu>,
+    pub waker: Waker,
+    fs_inbox: Inbox<FsEvent>,
+    _watcher: Option<FileWatcher>,
+    /// Actions waiting for the UI pass (from the native menu or global shortcuts).
+    pub pending: Vec<Action>,
+    /// Give the editor keyboard focus on the next frame.
+    pub focus_editor: bool,
+    /// Back/forward navigation: (file, char offset).
+    pub nav_back: Vec<(PathBuf, usize)>,
+    pub nav_forward: Vec<(PathBuf, usize)>,
+    applied_dark: Option<bool>,
+    applied_zoom: Option<f32>,
+    pub shift_taps: (f64, u8, bool),
+    pub session_dirty: bool,
+    pub last_session_save: f64,
+    /// Editor keeps the focus when the window regains it.
+    pub had_focus: bool,
+}
+
+impl DotCraftApp {
+    pub fn new(cc: &eframe::CreationContext<'_>, open: Option<PathBuf>) -> Self {
+        let settings = Settings::load();
+        i18n::set_lang(settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
+        rc_kit::theme::install_fonts(&cc.egui_ctx);
+        let ctx = cc.egui_ctx.clone();
+        let waker = Waker::new(move || ctx.request_repaint());
+        let keymap = Keymap::new(keymap_kind(settings.keymap));
+        let native_menu = NativeMenu::install(&cc.egui_ctx, &keymap);
+        let mut app = Self::with_settings(settings, waker, native_menu);
+        let to_open = open.or_else(|| app.settings.recent_workspaces.first().cloned().filter(|p| p.exists()));
+        if let Some(path) = to_open {
+            app.open_workspace(&path);
+        }
+        app
+    }
+
+    /// Builds the app without a window (tests and headless captures).
+    pub fn with_settings(settings: Settings, waker: Waker, native_menu: Option<NativeMenu>) -> Self {
+        let keymap = Keymap::new(keymap_kind(settings.keymap));
+        let editor_config = editor_config(&settings);
+        let pool = rc_syntax::ParserPool::new(waker.as_fn());
+        DotCraftApp {
+            keymap,
+            editor_config,
+            workspace: None,
+            docs: Docs::new(pool),
+            dock: Dock::default(),
+            explorer: ExplorerState::default(),
+            dialog: None,
+            notices: Vec::new(),
+            native_menu,
+            fs_inbox: Inbox::new(waker.clone()),
+            waker,
+            _watcher: None,
+            pending: Vec::new(),
+            focus_editor: false,
+            nav_back: Vec::new(),
+            nav_forward: Vec::new(),
+            applied_dark: None,
+            applied_zoom: None,
+            shift_taps: (0.0, 0, false),
+            session_dirty: false,
+            last_session_save: 0.0,
+            had_focus: true,
+            settings,
+        }
+    }
+
+    pub fn dark(&self, ctx: &Context) -> bool {
+        match self.settings.theme {
+            ThemeChoice::Dark => true,
+            ThemeChoice::Light => false,
+            ThemeChoice::System => ctx.system_theme().is_none_or(|t| t == egui::Theme::Dark),
+        }
+    }
+
+    pub fn notify(&mut self, text: impl Into<String>, error: bool) {
+        self.notices.push(Notice { text: text.into(), error, at: 0.0 });
+    }
+
+    // ------------------------------------------------------------------ workspace
+
+    /// Opens a folder, solution or project, restoring its session.
+    pub fn open_workspace(&mut self, path: &Path) {
+        let ws = match Workspace::open(path) {
+            Ok(ws) => ws,
+            Err(e) => {
+                self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &e)]), true);
+                return;
+            }
+        };
+        self.close_workspace();
+        let (solution, solution_error) = match ws.solution() {
+            Some(sln) => match Solution::load(sln) {
+                Ok(s) => (Some(s), None),
+                Err(e) => (None, Some(e.to_string())),
+            },
+            None => (None, None),
+        };
+        if let Some(err) = &solution_error {
+            self.notify(trf("Could not read the solution: {error}", &[("error", err)]), true);
+        }
+        self.settings.add_recent(ws.key_path().to_path_buf());
+        let _ = self.settings.save();
+        self._watcher = FileWatcher::new(&ws.root, self.fs_inbox.sender()).ok();
+        let session = Session::load(ws.key_path());
+        self.workspace = Some(WorkspaceState { ws, solution, solution_error });
+        self.restore_session(session);
+    }
+
+    pub fn close_workspace(&mut self) {
+        if self.workspace.is_some() {
+            self.save_all_docs();
+            self.save_session();
+        }
+        self.workspace = None;
+        self._watcher = None;
+        self.docs.list.clear();
+        self.docs.active = None;
+        self.explorer = ExplorerState::default();
+        self.dock = Dock::default();
+        self.nav_back.clear();
+        self.nav_forward.clear();
+    }
+
+    fn restore_session(&mut self, s: Session) {
+        self.dock = Dock::from_session(&s.tool_windows);
+        self.explorer.expanded = s.expanded.iter().cloned().collect();
+        if self.explorer.expanded.is_empty() {
+            // First open: the solution and its top folders expanded, like Rider.
+            self.explorer.expanded.insert("sln".into());
+            if let Some(sln) = self.workspace.as_ref().and_then(|w| w.solution.as_ref()) {
+                for item in &sln.items {
+                    if let rc_dotnet::SolutionItem::Folder { name, .. } = item {
+                        self.explorer.expanded.insert(format!("sf:/{name}"));
+                    }
+                }
+            }
+        }
+        for f in &s.files {
+            if !f.path.exists() {
+                continue;
+            }
+            if let Ok(i) = self.docs.open(&f.path) {
+                let d = &mut self.docs.list[i];
+                d.pinned = f.pinned;
+                let pos = d.editor.buffer.pos_at(f.line, f.col);
+                d.editor.selection = rc_text::Selection::point(pos);
+                if d.editor.syntax.tree().is_none() {
+                    d.editor.parse_blocking();
+                }
+                for &line in &f.folded {
+                    d.editor.toggle_fold(line);
+                }
+                d.editor.set_scroll_offset(egui::vec2(0.0, f.scroll_y));
+            }
+        }
+        self.docs.active = s.active.filter(|&a| a < self.docs.list.len()).or(if self.docs.list.is_empty() { None } else { Some(0) });
+        for (path, bps) in &s.breakpoints {
+            if let Some(i) = self.docs.index_of(path) {
+                for (line, cond) in bps {
+                    let kind = if cond.is_some() { rc_editor::BreakpointKind::Conditional } else { rc_editor::BreakpointKind::Normal };
+                    self.docs.list[i].editor.breakpoints.insert(*line, kind);
+                }
+            }
+        }
+        self.focus_editor = true;
+    }
+
+    pub fn session(&self) -> Session {
+        let files = self
+            .docs
+            .list
+            .iter()
+            .map(|d| {
+                let (line, col) = d.editor.caret_line_col();
+                let folded = d.editor.syntax.folds().iter().filter(|f| d.editor.is_folded(f.start_line)).map(|f| f.start_line).collect();
+                OpenFile { path: d.path.clone(), line, col, scroll_y: d.editor.scroll_offset().y, folded, pinned: d.pinned }
+            })
+            .collect();
+        let breakpoints = self
+            .docs
+            .list
+            .iter()
+            .filter(|d| !d.editor.breakpoints.is_empty())
+            .map(|d| (d.path.clone(), d.editor.breakpoints.iter().map(|(l, k)| (*l, (*k == rc_editor::BreakpointKind::Conditional).then(String::new))).collect()))
+            .collect();
+        Session {
+            files,
+            active: self.docs.active,
+            tool_windows: self.dock.to_session(),
+            expanded: {
+                let mut v: Vec<String> = self.explorer.expanded.iter().cloned().collect();
+                v.sort();
+                v
+            },
+            run_configuration: None,
+            breakpoints,
+        }
+    }
+
+    pub fn save_session(&mut self) {
+        if let Some(w) = &self.workspace
+            && let Err(e) = self.session().save(w.ws.key_path())
+        {
+            eprintln!("could not save the session: {e:#}");
+        }
+        self.session_dirty = false;
+    }
+
+    pub fn save_all_docs(&mut self) {
+        for e in self.docs.save_all() {
+            self.notify(e, true);
+        }
+    }
+
+    // ------------------------------------------------------------------ documents
+
+    /// Opens a file in an editor tab, remembering the current place for "Back".
+    pub fn open_file(&mut self, path: &Path) {
+        self.push_nav();
+        match self.docs.open(path) {
+            Ok(_) => {
+                self.focus_editor = true;
+                self.session_dirty = true;
+            }
+            Err(e) => self.notify(e, true),
+        }
+    }
+
+    /// Opens `path` and puts the caret at (line, col).
+    pub fn open_at(&mut self, path: &Path, line: usize, col: usize) {
+        self.open_file(path);
+        if let Some(d) = self.docs.active_doc_mut() {
+            d.editor.goto(line, col);
+        }
+    }
+
+    pub fn push_nav(&mut self) {
+        if let Some(d) = self.docs.active_doc() {
+            let here = (d.path.clone(), d.editor.caret());
+            if self.nav_back.last() != Some(&here) {
+                self.nav_back.push(here);
+                if self.nav_back.len() > 100 {
+                    self.nav_back.remove(0);
+                }
+            }
+            self.nav_forward.clear();
+        }
+    }
+
+    fn navigate(&mut self, back: bool) {
+        let (from, to) = if back { (&mut self.nav_back, &mut self.nav_forward) } else { (&mut self.nav_forward, &mut self.nav_back) };
+        let Some((path, pos)) = from.pop() else { return };
+        if let Some(d) = self.docs.active_doc() {
+            to.push((d.path.clone(), d.editor.caret()));
+        }
+        if self.docs.open(&path).is_ok()
+            && let Some(d) = self.docs.active_doc_mut()
+        {
+            let pos = pos.min(d.editor.buffer.len_chars());
+            d.editor.set_selection(rc_text::Selection::point(pos));
+            self.focus_editor = true;
+        }
+    }
+
+    /// Closes tab `i`, saving it first (IntelliJ autosaves; nothing is ever lost on close).
+    pub fn close_tab(&mut self, i: usize) {
+        if i < self.docs.list.len() && self.docs.list[i].is_modified()
+            && let Err(e) = self.docs.save(i)
+        {
+            self.notify(e, true);
+            return;
+        }
+        self.docs.close(i);
+        self.session_dirty = true;
+    }
+
+    // ------------------------------------------------------------------ actions
+
+    /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
+    pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
+        match action {
+            Action::SaveAll | Action::Save => {
+                self.save_all_docs();
+                self.save_session();
+            }
+            Action::CloseTab => {
+                if let Some(i) = self.docs.active {
+                    self.close_tab(i);
+                }
+            }
+            Action::NextTab | Action::PreviousTab => {
+                if let Some(a) = self.docs.active {
+                    let n = self.docs.list.len();
+                    let next = if action == Action::NextTab { (a + 1) % n } else { (a + n - 1) % n };
+                    self.docs.activate(next);
+                    self.focus_editor = true;
+                }
+            }
+            Action::NavigateBack => self.navigate(true),
+            Action::NavigateForward => self.navigate(false),
+            Action::ShowSettings => self.dialog = Some(Dialog::settings(&self.settings)),
+            Action::ToggleProjectWindow => self.toggle_tool(ToolWindow::Explorer),
+            Action::ToggleTerminal => self.toggle_tool(ToolWindow::Terminal),
+            Action::ToggleGitWindow => self.toggle_tool(ToolWindow::Git),
+            Action::ToggleProblems => self.toggle_tool(ToolWindow::Problems),
+            Action::HideToolWindows => {
+                self.dock.hide_all();
+                self.focus_editor = true;
+                self.session_dirty = true;
+            }
+            Action::OpenFolder => self.pick_and_open(),
+            Action::ZoomIn => self.set_zoom(ctx, self.settings.ui_zoom + 0.1),
+            Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
+            Action::ZoomReset => self.set_zoom(ctx, 1.0),
+            Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
+            Action::GotoLine => {
+                if let Some(d) = self.docs.active_doc() {
+                    let (l, c) = d.editor.caret_line_col();
+                    self.dialog = Some(Dialog::GotoLine { text: format!("{}:{}", l + 1, c + 1), focus: true });
+                }
+            }
+            Action::Escape => {
+                // Esc in a tool window returns to the editor (IntelliJ).
+                self.focus_editor = true;
+            }
+            other => {
+                // Not available yet in this build: say so instead of doing nothing.
+                if matches!(other, Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol | Action::FindInFiles | Action::ReplaceInFiles | Action::RecentLocations | Action::Build | Action::Run | Action::Debug | Action::StopRun | Action::RunTests | Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::RunToCursor | Action::Evaluate | Action::Commit) {
+                    self.notify(tr("This action is not available yet"), false);
+                }
+            }
+        }
+    }
+
+    pub fn toggle_tool(&mut self, tw: ToolWindow) {
+        let was_open = self.dock.is_open(tw);
+        self.dock.toggle(tw);
+        if was_open {
+            self.focus_editor = true;
+        }
+        self.session_dirty = true;
+    }
+
+    fn set_zoom(&mut self, ctx: &Context, z: f32) {
+        self.settings.ui_zoom = (z * 10.0).round().clamp(5.0, 30.0) / 10.0;
+        let _ = self.settings.save();
+        ctx.request_repaint();
+    }
+
+    pub fn pick_and_open(&mut self) {
+        let dialog = rfd::FileDialog::new().set_title(tr("Open Folder, Solution or Project"));
+        if let Some(path) = dialog.pick_folder() {
+            self.open_workspace(&path);
+        }
+    }
+
+    pub fn pick_solution(&mut self) {
+        let dialog = rfd::FileDialog::new().set_title(tr("Open Solution or Project")).add_filter(tr("Solutions and projects"), &["sln", "slnx", "slnf", "csproj", "fsproj"]);
+        if let Some(path) = dialog.pick_file() {
+            self.open_workspace(&path);
+        }
+    }
+
+    pub fn apply_settings(&mut self, ctx: &Context, new: Settings) {
+        let lang_changed = new.language != self.settings.language;
+        let keymap_changed = new.keymap != self.settings.keymap;
+        self.settings = new;
+        self.editor_config = editor_config(&self.settings);
+        if keymap_changed {
+            self.keymap = Keymap::new(keymap_kind(self.settings.keymap));
+        }
+        if lang_changed {
+            i18n::set_lang(self.settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
+            if let Some(m) = &self.native_menu {
+                m.relabel();
+            }
+        }
+        if let Err(e) = self.settings.save() {
+            self.notify(trf("Could not save the settings: {error}", &[("error", &e)]), true);
+        }
+        self.applied_dark = None;
+        ctx.request_repaint();
+    }
+
+    // ------------------------------------------------------------------ explorer actions
+
+    pub fn handle_explorer(&mut self, ctx: &Context, actions: Vec<ExplorerAction>) {
+        for a in actions {
+            match a {
+                ExplorerAction::Open(p) => self.open_file(&p),
+                ExplorerAction::Collapse => {
+                    self.explorer.expanded.retain(|k| k == "sln");
+                    self.session_dirty = true;
+                }
+                ExplorerAction::LocateActive => self.locate_active(),
+                ExplorerAction::NewFile(dir) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), folder: false, error: None }),
+                ExplorerAction::NewFolder(dir) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), folder: true, error: None }),
+                ExplorerAction::Rename(path) => {
+                    let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                    self.dialog = Some(Dialog::Rename { path, name, error: None });
+                }
+                ExplorerAction::Delete(path) => self.dialog = Some(Dialog::ConfirmDelete { path }),
+                ExplorerAction::CopyPath(path) => ctx.copy_text(path.display().to_string()),
+                ExplorerAction::Reveal(path) => reveal_in_file_manager(&path),
+                ExplorerAction::OpenInTerminal(_dir) => self.toggle_tool(ToolWindow::Terminal),
+            }
+        }
+    }
+
+    pub fn locate_active(&mut self) {
+        let Some(path) = self.docs.active_doc().map(|d| d.path.clone()) else { return };
+        if let Some(w) = &self.workspace {
+            self.explorer.locate(&path, w.solution.as_ref(), &w.ws.root);
+            self.dock.show(ToolWindow::Explorer);
+        }
+    }
+
+    // ------------------------------------------------------------------ frame
+
+    fn poll_background(&mut self) {
+        let mut changed: Vec<PathBuf> = Vec::new();
+        for ev in self.fs_inbox.drain() {
+            let p = ev.path().to_path_buf();
+            self.explorer.invalidate(&p);
+            if !changed.contains(&p) {
+                changed.push(p);
+            }
+        }
+        for p in changed {
+            self.docs.on_disk_change(&p);
+            // A changed solution file reloads the explorer's model.
+            if let Some(w) = &mut self.workspace
+                && w.ws.solution() == Some(p.as_path())
+                && let Ok(s) = Solution::load(&p)
+            {
+                w.solution = Some(s);
+            }
+        }
+        self.docs.poll_parses();
+    }
+
+    /// IDE shortcuts work whatever has the focus; they are taken out of the input so text
+    /// fields don't see them.
+    fn global_shortcuts(&mut self, ctx: &Context) {
+        let now = ctx.input(|i| i.time);
+        // Shift, Shift: Search Everywhere.
+        let shift = ctx.input(|i| i.modifiers.shift_only());
+        let any_key = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { .. } | egui::Event::Text(_))));
+        let (last, taps, was_down) = self.shift_taps;
+        if any_key {
+            self.shift_taps = (0.0, 0, shift);
+        } else if shift && !was_down {
+            let taps = if now - last < 0.4 { taps + 1 } else { 1 };
+            self.shift_taps = (now, taps, true);
+            if taps >= 2 {
+                self.shift_taps = (0.0, 0, true);
+                self.pending.push(Action::SearchEverywhere);
+            }
+        } else if !shift && was_down {
+            self.shift_taps.2 = false;
+        }
+        let keymap = &self.keymap;
+        let mut found = Vec::new();
+        ctx.input_mut(|i| {
+            i.events.retain(|e| {
+                if let egui::Event::Key { key, pressed: true, modifiers, .. } = e
+                    && let Some(a) = keymap.lookup(*key, *modifiers)
+                    && a.is_ide()
+                {
+                    found.push(a);
+                    return false;
+                }
+                true
+            })
+        });
+        self.pending.extend(found);
+    }
+}
+
+impl eframe::App for DotCraftApp {
+    fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        if let Some(menu) = &self.native_menu {
+            for cmd in menu.poll() {
+                match cmd {
+                    MenuCommand::Act(a) => self.pending.push(a),
+                    MenuCommand::About => self.dialog = Some(Dialog::About),
+                    MenuCommand::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                    MenuCommand::OpenProject => self.pick_and_open(),
+                    MenuCommand::CloseProject => self.close_workspace(),
+                    MenuCommand::ThemeLight | MenuCommand::ThemeDark => {
+                        let mut s = self.settings.clone();
+                        s.theme = if cmd == MenuCommand::ThemeDark { ThemeChoice::Dark } else { ThemeChoice::Light };
+                        self.apply_settings(ctx, s);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self.global_shortcuts(ctx);
+        self.poll_background();
+        let dark = self.dark(ctx);
+        if self.applied_dark != Some(dark) {
+            rc_kit::theme::apply(ctx, dark);
+            self.applied_dark = Some(dark);
+        }
+        if let Some(m) = &self.native_menu {
+            m.sync(dark);
+        }
+        if self.applied_zoom != Some(self.settings.ui_zoom) {
+            ctx.set_zoom_factor(self.settings.ui_zoom);
+            self.applied_zoom = Some(self.settings.ui_zoom);
+        }
+        // Autosave when the window loses focus (IntelliJ's "save on frame deactivation").
+        let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
+        if self.had_focus && !focused && self.settings.autosave {
+            self.save_all_docs();
+            self.save_session();
+        }
+        self.had_focus = focused;
+    }
+
+    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        let pending = std::mem::take(&mut self.pending);
+        let mut editor_actions = Vec::new();
+        for a in pending {
+            if a.is_ide() {
+                self.run_ide_action(&ctx, a);
+            } else {
+                editor_actions.push(a);
+            }
+        }
+        crate::ui::frame(self, ui, editor_actions);
+        self.docs.reparse_edited();
+        let now = ctx.input(|i| i.time);
+        if self.session_dirty && now - self.last_session_save > 2.0 {
+            self.save_session();
+            self.last_session_save = now;
+        }
+    }
+
+    fn on_exit(&mut self) {
+        self.save_all_docs();
+        self.save_session();
+    }
+}
+
+pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind {
+    match choice {
+        KeymapChoice::VisualStudio => KeymapKind::VisualStudio,
+        KeymapChoice::Rider if cfg!(target_os = "macos") => KeymapKind::RiderMac,
+        KeymapChoice::Rider => KeymapKind::Rider,
+    }
+}
+
+pub fn editor_config(s: &Settings) -> EditorConfig {
+    EditorConfig {
+        font: rc_editor::layout::EditorFont { size: s.editor_font_size.clamp(8.0, 32.0), line_spacing: s.editor_line_spacing.clamp(1.0, 2.0) },
+        show_indent_guides: s.show_indent_guides,
+        show_inlays: s.show_inlay_hints,
+        right_margin: (s.right_margin > 0).then_some(s.right_margin),
+        ..EditorConfig::default()
+    }
+}
+
+pub fn reveal_in_file_manager(path: &Path) {
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg("-R").arg(path).spawn();
+    #[cfg(target_os = "windows")]
+    let _ = std::process::Command::new("explorer").arg(format!("/select,{}", path.display())).spawn();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let _ = std::process::Command::new("xdg-open").arg(path.parent().unwrap_or(path)).spawn();
+}

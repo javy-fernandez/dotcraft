@@ -1,0 +1,37 @@
+[package]
+name = "rc-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "DotCraft: a lightweight native IDE for .NET"
+
+[[bin]]
+name = "dotcraft"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+egui.workspace = true
+eframe.workspace = true
+egui-wgpu.workspace = true
+wgpu.workspace = true
+rc-text.workspace = true
+rc-syntax.workspace = true
+rc-editor.workspace = true
+rc-kit.workspace = true
+rc-core.workspace = true
+rc-dotnet.workspace = true
+rfd = "0.17"
+muda = { version = "0.21", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "wgsl"] }
+
+[dev-dependencies]
+egui_kittest.workspace = true
+tempfile = "3"
+
+[build-dependencies]
+embed-resource = "3.0"

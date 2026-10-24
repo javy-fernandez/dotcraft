@@ -1,0 +1,215 @@
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+ columns	 columnas	 colonnes	 colunas	 Spalten	 kolumn	 列	 列
+(not found)	(no encontrado)	(introuvable)	(não encontrado)	(nicht gefunden)	(nie znaleziono)	(未找到)	(見つかりません)
+.NET CLI	CLI de .NET	CLI .NET	CLI do .NET	.NET-CLI	.NET CLI	.NET CLI	.NET CLI
+1 project	1 proyecto	1 projet	1 projeto	1 Projekt	1 projekt	1 个项目	1 プロジェクト
+1 to {n}	1 a {n}	1 à {n}	1 a {n}	1 bis {n}	1 do {n}	1 到 {n}	1 から {n}
+A file or folder with this name already exists	Ya existe un archivo o carpeta con este nombre	Un fichier ou dossier portant ce nom existe déjà	Já existe um arquivo ou pasta com este nome	Eine Datei oder ein Ordner mit diesem Namen existiert bereits	Plik lub folder o tej nazwie już istnieje	已存在同名的文件或文件夹	この名前のファイルまたはフォルダーは既に存在します
+A lightweight IDE for .NET	Un IDE ligero para .NET	Un IDE léger pour .NET	Uma IDE leve para .NET	Eine schlanke IDE für .NET	Lekkie IDE dla .NET	轻量级 .NET IDE	.NET 向けの軽量 IDE
+A shell in the workspace folder.	Una terminal en la carpeta del proyecto.	Un shell dans le dossier du projet.	Um shell na pasta do projeto.	Eine Shell im Projektordner.	Powłoka w folderze projektu.	位于项目文件夹中的 Shell。	プロジェクトフォルダーのシェル。
+About DotCraft	Acerca de DotCraft	À propos de DotCraft	Sobre o DotCraft	Über DotCraft	O DotCraft	关于 DotCraft	DotCraft について
+Add Selection for Next Occurrence	Añadir selección a la siguiente coincidencia	Ajouter la sélection pour l'occurrence suivante	Adicionar seleção para a próxima ocorrência	Auswahl für nächstes Vorkommen hinzufügen	Dodaj zaznaczenie następnego wystąpienia	为下一个匹配项添加选区	次の出現箇所を選択に追加
+Appearance	Apariencia	Apparence	Aparência	Darstellung	Wygląd	外观	外観
+Back	Atrás	Précédent	Voltar	Zurück	Wstecz	后退	戻る
+Branches, history and changes of the repository.	Ramas, historial y cambios del repositorio.	Branches, historique et modifications du dépôt.	Branches, histórico e alterações do repositório.	Branches, Verlauf und Änderungen des Repositorys.	Gałęzie, historia i zmiany repozytorium.	仓库的分支、历史和更改。	リポジトリのブランチ、履歴、変更。
+Bring All to Front	Traer todo al frente	Tout ramener au premier plan	Trazer Tudo para a Frente	Alle nach vorne bringen	Przenieś wszystko na wierzch	前置全部窗口	すべてを手前に移動
+Browse…	Examinar…	Parcourir…	Procurar…	Durchsuchen…	Przeglądaj…	浏览…	参照…
+Build Solution	Compilar solución	Générer la solution	Compilar solução	Projektmappe erstellen	Zbuduj rozwiązanie	生成解决方案	ソリューションのビルド
+Build the solution to see errors and warnings.	Compila la solución para ver errores y avisos.	Générez la solution pour voir les erreurs et avertissements.	Compile a solução para ver erros e avisos.	Erstellen Sie die Projektmappe, um Fehler und Warnungen zu sehen.	Zbuduj rozwiązanie, aby zobaczyć błędy i ostrzeżenia.	生成解决方案以查看错误和警告。	ソリューションをビルドするとエラーと警告が表示されます。
+Build	Compilar	Générer	Compilar	Erstellen	Budowanie	生成	ビルド
+Cancel	Cancelar	Annuler	Cancelar	Abbrechen	Anuluj	取消	キャンセル
+Changed files will show up here, ready to commit.	Los archivos modificados aparecerán aquí, listos para el commit.	Les fichiers modifiés apparaîtront ici, prêts à être commités.	Os arquivos alterados aparecerão aqui, prontos para o commit.	Geänderte Dateien erscheinen hier, bereit zum Commit.	Zmienione pliki pojawią się tutaj, gotowe do commitu.	已更改的文件将显示在这里，可直接提交。	変更されたファイルがここに表示され、コミットできます。
+Choose what Run and Debug start	Elige qué inician Ejecutar y Depurar	Choisir ce que lancent Exécuter et Déboguer	Escolha o que Executar e Depurar iniciam	Auswählen, was Ausführen und Debuggen starten	Wybierz, co uruchamiają Uruchom i Debuguj	选择运行和调试启动的内容	実行とデバッグで起動するものを選択
+Class name or file name	Nombre de clase o de archivo	Nom de classe ou de fichier	Nome da classe ou do arquivo	Klassen- oder Dateiname	Nazwa klasy lub pliku	类名或文件名	クラス名またはファイル名
+Close All Tabs	Cerrar todas las pestañas	Fermer tous les onglets	Fechar todas as abas	Alle Tabs schließen	Zamknij wszystkie karty	关闭所有标签页	すべてのタブを閉じる
+Close Other Tabs	Cerrar las demás pestañas	Fermer les autres onglets	Fechar as outras abas	Andere Tabs schließen	Zamknij pozostałe karty	关闭其他标签页	他のタブを閉じる
+Close Project	Cerrar proyecto	Fermer le projet	Fechar projeto	Projekt schließen	Zamknij projekt	关闭项目	プロジェクトを閉じる
+Close Tab	Cerrar pestaña	Fermer l'onglet	Fechar aba	Tab schließen	Zamknij kartę	关闭标签页	タブを閉じる
+Close Tabs to the Right	Cerrar pestañas a la derecha	Fermer les onglets à droite	Fechar abas à direita	Tabs rechts schließen	Zamknij karty po prawej	关闭右侧标签页	右側のタブを閉じる
+Close	Cerrar	Fermer	Fechar	Schließen	Zamknij	关闭	閉じる
+Code Completion	Completado de código	Complétion de code	Conclusão de código	Codevervollständigung	Uzupełnianie kodu	代码补全	コード補完
+Code	Código	Code	Código	Code	Kod	代码	コード
+Collapse All	Contraer todo	Tout réduire	Recolher tudo	Alle einklappen	Zwiń wszystko	全部折叠	すべて折りたたむ
+Collapse	Contraer	Réduire	Recolher	Einklappen	Zwiń	折叠	折りたたむ
+Comment with Block Comment	Comentar con comentario de bloque	Commenter avec un commentaire de bloc	Comentar com comentário de bloco	Mit Blockkommentar kommentieren	Komentarz blokowy	使用块注释	ブロックコメントでコメント
+Comment with Line Comment	Comentar con comentario de línea	Commenter avec un commentaire de ligne	Comentar com comentário de linha	Mit Zeilenkommentar kommentieren	Komentarz liniowy	使用行注释	行コメントでコメント
+Commit	Commit	Commit	Commit	Commit	Commit	提交	コミット
+Commit…	Commit…	Commit…	Commit…	Commit…	Commit…	提交…	コミット…
+Copy Path	Copiar ruta	Copier le chemin	Copiar caminho	Pfad kopieren	Kopiuj ścieżkę	复制路径	パスをコピー
+Copy	Copiar	Copier	Copiar	Kopieren	Kopiuj	复制	コピー
+Could not delete {name}: {error}	No se pudo eliminar {name}: {error}	Impossible de supprimer {name} : {error}	Não foi possível excluir {name}: {error}	{name} konnte nicht gelöscht werden: {error}	Nie można usunąć {name}: {error}	无法删除 {name}：{error}	{name} を削除できませんでした: {error}
+Could not open {path}: {error}	No se pudo abrir {path}: {error}	Impossible d'ouvrir {path} : {error}	Não foi possível abrir {path}: {error}	{path} konnte nicht geöffnet werden: {error}	Nie można otworzyć {path}: {error}	无法打开 {path}：{error}	{path} を開けませんでした: {error}
+Could not read the solution: {error}	No se pudo leer la solución: {error}	Impossible de lire la solution : {error}	Não foi possível ler a solução: {error}	Die Projektmappe konnte nicht gelesen werden: {error}	Nie można odczytać rozwiązania: {error}	无法读取解决方案：{error}	ソリューションを読み込めませんでした: {error}
+Could not save the settings: {error}	No se pudieron guardar los ajustes: {error}	Impossible d'enregistrer les paramètres : {error}	Não foi possível salvar as configurações: {error}	Die Einstellungen konnten nicht gespeichert werden: {error}	Nie można zapisać ustawień: {error}	无法保存设置：{error}	設定を保存できませんでした: {error}
+Could not save {file}: {error}	No se pudo guardar {file}: {error}	Impossible d'enregistrer {file} : {error}	Não foi possível salvar {file}: {error}	{file} konnte nicht gespeichert werden: {error}	Nie można zapisać {file}: {error}	无法保存 {file}：{error}	{file} を保存できませんでした: {error}
+Create	Crear	Créer	Criar	Erstellen	Utwórz	创建	作成
+Cut	Cortar	Couper	Recortar	Ausschneiden	Wytnij	剪切	切り取り
+Debug	Depurar	Déboguer	Depurar	Debuggen	Debuguj	调试	デバッグ
+Delete	Eliminar	Supprimer	Excluir	Löschen	Usuń	删除	削除
+Delete…	Eliminar…	Supprimer…	Excluir…	Löschen…	Usuń…	删除…	削除…
+Dependencies	Dependencias	Dépendances	Dependências	Abhängigkeiten	Zależności	依赖项	依存関係
+Detect automatically	Detectar automáticamente	Détecter automatiquement	Detectar automaticamente	Automatisch erkennen	Wykryj automatycznie	自动检测	自動検出
+Drop files here to open them	Suelta archivos aquí para abrirlos	Déposez des fichiers ici pour les ouvrir	Solte arquivos aqui para abri-los	Dateien hierher ziehen, um sie zu öffnen	Upuść tutaj pliki, aby je otworzyć	将文件拖放到此处以打开	ここにファイルをドロップして開きます
+Duplicate Line or Selection	Duplicar línea o selección	Dupliquer la ligne ou la sélection	Duplicar linha ou seleção	Zeile oder Auswahl duplizieren	Duplikuj wiersz lub zaznaczenie	复制行或选区	行または選択範囲を複製
+Edit	Editar	Modifier	Editar	Bearbeiten	Edytuj	编辑	編集
+menu|Edit	Edición	Édition	Editar	Bearbeiten	Edycja	编辑	編集
+Editor	Editor	Éditeur	Editor	Editor	Edytor	编辑器	エディター
+Errors and warnings of the open files show up here.	Aquí aparecen los errores y avisos de los archivos abiertos.	Les erreurs et avertissements des fichiers ouverts apparaissent ici.	Erros e avisos dos arquivos abertos aparecem aqui.	Fehler und Warnungen der geöffneten Dateien erscheinen hier.	Tutaj pojawiają się błędy i ostrzeżenia otwartych plików.	已打开文件的错误和警告会显示在这里。	開いているファイルのエラーと警告がここに表示されます。
+Evaluate Expression…	Evaluar expresión…	Évaluer l'expression…	Avaliar expressão…	Ausdruck auswerten…	Oblicz wyrażenie…	计算表达式…	式を評価…
+Expand All	Expandir todo	Tout développer	Expandir tudo	Alle ausklappen	Rozwiń wszystko	全部展开	すべて展開
+Expand	Expandir	Développer	Expandir	Ausklappen	Rozwiń	展开	展開
+Explorer	Explorador	Explorateur	Explorador	Explorer	Eksplorator	资源管理器	エクスプローラー
+File Structure	Estructura del archivo	Structure du fichier	Estrutura do arquivo	Dateistruktur	Struktura pliku	文件结构	ファイル構造
+File encoding	Codificación del archivo	Encodage du fichier	Codificação do arquivo	Dateikodierung	Kodowanie pliku	文件编码	ファイルのエンコーディング
+File	Archivo	Fichier	Arquivo	Datei	Plik	文件	ファイル
+Find Usages	Buscar usos	Rechercher les utilisations	Localizar usos	Verwendungen suchen	Znajdź użycia	查找用法	使用箇所を検索
+Find in Files shows its results here.	Buscar en archivos muestra aquí sus resultados.	Rechercher dans les fichiers affiche ses résultats ici.	Localizar em arquivos mostra os resultados aqui.	„In Dateien suchen“ zeigt hier die Ergebnisse.	Wyniki wyszukiwania w plikach pojawią się tutaj.	在文件中查找的结果会显示在这里。	ファイル内検索の結果がここに表示されます。
+Find in Files	Buscar en archivos	Rechercher dans les fichiers	Localizar em arquivos	In Dateien suchen	Znajdź w plikach	在文件中查找	ファイル内検索
+Find in Files…	Buscar en archivos…	Rechercher dans les fichiers…	Localizar em arquivos…	In Dateien suchen…	Znajdź w plikach…	在文件中查找…	ファイル内検索…
+Find	Buscar	Rechercher	Localizar	Suchen	Znajdź	查找	検索
+Find…	Buscar…	Rechercher…	Localizar…	Suchen…	Znajdź…	查找…	検索…
+Folder name	Nombre de la carpeta	Nom du dossier	Nome da pasta	Ordnername	Nazwa folderu	文件夹名称	フォルダー名
+Font size	Tamaño de fuente	Taille de police	Tamanho da fonte	Schriftgröße	Rozmiar czcionki	字号	フォントサイズ
+Forward	Adelante	Suivant	Avançar	Vorwärts	Dalej	前进	進む
+Frameworks	Frameworks	Frameworks	Frameworks	Frameworks	Frameworki	框架	フレームワーク
+Git branches and actions	Ramas y acciones de Git	Branches et actions Git	Branches e ações do Git	Git-Branches und -Aktionen	Gałęzie i akcje Git	Git 分支和操作	Git のブランチと操作
+Git	Git	Git	Git	Git	Git	Git	Git
+Go to Declaration	Ir a la declaración	Aller à la déclaration	Ir para a declaração	Zur Deklaration	Przejdź do deklaracji	转到声明	宣言へ移動
+Go to File	Ir a archivo	Aller au fichier	Ir para o arquivo	Zu Datei	Przejdź do pliku	转到文件	ファイルへ移動
+Go to File…	Ir a archivo…	Aller au fichier…	Ir para o arquivo…	Zu Datei…	Przejdź do pliku…	转到文件…	ファイルへ移動…
+Go to Implementation	Ir a la implementación	Aller à l'implémentation	Ir para a implementação	Zur Implementierung	Przejdź do implementacji	转到实现	実装へ移動
+Go to Line:Column	Ir a línea:columna	Aller à la ligne:colonne	Ir para linha:coluna	Gehe zu Zeile:Spalte	Przejdź do wiersza:kolumny	转到行:列	行:列へ移動
+Go to Line…	Ir a línea…	Aller à la ligne…	Ir para a linha…	Gehe zu Zeile…	Przejdź do wiersza…	转到行…	行へ移動…
+Go to Symbol…	Ir a símbolo…	Aller au symbole…	Ir para o símbolo…	Zu Symbol…	Przejdź do symbolu…	转到符号…	シンボルへ移動…
+Go to Type Declaration	Ir a la declaración del tipo	Aller à la déclaration du type	Ir para a declaração do tipo	Zur Typdeklaration	Przejdź do deklaracji typu	转到类型声明	型宣言へ移動
+Go to Type…	Ir a tipo…	Aller au type…	Ir para o tipo…	Zu Typ…	Przejdź do typu…	转到类型…	型へ移動…
+Hard wrap guide	Guía de margen	Guide de retour à la ligne	Guia de margem	Umbruchhilfslinie	Linia marginesu	硬换行参考线	折り返しガイド
+Help	Ayuda	Aide	Ajuda	Hilfe	Pomoc	帮助	ヘルプ
+Hide All Tool Windows	Ocultar todas las ventanas de herramientas	Masquer toutes les fenêtres d'outils	Ocultar todas as janelas de ferramentas	Alle Werkzeugfenster ausblenden	Ukryj wszystkie okna narzędzi	隐藏所有工具窗口	すべてのツールウィンドウを隠す
+Hide DotCraft	Ocultar DotCraft	Masquer DotCraft	Ocultar DotCraft	DotCraft ausblenden	Ukryj DotCraft	隐藏 DotCraft	DotCraft を隠す
+Hide Others	Ocultar otros	Masquer les autres	Ocultar Outros	Andere ausblenden	Ukryj pozostałe	隐藏其他	ほかを隠す
+Hide	Ocultar	Masquer	Ocultar	Ausblenden	Ukryj	隐藏	隠す
+Icons: IntelliJ Platform (Apache 2.0)	Iconos: IntelliJ Platform (Apache 2.0)	Icônes : IntelliJ Platform (Apache 2.0)	Ícones: IntelliJ Platform (Apache 2.0)	Symbole: IntelliJ Platform (Apache 2.0)	Ikony: IntelliJ Platform (Apache 2.0)	图标：IntelliJ Platform（Apache 2.0）	アイコン: IntelliJ Platform (Apache 2.0)
+Indentation	Sangría	Indentation	Indentação	Einrückung	Wcięcie	缩进	インデント
+Join Lines	Unir líneas	Joindre les lignes	Juntar linhas	Zeilen verbinden	Połącz wiersze	合并行	行を結合
+Keep Mine	Conservar la mía	Garder la mienne	Manter a minha	Meine behalten	Zachowaj moją	保留我的版本	自分の版を保持
+Keymap	Mapa de teclado	Raccourcis clavier	Mapa de teclas	Tastaturbelegung	Skróty klawiszowe	键盘映射	キーマップ
+Language	Idioma	Langue	Idioma	Sprache	Język	语言	言語
+Line height	Altura de línea	Hauteur de ligne	Altura da linha	Zeilenhöhe	Wysokość wiersza	行高	行の高さ
+Line separator	Separador de línea	Séparateur de ligne	Separador de linha	Zeilentrenner	Separator wierszy	行分隔符	行区切り
+Load from Disk	Cargar del disco	Charger depuis le disque	Carregar do disco	Von Datenträger laden	Wczytaj z dysku	从磁盘加载	ディスクから読み込む
+Loading…	Cargando…	Chargement…	Carregando…	Wird geladen…	Wczytywanie…	正在加载…	読み込み中…
+Messages from builds, tools and updates show up here.	Aquí aparecen los mensajes de compilaciones, herramientas y actualizaciones.	Les messages des générations, outils et mises à jour apparaissent ici.	Mensagens de compilações, ferramentas e atualizações aparecem aqui.	Meldungen von Builds, Werkzeugen und Updates erscheinen hier.	Tutaj pojawiają się komunikaty kompilacji, narzędzi i aktualizacji.	生成、工具和更新的消息会显示在这里。	ビルド、ツール、更新のメッセージがここに表示されます。
+More actions	Más acciones	Plus d'actions	Mais ações	Weitere Aktionen	Więcej akcji	更多操作	その他のアクション
+Move "{name}" to the Trash?	¿Mover «{name}» a la papelera?	Placer « {name} » dans la corbeille ?	Mover "{name}" para a Lixeira?	„{name}“ in den Papierkorb verschieben?	Przenieść „{name}” do kosza?	将“{name}”移到废纸篓？	「{name}」をゴミ箱に移動しますか？
+Navigate	Navegar	Naviguer	Navegar	Navigieren	Nawigacja	导航	ナビゲート
+New C# File	Nuevo archivo C#	Nouveau fichier C#	Novo arquivo C#	Neue C#-Datei	Nowy plik C#	新建 C# 文件	新規 C# ファイル
+New C# File…	Nuevo archivo C#…	Nouveau fichier C#…	Novo arquivo C#…	Neue C#-Datei…	Nowy plik C#…	新建 C# 文件…	新規 C# ファイル…
+New Folder	Nueva carpeta	Nouveau dossier	Nova pasta	Neuer Ordner	Nowy folder	新建文件夹	新規フォルダー
+New Folder…	Nueva carpeta…	Nouveau dossier…	Nova pasta…	Neuer Ordner…	Nowy folder…	新建文件夹…	新規フォルダー…
+Next Highlighted Error	Siguiente error resaltado	Erreur mise en évidence suivante	Próximo erro destacado	Nächster markierter Fehler	Następny wyróżniony błąd	下一个突出显示的错误	次のハイライトされたエラー
+No actions for this item	No hay acciones para este elemento	Aucune action pour cet élément	Nenhuma ação para este item	Keine Aktionen für dieses Element	Brak akcji dla tego elementu	此项没有可用操作	この項目に対するアクションはありません
+No build output	Sin salida de compilación	Aucune sortie de génération	Nenhuma saída de compilação	Keine Build-Ausgabe	Brak wyników budowania	没有生成输出	ビルド出力はありません
+No changes	Sin cambios	Aucune modification	Nenhuma alteração	Keine Änderungen	Brak zmian	没有更改	変更はありません
+No debug session	Sin sesión de depuración	Aucune session de débogage	Nenhuma sessão de depuração	Keine Debug-Sitzung	Brak sesji debugowania	没有调试会话	デバッグセッションはありません
+No notifications	Sin notificaciones	Aucune notification	Nenhuma notificação	Keine Benachrichtigungen	Brak powiadomień	没有通知	通知はありません
+No problems	Sin problemas	Aucun problème	Nenhum problema	Keine Probleme	Brak problemów	没有问题	問題はありません
+No recent files	No hay archivos recientes	Aucun fichier récent	Nenhum arquivo recente	Keine zuletzt geöffneten Dateien	Brak ostatnich plików	没有最近文件	最近のファイルはありません
+No search results	Sin resultados de búsqueda	Aucun résultat de recherche	Nenhum resultado de pesquisa	Keine Suchergebnisse	Brak wyników wyszukiwania	没有搜索结果	検索結果はありません
+No structure	Sin estructura	Aucune structure	Nenhuma estrutura	Keine Struktur	Brak struktury	没有结构	構造はありません
+No suggestions	Sin sugerencias	Aucune suggestion	Nenhuma sugestão	Keine Vorschläge	Brak podpowiedzi	没有建议	候補はありません
+No tests run yet	Aún no se han ejecutado pruebas	Aucun test exécuté pour l'instant	Nenhum teste executado ainda	Noch keine Tests ausgeführt	Nie uruchomiono jeszcze testów	尚未运行测试	まだテストは実行されていません
+Nothing is running	No hay nada en ejecución	Rien n'est en cours d'exécution	Nada em execução	Es läuft nichts	Nic nie jest uruchomione	没有正在运行的内容	実行中のものはありません
+Notifications	Notificaciones	Notifications	Notificações	Benachrichtigungen	Powiadomienia	通知	通知
+OK	Aceptar	OK	OK	OK	OK	确定	OK
+Open Folder, Solution or Project	Abrir carpeta, solución o proyecto	Ouvrir un dossier, une solution ou un projet	Abrir pasta, solução ou projeto	Ordner, Projektmappe oder Projekt öffnen	Otwórz folder, rozwiązanie lub projekt	打开文件夹、解决方案或项目	フォルダー、ソリューション、プロジェクトを開く
+Open Solution or Project	Abrir solución o proyecto	Ouvrir une solution ou un projet	Abrir solução ou projeto	Projektmappe oder Projekt öffnen	Otwórz rozwiązanie lub projekt	打开解决方案或项目	ソリューションまたはプロジェクトを開く
+Open Solution or Project…	Abrir solución o proyecto…	Ouvrir une solution ou un projet…	Abrir solução ou projeto…	Projektmappe oder Projekt öffnen…	Otwórz rozwiązanie lub projekt…	打开解决方案或项目…	ソリューションまたはプロジェクトを開く…
+Open a C# file to see its types and members.	Abre un archivo C# para ver sus tipos y miembros.	Ouvrez un fichier C# pour voir ses types et membres.	Abra um arquivo C# para ver seus tipos e membros.	Öffnen Sie eine C#-Datei, um ihre Typen und Member zu sehen.	Otwórz plik C#, aby zobaczyć jego typy i składowe.	打开 C# 文件以查看其类型和成员。	C# ファイルを開くと型とメンバーが表示されます。
+Open in Explorer	Abrir en el Explorador	Ouvrir dans l'Explorateur	Abrir no Explorador	Im Explorer öffnen	Otwórz w Eksploratorze	在资源管理器中打开	エクスプローラーで開く
+Open in Terminal	Abrir en la terminal	Ouvrir dans le terminal	Abrir no terminal	Im Terminal öffnen	Otwórz w terminalu	在终端中打开	ターミナルで開く
+Open	Abrir	Ouvrir	Abrir	Öffnen	Otwórz	打开	開く
+Open…	Abrir…	Ouvrir…	Abrir…	Öffnen…	Otwórz…	打开…	開く…
+Packages	Paquetes	Paquets	Pacotes	Pakete	Pakiety	包	パッケージ
+Parameter Info	Información de parámetros	Infos sur les paramètres	Informações de parâmetros	Parameterinformationen	Informacje o parametrach	参数信息	パラメーター情報
+Paste	Pegar	Coller	Colar	Einfügen	Wklej	粘贴	貼り付け
+Pin Tab	Fijar pestaña	Épingler l'onglet	Fixar aba	Tab anheften	Przypnij kartę	固定标签页	タブをピン留め
+Previous Highlighted Error	Error resaltado anterior	Erreur mise en évidence précédente	Erro destacado anterior	Vorheriger markierter Fehler	Poprzedni wyróżniony błąd	上一个突出显示的错误	前のハイライトされたエラー
+Problems	Problemas	Problèmes	Problemas	Probleme	Problemy	问题	問題
+Projects you open will be listed here.	Los proyectos que abras aparecerán aquí.	Les projets que vous ouvrez seront listés ici.	Os projetos que você abrir aparecerão aqui.	Geöffnete Projekte werden hier aufgelistet.	Otwierane projekty pojawią się tutaj.	您打开的项目将列在这里。	開いたプロジェクトがここに表示されます。
+Projects	Proyectos	Projets	Projetos	Projekte	Projekty	项目	プロジェクト
+Quick Documentation	Documentación rápida	Documentation rapide	Documentação rápida	Schnelldokumentation	Szybka dokumentacja	快速文档	クイックドキュメント
+Quit DotCraft	Salir de DotCraft	Quitter DotCraft	Encerrar o DotCraft	DotCraft beenden	Zakończ DotCraft	退出 DotCraft	DotCraft を終了
+Recent Files	Archivos recientes	Fichiers récents	Arquivos recentes	Zuletzt geöffnete Dateien	Ostatnie pliki	最近的文件	最近のファイル
+Recent Locations	Ubicaciones recientes	Emplacements récents	Locais recentes	Zuletzt besuchte Stellen	Ostatnie lokalizacje	最近的位置	最近の場所
+Recent Projects	Proyectos recientes	Projets récents	Projetos recentes	Zuletzt geöffnete Projekte	Ostatnie projekty	最近的项目	最近のプロジェクト
+Redo	Rehacer	Rétablir	Refazer	Wiederholen	Ponów	重做	やり直し
+Reformat Code	Reformatear código	Reformater le code	Reformatar código	Code neu formatieren	Przeformatuj kod	重新格式化代码	コードの再フォーマット
+Remove from Recent Projects	Quitar de proyectos recientes	Retirer des projets récents	Remover dos projetos recentes	Aus zuletzt geöffneten Projekten entfernen	Usuń z ostatnich projektów	从最近的项目中移除	最近のプロジェクトから削除
+Rename	Renombrar	Renommer	Renomear	Umbenennen	Zmień nazwę	重命名	名前の変更
+Rename…	Renombrar…	Renommer…	Renomear…	Umbenennen…	Zmień nazwę…	重命名…	名前の変更…
+Replace in Files…	Reemplazar en archivos…	Remplacer dans les fichiers…	Substituir em arquivos…	In Dateien ersetzen…	Zamień w plikach…	在文件中替换…	ファイル内置換…
+Replace…	Reemplazar…	Remplacer…	Substituir…	Ersetzen…	Zamień…	替换…	置換…
+Reset Zoom	Restablecer zoom	Réinitialiser le zoom	Redefinir zoom	Zoom zurücksetzen	Resetuj powiększenie	重置缩放	ズームをリセット
+Resume Program	Reanudar programa	Reprendre le programme	Retomar programa	Programm fortsetzen	Wznów program	恢复程序	プログラムの再開
+Reveal in Finder	Mostrar en el Finder	Afficher dans le Finder	Mostrar no Finder	Im Finder zeigen	Pokaż w Finderze	在访达中显示	Finder で表示
+Roslyn language server	Servidor de lenguaje Roslyn	Serveur de langage Roslyn	Servidor de linguagem Roslyn	Roslyn-Sprachserver	Serwer języka Roslyn	Roslyn 语言服务器	Roslyn 言語サーバー
+Run Tests	Ejecutar pruebas	Exécuter les tests	Executar testes	Tests ausführen	Uruchom testy	运行测试	テストを実行
+Run a project to see its output here.	Ejecuta un proyecto para ver aquí su salida.	Exécutez un projet pour voir sa sortie ici.	Execute um projeto para ver a saída aqui.	Führen Sie ein Projekt aus, um seine Ausgabe hier zu sehen.	Uruchom projekt, aby zobaczyć tutaj jego wyjście.	运行项目以在此查看其输出。	プロジェクトを実行すると出力がここに表示されます。
+Run configurations	Configuraciones de ejecución	Configurations d'exécution	Configurações de execução	Ausführungskonfigurationen	Konfiguracje uruchamiania	运行配置	実行構成
+Run the tests of a project or file to see the results.	Ejecuta las pruebas de un proyecto o archivo para ver los resultados.	Exécutez les tests d'un projet ou d'un fichier pour voir les résultats.	Execute os testes de um projeto ou arquivo para ver os resultados.	Führen Sie die Tests eines Projekts oder einer Datei aus, um die Ergebnisse zu sehen.	Uruchom testy projektu lub pliku, aby zobaczyć wyniki.	运行项目或文件的测试以查看结果。	プロジェクトまたはファイルのテストを実行すると結果が表示されます。
+Run to Cursor	Ejecutar hasta el cursor	Exécuter jusqu'au curseur	Executar até o cursor	Bis zum Cursor ausführen	Uruchom do kursora	运行到光标处	カーソルまで実行
+Run	Ejecutar	Exécuter	Executar	Ausführen	Uruchom	运行	実行
+Save All	Guardar todo	Tout enregistrer	Salvar tudo	Alle speichern	Zapisz wszystko	全部保存	すべて保存
+Save files when switching to another application	Guardar los archivos al cambiar a otra aplicación	Enregistrer les fichiers en passant à une autre application	Salvar arquivos ao alternar para outro aplicativo	Dateien beim Wechsel zu einer anderen Anwendung speichern	Zapisuj pliki po przełączeniu do innej aplikacji	切换到其他应用程序时保存文件	別のアプリケーションに切り替えたらファイルを保存
+Search Everywhere	Buscar en todo	Rechercher partout	Pesquisar em tudo	Überall suchen	Szukaj wszędzie	随处搜索	どこでも検索
+Select All Occurrences	Seleccionar todas las coincidencias	Sélectionner toutes les occurrences	Selecionar todas as ocorrências	Alle Vorkommen auswählen	Zaznacz wszystkie wystąpienia	选择所有匹配项	すべての出現箇所を選択
+Select All	Seleccionar todo	Tout sélectionner	Selecionar tudo	Alles auswählen	Zaznacz wszystko	全选	すべて選択
+Select Opened File	Seleccionar el archivo abierto	Sélectionner le fichier ouvert	Selecionar o arquivo aberto	Geöffnete Datei auswählen	Zaznacz otwarty plik	选择打开的文件	開いているファイルを選択
+Select in Explorer	Seleccionar en el explorador	Sélectionner dans l'explorateur	Selecionar no explorador	Im Explorer auswählen	Zaznacz w eksploratorze	在资源管理器中选择	エクスプローラーで選択
+Services	Servicios	Services	Serviços	Dienste	Usługi	服务	サービス
+Settings	Ajustes	Paramètres	Configurações	Einstellungen	Ustawienia	设置	設定
+Settings…	Ajustes…	Paramètres…	Configurações…	Einstellungen…	Ustawienia…	设置…	設定…
+Show All	Mostrar todo	Tout afficher	Mostrar Tudo	Alle einblenden	Pokaż wszystko	全部显示	すべてを表示
+Show Context Actions	Mostrar acciones de contexto	Afficher les actions contextuelles	Mostrar ações de contexto	Kontextaktionen anzeigen	Pokaż akcje kontekstowe	显示上下文操作	コンテキストアクションを表示
+Show indent guides	Mostrar guías de sangría	Afficher les guides d'indentation	Mostrar guias de indentação	Einrückungslinien anzeigen	Pokaż prowadnice wcięć	显示缩进参考线	インデントガイドを表示
+Show inlay hints	Mostrar sugerencias en línea	Afficher les indications incrustées	Mostrar dicas embutidas	Inlay-Hinweise anzeigen	Pokaż podpowiedzi w tekście	显示嵌入提示	インレイヒントを表示
+Solutions and projects	Soluciones y proyectos	Solutions et projets	Soluções e projetos	Projektmappen und Projekte	Rozwiązania i projekty	解决方案和项目	ソリューションとプロジェクト
+Start debugging to see frames, variables and watches.	Inicia la depuración para ver la pila, las variables y las inspecciones.	Démarrez le débogage pour voir les frames, variables et espions.	Inicie a depuração para ver quadros, variáveis e inspeções.	Starten Sie das Debuggen, um Frames, Variablen und Überwachungen zu sehen.	Rozpocznij debugowanie, aby zobaczyć ramki, zmienne i obserwacje.	开始调试以查看帧、变量和监视。	デバッグを開始するとフレーム、変数、ウォッチが表示されます。
+Step Into	Paso a paso por instrucciones	Pas à pas détaillé	Intervir	Einzelschritt	Wejdź	单步执行	ステップイン
+Step Out	Salir paso a paso	Pas à pas sortant	Sair	Ausführen bis Rücksprung	Wyjdź	单步跳出	ステップアウト
+Step Over	Paso a paso por procedimientos	Pas à pas principal	Contornar	Prozedurschritt	Przejdź	单步跳过	ステップオーバー
+Stop	Detener	Arrêter	Parar	Beenden	Zatrzymaj	停止	停止
+Structure	Estructura	Structure	Estrutura	Struktur	Struktura	结构	構造
+Sync with OS	Sincronizar con el sistema	Synchroniser avec le système	Sincronizar com o sistema	Mit dem System synchronisieren	Synchronizuj z systemem	与操作系统同步	OS と同期
+System language	Idioma del sistema	Langue du système	Idioma do sistema	Systemsprache	Język systemu	系统语言	システムの言語
+Tab	Tabulador	Tabulation	Tabulação	Tabulator	Tabulator	制表符	タブ
+Terminal	Terminal	Terminal	Terminal	Terminal	Terminal	终端	ターミナル
+Tests	Pruebas	Tests	Testes	Tests	Testy	测试	テスト
+The file is read-only	El archivo es de solo lectura	Le fichier est en lecture seule	O arquivo é somente leitura	Die Datei ist schreibgeschützt	Plik jest tylko do odczytu	文件为只读	ファイルは読み取り専用です
+The file is too large to open ({size} MB)	El archivo es demasiado grande para abrirlo ({size} MB)	Le fichier est trop volumineux pour être ouvert ({size} Mo)	O arquivo é grande demais para abrir ({size} MB)	Die Datei ist zu groß zum Öffnen ({size} MB)	Plik jest za duży, aby go otworzyć ({size} MB)	文件太大，无法打开（{size} MB）	ファイルが大きすぎて開けません ({size} MB)
+The file was changed on disk. Keep your version or load the one on disk?	El archivo cambió en el disco. ¿Conservar tu versión o cargar la del disco?	Le fichier a été modifié sur le disque. Garder votre version ou charger celle du disque ?	O arquivo foi alterado no disco. Manter a sua versão ou carregar a do disco?	Die Datei wurde auf dem Datenträger geändert. Ihre Version behalten oder die vom Datenträger laden?	Plik zmienił się na dysku. Zachować twoją wersję czy wczytać wersję z dysku?	文件已在磁盘上更改。保留您的版本还是加载磁盘上的版本？	ファイルがディスク上で変更されました。自分の版を保持しますか、ディスクの版を読み込みますか？
+Theme	Tema	Thème	Tema	Design	Motyw	主题	テーマ
+This action is not available yet	Esta acción aún no está disponible	Cette action n'est pas encore disponible	Esta ação ainda não está disponível	Diese Aktion ist noch nicht verfügbar	Ta akcja nie jest jeszcze dostępna	此操作尚不可用	このアクションはまだ利用できません
+This action needs the C# language server, which is not connected yet	Esta acción necesita el servidor de lenguaje de C#, que aún no está conectado	Cette action nécessite le serveur de langage C#, qui n'est pas encore connecté	Esta ação precisa do servidor de linguagem C#, que ainda não está conectado	Diese Aktion benötigt den C#-Sprachserver, der noch nicht verbunden ist	Ta akcja wymaga serwera języka C#, który nie jest jeszcze połączony	此操作需要 C# 语言服务器，但尚未连接	このアクションには C# 言語サーバーが必要ですが、まだ接続されていません
+This is a binary file and cannot be edited	Es un archivo binario y no se puede editar	C'est un fichier binaire qui ne peut pas être modifié	Este é um arquivo binário e não pode ser editado	Dies ist eine Binärdatei und kann nicht bearbeitet werden	To plik binarny i nie można go edytować	这是二进制文件，无法编辑	バイナリファイルのため編集できません
+Toggle Case	Alternar mayúsculas/minúsculas	Basculer la casse	Alternar maiúsculas/minúsculas	Groß-/Kleinschreibung umschalten	Przełącz wielkość liter	切换大小写	大文字/小文字の切り替え
+Toggle Line Breakpoint	Alternar punto de interrupción de línea	Basculer le point d'arrêt de ligne	Alternar ponto de interrupção de linha	Zeilenhaltepunkt umschalten	Przełącz punkt przerwania wiersza	切换行断点	行ブレークポイントの切り替え
+Tool Windows	Ventanas de herramientas	Fenêtres d'outils	Janelas de ferramentas	Werkzeugfenster	Okna narzędzi	工具窗口	ツールウィンドウ
+Tools	Herramientas	Outils	Ferramentas	Werkzeuge	Narzędzia	工具	ツール
+Type to filter	Escribe para filtrar	Tapez pour filtrer	Digite para filtrar	Zum Filtern tippen	Wpisz, aby filtrować	键入以筛选	入力して絞り込み
+Undo	Deshacer	Annuler	Desfazer	Rückgängig	Cofnij	撤销	元に戻す
+Unpin Tab	Desfijar pestaña	Désépingler l'onglet	Desafixar aba	Tab lösen	Odepnij kartę	取消固定标签页	タブのピン留めを解除
+Version control	Control de versiones	Gestion de versions	Controle de versão	Versionskontrolle	Kontrola wersji	版本控制	バージョン管理
+Version {version}	Versión {version}	Version {version}	Versão {version}	Version {version}	Wersja {version}	版本 {version}	バージョン {version}
+View	Ver	Affichage	Exibir	Ansicht	Widok	视图	表示
+Welcome to DotCraft	Bienvenido a DotCraft	Bienvenue dans DotCraft	Bem-vindo ao DotCraft	Willkommen bei DotCraft	Witamy w DotCraft	欢迎使用 DotCraft	DotCraft へようこそ
+Window	Ventana	Fenêtre	Janela	Fenster	Okno	窗口	ウインドウ
+Zoom In	Acercar	Zoom avant	Ampliar	Vergrößern	Powiększ	放大	拡大
+Zoom Out	Alejar	Zoom arrière	Reduzir	Verkleinern	Pomniejsz	缩小	縮小
+Zoom	Zoom	Zoom	Zoom	Zoom	Powiększenie	缩放	ズーム
+netcoredbg debugger	Depurador netcoredbg	Débogueur netcoredbg	Depurador netcoredbg	netcoredbg-Debugger	Debuger netcoredbg	netcoredbg 调试器	netcoredbg デバッガー
+not found	no encontrado	introuvable	não encontrado	nicht gefunden	nie znaleziono	未找到	見つかりません
+{line}:{col} ({n} chars)	{line}:{col} ({n} caracteres)	{line}:{col} ({n} caractères)	{line}:{col} ({n} caracteres)	{line}:{col} ({n} Zeichen)	{line}:{col} ({n} znaków)	{line}:{col}（{n} 个字符）	{line}:{col} ({n} 文字)
+{n} projects	{n} proyectos	{n} projets	{n} projetos	{n} Projekte	Projekty: {n}	{n} 个项目	{n} プロジェクト
+{n} spaces	{n} espacios	{n} espaces	{n} espaços	{n} Leerzeichen	{n} spacji	{n} 个空格	{n} スペース
