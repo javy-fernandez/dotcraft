@@ -1,0 +1,8 @@
+# Terminal (rc-term). Import: python3 scripts/i18n_tsv.py terminal scripts/i18n/rc-term.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Local	Local	Local	Local	Lokal	Lokalny	本地	ローカル
+Copy	Copiar	Copier	Copiar	Kopieren	Kopiuj	复制	コピー
+Paste	Pegar	Coller	Colar	Einfügen	Wklej	粘贴	貼り付け
+Select All	Seleccionar todo	Tout sélectionner	Selecionar tudo	Alles auswählen	Zaznacz wszystko	全选	すべて選択
+Clear Buffer	Limpiar búfer	Effacer le tampon	Limpar buffer	Puffer leeren	Wyczyść bufor	清除缓冲区	バッファーをクリア
+Process finished with exit code {code}	Proceso terminado con código de salida {code}	Processus terminé avec le code de sortie {code}	Processo concluído com código de saída {code}	Prozess beendet mit Exit-Code {code}	Proces zakończony z kodem wyjścia {code}	进程已结束，退出代码为 {code}	プロセスは終了コード {code} で終了しました

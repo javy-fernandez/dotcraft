@@ -1,0 +1,18 @@
+[package]
+name = "rc-term"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+egui.workspace = true
+rc-kit = { path = "../rc-kit" }
+rc-core = { path = "../rc-core" }
+alacritty_terminal = "0.26"
+portable-pty = "0.9"
+anyhow = "1.0"
+parking_lot = "0.12"
+
+[dev-dependencies]
+egui_kittest.workspace = true
+wgpu.workspace = true
