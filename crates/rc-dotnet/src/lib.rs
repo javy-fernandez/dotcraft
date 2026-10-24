@@ -11,6 +11,7 @@ pub mod build;
 pub mod diagnostics;
 pub mod launch;
 pub mod msbuild;
+pub mod nuget;
 pub mod process;
 pub mod project;
 pub mod run;
@@ -23,6 +24,7 @@ pub use build::{BuildAction, BuildEvent, BuildRequest, BuildResult, start_build}
 pub use diagnostics::{Diagnostic, Severity};
 pub use launch::{LaunchProfile, LaunchSettings};
 pub use msbuild::ProjectProperties;
+pub use nuget::{NugetClient, PackageSummary};
 pub use process::{CancelToken, OpHandle, OutputLine, Stream, kill_tree, strip_ansi};
 pub use project::ProjectInfo;
 pub use run::{LaunchPlan, RunEvent, RunHandle, RunRequest, start_run};
