@@ -19,5 +19,6 @@ if (app.Environment.IsDevelopment())
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapGet("/health", () => "ok");
 
 app.Run();
