@@ -21,6 +21,9 @@ pub struct FoldRange {
     pub kind: FoldKind,
     /// Char column on `start_line` where the placeholder (`{...}`) starts.
     pub start_col: usize,
+    /// Char column on `end_line` right after the folded text (what follows stays visible
+    /// after the placeholder, e.g. the `);` of `});`).
+    pub end_col: usize,
 }
 
 /// C# nodes that fold from their `{` to their `}`.
@@ -46,7 +49,7 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                 let kind = node.kind();
                 let (sr, er) = (node.start_position().row, node.end_position().row);
                 if CS_BLOCKS.contains(&kind) && er > sr {
-                    out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Block, start_col: char_col(rope, node) });
+                    out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Block, start_col: char_col(rope, node), end_col: end_col(rope, node) });
                 } else if kind == "using_directive" && node.parent().is_some_and(|p| p.kind() == "compilation_unit") {
                     usings = Some(match usings {
                         Some((s, _, c)) => (s, er, c),
@@ -54,14 +57,14 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                     });
                 } else if kind == "comment" {
                     if er > sr {
-                        out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Comment, start_col: char_col(rope, node) });
+                        out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Comment, start_col: char_col(rope, node), end_col: end_col(rope, node) });
                     } else {
                         // Consecutive `//` lines fold together.
                         comments = match comments {
                             Some((s, e, c)) if e + 1 == sr => Some((s, sr, c)),
                             Some((s, e, c)) => {
                                 if e > s {
-                                    out.push(FoldRange { start_line: s, end_line: e, kind: FoldKind::Comment, start_col: c });
+                                    out.push(FoldRange { start_line: s, end_line: e, kind: FoldKind::Comment, start_col: c, end_col: line_end(rope, e) });
                                 }
                                 Some((sr, sr, char_col(rope, node)))
                             }
@@ -73,30 +76,30 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                 } else if kind == "preproc_endregion"
                     && let Some((start, col)) = regions.pop()
                 {
-                    out.push(FoldRange { start_line: start, end_line: sr, kind: FoldKind::Region, start_col: col });
+                    out.push(FoldRange { start_line: start, end_line: sr, kind: FoldKind::Region, start_col: col, end_col: line_end(rope, sr) });
                 }
             });
             if let Some((s, e, c)) = comments
                 && e > s
             {
-                out.push(FoldRange { start_line: s, end_line: e, kind: FoldKind::Comment, start_col: c });
+                out.push(FoldRange { start_line: s, end_line: e, kind: FoldKind::Comment, start_col: c, end_col: line_end(rope, e) });
             }
             if let Some((s, e, c)) = usings
                 && e > s
             {
-                out.push(FoldRange { start_line: s, end_line: e, kind: FoldKind::Imports, start_col: c });
+                out.push(FoldRange { start_line: s, end_line: e, kind: FoldKind::Imports, start_col: c, end_col: line_end(rope, e) });
             }
         }
         Lang::Xml => walk(tree.root_node(), &mut |node| {
             let (sr, er) = (node.start_position().row, node.end_position().row);
             if (node.kind() == "element" || node.kind() == "Comment") && er > sr {
-                out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Block, start_col: char_col(rope, node) });
+                out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Block, start_col: char_col(rope, node), end_col: end_col(rope, node) });
             }
         }),
         Lang::Json => walk(tree.root_node(), &mut |node| {
             let (sr, er) = (node.start_position().row, node.end_position().row);
             if (node.kind() == "object" || node.kind() == "array") && er > sr {
-                out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Block, start_col: char_col(rope, node) });
+                out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Block, start_col: char_col(rope, node), end_col: end_col(rope, node) });
             }
         }),
         Lang::Markdown => walk(tree.root_node(), &mut |node| {
@@ -104,7 +107,7 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
             if (node.kind() == "section" || node.kind() == "fenced_code_block") && er > sr + 1 {
                 let end = if node.end_position().column == 0 { er - 1 } else { er };
                 if end > sr {
-                    out.push(FoldRange { start_line: sr, end_line: end, kind: FoldKind::Block, start_col: 0 });
+                    out.push(FoldRange { start_line: sr, end_line: end, kind: FoldKind::Block, start_col: line_end(rope, sr), end_col: line_end(rope, end) });
                 }
             }
         }),
@@ -114,6 +117,17 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
     // One fold per start line (the outermost), like IntelliJ.
     out.dedup_by_key(|f| f.start_line);
     out
+}
+
+fn line_end(rope: &Rope, line: usize) -> usize {
+    rc_text::buffer::line_len(rope, line)
+}
+
+fn end_col(rope: &Rope, node: Node) -> usize {
+    let p = node.end_position();
+    let line_start = rope.line_to_byte(p.row.min(rope.len_lines().saturating_sub(1)));
+    let byte = (line_start + p.column).min(rope.len_bytes());
+    rope.byte_to_char(byte) - rope.line_to_char(rope.byte_to_line(byte))
 }
 
 fn char_col(rope: &Rope, node: Node) -> usize {
