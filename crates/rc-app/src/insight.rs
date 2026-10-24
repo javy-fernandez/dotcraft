@@ -645,10 +645,26 @@ impl Insight {
 
     // ------------------------------------------------------------------ editor events
 
+    /// Sends `doc`'s pending edits now, so a request about to be made sees the current text.
+    pub fn flush(&mut self, doc: &mut Doc) {
+        let Some(session) = &mut self.session else { return };
+        if !session.is_initialized() || !session.docs.is_open(&doc.path) {
+            return;
+        }
+        let edits = doc.editor.take_edits();
+        if !edits.is_empty() {
+            session.did_change(&doc.path, &edits);
+            self.dirty.insert(doc.editor.id, Instant::now());
+        }
+    }
+
     /// Reacts to what the active editor did this frame.
     pub fn on_editor_events(&mut self, doc: &mut Doc, events: &[EditorEvent]) {
         if !self.ready() || !is_csharp(doc) {
             return;
+        }
+        if !events.is_empty() {
+            self.flush(doc);
         }
         for ev in events {
             match ev {

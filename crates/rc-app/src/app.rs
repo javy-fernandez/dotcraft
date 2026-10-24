@@ -314,6 +314,7 @@ impl DotCraftApp {
             return;
         }
         let doc = &mut self.docs.list[i];
+        self.insight.flush(doc);
         let caret = doc.editor.caret();
         match action {
             Action::Complete => self.insight.complete(doc, None),
