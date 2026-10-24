@@ -1,0 +1,50 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/javy-fernandez/dotcraft"
+
+[workspace.dependencies]
+anyhow = "1.0"
+ropey = "1.6.1"
+smallvec = "1.15"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tree-sitter = "0.25"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-xml = "0.7"
+tree-sitter-json = "0.24"
+tree-sitter-md = "0.5"
+crossbeam-channel = "0.5"
+egui = "0.36"
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu_no_default_features", "persistence"] }
+egui-wgpu = { version = "0.36", default-features = false }
+wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
+egui_kittest = { version = "0.36", features = ["wgpu", "snapshot"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "process", "io-util", "fs"] }
+proptest = "1"
+criterion = "0.8"
+rc-text = { path = "crates/rc-text" }
+rc-syntax = { path = "crates/rc-syntax" }
+rc-editor = { path = "crates/rc-editor" }
+rc-kit = { path = "crates/rc-kit" }
+rc-core = { path = "crates/rc-core" }
+rc-lsp = { path = "crates/rc-lsp" }
+rc-dap = { path = "crates/rc-dap" }
+rc-dotnet = { path = "crates/rc-dotnet" }
+rc-vcs = { path = "crates/rc-vcs" }
+rc-search = { path = "crates/rc-search" }
+rc-term = { path = "crates/rc-term" }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+
+# Tree-sitter and the rope are hot paths even in debug builds (tests, snapshots).
+[profile.dev.package."*"]
+opt-level = 2
