@@ -102,7 +102,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                 }
                 ui.add_space(6.0);
                 ui.spacing_mut().item_spacing.x = 2.0;
-                let shortcut = |a: Action| app.keymap.shortcut_text(a).map(|s| format!(" ({s})")).unwrap_or_default();
+                let keymap = rc_editor::Keymap::new(app.keymap.kind);
+                let shortcut = |a: Action| keymap.shortcut_text(a).map(|s| format!(" ({s})")).unwrap_or_default();
                 if theme::icon_button_sized(ui, ico::SETTINGS, true, &format!("{}{}", tr("Settings"), shortcut(Action::ShowSettings)), 30.0).clicked() {
                     app.pending.push(Action::ShowSettings);
                 }
@@ -114,7 +115,34 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                     ui.add_space(6.0);
                     theme::toolbar_separator(ui);
                     ui.add_space(4.0);
-                    if theme::icon_button_sized(ui, ico::MORE_VERT, true, tr("More actions"), 30.0).clicked() {}
+                    let more = theme::icon_button_sized(ui, ico::MORE_VERT, true, tr("More actions"), 30.0);
+                    egui::Popup::menu(&more).show(|ui| {
+                        ui.set_min_width(200.0);
+                        if ui.button(tr("Rebuild Solution")).clicked() {
+                            if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
+                                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Rebuild);
+                                crate::ui::run_windows::handle_outputs(app, outs);
+                            }
+                            ui.close();
+                        }
+                        if ui.button(tr("Clean Solution")).clicked() {
+                            if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
+                                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Clean);
+                                crate::ui::run_windows::handle_outputs(app, outs);
+                            }
+                            ui.close();
+                        }
+                        if ui.button(tr("Restore NuGet Packages")).clicked() {
+                            if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
+                                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Restore);
+                                crate::ui::run_windows::handle_outputs(app, outs);
+                            }
+                            ui.close();
+                        }
+                    });
+                    if app.runner.busy() && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked() {
+                        app.pending.push(Action::StopRun);
+                    }
                     if theme::icon_button_sized(ui, ico::DEBUG, true, &format!("{}{}", tr("Debug"), shortcut(Action::Debug)), 30.0).clicked() {
                         app.pending.push(Action::Debug);
                     }
@@ -125,9 +153,28 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                         app.pending.push(Action::Build);
                     }
                     ui.add_space(2.0);
-                    let resp = theme::flat_button(ui, Some(ico::CONFIG_APP), tr("Run configurations"), FontId::proportional(13.0), true, true)
-                        .on_hover_text(tr("Choose what Run and Debug start"));
-                    let _ = resp;
+                    let (icon, label) = match app.runner.selected_config() {
+                        Some(c) => (c.icon(), c.name.clone()),
+                        None => (ico::CONFIG_APP, tr("No run configurations").to_string()),
+                    };
+                    let resp = theme::flat_button(ui, Some(icon), &label, FontId::proportional(13.0), true, true).on_hover_text(tr("Choose what Run and Debug start"));
+                    egui::Popup::menu(&resp).show(|ui| {
+                        ui.set_min_width(240.0);
+                        if app.runner.configs.is_empty() {
+                            ui.label(egui::RichText::new(tr("The workspace has no executable or test projects")).color(rc_kit::pal(ui).muted));
+                        }
+                        let mut chosen = None;
+                        for (i, c) in app.runner.configs.iter().enumerate() {
+                            if ui.add(egui::Button::selectable(i == app.runner.selected, &c.name)).clicked() {
+                                chosen = Some(i);
+                                ui.close();
+                            }
+                        }
+                        if let Some(i) = chosen {
+                            app.runner.selected = i;
+                            app.session_dirty = true;
+                        }
+                    });
                 }
             }
         });

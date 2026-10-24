@@ -6,6 +6,7 @@ pub mod editor_area;
 pub mod explorer;
 pub mod header;
 pub mod status;
+pub mod run_windows;
 pub mod stripes;
 pub mod toolwindows;
 pub mod welcome;

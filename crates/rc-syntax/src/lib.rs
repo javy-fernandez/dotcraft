@@ -15,6 +15,7 @@ pub mod sample;
 pub use highlight::{Hl, Span, highlight_lines};
 pub use lang::Lang;
 pub use parse::{ParseResult, ParserPool, parse_now};
+pub use tree_sitter;
 pub use structure::{FoldKind, FoldRange, folding_ranges, matching_bracket};
 
 use rc_text::{Edit, Rope};

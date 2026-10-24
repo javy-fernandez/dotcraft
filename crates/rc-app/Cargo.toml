@@ -24,6 +24,9 @@ rc-kit.workspace = true
 rc-core.workspace = true
 rc-dotnet.workspace = true
 rc-lsp.workspace = true
+rc-term.workspace = true
+rc-search.workspace = true
+rc-vcs.workspace = true
 rfd = "0.17"
 muda = { version = "0.21", default-features = false }
 

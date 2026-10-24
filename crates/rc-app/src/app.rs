@@ -3,6 +3,7 @@
 
 use crate::docs::Docs;
 use crate::insight::{Insight, InsightOutput, NavKind, Target};
+use crate::runner::Runner;
 use crate::native_menu::{MenuCommand, NativeMenu};
 use crate::toolwindow::{Dock, ToolWindow};
 use crate::ui::dialogs::Dialog;
@@ -42,10 +43,14 @@ pub struct DotCraftApp {
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
     pub insight: Insight,
+    pub runner: Runner,
+    pub terminals: rc_term::Terminals,
+    pub focus_terminal: bool,
     /// Results shown in the Find tool window (usages, implementations…).
     pub find_results: Option<(String, Vec<Target>)>,
     /// Screen position under the active caret (popups that belong to the editor).
     pub caret_screen: Option<egui::Pos2>,
+    pub test_markers: Vec<crate::runner::TestMarker>,
     pub native_menu: Option<NativeMenu>,
     pub waker: Waker,
     fs_inbox: Inbox<FsEvent>,
@@ -98,8 +103,12 @@ impl DotCraftApp {
             dialog: None,
             notices: Vec::new(),
             insight: Insight::new(waker.clone()),
+            runner: Runner::new(waker.clone()),
+            terminals: rc_term::Terminals::new(),
+            focus_terminal: false,
             find_results: None,
             caret_screen: None,
+            test_markers: Vec::new(),
             native_menu,
             fs_inbox: Inbox::new(waker.clone()),
             waker,
@@ -162,7 +171,8 @@ impl DotCraftApp {
             rc_core::WorkspaceKind::Solution(_) => Vec::new(),
         };
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
-        self.insight.start(&ws.root, solution_path.as_deref(), projects, dotnet_path(&self.settings), self.settings.roslyn_path.clone());
+        self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
+        self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         self.workspace = Some(WorkspaceState { ws, solution, solution_error });
         self.restore_session(session);
     }
@@ -175,6 +185,9 @@ impl DotCraftApp {
         self.workspace = None;
         self._watcher = None;
         self.insight.stop();
+        self.runner.stop_all();
+        self.runner.clear();
+        self.terminals = rc_term::Terminals::new();
         self.find_results = None;
         self.docs.list.clear();
         self.docs.active = None;
@@ -255,7 +268,7 @@ impl DotCraftApp {
                 v.sort();
                 v
             },
-            run_configuration: None,
+            run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             breakpoints,
         }
     }
@@ -441,6 +454,19 @@ impl DotCraftApp {
                 self.session_dirty = true;
             }
             Action::OpenFolder => self.pick_and_open(),
+            Action::Build => {
+                self.save_all_docs();
+                if let Some(target) = self.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
+                    let outs = self.runner.build(&target, rc_dotnet::BuildAction::Build);
+                    crate::ui::run_windows::handle_outputs(self, outs);
+                }
+            }
+            Action::Run | Action::RunTests => {
+                self.save_all_docs();
+                let outs = self.runner.run_selected();
+                crate::ui::run_windows::handle_outputs(self, outs);
+            }
+            Action::StopRun => self.runner.stop_all(),
             Action::ZoomIn => self.set_zoom(ctx, self.settings.ui_zoom + 0.1),
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
             Action::ZoomReset => self.set_zoom(ctx, 1.0),
@@ -457,11 +483,109 @@ impl DotCraftApp {
             }
             other => {
                 // Not available yet in this build: say so instead of doing nothing.
-                if matches!(other, Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol | Action::FindInFiles | Action::ReplaceInFiles | Action::RecentLocations | Action::Build | Action::Run | Action::Debug | Action::StopRun | Action::RunTests | Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::RunToCursor | Action::Evaluate | Action::Commit) {
+                if matches!(other, Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol | Action::FindInFiles | Action::ReplaceInFiles | Action::RecentLocations | Action::Debug | Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::RunToCursor | Action::Evaluate | Action::Commit) {
                     self.notify(tr("This action is not available yet"), false);
                 }
             }
         }
+    }
+
+    /// Build errors and warnings go to the Problems window next to the server's diagnostics.
+    pub fn set_build_problems(&mut self, list: Vec<rc_dotnet::Diagnostic>) {
+        let mut per_file: std::collections::BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>> = std::collections::BTreeMap::new();
+        for d in list {
+            let Some(file) = d.file.clone() else { continue };
+            let text = match self.docs.index_of(&file) {
+                Some(i) => self.docs.list[i].editor.buffer.rope().clone(),
+                None => rc_text::Rope::from_str(&std::fs::read_to_string(&file).unwrap_or_default().replace("\r\n", "\n")),
+            };
+            let line = d.line.unwrap_or(1).saturating_sub(1) as usize;
+            let line = line.min(text.len_lines().saturating_sub(1));
+            let start = text.line_to_char(line) + d.column.unwrap_or(1).saturating_sub(1) as usize;
+            let start = start.min(text.len_chars());
+            per_file.entry(file).or_default().push(rc_editor::Diagnostic {
+                start,
+                end: start,
+                severity: if d.severity == rc_dotnet::Severity::Error { rc_editor::Severity::Error } else { rc_editor::Severity::Warning },
+                message: d.message,
+                code: (!d.code.is_empty()).then_some(d.code),
+                unnecessary: false,
+                deprecated: false,
+            });
+        }
+        for (file, diags) in per_file {
+            self.insight.problems.insert(file, diags);
+        }
+    }
+
+    /// Opens the declaration of a test from its fully qualified name (Tests window).
+    pub fn goto_test(&mut self, name: &str) {
+        let parts: Vec<&str> = name.rsplitn(3, '.').collect();
+        let (method, class) = (parts.first().copied().unwrap_or(""), parts.get(1).copied().unwrap_or(""));
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        // The class's file: `Class.cs` under the workspace, else any file declaring it.
+        let mut stack = vec![root];
+        while let Some(dir) = stack.pop() {
+            for n in rc_core::workspace::list_dir(&dir) {
+                if n.is_dir {
+                    stack.push(n.path);
+                } else if n.name.ends_with(".cs")
+                    && let Ok(text) = std::fs::read_to_string(&n.path)
+                    && text.contains(&format!("class {class}"))
+                    && let Some(line) = text.lines().position(|l| l.contains(&format!(" {method}(")))
+                {
+                    self.open_at(&n.path, line, 0);
+                    return;
+                }
+            }
+        }
+    }
+
+    /// A new terminal tab in `dir` (the workspace folder by default).
+    pub fn open_terminal(&mut self, dir: Option<PathBuf>) {
+        let cwd = dir.or_else(|| self.workspace.as_ref().map(|w| w.ws.root.clone()));
+        match self.terminals.open(&rc_term::SpawnSpec::shell(cwd), self.waker.clone()) {
+            Ok(_) => {
+                self.dock.show(ToolWindow::Terminal);
+                self.focus_terminal = true;
+            }
+            Err(e) => self.notify(trf("Could not start the terminal: {error}", &[("error", &e)]), true),
+        }
+    }
+
+    /// Run icons next to test classes and methods, with their last outcome.
+    fn update_test_markers(&mut self) {
+        let Some(i) = self.docs.active else { return };
+        let doc = &mut self.docs.list[i];
+        if !crate::insight::is_csharp(doc) {
+            return;
+        }
+        let Some(tree) = doc.editor.syntax.tree() else { return };
+        let markers = crate::runner::test_markers(doc.editor.buffer.rope(), tree);
+        doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed));
+        for m in &markers {
+            let icon = match self.runner.test_outcomes.get(&m.name) {
+                Some(crate::runner::TestState::Passed) => rc_editor::GutterIcon::TestPassed,
+                Some(crate::runner::TestState::Failed) => rc_editor::GutterIcon::TestFailed,
+                _ => rc_editor::GutterIcon::RunTest,
+            };
+            doc.editor.gutter_icons.insert(m.line, icon);
+        }
+        self.test_markers = markers;
+    }
+
+    /// Click on a test's gutter icon: runs that test (or class) in its project.
+    pub fn run_test_at(&mut self, line: usize) {
+        let Some(m) = self.test_markers.iter().find(|m| m.line == line).cloned() else { return };
+        let Some(path) = self.docs.active_doc().map(|d| d.path.clone()) else { return };
+        let Some(project) = crate::runner::project_of(&path, &self.runner.configs) else {
+            self.notify(tr("This file is not part of a test project"), false);
+            return;
+        };
+        self.save_all_docs();
+        let filter = if m.is_class { rc_dotnet::TestFilter::Class(m.name.clone()) } else { rc_dotnet::TestFilter::Tests(vec![m.name.clone()]) };
+        let outs = self.runner.run_tests(&project, Some(filter));
+        crate::ui::run_windows::handle_outputs(self, outs);
     }
 
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
@@ -534,7 +658,7 @@ impl DotCraftApp {
                 ExplorerAction::Delete(path) => self.dialog = Some(Dialog::ConfirmDelete { path }),
                 ExplorerAction::CopyPath(path) => ctx.copy_text(path.display().to_string()),
                 ExplorerAction::Reveal(path) => reveal_in_file_manager(&path),
-                ExplorerAction::OpenInTerminal(_dir) => self.toggle_tool(ToolWindow::Terminal),
+                ExplorerAction::OpenInTerminal(dir) => self.open_terminal(Some(dir)),
             }
         }
     }
@@ -682,6 +806,14 @@ impl eframe::App for DotCraftApp {
         }
         let outputs = self.insight.update(&mut self.docs, self.settings.show_inlay_hints);
         self.handle_insight(outputs);
+        let outs = self.runner.update();
+        crate::ui::run_windows::handle_outputs(self, outs);
+        for (_, ev) in self.terminals.poll() {
+            if let rc_term::SessionEvent::Clipboard(text) = ev {
+                ctx.copy_text(text);
+            }
+        }
+        self.update_test_markers();
         crate::ui::frame(self, ui, editor_actions);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);
@@ -692,6 +824,8 @@ impl eframe::App for DotCraftApp {
     }
 
     fn on_exit(&mut self) {
+        self.runner.stop_all();
+        self.insight.stop();
         self.save_all_docs();
         self.save_session();
     }

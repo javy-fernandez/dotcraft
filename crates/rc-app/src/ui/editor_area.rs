@@ -142,6 +142,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     if let Some(data) = out.accepted_completion {
         app.insight.completion_accepted(doc, data);
     }
+    let mut run_test_line = None;
     let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
     app.caret_screen = Some(caret_screen);
     for ev in out.events {
@@ -151,6 +152,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
                 app.session_dirty = true;
             }
             EditorEvent::CaretMoved => app.session_dirty = true,
+            EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
             _ => {}
         }
     }
@@ -170,6 +172,9 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         }
     }
     insight_actions.extend(from_menu);
+    if let Some(line) = run_test_line {
+        app.run_test_at(line);
+    }
     for a in insight_actions {
         app.run_insight_action(a, caret_screen);
     }

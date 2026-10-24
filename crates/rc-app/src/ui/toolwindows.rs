@@ -26,6 +26,10 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
             let ctx = ui.ctx().clone();
             app.handle_explorer(&ctx, actions);
         }
+        ToolWindow::Build => crate::ui::run_windows::build(app, ui),
+        ToolWindow::Run => crate::ui::run_windows::run(app, ui),
+        ToolWindow::Tests => crate::ui::run_windows::tests(app, ui),
+        ToolWindow::Terminal => crate::ui::run_windows::terminal(app, ui),
         ToolWindow::Problems => {
             if header(ui, tw.title()) {
                 app.toggle_tool(tw);

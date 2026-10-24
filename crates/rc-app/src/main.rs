@@ -3,6 +3,9 @@
 mod app;
 mod convert;
 mod insight;
+mod runner;
+#[cfg(test)]
+mod runner_tests;
 #[cfg(test)]
 mod insight_tests;
 #[cfg(test)]
