@@ -16,6 +16,8 @@ pub mod project;
 pub mod run;
 pub mod sdk;
 pub mod solution;
+pub mod test;
+pub mod trx;
 
 pub use build::{BuildAction, BuildEvent, BuildRequest, BuildResult, start_build};
 pub use diagnostics::{Diagnostic, Severity};
@@ -26,3 +28,5 @@ pub use project::ProjectInfo;
 pub use run::{LaunchPlan, RunEvent, RunHandle, RunRequest, start_run};
 pub use sdk::{Dotnet, RuntimeInfo, SdkInfo};
 pub use solution::{ProjectRef, Solution, SolutionItem};
+pub use test::{DiscoveredTest, TestEvent, TestFilter, TestRequest, TestRunResult, start_tests};
+pub use trx::{TestOutcome, TestResult};
