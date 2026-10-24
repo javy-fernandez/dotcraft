@@ -475,7 +475,7 @@ mod tests {
     fn icons_snap_to_the_pixel_grid() {
         let ctx = Context::default();
         ctx.set_pixels_per_point(2.0);
-        let _ = ctx.run_ui(Default::default(), |_| {});
+        ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
         let (r, px) = snapped(&ctx, Rect::from_min_size(pos2(10.3, 4.1), vec2(26.0, 26.0)), 16.0);
         assert_eq!(px, 32);
         assert_eq!((r.min.x * 2.0).fract(), 0.0);
