@@ -9,6 +9,12 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 roxmltree = "0.20"
+rc-core = { path = "../rc-core" }
+tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "sync", "time", "macros", "fs"] }
+tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3"

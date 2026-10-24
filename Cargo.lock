@@ -2547,10 +2547,13 @@ name = "rc-dotnet"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "libc",
+ "rc-core",
  "roxmltree",
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
