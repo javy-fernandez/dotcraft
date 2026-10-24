@@ -12,6 +12,9 @@ pub fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures").canonicalize().unwrap()
 }
 
+/// Tests that point `DOTCRAFT_HOME` somewhere hold this lock: the variable is process-wide.
+pub static HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// An app with its own data folder (never the user's settings or sessions).
 pub fn test_app(home: &Path, dark: bool) -> DotCraftApp {
     // SAFETY: tests that read DOTCRAFT_HOME set it to the same kind of temp folder first.
@@ -46,6 +49,7 @@ pub fn harness(app: DotCraftApp, size: egui::Vec2) -> Harness<'static, DotCraftA
 #[test]
 #[ignore = "Requires a GPU; writes window captures to target/snapshots"]
 fn screens() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
     std::fs::create_dir_all(&out).unwrap();
     for dark in [true, false] {
@@ -78,6 +82,7 @@ fn screens() {
 #[test]
 fn ten_project_solution_opens_and_its_session_is_restored() {
     use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     let sln = fixtures().join("TenProjects/TenProjects.slnx");
     let file_a = fixtures().join("TenProjects/src/Module03/Class1.cs");
