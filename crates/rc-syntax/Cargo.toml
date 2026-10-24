@@ -1,0 +1,22 @@
+[package]
+name = "rc-syntax"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rc-text.workspace = true
+tree-sitter.workspace = true
+tree-sitter-c-sharp.workspace = true
+tree-sitter-xml.workspace = true
+tree-sitter-json.workspace = true
+tree-sitter-md.workspace = true
+crossbeam-channel.workspace = true
+streaming-iterator = "0.1"
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "parse"
+harness = false
