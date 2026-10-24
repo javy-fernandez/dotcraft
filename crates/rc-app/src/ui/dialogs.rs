@@ -25,6 +25,12 @@ pub enum Dialog {
     Rename { path: PathBuf, name: String, error: Option<String> },
     ConfirmDelete { path: PathBuf },
     RecentFiles { selected: usize, filter: String },
+    /// ⌥⏎ context actions for the active editor.
+    CodeActions { list: Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: usize },
+    /// Shift+F6 on a symbol.
+    RenameSymbol { doc: u64, pos: usize, original: String, name: String, focus: bool },
+    /// ⌘F12 file structure popup.
+    FileStructure { filter: String, selected: usize },
 }
 
 impl Dialog {
@@ -48,6 +54,9 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
+        Dialog::CodeActions { list, selected } => code_actions(app, ctx, list, selected),
+        Dialog::RenameSymbol { doc, pos, original, name, focus } => rename_symbol(app, ctx, *doc, *pos, original, name, focus),
+        Dialog::FileStructure { filter, selected } => file_structure(app, ctx, filter, selected),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -484,6 +493,160 @@ fn recent_files(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize, filt
     });
     if let Some(path) = open {
         app.open_file(&path);
+        return Outcome::Close;
+    }
+    if esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The list of context actions, under the caret like IntelliJ's bulb popup.
+fn code_actions(app: &mut DotCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: &mut usize) -> Outcome {
+    use rc_lsp::lsp_types::CodeActionOrCommand as A;
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let pos = app.caret_screen.unwrap_or(egui::pos2(200.0, 200.0));
+    let mut chosen = None;
+    let mut close = false;
+    let n = list.len();
+    if ctx.input(|i| i.key_pressed(Key::ArrowDown)) {
+        *selected = (*selected + 1) % n.max(1);
+    }
+    if ctx.input(|i| i.key_pressed(Key::ArrowUp)) {
+        *selected = (*selected + n.max(1) - 1) % n.max(1);
+    }
+    if ctx.input(|i| i.key_pressed(Key::Enter)) {
+        chosen = Some(*selected);
+    }
+    if ctx.input(|i| i.key_pressed(Key::Escape)) {
+        close = true;
+    }
+    let area = egui::Area::new(Id::new("code_actions")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+        egui::Frame::NONE.fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(8).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
+            ui.set_min_width(320.0);
+            for (i, a) in list.iter().enumerate() {
+                let (title, quickfix) = match a {
+                    A::Command(c) => (c.title.clone(), false),
+                    A::CodeAction(c) => (c.title.clone(), c.kind.as_ref().is_some_and(|k| k.as_str().starts_with("quickfix"))),
+                };
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(320.0), 26.0), egui::Sense::click());
+                if i == *selected {
+                    ui.painter().rect_filled(r, 4.0, p.selection);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(r, 4.0, p.row_hover);
+                }
+                let icon = if quickfix { rc_kit::ico::BULB_QUICKFIX } else { rc_kit::ico::BULB };
+                icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(16.0, 16.0)), icon, &p, true);
+                ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, &title, FontId::proportional(13.0), p.text);
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &title));
+                if resp.clicked() {
+                    chosen = Some(i);
+                }
+            }
+        });
+    });
+    if ctx.input(|i| i.pointer.any_pressed()) && !area.response.hovered() && chosen.is_none() {
+        close = true;
+    }
+    if let Some(i) = chosen {
+        let action = list.swap_remove(i);
+        let mut out = Vec::new();
+        app.insight.run_code_action(&mut app.docs, action, &mut out);
+        app.handle_insight(out);
+        return Outcome::Close;
+    }
+    if close { Outcome::Close } else { Outcome::Keep }
+}
+
+fn rename_symbol(app: &mut DotCraftApp, ctx: &Context, doc: u64, pos: usize, original: &mut String, name: &mut String, focus: &mut bool) -> Outcome {
+    let valid = !name.trim().is_empty() && name.trim().chars().all(|c| c.is_alphanumeric() || c == '_' || c == '@');
+    let ((ok, cancel), esc) = modal(ctx, "rename_symbol", 400.0, |ui| {
+        title(ui, &trf("Rename '{name}'", &[("name", original)]));
+        let resp = ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY));
+        if std::mem::take(focus) {
+            resp.request_focus();
+            // Select the whole name, like IntelliJ's rename field.
+            if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), resp.id) {
+                let n = name.chars().count();
+                state.cursor.set_char_range(Some(egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(n))));
+                state.store(ui.ctx(), resp.id);
+            }
+        }
+        ui.label(egui::RichText::new(tr("Renames the symbol and its usages in every project.")).size(12.0).color(rc_kit::pal(ui).muted));
+        let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        let (ok, cancel) = buttons(ui, tr("Rename"), valid);
+        (ok || enter && valid, cancel)
+    });
+    if ok {
+        if *name != *original
+            && let Some(d) = app.docs.list.iter().find(|d| d.editor.id == doc)
+        {
+            app.insight.rename(d, pos, name.trim());
+        }
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// ⌘F12: the members of the active file, filtered by typing.
+fn file_structure(app: &mut DotCraftApp, ctx: &Context, filter: &mut String, selected: &mut usize) -> Outcome {
+    let Some(doc) = app.docs.active_doc() else { return Outcome::Close };
+    let id = doc.editor.id;
+    let Some(tree) = app.insight.structure.get(&id).cloned() else {
+        app.notify(tr("The file structure is not available yet"), false);
+        return Outcome::Close;
+    };
+    let mut flat: Vec<(usize, crate::insight::SymbolNode)> = Vec::new();
+    fn walk(nodes: &[crate::insight::SymbolNode], depth: usize, out: &mut Vec<(usize, crate::insight::SymbolNode)>) {
+        for n in nodes {
+            out.push((depth, n.clone()));
+            walk(&n.children, depth + 1, out);
+        }
+    }
+    walk(&tree, 0, &mut flat);
+    let items: Vec<(usize, crate::insight::SymbolNode)> = flat
+        .into_iter()
+        .filter(|(_, n)| filter.is_empty() || rc_editor::popup::fuzzy_score(&n.name, filter).is_some())
+        .collect();
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let mut open = None;
+    let (_, esc) = modal(ctx, "file_structure", 460.0, |ui| {
+        title(ui, &doc.name());
+        let resp = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Type to filter")).desired_width(f32::INFINITY));
+        resp.request_focus();
+        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
+            *selected = (*selected + 1).min(items.len().saturating_sub(1));
+        }
+        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
+            *selected = selected.saturating_sub(1);
+        }
+        if ui.input(|i| i.key_pressed(Key::Enter)) {
+            open = items.get(*selected).map(|(_, n)| (n.line, n.col));
+        }
+        ui.add_space(6.0);
+        egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
+            for (i, (depth, n)) in items.iter().enumerate() {
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), egui::Sense::click());
+                if i == *selected {
+                    ui.painter().rect_filled(r, 4.0, p.selection);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(r, 4.0, p.row_hover);
+                }
+                let x = r.left() + 8.0 + *depth as f32 * 16.0;
+                icons::paint(ui.painter(), egui::Rect::from_center_size(egui::pos2(x + 8.0, r.center().y), vec2(16.0, 16.0)), crate::convert::symbol_icon(n.kind), &p, true);
+                let g = ui.painter().layout_no_wrap(n.name.clone(), FontId::proportional(13.0), p.text);
+                ui.painter().galley(egui::pos2(x + 22.0, r.center().y - g.size().y / 2.0), g.clone(), p.text);
+                if !n.detail.is_empty() {
+                    ui.painter().text(egui::pos2(x + 30.0 + g.size().x, r.center().y), Align2::LEFT_CENTER, &n.detail, FontId::proportional(12.0), p.muted);
+                }
+                if resp.clicked() {
+                    open = Some((n.line, n.col));
+                }
+            }
+        });
+    });
+    if let Some((line, col)) = open {
+        app.push_nav();
+        if let Some(d) = app.docs.active_doc_mut() {
+            d.editor.goto(line, col);
+        }
         return Outcome::Close;
     }
     if esc { Outcome::Close } else { Outcome::Keep }

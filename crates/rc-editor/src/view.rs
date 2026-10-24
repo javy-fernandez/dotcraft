@@ -32,8 +32,10 @@ pub struct EditorOutput {
     /// IDE actions triggered by shortcuts while the editor had focus.
     pub actions: Vec<Action>,
     pub events: Vec<EditorEvent>,
-    /// Index into the completion's filtered list of the item accepted this frame.
+    /// `data` of the completion item accepted this frame (the caller's index of the item).
     pub accepted_completion: Option<usize>,
+    /// Screen rect of the primary caret when it is visible (popups open below it).
+    pub caret_rect: Option<Rect>,
 }
 
 /// Geometry of the current frame.
@@ -85,7 +87,7 @@ impl<'a> EditorView<'a> {
         let rect = ui.available_rect_before_wrap();
         let response = ui.interact(rect, id, Sense::click_and_drag());
         ui.advance_cursor_after_rect(rect);
-        let mut out = EditorOutput { response: response.clone(), actions: Vec::new(), events: Vec::new(), accepted_completion: None };
+        let mut out = EditorOutput { response: response.clone(), actions: Vec::new(), events: Vec::new(), accepted_completion: None, caret_rect: None };
         if focus_on_show {
             response.request_focus();
         }
@@ -146,8 +148,9 @@ impl<'a> EditorView<'a> {
         }
 
         // IME position.
+        out.caret_rect = caret_screen_rect(ui, state, config, &scheme, &m, text_rect);
         if focused {
-            if let Some(cursor_rect) = caret_screen_rect(ui, state, config, &scheme, &m, text_rect) {
+            if let Some(cursor_rect) = out.caret_rect {
                 ui.output_mut(|o| {
                     o.ime = Some(egui::output::IMEOutput {
                         purpose: Default::default(),
@@ -1343,7 +1346,7 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
 /// Returns the code-insight actions it could not handle itself.
 pub fn run_action(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action) -> Vec<Action> {
     let response = ui.interact(Rect::NOTHING, Id::new("dotcraft_editor_action"), Sense::hover());
-    let mut out = EditorOutput { response, actions: Vec::new(), events: Vec::new(), accepted_completion: None };
+    let mut out = EditorOutput { response, actions: Vec::new(), events: Vec::new(), accepted_completion: None, caret_rect: None };
     if action.is_editing() {
         exec(ui, state, config, action, &mut out);
     } else {

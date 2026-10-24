@@ -38,6 +38,13 @@ pub struct Completion {
 }
 
 impl Completion {
+    /// A list for items starting at `anchor` (or a "loading" placeholder until they arrive).
+    pub fn new(anchor: usize, items: Vec<CompletionItem>, loading: bool) -> Self {
+        Completion { anchor, items, loading, ..Default::default() }
+    }
+}
+
+impl Completion {
     /// Re-filters the items for `prefix`: camel-hump and substring matches, prefix matches
     /// first (IntelliJ's ordering, simplified).
     pub fn filter(&mut self, prefix: &str) {

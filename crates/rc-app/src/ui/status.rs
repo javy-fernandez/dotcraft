@@ -34,6 +34,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
             theme::Side::Right => {
                 ui.add_space(10.0);
                 ui.spacing_mut().item_spacing.x = 0.0;
+                insight_widget(app, ui);
                 let Some(doc) = app.docs.active_doc() else { return };
                 let e = &doc.editor;
                 let widget = |ui: &mut Ui, text: String, tip: &str| {
@@ -61,6 +62,55 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
             }
         });
     });
+}
+
+/// C# language server state: download offer, progress, failures with a restart button.
+fn insight_widget(app: &mut DotCraftApp, ui: &mut Ui) {
+    use crate::insight::InsightStatus as S;
+    let p = rc_kit::pal(ui);
+    match app.insight.status.clone() {
+        S::Idle => {}
+        S::Ready => {
+            let tip = match app.insight.last_completion_ms {
+                Some(ms) => trf("C# language server ready (last completion {ms} ms)", &[("ms", &ms)]),
+                None => tr("C# language server ready").to_string(),
+            };
+            theme::flat_button(ui, Some(ico::CHECKMARK), "C#", FontId::proportional(12.5), false, true).on_hover_text(tip);
+        }
+        S::NotInstalled => {
+            if theme::flat_button(ui, Some(ico::DOWNLOAD), tr("Download C# language server"), FontId::proportional(12.5), false, true)
+                .on_hover_text(tr("Roslyn is needed for completion, navigation, refactorings and errors (about 60 MB)"))
+                .clicked()
+            {
+                app.insight.download();
+            }
+        }
+        S::Downloading { done, total } => {
+            let text = match total {
+                Some(t) if t > 0 => trf("Downloading C# language server… {pct}%", &[("pct", &(done * 100 / t))]),
+                _ => trf("Downloading C# language server… {mb} MB", &[("mb", &(done / 1_048_576))]),
+            };
+            ui.add(egui::Spinner::new().size(12.0).color(p.muted));
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new(text).size(12.5).color(p.text_muted));
+            ui.add_space(8.0);
+        }
+        S::Starting | S::Loading(_) => {
+            let text = match &app.insight.status {
+                S::Loading(t) => t.clone(),
+                _ => tr("Starting C# language server…").to_string(),
+            };
+            ui.add(egui::Spinner::new().size(12.0).color(p.muted));
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new(text).size(12.5).color(p.text_muted));
+            ui.add_space(8.0);
+        }
+        S::Failed(why) => {
+            if theme::flat_button(ui, Some(ico::ERROR), tr("C# server stopped — Restart"), FontId::proportional(12.5), false, true).on_hover_text(why).clicked() {
+                app.insight.restart();
+            }
+        }
+    }
 }
 
 /// Workspace › folders › file (each part clickable to locate it in the explorer).

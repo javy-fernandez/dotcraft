@@ -2,6 +2,7 @@
 //! the frame loop that ties them together.
 
 use crate::docs::Docs;
+use crate::insight::{Insight, InsightOutput, NavKind, Target};
 use crate::native_menu::{MenuCommand, NativeMenu};
 use crate::toolwindow::{Dock, ToolWindow};
 use crate::ui::dialogs::Dialog;
@@ -40,6 +41,11 @@ pub struct DotCraftApp {
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
+    pub insight: Insight,
+    /// Results shown in the Find tool window (usages, implementations…).
+    pub find_results: Option<(String, Vec<Target>)>,
+    /// Screen position under the active caret (popups that belong to the editor).
+    pub caret_screen: Option<egui::Pos2>,
     pub native_menu: Option<NativeMenu>,
     pub waker: Waker,
     fs_inbox: Inbox<FsEvent>,
@@ -91,6 +97,9 @@ impl DotCraftApp {
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
+            insight: Insight::new(waker.clone()),
+            find_results: None,
+            caret_screen: None,
             native_menu,
             fs_inbox: Inbox::new(waker.clone()),
             waker,
@@ -147,6 +156,13 @@ impl DotCraftApp {
         let _ = self.settings.save();
         self._watcher = FileWatcher::new(&ws.root, self.fs_inbox.sender()).ok();
         let session = Session::load(ws.key_path());
+        let projects = match &ws.kind {
+            rc_core::WorkspaceKind::Project(p) => vec![p.clone()],
+            rc_core::WorkspaceKind::Folder => find_projects(&ws.root, 4),
+            rc_core::WorkspaceKind::Solution(_) => Vec::new(),
+        };
+        let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
+        self.insight.start(&ws.root, solution_path.as_deref(), projects, dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         self.workspace = Some(WorkspaceState { ws, solution, solution_error });
         self.restore_session(session);
     }
@@ -158,6 +174,8 @@ impl DotCraftApp {
         }
         self.workspace = None;
         self._watcher = None;
+        self.insight.stop();
+        self.find_results = None;
         self.docs.list.clear();
         self.docs.active = None;
         self.explorer = ExplorerState::default();
@@ -252,8 +270,76 @@ impl DotCraftApp {
     }
 
     pub fn save_all_docs(&mut self) {
+        let modified: Vec<PathBuf> = self.docs.list.iter().filter(|d| d.is_modified()).map(|d| d.path.clone()).collect();
         for e in self.docs.save_all() {
             self.notify(e, true);
+        }
+        for p in modified {
+            self.insight.did_save(&p);
+        }
+    }
+
+    /// Code-insight results that leave the editor: navigation, result lists, dialogs.
+    pub fn handle_insight(&mut self, outputs: Vec<InsightOutput>) {
+        for o in outputs {
+            match o {
+                InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
+                InsightOutput::Usages { title, targets } => {
+                    if targets.len() == 1 {
+                        let t = &targets[0];
+                        self.open_at(&t.path.clone(), t.line, t.col);
+                    } else {
+                        self.find_results = Some((title, targets));
+                        self.dock.show(ToolWindow::Find);
+                    }
+                }
+                InsightOutput::Actions(list) => self.dialog = Some(Dialog::CodeActions { list, selected: 0 }),
+                InsightOutput::AskRename { doc, pos, name } => self.dialog = Some(Dialog::RenameSymbol { doc, pos, original: name.clone(), name, focus: true }),
+                InsightOutput::Message(m) => self.notify(m, false),
+            }
+        }
+    }
+
+    /// Runs a code-insight action from the editor's keymap on the active document.
+    pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
+        let Some(i) = self.docs.active else { return };
+        if !self.insight.ready() || !crate::insight::is_csharp(&self.docs.list[i]) {
+            let msg = match &self.insight.status {
+                crate::insight::InsightStatus::NotInstalled => tr("Download the C# language server from the status bar to use this action"),
+                crate::insight::InsightStatus::Failed(_) => tr("The C# language server stopped; restart it from the status bar"),
+                _ if !crate::insight::is_csharp(&self.docs.list[i]) => tr("This action is available in C# files"),
+                _ => tr("The C# language server is still loading the solution"),
+            };
+            self.notify(msg, false);
+            return;
+        }
+        let doc = &mut self.docs.list[i];
+        let caret = doc.editor.caret();
+        match action {
+            Action::Complete => self.insight.complete(doc, None),
+            Action::ParameterInfo => self.insight.parameter_info(doc),
+            Action::QuickDoc => self.insight.quick_doc(doc, caret_screen),
+            Action::ShowIntentions => self.insight.code_actions(doc),
+            Action::GotoDeclaration => {
+                self.push_nav();
+                let doc = &self.docs.list[i];
+                self.insight.navigate(doc, caret, NavKind::Declaration);
+            }
+            Action::GotoImplementation => {
+                self.push_nav();
+                let doc = &self.docs.list[i];
+                self.insight.navigate(doc, caret, NavKind::Implementation);
+            }
+            Action::GotoTypeDeclaration => {
+                self.push_nav();
+                let doc = &self.docs.list[i];
+                self.insight.navigate(doc, caret, NavKind::TypeDeclaration);
+            }
+            Action::FindUsages => self.insight.navigate(doc, caret, NavKind::Usages),
+            Action::Rename => self.insight.prepare_rename(doc),
+            Action::Reformat => self.insight.format(doc),
+            Action::FileStructure => self.dialog = Some(Dialog::FileStructure { filter: String::new(), selected: 0 }),
+            _ => {}
         }
     }
 
@@ -464,7 +550,9 @@ impl DotCraftApp {
 
     fn poll_background(&mut self) {
         let mut changed: Vec<PathBuf> = Vec::new();
-        for ev in self.fs_inbox.drain() {
+        let events = self.fs_inbox.drain();
+        self.report_fs_to_server(&events);
+        for ev in events {
             let p = ev.path().to_path_buf();
             self.explorer.invalidate(&p);
             if !changed.contains(&p) {
@@ -482,6 +570,22 @@ impl DotCraftApp {
             }
         }
         self.docs.poll_parses();
+    }
+
+    /// Changed C# files tell the language server to reload them (1 created, 2 changed, 3 deleted).
+    fn report_fs_to_server(&self, events: &[FsEvent]) {
+        let changes: Vec<(PathBuf, u8)> = events
+            .iter()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "cs" || x == "csproj" || x == "props" || x == "targets"))
+            .map(|e| match e {
+                FsEvent::Created(p) => (p.clone(), 1),
+                FsEvent::Changed(p) => (p.clone(), 2),
+                FsEvent::Removed(p) => (p.clone(), 3),
+            })
+            .collect();
+        if !changes.is_empty() {
+            self.insight.files_changed(&changes);
+        }
     }
 
     /// IDE shortcuts work whatever has the focus; they are taken out of the input so text
@@ -575,6 +679,8 @@ impl eframe::App for DotCraftApp {
                 editor_actions.push(a);
             }
         }
+        let outputs = self.insight.update(&mut self.docs, self.settings.show_inlay_hints);
+        self.handle_insight(outputs);
         crate::ui::frame(self, ui, editor_actions);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);
@@ -606,6 +712,32 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
         right_margin: (s.right_margin > 0).then_some(s.right_margin),
         ..EditorConfig::default()
     }
+}
+
+/// The configured `dotnet`, or the default install location, or `dotnet` from PATH.
+pub fn dotnet_path(s: &Settings) -> PathBuf {
+    if let Some(p) = s.dotnet_path.clone().filter(|p| p.exists()) {
+        return p;
+    }
+    let candidates: &[&str] = if cfg!(windows) { &["C:\\Program Files\\dotnet\\dotnet.exe"] } else { &["/usr/local/share/dotnet/dotnet", "/opt/homebrew/bin/dotnet", "/usr/local/bin/dotnet", "/usr/share/dotnet/dotnet"] };
+    candidates.iter().map(PathBuf::from).find(|p| p.exists()).unwrap_or_else(|| PathBuf::from("dotnet"))
+}
+
+/// Project files under `root` (for folders without a solution), skipping build output.
+pub fn find_projects(root: &Path, depth: usize) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut stack = vec![(root.to_path_buf(), 0)];
+    while let Some((dir, d)) = stack.pop() {
+        for n in rc_core::workspace::list_dir(&dir) {
+            if n.is_dir && d < depth {
+                stack.push((n.path, d + 1));
+            } else if rc_core::workspace::is_project(&n.path) {
+                out.push(n.path);
+            }
+        }
+    }
+    out.sort();
+    out
 }
 
 pub fn reveal_in_file_manager(path: &Path) {

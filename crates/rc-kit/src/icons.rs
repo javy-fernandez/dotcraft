@@ -207,6 +207,7 @@ pub mod ico {
         PIN = "general/pin",
         MENU = "general/menu",
         EXPORT = "general/export",
+        DOWNLOAD = "general/download",
         IMPORT = "general/import",
         UP = "general/up",
         DOWN = "general/down",

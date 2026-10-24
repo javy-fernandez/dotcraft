@@ -28,8 +28,9 @@ pub(crate) fn handle_key(state: &mut EditorState, key: Key, mods: Modifiers, out
                     return false;
                 }
                 let index = c.selected;
+                let data = c.filtered.get(index).map(|&i| c.items[i].data);
                 accept(state, index, key == Key::Tab);
-                out.accepted_completion = Some(index);
+                out.accepted_completion = data;
             }
             Key::Escape => state.popups.completion = None,
             _ => return false,
@@ -151,8 +152,8 @@ pub(crate) fn show(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
         let anchor_pos = state.popups.completion.as_ref().map(|c| c.anchor).unwrap_or(0);
         let anchor = crate::view::caret_anchor(ui, state, scheme, m, text_rect, anchor_pos);
         if let Some(i) = show_completion(ui, state, scheme, pal, anchor + vec2(-26.0, m.row_h + 2.0)) {
+            accepted = state.popups.completion.as_ref().and_then(|c| c.filtered.get(i).map(|&k| c.items[k].data));
             accept(state, i, false);
-            accepted = Some(i);
         }
     }
     if let Some(h) = state.popups.hover.clone() {

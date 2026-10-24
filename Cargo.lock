@@ -2957,6 +2957,7 @@ dependencies = [
  "rc-dotnet",
  "rc-editor",
  "rc-kit",
+ "rc-lsp",
  "rc-syntax",
  "rc-text",
  "rfd",

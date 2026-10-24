@@ -1,6 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod convert;
+mod insight;
+#[cfg(test)]
+mod insight_tests;
 #[cfg(test)]
 mod screens;
 mod docs;

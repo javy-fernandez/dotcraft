@@ -99,6 +99,8 @@ fn roslyn_completion_rename_and_diagnostics() {
     let text = std::fs::read_to_string(&program).unwrap();
     s.did_open(&program, "csharp", &text);
     let uri = path_to_uri(&program);
+    // Pulling diagnostics makes Roslyn attach the opened document to its project.
+    let _: serde_json::Value = wait(s.client.request_raw("textDocument/diagnostic", json!({"textDocument": {"uri": uri.as_str()}}))).unwrap();
 
     // Completion right after "greeter." on line 3.
     let col = text.lines().nth(3).unwrap().find("greeter.").unwrap() as u32 + 8;
@@ -112,79 +114,17 @@ fn roslyn_completion_rename_and_diagnostics() {
     let mut items = Vec::new();
     // Right after `didOpen` the document may still be attaching to its project.
     for attempt in 0..40 {
-        items = match wait(complete(&s)).unwrap() {
+        let raw: serde_json::Value = wait(s.client.request_raw("textDocument/completion", json!({"textDocument": {"uri": uri.as_str()}, "position": {"line": 3, "character": col}, "context": {"triggerKind": 1}}))).unwrap();
+        items = match serde_json::from_value::<Option<CompletionResponse>>(raw.clone()).unwrap() {
             Some(CompletionResponse::List(l)) => l.items,
             Some(CompletionResponse::Array(a)) => a,
             None => Vec::new(),
         };
+
         if !items.is_empty() {
             eprintln!("completion ready after {attempt} retries");
             break;
         }
-        for e in s.pump() {
-            let stop = done(&e, s);
-            if let LspEvent::StateChanged(ServerState::Failed(why)) = &e {
-                panic!("server failed: {why}");
-            }
-            all.push(e);
-            if stop {
-                return all;
-            }
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    panic!("timed out; state {:?}", s.state);
-}
-
-fn wait<T>(mut p: rc_lsp::Pending<T>) -> Result<T, rc_lsp::RpcError> {
-    let start = Instant::now();
-    loop {
-        if let Some(r) = p.poll() {
-            return r;
-        }
-        assert!(start.elapsed() < Duration::from_secs(60), "request timed out");
-        std::thread::sleep(Duration::from_millis(2));
-    }
-}
-
-#[test]
-fn roslyn_completion_rename_and_diagnostics() {
-    let cmd = server();
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().canonicalize().unwrap();
-    let sln = solution(&root);
-    let mut s = LanguageSession::start(&cmd, &root, Some(&sln), Vec::new(), None, Waker::noop()).unwrap();
-    pump_until(&mut s, Duration::from_secs(180), |e, _| matches!(e, LspEvent::StateChanged(ServerState::Ready)));
-    eprintln!("solution loaded in {:?}", s.started.elapsed());
-
-    let program = root.join("App/Program.cs");
-    let text = std::fs::read_to_string(&program).unwrap();
-    s.did_open(&program, "csharp", &text);
-    let uri = path_to_uri(&program);
-
-    // Completion right after "greeter." on line 3.
-    let col = text.lines().nth(3).unwrap().find("greeter.").unwrap() as u32 + 8;
-    let complete = |s: &LanguageSession| {
-        s.client.request_raw::<Option<CompletionResponse>>(
-            "textDocument/completion",
-            json!({"textDocument": {"uri": uri.as_str()}, "position": {"line": 3, "character": col}, "context": {"triggerKind": 1}}),
-        )
-    };
-    let first = Instant::now();
-    let mut items = Vec::new();
-    // Right after `didOpen` the document may still be attaching to its project.
-    for attempt in 0..40 {
-        items = match wait(complete(&s)).unwrap() {
-            Some(CompletionResponse::List(l)) => l.items,
-            Some(CompletionResponse::Array(a)) => a,
-            None => Vec::new(),
-        };
-        if !items.is_empty() {
-            eprintln!("completion ready after {attempt} retries");
-            break;
-        }
-        let raw2: serde_json::Value = wait(s.client.request_raw("textDocument/completion", json!({"textDocument": {"uri": uri.as_str()}, "position": {"line": 3, "character": col}, "context": {"triggerKind": 1}}))).unwrap();
-        eprintln!("attempt {attempt} raw: {}", raw2.to_string().chars().take(200).collect::<String>());
         s.pump();
         std::thread::sleep(Duration::from_millis(250));
     }

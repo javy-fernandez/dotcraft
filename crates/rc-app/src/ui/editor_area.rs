@@ -133,11 +133,17 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     ed_ui.set_clip_rect(editor_rect.intersect(ui.clip_rect()));
     let focus = std::mem::take(&mut app.focus_editor);
     let doc = &mut app.docs.list[active];
+    let mut from_menu = Vec::new();
     for a in &editor_actions {
-        let rest = rc_editor::run_action(&ed_ui, &mut doc.editor, &app.editor_config, *a);
-        let _ = rest;
+        from_menu.extend(rc_editor::run_action(&ed_ui, &mut doc.editor, &app.editor_config, *a));
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
+    app.insight.on_editor_events(doc, &out.events);
+    if let Some(data) = out.accepted_completion {
+        app.insight.completion_accepted(doc, data);
+    }
+    let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
+    app.caret_screen = Some(caret_screen);
     for ev in out.events {
         match ev {
             EditorEvent::GutterClicked { line } => {
@@ -148,7 +154,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
             _ => {}
         }
     }
-    let mut needs_lsp = false;
+    let mut insight_actions = Vec::new();
     for a in out.actions {
         match a {
             Action::ToggleBreakpoint => {
@@ -160,11 +166,12 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
                 doc.editor.next_diagnostic(a == Action::NextError);
             }
             Action::Escape => {}
-            _ => needs_lsp = true,
+            other => insight_actions.push(other),
         }
     }
-    if needs_lsp {
-        app.notify(tr("This action needs the C# language server, which is not connected yet"), false);
+    insight_actions.extend(from_menu);
+    for a in insight_actions {
+        app.run_insight_action(a, caret_screen);
     }
 }
 
