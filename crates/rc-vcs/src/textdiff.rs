@@ -122,13 +122,14 @@ fn conquer(a: &[u32], mut alo: usize, mut ahi: usize, b: &[u32], mut blo: usize,
         ahi -= 1;
         bhi -= 1;
     }
-    if alo < ahi && blo < bhi {
-        if let Some((x, y)) = middle_snake(a, alo, ahi, b, blo, bhi, vf, vb, limit) {
-            if (x, y) != (alo, blo) && (x, y) != (ahi, bhi) {
-                conquer(a, alo, x, b, blo, y, vf, vb, limit, out);
-                conquer(a, x, ahi, b, y, bhi, vf, vb, limit, out);
-            }
-        }
+    if alo < ahi
+        && blo < bhi
+        && let Some((x, y)) = middle_snake(a, alo, ahi, b, blo, bhi, vf, vb, limit)
+        && (x, y) != (alo, blo)
+        && (x, y) != (ahi, bhi)
+    {
+        conquer(a, alo, x, b, blo, y, vf, vb, limit, out);
+        conquer(a, x, ahi, b, y, bhi, vf, vb, limit, out);
     }
     out.extend((0..end_a - ahi).map(|i| (ahi + i, bhi + i)));
 }
