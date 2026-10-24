@@ -116,6 +116,7 @@ pub struct EditorState {
     pub(crate) ime_preedit: Option<String>,
     /// Lines copied without a selection paste as whole lines (IntelliJ).
     pub(crate) line_clipboard: Option<String>,
+    pub(crate) select_stack: Vec<Range>,
     // --- decorations
     pub diagnostics: Vec<Diagnostic>,
     pub inlays: Vec<InlayHint>,
@@ -167,6 +168,7 @@ impl EditorState {
             alt_taps: (0.0, 0, false),
             ime_preedit: None,
             line_clipboard: None,
+            select_stack: Vec::new(),
             diagnostics: Vec::new(),
             inlays: Vec::new(),
             semantic: Vec::new(),
@@ -237,6 +239,15 @@ impl EditorState {
         let line = self.buffer.line_col(start).0;
         self.unfold_line(line);
         self.set_selection(Selection::single(Range::new(start, end)));
+    }
+
+    /// Scroll offset in points (persisted with the session).
+    pub fn scroll_offset(&self) -> egui::Vec2 {
+        self.scroll
+    }
+
+    pub fn set_scroll_offset(&mut self, offset: egui::Vec2) {
+        self.scroll = offset;
     }
 
     pub fn request_scroll_to_caret(&mut self) {

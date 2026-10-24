@@ -65,10 +65,13 @@ fn rasterize(key: Key) -> Option<ColorImage> {
     let data = if key.dark { dark.unwrap_or(light) } else { light };
     let tree = resvg::usvg::Tree::from_data(data, &resvg::usvg::Options::default()).ok()?;
     let size = tree.size();
-    let px = key.px.max(1);
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(px, px)?;
-    let scale = px as f32 / size.width().max(size.height());
-    resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(scale, scale), &mut pixmap.as_mut());
+    // `px` is the pixel size of the 16-unit grid: smaller artwork (14×14 breakpoints, 7×10
+    // badges) keeps its own size instead of being stretched, so it stays sharp.
+    let scale = key.px.max(1) as f32 / 16.0;
+    let (w, h) = ((size.width() * scale).round().max(1.0) as u32, (size.height() * scale).round().max(1.0) as u32);
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h)?;
+    let (sx, sy) = (w as f32 / size.width(), h as f32 / size.height());
+    resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(sx, sy), &mut pixmap.as_mut());
     // tiny-skia pixels are premultiplied RGBA, like egui's `Color32`.
     let mut pixels: Vec<Color32> = pixmap
         .pixels()
@@ -97,7 +100,7 @@ fn rasterize(key: Key) -> Option<ColorImage> {
             }
         }
     }
-    Some(ColorImage::new([px as usize, px as usize], pixels))
+    Some(ColorImage::new([w as usize, h as usize], pixels))
 }
 
 /// Rect of `size` points centred in `rect`, snapped to whole physical pixels.
@@ -111,9 +114,15 @@ pub fn snapped(ctx: &Context, rect: Rect, size: f32) -> (Rect, u32) {
 
 fn paint_variant(painter: &Painter, rect: Rect, ico: Ico, dark: bool, size: f32, variant: Variant) {
     let ctx = painter.ctx();
-    let (r, px) = snapped(ctx, rect, size);
+    let ppp = ctx.pixels_per_point();
+    let px = (size * ppp).round().max(1.0) as u32;
     if let Some(tex) = texture(ctx, Key { name: ico.0, dark, px, variant }) {
-        painter.image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+        // The texture is exactly as many pixels as it covers, on whole pixels.
+        let [w, h] = tex.size();
+        let (w, h) = (w as f32 / ppp, h as f32 / ppp);
+        let c = rect.center();
+        let min = pos2(((c.x - w / 2.0) * ppp).round() / ppp, ((c.y - h / 2.0) * ppp).round() / ppp);
+        painter.image(tex.id(), Rect::from_min_size(min, vec2(w, h)), Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
     }
 }
 
@@ -464,7 +473,7 @@ mod tests {
             for dark in [false, true] {
                 for variant in [Variant::Normal, Variant::Disabled] {
                     let img = rasterize(Key { name: icon.0, dark, px: 32, variant }).unwrap_or_else(|| panic!("{} fails to render", icon.0));
-                    assert_eq!(img.size, [32, 32]);
+                    assert!(img.size[0] >= 8 && img.size[1] >= 8, "{} is {:?}", icon.0, img.size);
                     assert!(img.pixels.iter().any(|p| p.a() > 0), "{} renders empty", icon.0);
                 }
             }
