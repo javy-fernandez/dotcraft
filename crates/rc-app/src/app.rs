@@ -45,6 +45,7 @@ pub struct DotCraftApp {
     pub insight: Insight,
     pub runner: Runner,
     pub files: crate::search::Files,
+    pub vcs: crate::vcs::Vcs,
     pub search_everywhere: Option<crate::search::SearchEverywhere>,
     pub find_bar: Option<crate::search::FindBar>,
     pub find_in_files: Option<crate::search::FindInFiles>,
@@ -109,6 +110,7 @@ impl DotCraftApp {
             insight: Insight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
             files: crate::search::Files::new(),
+            vcs: crate::vcs::Vcs::new(waker.clone()),
             search_everywhere: None,
             find_bar: None,
             find_in_files: None,
@@ -173,6 +175,7 @@ impl DotCraftApp {
         let _ = self.settings.save();
         self._watcher = FileWatcher::new(&ws.root, self.fs_inbox.sender()).ok();
         self.files.open(&ws.root, self.waker.clone());
+        self.vcs.open(&ws.root);
         let session = Session::load(ws.key_path());
         let projects = match &ws.kind {
             rc_core::WorkspaceKind::Project(p) => vec![p.clone()],
@@ -197,6 +200,7 @@ impl DotCraftApp {
         self.runner.stop_all();
         self.runner.clear();
         self.files.close();
+        self.vcs.close();
         self.find_in_files = None;
         self.search_everywhere = None;
         self.find_bar = None;
@@ -480,6 +484,7 @@ impl DotCraftApp {
                 crate::ui::run_windows::handle_outputs(self, outs);
             }
             Action::StopRun => self.runner.stop_all(),
+            Action::Commit => self.dock.show(ToolWindow::Commit),
             Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => {
                 if self.workspace.is_some() {
                     let tab = match action {
@@ -523,7 +528,7 @@ impl DotCraftApp {
             }
             other => {
                 // Not available yet in this build: say so instead of doing nothing.
-                if matches!(other, Action::RecentLocations | Action::Debug | Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::RunToCursor | Action::Evaluate | Action::Commit) {
+                if matches!(other, Action::RecentLocations | Action::Debug | Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::RunToCursor | Action::Evaluate) {
                     self.notify(tr("This action is not available yet"), false);
                 }
             }
@@ -720,7 +725,11 @@ impl DotCraftApp {
         if let Some(index) = &self.files.index
             && !events.is_empty()
         {
-            index.apply(&events);
+            let outside_git: Vec<FsEvent> = events.iter().filter(|e| !e.path().components().any(|c| c.as_os_str() == ".git")).cloned().collect();
+            index.apply(&outside_git);
+        }
+        for e in &events {
+            self.vcs.on_fs_change(e.path());
         }
         for ev in events {
             let p = ev.path().to_path_buf();
@@ -859,6 +868,10 @@ impl eframe::App for DotCraftApp {
             }
         }
         self.update_test_markers();
+        let dark = self.dark(&ctx);
+        for n in self.vcs.update(&mut self.docs, dark) {
+            self.notify(n, false);
+        }
         crate::ui::frame(self, ui, editor_actions);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);

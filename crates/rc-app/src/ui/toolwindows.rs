@@ -30,6 +30,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Run => crate::ui::run_windows::run(app, ui),
         ToolWindow::Tests => crate::ui::run_windows::tests(app, ui),
         ToolWindow::Terminal => crate::ui::run_windows::terminal(app, ui),
+        ToolWindow::Commit => crate::ui::git::commit_window(app, ui),
+        ToolWindow::Git => crate::ui::git::git_window(app, ui),
         ToolWindow::Problems => {
             if header(ui, tw.title()) {
                 app.toggle_tool(tw);

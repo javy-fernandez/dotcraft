@@ -1,0 +1,35 @@
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Amend	Modificar el último commit	Modifier le dernier commit	Corrigir último commit	Letzten Commit ändern	Popraw ostatni commit	修改上次提交	直前のコミットを修正
+Annotate with Git Blame	Anotar con Git Blame	Annoter avec Git Blame	Anotar com Git Blame	Mit Git Blame annotieren	Adnotuj za pomocą Git Blame	使用 Git Blame 注解	Git Blame で注釈を表示
+Branch name	Nombre de la rama	Nom de la branche	Nome do branch	Branch-Name	Nazwa gałęzi	分支名称	ブランチ名
+Changes	Cambios	Modifications	Alterações	Änderungen	Zmiany	更改	変更
+Commit Message	Mensaje del commit	Message de commit	Mensagem do commit	Commit-Nachricht	Komunikat commitu	提交消息	コミットメッセージ
+Commit and Push…	Commit y push…	Commit et push…	Commit e push…	Commit und Push…	Commit i push…	提交并推送…	コミットしてプッシュ…
+Committed and pushed	Commit hecho y enviado	Commit effectué et poussé	Commit feito e enviado	Committet und gepusht	Zatwierdzono i wypchnięto	已提交并推送	コミットしてプッシュしました
+Committed	Commit hecho	Commit effectué	Commit feito	Committet	Zatwierdzono	已提交	コミットしました
+Detached HEAD	HEAD separado	HEAD détaché	HEAD desanexado	Losgelöster HEAD	Odłączony HEAD	分离的 HEAD	デタッチされた HEAD
+Discard the changes of {n} files? This cannot be undone.	¿Descartar los cambios de {n} archivos? No se puede deshacer.	Annuler les modifications de {n} fichiers ? Cette action est irréversible.	Descartar as alterações de {n} arquivos? Isso não pode ser desfeito.	Die Änderungen an {n} Dateien verwerfen? Dies kann nicht rückgängig gemacht werden.	Odrzucić zmiany w plikach ({n})? Tej operacji nie można cofnąć.	放弃 {n} 个文件的更改？此操作无法撤销。	{n} ファイルの変更を破棄しますか？元に戻せません。
+Fetch	Fetch	Fetch	Fetch	Fetch	Pobierz (fetch)	获取	フェッチ
+HEAD	HEAD	HEAD	HEAD	HEAD	HEAD	HEAD	HEAD
+New Branch	Nueva rama	Nouvelle branche	Novo branch	Neuer Branch	Nowa gałąź	新建分支	新規ブランチ
+New Branch…	Nueva rama…	Nouvelle branche…	Novo branch…	Neuer Branch…	Nowa gałąź…	新建分支…	新規ブランチ…
+No Git repository	No hay repositorio Git	Aucun dépôt Git	Nenhum repositório Git	Kein Git-Repository	Brak repozytorium Git	没有 Git 仓库	Git リポジトリがありません
+Not committed yet	Sin commit todavía	Pas encore commité	Ainda sem commit	Noch nicht committet	Jeszcze nie zatwierdzono	尚未提交	未コミット
+Open File	Abrir archivo	Ouvrir le fichier	Abrir arquivo	Datei öffnen	Otwórz plik	打开文件	ファイルを開く
+Project updated	Proyecto actualizado	Projet mis à jour	Projeto atualizado	Projekt aktualisiert	Zaktualizowano projekt	项目已更新	プロジェクトを更新しました
+Pushed	Enviado	Poussé	Enviado	Gepusht	Wypchnięto	已推送	プッシュしました
+Push…	Push…	Push…	Push…	Push…	Wypchnij…	推送…	プッシュ…
+Refresh	Actualizar	Actualiser	Atualizar	Aktualisieren	Odśwież	刷新	更新
+Remote	Remotas	Distantes	Remotos	Remote	Zdalne	远程	リモート
+Rollback Changes	Revertir cambios	Annuler les modifications	Reverter alterações	Änderungen zurücksetzen	Wycofaj zmiany	回滚更改	変更をロールバック
+Rollback	Revertir	Annuler	Reverter	Zurücksetzen	Wycofaj	回滚	ロールバック
+Rollback…	Revertir…	Annuler…	Reverter…	Zurücksetzen…	Wycofaj…	回滚…	ロールバック…
+Select a commit to see its changes	Selecciona un commit para ver sus cambios	Sélectionnez un commit pour voir ses modifications	Selecione um commit para ver as alterações	Wählen Sie einen Commit, um seine Änderungen zu sehen	Wybierz commit, aby zobaczyć jego zmiany	选择一个提交以查看其更改	コミットを選択すると変更が表示されます
+Select the files to commit	Selecciona los archivos que quieres incluir	Sélectionnez les fichiers à commiter	Selecione os arquivos para o commit	Wählen Sie die Dateien für den Commit	Wybierz pliki do zatwierdzenia	选择要提交的文件	コミットするファイルを選択してください
+Show Diff	Mostrar diferencias	Afficher les différences	Mostrar diferenças	Diff anzeigen	Pokaż różnice	显示差异	差分を表示
+The new branch is checked out.	Se cambiará a la nueva rama.	La nouvelle branche est extraite.	O novo branch será usado.	Der neue Branch wird ausgecheckt.	Nowa gałąź zostanie wybrana.	将签出新分支。	新しいブランチがチェックアウトされます。
+The workspace is not inside a Git repository.	El espacio de trabajo no está dentro de un repositorio Git.	L'espace de travail n'est pas dans un dépôt Git.	O espaço de trabalho não está em um repositório Git.	Der Arbeitsbereich liegt in keinem Git-Repository.	Obszar roboczy nie znajduje się w repozytorium Git.	工作区不在 Git 仓库中。	ワークスペースは Git リポジトリ内にありません。
+Unversioned Files	Archivos sin versionar	Fichiers non versionnés	Arquivos não versionados	Nicht versionierte Dateien	Pliki niewersjonowane	未版本控制的文件	バージョン管理外のファイル
+Update Project…	Actualizar proyecto…	Mettre à jour le projet…	Atualizar projeto…	Projekt aktualisieren…	Aktualizuj projekt…	更新项目…	プロジェクトを更新…
+Working tree	Árbol de trabajo	Arbre de travail	Árvore de trabalho	Arbeitsverzeichnis	Drzewo robocze	工作树	作業ツリー
+Write a commit message	Escribe un mensaje de commit	Saisissez un message de commit	Escreva uma mensagem de commit	Schreiben Sie eine Commit-Nachricht	Napisz komunikat commitu	请编写提交消息	コミットメッセージを入力してください

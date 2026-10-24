@@ -29,6 +29,9 @@ pub enum Dialog {
     CodeActions { list: Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: usize },
     /// Shift+F6 on a symbol.
     RenameSymbol { doc: u64, pos: usize, original: String, name: String, focus: bool },
+    /// Confirm rolling back files to HEAD.
+    Rollback { paths: Vec<String> },
+    NewBranch { name: String },
     /// ⌘F12 file structure popup.
     FileStructure { filter: String, selected: usize },
 }
@@ -57,6 +60,8 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::CodeActions { list, selected } => code_actions(app, ctx, list, selected),
         Dialog::RenameSymbol { doc, pos, original, name, focus } => rename_symbol(app, ctx, *doc, *pos, original, name, focus),
         Dialog::FileStructure { filter, selected } => file_structure(app, ctx, filter, selected),
+        Dialog::Rollback { paths } => rollback(app, ctx, paths),
+        Dialog::NewBranch { name } => new_branch(app, ctx, name),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -580,6 +585,40 @@ fn rename_symbol(app: &mut DotCraftApp, ctx: &Context, doc: u64, pos: usize, ori
         {
             app.insight.rename(d, pos, name.trim());
         }
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn rollback(app: &mut DotCraftApp, ctx: &Context, paths: &mut Vec<String>) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "rollback", 440.0, |ui| {
+        title(ui, tr("Rollback Changes"));
+        ui.label(trf("Discard the changes of {n} files? This cannot be undone.", &[("n", &paths.len())]));
+        for p in paths.iter().take(8) {
+            ui.label(egui::RichText::new(p).size(12.0).color(rc_kit::pal(ui).muted));
+        }
+        buttons(ui, tr("Rollback"), true)
+    });
+    if ok {
+        app.vcs.rollback(std::mem::take(paths));
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn new_branch(app: &mut DotCraftApp, ctx: &Context, name: &mut String) -> Outcome {
+    let valid = !name.trim().is_empty() && !name.contains(' ') && !name.contains("..");
+    let ((ok, cancel), esc) = modal(ctx, "new_branch", 380.0, |ui| {
+        title(ui, tr("New Branch"));
+        let resp = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY));
+        resp.request_focus();
+        ui.label(egui::RichText::new(tr("The new branch is checked out.")).size(12.0).color(rc_kit::pal(ui).muted));
+        let enter = ui.input(|i| i.key_pressed(Key::Enter));
+        let (ok, cancel) = buttons(ui, tr("Create"), valid);
+        (ok || enter && valid, cancel)
+    });
+    if ok {
+        app.vcs.new_branch(name.trim());
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

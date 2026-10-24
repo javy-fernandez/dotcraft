@@ -194,3 +194,56 @@ fn screens_tools() {
     run_frames(&mut h, "terminal", |a| a.terminals.active().is_some_and(|t| t.session.screen_lines().iter().any(|l| !l.trim().is_empty())));
     h.render().unwrap().save(out.join("terminal-dark.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes Git captures to target/snapshots"]
+fn screens_git() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let root = repo.path().canonicalize().unwrap().join("Shop");
+    let copy = std::process::Command::new("cp").args(["-R", fixtures().join("Shop").to_str().unwrap(), root.to_str().unwrap()]).status().unwrap();
+    assert!(copy.success());
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success());
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    let calc = root.join("src/Shop.Core/PriceCalculator.cs");
+    let text = std::fs::read_to_string(&calc).unwrap();
+    std::fs::write(&calc, text.replacen("public", "/// <summary>Prices orders.</summary>\npublic", 1)).unwrap();
+    git(&["commit", "-qam", "Document the price calculator"]);
+    git(&["checkout", "-qb", "feature/coupons"]);
+    std::fs::write(root.join("src/Shop.Core/Coupon.cs"), "namespace Shop.Core;\n\npublic record Coupon(string Code, decimal Percent);\n").unwrap();
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root.join("Shop.sln"));
+    app.open_file(&calc);
+    let doc = app.docs.active_doc_mut().unwrap();
+    let t = doc.editor.buffer.rope().to_string();
+    let at = doc.editor.buffer.rope().byte_to_char(t.find("{").unwrap() + 1);
+    doc.editor.replace(at, at, "\n    private const decimal FreeShippingFrom = 50m;");
+    app.save_all_docs();
+    app.dock.show(crate::toolwindow::ToolWindow::Commit);
+    app.dock.show(crate::toolwindow::ToolWindow::Git);
+    app.vcs.message = "Add coupons".into();
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "status", |a| a.vcs.changes().len() >= 2 && !a.vcs.log.is_empty() && !a.docs.active_doc().unwrap().editor.line_changes.is_empty());
+    let first = h.state().vcs.log[0].hash.clone();
+    h.state_mut().vcs.select_commit(&first);
+    run_frames(&mut h, "commit files", |a| !a.vcs.commit_files.is_empty());
+    h.render().unwrap().save(out.join("git-dark.png")).unwrap();
+    {
+        let app = h.state_mut();
+        let (path, text) = (calc.clone(), app.docs.active_doc().unwrap().editor.buffer.rope().to_string());
+        app.vcs.toggle_blame(&path, text, &mut app.docs);
+    }
+    run_frames(&mut h, "blame", |a| a.docs.active_doc().unwrap().editor.annotations.is_some());
+    h.render().unwrap().save(out.join("blame-dark.png")).unwrap();
+    h.state_mut().vcs.open_diff("src/Shop.Core/PriceCalculator.cs");
+    run_frames(&mut h, "diff", |a| a.vcs.diff.is_some());
+    h.render().unwrap().save(out.join("diff-dark.png")).unwrap();
+}

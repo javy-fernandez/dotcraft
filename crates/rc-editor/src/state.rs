@@ -131,6 +131,12 @@ pub struct EditorState {
     pub execution_line: Option<usize>,
     /// Ranges to highlight like "identifier under caret" (LSP document highlights).
     pub highlights: Vec<(usize, usize, bool)>,
+    /// Full-row backgrounds (diff viewer: added, removed and changed lines).
+    pub line_backgrounds: BTreeMap<usize, egui::Color32>,
+    /// Text shown in an extra gutter column per line (Git blame "Annotate").
+    pub annotations: Option<Vec<String>>,
+    /// Line numbers to show instead of the buffer's (diff sides: `None` for filler rows).
+    pub display_numbers: Option<Vec<Option<usize>>>,
     pub popups: Popups,
     pub(crate) edits: Vec<Edit>,
     pub(crate) hl_cache: Option<HlCache>,
@@ -179,6 +185,9 @@ impl EditorState {
             current_match: None,
             execution_line: None,
             highlights: Vec::new(),
+            line_backgrounds: BTreeMap::new(),
+            annotations: None,
+            display_numbers: None,
             popups: Popups::default(),
             edits: Vec::new(),
             hl_cache: None,

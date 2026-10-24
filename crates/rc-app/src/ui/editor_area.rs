@@ -19,10 +19,16 @@ enum TabCommand {
     CopyPath(usize),
     Reveal(usize),
     Locate(usize),
+    Blame(usize),
+    Diff(usize),
 }
 
 pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     let p = rc_kit::pal(ui);
+    if app.vcs.diff.is_some() {
+        crate::ui::git::diff_view(app, ui);
+        return;
+    }
     if app.docs.list.is_empty() {
         empty_state(app, ui);
         return;
@@ -83,6 +89,17 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
                     if ui.button(tr("Copy Path")).clicked() {
                         commands.push(TabCommand::CopyPath(i));
                         ui.close();
+                    }
+                    if app.vcs.repo.is_some() {
+                        let on = app.vcs.blame_for.as_deref() == Some(app.docs.list[i].path.as_path());
+                        if ui.add(egui::Button::selectable(on, tr("Annotate with Git Blame"))).clicked() {
+                            commands.push(TabCommand::Blame(i));
+                            ui.close();
+                        }
+                        if ui.button(tr("Show Diff")).clicked() {
+                            commands.push(TabCommand::Diff(i));
+                            ui.close();
+                        }
                     }
                     if ui.button(tr("Select in Explorer")).clicked() {
                         commands.push(TabCommand::Locate(i));
@@ -252,6 +269,17 @@ fn run_tab_commands(app: &mut DotCraftApp, ui: &Ui, commands: Vec<TabCommand>) {
             }
             TabCommand::CopyPath(i) => ui.ctx().copy_text(app.docs.list[i].path.display().to_string()),
             TabCommand::Reveal(i) => crate::app::reveal_in_file_manager(&app.docs.list[i].path),
+            TabCommand::Blame(i) => {
+                let (path, text) = (app.docs.list[i].path.clone(), app.docs.list[i].editor.buffer.rope().to_string());
+                app.vcs.toggle_blame(&path, text, &mut app.docs);
+            }
+            TabCommand::Diff(i) => {
+                let path = app.docs.list[i].path.clone();
+                if let Some(rel) = app.vcs.repo.as_ref().and_then(|r| r.rel_path(&path)) {
+                    app.save_all_docs();
+                    app.vcs.open_diff(&rel);
+                }
+            }
             TabCommand::Locate(i) => {
                 app.docs.activate(i);
                 app.locate_active();

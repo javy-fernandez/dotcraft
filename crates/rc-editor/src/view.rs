@@ -188,12 +188,17 @@ pub(crate) fn metrics(ui: &Ui, state: &EditorState, config: &EditorConfig, rect:
     let text_dy = snap((row_h - font_h) / 2.0);
     let digits = state.buffer.len_lines().max(1).to_string().len().max(2) as f32;
     let num_w = digits * char_w;
-    let left = rect.left();
+    // Blame annotations take a column left of the line numbers.
+    let ann_w = state.annotations.as_ref().map_or(0.0, |a| {
+        let longest = a.iter().map(|s| s.chars().count()).max().unwrap_or(0).min(40) as f32;
+        (longest * char_w * 0.92 + 16.0).round()
+    });
+    let left = rect.left() + ann_w;
     let num_right = snap(left + 10.0 + num_w);
     let icons_x = num_right + 8.0;
     let vcs_x = icons_x + 18.0;
     let fold_x = vcs_x + 5.0;
-    let gutter_w = snap(fold_x + 14.0 - left + 2.0);
+    let gutter_w = snap(fold_x + 14.0 - rect.left() + 2.0);
     Metrics { row_h, char_w, text_dy, gutter_w, num_right, icons_x, vcs_x, fold_x }
 }
 
@@ -336,7 +341,9 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
     for (i, &l) in lines.iter().enumerate() {
         let y = y_of_row(first_row + i);
         let row_rect = Rect::from_min_size(pos2(text_rect.left(), y), vec2(text_rect.width(), m.row_h));
-        if Some(l) == state.execution_line {
+        if let Some(bg) = state.line_backgrounds.get(&l) {
+            painter.rect_filled(row_rect, 0.0, *bg);
+        } else if Some(l) == state.execution_line {
             painter.rect_filled(row_rect, 0.0, scheme.execution_line);
         } else if state.breakpoints.contains_key(&l) && state.breakpoints[&l] != BreakpointKind::Disabled {
             painter.rect_filled(row_rect, 0.0, scheme.breakpoint_line);
@@ -586,6 +593,13 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
         let y = text_rect.top() + row as f32 * m.row_h - state.scroll.y;
         let row_rect = Rect::from_min_max(pos2(gutter.left(), y), pos2(gutter.right(), y + m.row_h));
         let center_y = y + m.row_h / 2.0;
+        if let Some(text) = state.annotations.as_ref().and_then(|a| a.get(l)) {
+            if let Some(bg) = state.line_backgrounds.get(&l) {
+                painter.rect_filled(Rect::from_min_max(pos2(gutter.left(), y), pos2(gutter.left() + (m.num_right - 10.0 - gutter.left()) - 6.0, y + m.row_h)), 0.0, *bg);
+            }
+            let g = painter.layout_no_wrap(text.clone(), egui::FontId::proportional(11.5), pal.text_muted);
+            painter.galley(pos2(gutter.left() + 8.0, (center_y - g.size().y / 2.0).round()), g, pal.text_muted);
+        }
         // Breakpoint icon replaces the line number.
         if let Some(kind) = state.breakpoints.get(&l) {
             let icon = match kind {
@@ -604,7 +618,11 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
             }
         } else {
             let color = if l == caret_line { pal.gutter_fg_caret } else { pal.gutter_fg };
-            let g = painter.layout_no_wrap((l + 1).to_string(), font.clone(), color);
+            let number = match &state.display_numbers {
+                Some(map) => map.get(l).copied().flatten().map(|n| (n + 1).to_string()).unwrap_or_default(),
+                None => (l + 1).to_string(),
+            };
+            let g = painter.layout_no_wrap(number, font.clone(), color);
             let gy = (center_y - g.size().y / 2.0).round();
             painter.galley(pos2(m.num_right - g.size().x, gy), g, color);
         }

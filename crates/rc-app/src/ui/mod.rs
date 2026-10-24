@@ -4,6 +4,7 @@
 pub mod dialogs;
 pub mod editor_area;
 pub mod explorer;
+pub mod git;
 pub mod header;
 pub mod status;
 pub mod run_windows;

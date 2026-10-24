@@ -86,10 +86,11 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                 ui.add_space(rc_kit::window_chrome::leading_space(cfg!(target_os = "macos"), fullscreen, zoom));
                 project_widget(app, ui);
                 if app.workspace.is_some() {
-                    // VCS widget (filled in by the Git integration).
-                    let resp = theme::flat_button(ui, Some(ico::VCS), tr("Version control"), FontId::proportional(13.0), true, true).on_hover_text(tr("Git branches and actions"));
-                    if resp.clicked() {
-                        app.pending.push(Action::ToggleGitWindow);
+                    // VCS widget: the current branch and the branches popup.
+                    if app.vcs.repo.is_some() {
+                        let name = app.vcs.branch_name().unwrap_or_else(|| "…".into());
+                        let resp = theme::flat_button(ui, Some(ico::VCS), &name, FontId::proportional(13.0), true, true).on_hover_text(tr("Git branches and actions"));
+                        egui::Popup::menu(&resp).show(|ui| crate::ui::git::branches_menu(app, ui));
                     }
                 }
             }
