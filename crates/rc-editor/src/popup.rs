@@ -55,7 +55,10 @@ impl Completion {
             .enumerate()
             .filter_map(|(i, it)| fuzzy_score(&it.label, prefix).map(|s| (s, i)))
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0).then(self.items[a.1].label.len().cmp(&self.items[b.1].label.len())).then(a.1.cmp(&b.1)));
+        // Ties keep the server's order (its sort text ranks the type's own members first);
+        // `object`'s members go last, like Rider.
+        let inherited = |i: usize| matches!(self.items[i].label.as_str(), "Equals" | "GetHashCode" | "GetType" | "ToString" | "ReferenceEquals" | "MemberwiseClone");
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then(inherited(a.1).cmp(&inherited(b.1))).then(a.1.cmp(&b.1)));
         self.filtered = scored.into_iter().map(|(_, i)| i).collect();
         self.selected = 0;
         self.scroll_to_selected = true;

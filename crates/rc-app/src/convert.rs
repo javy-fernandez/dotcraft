@@ -31,13 +31,16 @@ pub fn diagnostic(rope: &Rope, d: &lsp::Diagnostic) -> Diagnostic {
         lsp::NumberOrString::Number(n) => n.to_string(),
         lsp::NumberOrString::String(s) => s.clone(),
     });
+    // Roslyn reports IDE0005 once over the whole block of usings; only a single directive
+    // can be faded reliably (the block also holds the necessary ones).
+    let block = code.as_deref() == Some("IDE0005") && d.range.end.line > d.range.start.line;
     Diagnostic {
         start,
         end,
         severity,
         message: d.message.clone(),
         code,
-        unnecessary: tags.contains(&lsp::DiagnosticTag::UNNECESSARY),
+        unnecessary: tags.contains(&lsp::DiagnosticTag::UNNECESSARY) && !block,
         deprecated: tags.contains(&lsp::DiagnosticTag::DEPRECATED),
     }
 }

@@ -501,7 +501,7 @@ impl Insight {
                 {
                     *slot = None;
                     if let (Ok(item), Some(c)) = (r, docs.list[i].editor.popups.completion.as_mut()) {
-                        let doc = item.documentation.as_ref().map(convert::documentation);
+                        let doc = item.documentation.as_ref().map(convert::documentation).map(|d| clean_hover(&d));
                         let detail = item.detail.clone().filter(|d| !d.is_empty());
                         c.doc = match (detail, doc) {
                             (Some(d), Some(x)) => Some(format!("```csharp\n{d}\n```\n{x}")),

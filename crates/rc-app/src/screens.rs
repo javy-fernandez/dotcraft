@@ -247,3 +247,75 @@ fn screens_git() {
     run_frames(&mut h, "diff", |a| a.vcs.diff.is_some());
     h.render().unwrap().save(out.join("diff-dark.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU, the .NET SDK and the Roslyn server in target/test-home; writes captures"]
+fn screens_insight() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/test-home").canonicalize().unwrap();
+    let mut app = test_app(&home, true);
+    let repo = tempfile::tempdir().unwrap();
+    let root = repo.path().canonicalize().unwrap().join("Shop");
+    assert!(std::process::Command::new("cp").args(["-R", fixtures().join("Shop").to_str().unwrap(), root.to_str().unwrap()]).status().unwrap().success());
+    app.open_workspace(&root.join("Shop.sln"));
+    let program = root.join("src/Shop.Cli/Program.cs");
+    app.open_file(&program);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "Roslyn", |a| a.insight.status == crate::insight::InsightStatus::Ready && a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty()));
+    if std::env::var_os("DOTCRAFT_DEBUG_DIAGS").is_some() {
+        let d = h.state().docs.active_doc().unwrap();
+        for x in &d.editor.diagnostics {
+            eprintln!("DIAG {:?} {:?} {} {:?} unnecessary={}", d.editor.buffer.line_col(x.start), x.severity, x.message, x.code, x.unnecessary);
+        }
+        eprintln!("SEM0 {:?}", d.editor.semantic.first());
+    }
+    // Completion after typing "calculator." on a new line inside the file.
+    {
+        let app = h.state_mut();
+        let doc = app.docs.active_doc_mut().unwrap();
+        let text = doc.editor.buffer.rope().to_string();
+        let line = text.lines().position(|l| l.contains("Calculate(")).unwrap_or(5);
+        let pos = doc.editor.buffer.pos_at(line + 1, 0);
+        doc.editor.replace(pos, pos, "var c = new PriceCalculator();\nc.\n");
+        doc.editor.selection = rc_text::Selection::point(pos + "var c = new PriceCalculator();\nc.".len());
+        let i = app.docs.active.unwrap();
+        app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Typed('.')]);
+    }
+    run_frames(&mut h, "completion", |a| a.docs.active_doc().and_then(|d| d.editor.popups.completion.as_ref()).is_some_and(|c| !c.filtered.is_empty() && c.doc.is_some()));
+    h.render().unwrap().save(out.join("completion-dark.png")).unwrap();
+    // Parameter info inside the call.
+    {
+        let app = h.state_mut();
+        let doc = app.docs.active_doc_mut().unwrap();
+        doc.editor.popups.close_all();
+        let caret = doc.editor.caret();
+        doc.editor.replace(caret, caret, "Calculate(");
+        let i = app.docs.active.unwrap();
+        app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Typed('(')]);
+    }
+    run_frames(&mut h, "signature", |a| a.docs.active_doc().is_some_and(|d| d.editor.popups.signature.is_some()));
+    h.render().unwrap().save(out.join("signature-dark.png")).unwrap();
+    // Hover over a type, with the broken call's diagnostic.
+    {
+        let app = h.state_mut();
+        let doc = app.docs.active_doc_mut().unwrap();
+        doc.editor.popups.close_all();
+        let text = doc.editor.buffer.rope().to_string();
+        let pos = doc.editor.buffer.rope().byte_to_char(text.find("PriceCalculator()").unwrap() + 3);
+        let i = app.docs.active.unwrap();
+        app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::HoverAt { pos, screen: egui::pos2(700.0, 300.0) }]);
+    }
+    run_frames(&mut h, "hover", |a| a.docs.active_doc().is_some_and(|d| d.editor.popups.hover.is_some()));
+    h.render().unwrap().save(out.join("hover-dark.png")).unwrap();
+    // Context actions.
+    {
+        let app = h.state_mut();
+        app.docs.active_doc_mut().unwrap().editor.popups.close_all();
+        app.caret_screen = Some(egui::pos2(500.0, 320.0));
+        app.run_insight_action(rc_editor::Action::ShowIntentions, egui::pos2(500.0, 320.0));
+    }
+    run_frames(&mut h, "actions", |a| matches!(a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { .. })) || a.notices.iter().any(|n| n.text.contains("context")));
+    h.render().unwrap().save(out.join("actions-dark.png")).unwrap();
+    h.state_mut().insight.stop();
+}
