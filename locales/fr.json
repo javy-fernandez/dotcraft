@@ -561,5 +561,8 @@
     "Text File": "Fichier texte",
     "Directory": "Répertoire",
     "Name": "Nom"
+  },
+  "usings": {
+    "Add Missing Usings": "Ajouter les using manquants"
   }
 }

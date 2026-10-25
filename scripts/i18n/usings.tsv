@@ -1,0 +1,3 @@
+# Add Missing Usings. Import: python3 scripts/i18n_tsv.py usings scripts/i18n/usings.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Add Missing Usings	Añadir usings que faltan	Ajouter les using manquants	Adicionar usings ausentes	Fehlende using-Direktiven hinzufügen	Dodaj brakujące dyrektywy using	添加缺少的 using	不足している using を追加

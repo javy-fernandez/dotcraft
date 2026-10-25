@@ -93,6 +93,8 @@ pub enum EditorEvent {
     HoverEnd,
     /// The editor gained keyboard focus.
     Focused,
+    /// Text was pasted.
+    Pasted,
 }
 
 /// One open document view.

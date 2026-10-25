@@ -110,6 +110,10 @@ pub struct Insight {
     type_format: Option<(u64, Versioned<Option<Vec<lsp::TextEdit>>>)>,
     /// `///` doc comment skeletons and their continuation on Enter (document, version).
     auto_insert: Option<(u64, Versioned<Value>)>,
+    /// Add Missing Usings: the fixes asked for each unresolved name (document, version).
+    usings: Option<(u64, u64, Vec<Pending<Value>>, Vec<Value>)>,
+    /// Documents to import usings for once their diagnostics catch up (after a paste).
+    auto_usings: HashMap<u64, u64>,
     semantic: HashMap<u64, Versioned<Option<lsp::SemanticTokensResult>>>,
     inlay: HashMap<u64, Versioned<Option<Vec<lsp::InlayHint>>>>,
     diag_pull: HashMap<u64, (u64, Pending<Value>)>,
@@ -155,6 +159,8 @@ impl Insight {
             format: None,
             type_format: None,
             auto_insert: None,
+            usings: None,
+            auto_usings: HashMap::new(),
             semantic: HashMap::new(),
             inlay: HashMap::new(),
             diag_pull: HashMap::new(),
@@ -244,6 +250,8 @@ impl Insight {
         self.format = None;
         self.type_format = None;
         self.auto_insert = None;
+        self.usings = None;
+        self.auto_usings.clear();
         self.semantic.clear();
         self.inlay.clear();
         self.diag_pull.clear();
@@ -539,6 +547,7 @@ impl Insight {
     }
 
     fn poll_popups(&mut self, docs: &mut Docs) {
+        self.poll_usings(docs);
         if let Some((doc, pos, screen, p)) = &mut self.hover
             && let Some(r) = p.poll()
         {
@@ -710,6 +719,10 @@ impl Insight {
         for ev in events {
             match ev {
                 EditorEvent::Typed(c) => self.on_typed(doc, *c),
+                // Pasted code gets its usings once the server has seen it (Rider, VS).
+                EditorEvent::Pasted => {
+                    self.auto_usings.insert(doc.editor.id, doc.editor.buffer.version());
+                }
                 EditorEvent::HoverAt { pos, screen } => self.request_hover(doc, *pos, *screen),
                 EditorEvent::HoverEnd => self.hover = None,
                 EditorEvent::NavigateAt(pos) => self.navigate(doc, *pos, NavKind::Declaration),
@@ -790,6 +803,68 @@ impl Insight {
             json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(rope, doc.editor.caret()), "ch": c.to_string(), "options": options }),
         );
         self.type_format = Some((doc.editor.id, (doc.editor.buffer.version(), p)));
+    }
+
+    /// Add Missing Usings: asks the server for the fixes of every unresolved name; the ones with a
+    /// single `using` are added (see `poll_usings`).
+    pub fn add_missing_usings(&mut self, doc: &Doc) {
+        let Some(session) = &self.session else { return };
+        let rope = doc.editor.buffer.rope();
+        let mut seen = std::collections::HashSet::new();
+        let mut pending = Vec::new();
+        for d in &doc.editor.diagnostics {
+            // Type or namespace not found, name not found, missing member (extension methods).
+            if !matches!(d.code.as_deref(), Some("CS0246" | "CS0103" | "CS1061" | "CS0234" | "CS1935")) {
+                continue;
+            }
+            let name = rope.slice(d.start..d.end).to_string();
+            if !seen.insert((name, d.code.clone())) {
+                continue;
+            }
+            let range = json!({ "start": convert::lsp_position(rope, d.start), "end": convert::lsp_position(rope, d.end) });
+            let diag = json!({ "range": range, "severity": 1, "code": d.code, "message": d.message });
+            pending.push(session.client.request_raw(
+                "textDocument/codeAction",
+                json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "range": range, "context": { "diagnostics": [diag], "triggerKind": 1 } }),
+            ));
+        }
+        if !pending.is_empty() {
+            self.usings = Some((doc.editor.id, doc.editor.buffer.version(), pending, Vec::new()));
+        }
+    }
+
+    fn poll_usings(&mut self, docs: &mut Docs) {
+        // After a paste: once the server has published diagnostics for the pasted text.
+        let ready: Vec<u64> = self.auto_usings.iter().filter(|(id, v)| self.refreshed.get(id).is_some_and(|r| r >= v) && !self.diag_pull.contains_key(id)).map(|(id, _)| *id).collect();
+        for id in ready {
+            self.auto_usings.remove(&id);
+            if self.usings.is_none()
+                && let Some(d) = docs.list.iter().find(|d| d.editor.id == id)
+            {
+                self.add_missing_usings(d);
+            }
+        }
+        let Some((doc, version, pending, results)) = &mut self.usings else { return };
+        let mut i = 0;
+        while i < pending.len() {
+            match pending[i].poll() {
+                Some(r) => {
+                    pending.remove(i);
+                    if let Ok(v) = r {
+                        results.push(v);
+                    }
+                }
+                None => i += 1,
+            }
+        }
+        if !pending.is_empty() {
+            return;
+        }
+        let (doc, version, results) = (*doc, *version, std::mem::take(results));
+        self.usings = None;
+        let Some(d) = docs.list.iter_mut().find(|d| d.editor.id == doc).filter(|d| d.editor.buffer.version() == version) else { return };
+        let namespaces: Vec<String> = results.iter().filter_map(single_using).collect();
+        insert_usings(d, &namespaces);
     }
 
     /// Code completion at the caret (⌃Space, or typing).
@@ -1254,6 +1329,55 @@ fn apply_auto_insert(d: &mut Doc, edit: &lsp::TextEdit) {
     };
     d.editor.apply_text_edits(vec![rc_text::Change::new(a, b, text)]);
     d.editor.selection = rc_text::Selection::point(caret);
+}
+
+/// The namespace of the only `using X;` fix among `actions` (Roslyn titles them exactly so);
+/// `None` when there is none or the name is ambiguous.
+fn single_using(actions: &Value) -> Option<String> {
+    let mut found: Vec<String> = actions
+        .as_array()?
+        .iter()
+        .filter_map(|a| a.get("title")?.as_str())
+        .filter_map(|t| t.strip_prefix("using ")?.strip_suffix(';').map(str::to_string))
+        .filter(|ns| !ns.contains(' ') && !ns.contains('='))
+        .collect();
+    found.sort();
+    found.dedup();
+    (found.len() == 1).then(|| found.remove(0))
+}
+
+/// Adds `using ns;` lines that are missing, in order among the file's usings (or at the top).
+fn insert_usings(d: &mut Doc, namespaces: &[String]) {
+    let rope = d.editor.buffer.rope().clone();
+    let lines: Vec<String> = (0..rope.len_lines()).map(|l| rope.line(l).to_string()).collect();
+    let is_using = |l: &str| {
+        let t = l.trim();
+        t.starts_with("using ") && t.ends_with(';') && !t.contains('=') && !t.starts_with("using static") && !t.contains('(')
+    };
+    let existing: Vec<String> = lines.iter().filter(|l| is_using(l)).map(|l| l.trim().trim_start_matches("using ").trim_end_matches(';').to_string()).collect();
+    let mut add: Vec<&String> = namespaces.iter().filter(|n| !existing.contains(n)).collect();
+    add.sort();
+    add.dedup();
+    if add.is_empty() {
+        return;
+    }
+    let mut changes = Vec::new();
+    match lines.iter().rposition(|l| is_using(l)) {
+        Some(_) => {
+            // Each new using goes before the first existing one that sorts after it (System first).
+            let key = |n: &str| (!(n == "System" || n.starts_with("System.")), n.to_string());
+            for n in add {
+                let at = lines.iter().position(|l| is_using(l) && key(l.trim().trim_start_matches("using ").trim_end_matches(';')) > key(n));
+                let line = at.unwrap_or_else(|| lines.iter().rposition(|l| is_using(l)).unwrap() + 1);
+                changes.push(rc_text::Change::insert(rope.line_to_char(line), format!("using {n};\n")));
+            }
+        }
+        None => {
+            let text: String = add.iter().map(|n| format!("using {n};\n")).collect();
+            changes.push(rc_text::Change::insert(0, format!("{text}\n")));
+        }
+    }
+    d.editor.apply_text_edits(changes);
 }
 
 #[cfg(test)]

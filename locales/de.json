@@ -561,5 +561,8 @@
     "Text File": "Textdatei",
     "Directory": "Verzeichnis",
     "Name": "Name"
+  },
+  "usings": {
+    "Add Missing Usings": "Fehlende using-Direktiven hinzufügen"
   }
 }

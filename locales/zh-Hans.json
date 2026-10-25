@@ -561,5 +561,8 @@
     "Text File": "文本文件",
     "Directory": "目录",
     "Name": "名称"
+  },
+  "usings": {
+    "Add Missing Usings": "添加缺少的 using"
   }
 }

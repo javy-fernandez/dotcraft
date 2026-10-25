@@ -90,6 +90,17 @@ fn csharp_insight_end_to_end() {
     let lib = std::fs::read_to_string(root.join("Lib/Greeter.cs")).unwrap();
     assert!(lib.contains("public string Greet("), "{lib}");
 
+    // Pasting code with an unresolved type adds its using.
+    app.open_file(&program);
+    let doc = app.docs.active_doc_mut().unwrap();
+    let end = doc.editor.buffer.len_chars();
+    doc.editor.replace(end, end, "\nvar sb = new StringBuilder();\n");
+    let i = app.docs.active.unwrap();
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Changed, rc_editor::EditorEvent::Pasted]);
+    pump(&mut app, "the using", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("using System.Text;")));
+    let text = app.docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(text.starts_with("using Lib;\nusing System.Text;\n") || text.starts_with("using System.Text;\nusing Lib;\n"), "{text}");
+
     // `///` above a method: Roslyn inserts the doc comment skeleton with its parameter.
     app.open_file(&root.join("Lib/Greeter.cs"));
     pump(&mut app, "Greeter.cs to load", |a| a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty()));

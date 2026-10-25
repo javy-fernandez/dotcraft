@@ -29,6 +29,7 @@ pub enum MenuCommand {
     OpenFile,
     NewSolution,
     EditRunConfig,
+    AddUsings,
     CloseProject,
     ThemeLight,
     ThemeDark,
@@ -53,6 +54,7 @@ impl MenuCommand {
             MenuCommand::OpenProject | MenuCommand::OpenFile => ico::OPEN,
             MenuCommand::CloseProject => ico::CLOSE,
             MenuCommand::EditRunConfig => ico::SETTINGS,
+            MenuCommand::AddUsings => ico::NAMESPACE,
             MenuCommand::Undo => ico::UNDO,
             MenuCommand::Redo => ico::REDO,
             MenuCommand::Cut => ico::CUT,
@@ -468,6 +470,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &sep(),
             &act(Action::Rename, || tr("Rename…")),
             &act(Action::Reformat, || tr("Reformat Code")),
+            &item(MenuCommand::AddUsings, || tr("Add Missing Usings"), None),
         ],
     )?;
     let build_menu = submenu(|| tr("Build"), &[&act(Action::Build, || tr("Build Solution"))])?;

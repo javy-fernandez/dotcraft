@@ -561,5 +561,8 @@
     "Text File": "Plik tekstowy",
     "Directory": "Katalog",
     "Name": "Nazwa"
+  },
+  "usings": {
+    "Add Missing Usings": "Dodaj brakujące dyrektywy using"
   }
 }

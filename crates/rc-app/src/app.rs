@@ -1012,6 +1012,11 @@ impl eframe::App for DotCraftApp {
                     MenuCommand::OpenFile => self.pick_file(),
                     MenuCommand::NewSolution => self.new_project_dialog(None),
                     MenuCommand::EditRunConfig => self.edit_run_config(None),
+                    MenuCommand::AddUsings => {
+                        if let Some(i) = self.docs.active {
+                            self.insight.add_missing_usings(&self.docs.list[i]);
+                        }
+                    }
                     MenuCommand::CloseProject => self.close_workspace(),
                     MenuCommand::ThemeLight | MenuCommand::ThemeDark => {
                         let mut s = self.settings.clone();

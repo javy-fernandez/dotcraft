@@ -561,5 +561,8 @@
     "Text File": "テキスト ファイル",
     "Directory": "ディレクトリ",
     "Name": "名前"
+  },
+  "usings": {
+    "Add Missing Usings": "不足している using を追加"
   }
 }

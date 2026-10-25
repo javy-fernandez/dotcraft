@@ -1042,7 +1042,10 @@ fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keym
                 }
                 type_text(state, config, &text, out);
             }
-            Event::Paste(text) => paste(state, &text),
+            Event::Paste(text) => {
+                paste(state, &text);
+                out.events.push(EditorEvent::Pasted);
+            }
             Event::Copy => copy(ui, state, false),
             Event::Cut => copy(ui, state, true),
             Event::Ime(ime) => match ime {
