@@ -1,0 +1,13 @@
+# Debugger (rc-dap): Failure::user_message and StopReason::label. Import: python3 scripts/i18n_tsv.py debugger scripts/i18n/rc-dap.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Cannot start the debugger: {error}	No se puede iniciar el depurador: {error}	Impossible de démarrer le débogueur : {error}	Não foi possível iniciar o depurador: {error}	Der Debugger kann nicht gestartet werden: {error}	Nie można uruchomić debugera: {error}	无法启动调试器：{error}	デバッガーを起動できません: {error}
+The build failed	La compilación ha fallado	La génération a échoué	A compilação falhou	Der Build ist fehlgeschlagen	Kompilacja nie powiodła się	生成失败	ビルドに失敗しました
+Cannot launch the project: {error}	No se puede lanzar el proyecto: {error}	Impossible de lancer le projet : {error}	Não foi possível iniciar o projeto: {error}	Das Projekt kann nicht gestartet werden: {error}	Nie można uruchomić projektu: {error}	无法启动项目：{error}	プロジェクトを起動できません: {error}
+The debugger could not launch the program: {error}	El depurador no pudo lanzar el programa: {error}	Le débogueur n’a pas pu lancer le programme : {error}	O depurador não conseguiu iniciar o programa: {error}	Der Debugger konnte das Programm nicht starten: {error}	Debuger nie mógł uruchomić programu: {error}	调试器无法启动程序：{error}	デバッガーがプログラムを起動できませんでした: {error}
+The debugger could not attach to process {pid}: {error}	El depurador no pudo asociarse al proceso {pid}: {error}	Le débogueur n’a pas pu s’attacher au processus {pid} : {error}	O depurador não conseguiu se anexar ao processo {pid}: {error}	Der Debugger konnte sich nicht an Prozess {pid} anhängen: {error}	Debuger nie mógł dołączyć do procesu {pid}: {error}	调试器无法附加到进程 {pid}：{error}	デバッガーがプロセス {pid} にアタッチできませんでした: {error}
+The debugger exited unexpectedly	El depurador se cerró inesperadamente	Le débogueur s’est arrêté de façon inattendue	O depurador foi encerrado inesperadamente	Der Debugger wurde unerwartet beendet	Debuger nieoczekiwanie zakończył działanie	调试器意外退出	デバッガーが予期せず終了しました
+Paused on breakpoint	En pausa en un punto de interrupción	En pause sur un point d’arrêt	Pausado em um ponto de interrupção	An Haltepunkt angehalten	Wstrzymano w punkcie przerwania	已在断点处暂停	ブレークポイントで一時停止中
+Paused after step	En pausa tras un paso	En pause après un pas	Pausado após uma etapa	Nach Schritt angehalten	Wstrzymano po kroku	单步执行后已暂停	ステップ実行後に一時停止中
+Paused on exception	En pausa en una excepción	En pause sur une exception	Pausado em uma exceção	Bei Ausnahme angehalten	Wstrzymano na wyjątku	已在异常处暂停	例外で一時停止中
+Paused on entry	En pausa al inicio	En pause à l’entrée	Pausado na entrada	Beim Start angehalten	Wstrzymano przy wejściu	已在入口处暂停	エントリで一時停止中
+Paused	En pausa	En pause	Pausado	Angehalten	Wstrzymano	已暂停	一時停止中
