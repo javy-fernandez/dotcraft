@@ -87,3 +87,30 @@ fn a_compound_configuration_starts_several_applications() {
     again.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
     assert!(again.runner.configs.iter().any(|c| c.name == "Both" && matches!(c.kind, ConfigKind::Compound { .. })));
 }
+
+#[test]
+fn edited_run_configurations_reach_the_process_and_the_session() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = DotCraftApp::with_settings(settings.clone(), Waker::noop(), None);
+    app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    let cli = app.runner.configs.iter().find(|c| c.name.starts_with("Shop.Cli")).unwrap().clone();
+    let options = rc_core::session::RunOptions { args: "Grace --exit 3".into(), env: "# comment\nDOTCRAFT_TEST=yes\n".into(), ..Default::default() };
+    app.runner.options.insert(cli.name.clone(), options.clone());
+    let req = app.runner.request_for(&cli).unwrap();
+    assert_eq!(req.args, ["Grace", "--exit", "3"]);
+    assert_eq!(req.env, [("DOTCRAFT_TEST".to_string(), "yes".to_string())]);
+    app.runner.selected = app.runner.configs.iter().position(|c| c.name == cli.name).unwrap();
+    app.runner.run_selected();
+    pump(&mut app, "Shop.Cli", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let r = &app.runner.runs[0];
+    assert_eq!(r.exit, Some(Some(3)));
+    assert!(r.console.term.screen_lines().join("\n").contains("Order for Grace"));
+    app.save_session();
+    let mut again = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    again.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    assert_eq!(again.runner.options.get(&cli.name), Some(&options));
+}

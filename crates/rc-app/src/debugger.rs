@@ -28,7 +28,7 @@ pub struct Debugger {
     downloads: Inbox<DownloadEvent>,
     download: Option<rc_dap::netcoredbg::DownloadHandle>,
     pub downloading: Option<(u64, Option<u64>)>,
-    pending: Option<(RunConfig, PathBuf)>,
+    pending: Option<(RunConfig, rc_dotnet::RunRequest, PathBuf)>,
     waker: Waker,
     /// Expanded rows of the Variables tree, by path of names (kept across steps).
     pub expanded: BTreeSet<String>,
@@ -98,8 +98,8 @@ impl Debugger {
     }
 
     /// Starts debugging `config` (apps only); downloads netcoredbg first when needed.
-    pub fn start(&mut self, config: RunConfig, dotnet: &Path, configured: Option<&Path>, docs: &Docs) -> Vec<DebugOutput> {
-        let ConfigKind::App { project, profile, .. } = &config.kind else {
+    pub fn start(&mut self, config: RunConfig, request: Option<rc_dotnet::RunRequest>, dotnet: &Path, configured: Option<&Path>, docs: &Docs) -> Vec<DebugOutput> {
+        let (ConfigKind::App { .. }, Some(mut run)) = (&config.kind, request) else {
             return vec![DebugOutput::Notify(tr("Choose an application run configuration to debug").into(), false)];
         };
         if let Some(s) = &mut self.session {
@@ -110,14 +110,12 @@ impl Debugger {
                 self.downloading = Some((0, None));
                 self.download = Some(rc_dap::netcoredbg::start_download(self.downloads.sender()));
             }
-            self.pending = Some((config.clone(), dotnet.to_path_buf()));
+            self.pending = Some((config.clone(), run, dotnet.to_path_buf()));
             return vec![DebugOutput::Notify(tr("Downloading the netcoredbg debugger (first use)…").into(), false)];
         };
         let Some(dotnet) = rc_dotnet::Dotnet::locate(Some(dotnet)) else {
             return vec![DebugOutput::Notify(tr("The .NET SDK was not found. Install it or set its path in Settings › Tools.").into(), true)];
         };
-        let mut run = rc_dotnet::RunRequest::new(project);
-        run.launch_profile = profile.clone();
         run.env.extend(self.env.iter().cloned());
         self.urls.clear();
         let target = DebugTarget::Project { dotnet, run };
@@ -213,8 +211,8 @@ impl Debugger {
                     self.downloading = None;
                     self.download = None;
                     out.push(DebugOutput::Notify(tr("netcoredbg is ready").into(), false));
-                    if let Some((cfg, dotnet)) = self.pending.take() {
-                        out.extend(self.start(cfg, &dotnet, None, docs));
+                    if let Some((cfg, run, dotnet)) = self.pending.take() {
+                        out.extend(self.start(cfg, Some(run), &dotnet, None, docs));
                     }
                 }
                 DownloadEvent::Failed(e) => {

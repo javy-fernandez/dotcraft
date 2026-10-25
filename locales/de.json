@@ -520,5 +520,19 @@
     "Name": "Name",
     "Start these applications together:": "Diese Anwendungen gemeinsam starten:",
     "The compound configuration has no applications to run": "Die zusammengesetzte Konfiguration hat keine Anwendungen zum Ausführen"
+  },
+  "runoptions": {
+    "Build before running": "Vor dem Ausführen erstellen",
+    "Default": "Standard",
+    "Environment variables": "Umgebungsvariablen",
+    "Launch profile": "Startprofil",
+    "None (ignore launchSettings.json)": "Keines (launchSettings.json ignorieren)",
+    "Open launchSettings.json": "launchSettings.json öffnen",
+    "Program arguments": "Programmargumente",
+    "Run Configuration: {name}": "Ausführungskonfiguration: {name}",
+    "The profile's arguments": "Die Argumente des Profils",
+    "The project folder": "Der Projektordner",
+    "Variables here are added to the profile's; one NAME=value per line.": "Diese Variablen ergänzen die des Profils; eine NAME=Wert pro Zeile.",
+    "Working directory": "Arbeitsverzeichnis"
   }
 }

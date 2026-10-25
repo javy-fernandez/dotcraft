@@ -405,3 +405,51 @@ fn creates_a_solution_and_adds_a_project() {
     let out = dotnet.std_command().args(["build", "-nologo", "-v", "q"]).arg(&sln).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
 }
+
+/// A Blazor WebAssembly app is not framework-dependent (`runtimeconfig.json` has no
+/// `framework`): it runs through `RunCommand`/`RunArguments` (the dev server), as `dotnet run`
+/// does, and serves its page.
+#[test]
+fn runs_a_blazor_webassembly_app_with_its_dev_server() {
+    use std::io::{Read, Write};
+    let dotnet = rc_dotnet::Dotnet::locate(None).expect("dotnet");
+    // Not a hidden folder: Razor skips sources under paths with a `.` segment.
+    let dir = tempfile::Builder::new().prefix("dotcraft-wasm").tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let ok = dotnet.std_command().args(["new", "blazorwasm", "-n", "Wasm", "-o"]).arg(root.join("Wasm")).args(["-f", "net10.0"]).output().unwrap();
+    assert!(ok.status.success(), "{}", String::from_utf8_lossy(&ok.stdout));
+    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let mut req = rc_dotnet::RunRequest::new(root.join("Wasm/Wasm.csproj"));
+    req.env.push(("ASPNETCORE_URLS".into(), format!("http://127.0.0.1:{port}")));
+    let inbox = rc_core::Inbox::new(rc_core::Waker::noop());
+    let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(240);
+    let mut plan = None;
+    let mut log = String::new();
+    loop {
+        for ev in inbox.drain() {
+            match ev {
+                rc_dotnet::RunEvent::Started { plan: p, .. } => plan = Some(p),
+                rc_dotnet::RunEvent::Build(rc_dotnet::BuildEvent::Output(l)) => log.push_str(&format!("{}\n", l.text)),
+                rc_dotnet::RunEvent::Failed(e) => panic!("{e}\n{log}"),
+                rc_dotnet::RunEvent::Exited { code, .. } => panic!("exited early: {code:?}"),
+                _ => {}
+            }
+        }
+        if plan.is_some() && std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline, "the dev server did not start");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    let plan = plan.unwrap();
+    assert_eq!(plan.program, dotnet.path);
+    assert!(plan.args[0].contains("blazor-devserver"), "{:?}", plan.args);
+    let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    s.set_read_timeout(Some(std::time::Duration::from_secs(30))).unwrap();
+    write!(s, "GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n").unwrap();
+    let mut out = String::new();
+    let _ = s.read_to_string(&mut out);
+    assert!(out.starts_with("HTTP/1.1 200"), "{out}");
+    handle.stop();
+}

@@ -38,6 +38,8 @@ pub enum Dialog {
     FileStructure { filter: String, selected: usize },
     /// Right-click on a breakpoint: condition and enabled state (0-based line).
     BreakpointProperties { path: PathBuf, line: usize, condition: String, enabled: bool, focus: bool },
+    /// Edit an application run configuration: launch profile, arguments, environment, folder.
+    RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions },
     /// A compound run configuration: its name and which applications it starts.
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
@@ -74,6 +76,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::BreakpointProperties { path, line, condition, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, enabled, focus),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
+        Dialog::RunOptions { name, project, profiles, options } => run_options(app, ctx, name, project, profiles, options),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -297,6 +300,73 @@ fn goto_line(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus: &mu
                 d.editor.goto(line.saturating_sub(1), col.saturating_sub(1));
             }
         }
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn run_options(app: &mut DotCraftApp, ctx: &Context, name: &str, project: &std::path::Path, profiles: &[String], o: &mut rc_core::session::RunOptions) -> Outcome {
+    let settings_file = project.parent().map(|d| d.join("Properties/launchSettings.json")).filter(|p| p.exists());
+    let mut open_settings = false;
+    let ((ok, cancel), esc) = modal(ctx, "run_options", 560.0, |ui| {
+        title(ui, &trf("Run Configuration: {name}", &[("name", &name)]));
+        let p = rc_kit::pal(ui);
+        egui::Grid::new("run_options_grid").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
+            ui.label(tr("Launch profile"));
+            let label = |v: &Option<String>| match v.as_deref() {
+                None => tr("Default").to_string(),
+                Some("") => tr("None (ignore launchSettings.json)").to_string(),
+                Some(n) => n.to_string(),
+            };
+            egui::ComboBox::from_id_salt("run_profile").selected_text(label(&o.profile)).width(300.0).show_ui(ui, |ui| {
+                ui.selectable_value(&mut o.profile, None, tr("Default"));
+                for pr in profiles {
+                    ui.selectable_value(&mut o.profile, Some(pr.clone()), pr);
+                }
+                ui.selectable_value(&mut o.profile, Some(String::new()), tr("None (ignore launchSettings.json)"));
+            });
+            ui.end_row();
+            ui.label(tr("Program arguments"));
+            ui.add(egui::TextEdit::singleline(&mut o.args).hint_text(tr("The profile's arguments")).font(egui::TextStyle::Monospace).desired_width(380.0));
+            ui.end_row();
+            ui.label(tr("Environment variables"));
+            ui.add(egui::TextEdit::multiline(&mut o.env).hint_text("ASPNETCORE_ENVIRONMENT=Development\nASPNETCORE_URLS=http://localhost:5000").font(egui::TextStyle::Monospace).desired_rows(4).desired_width(380.0));
+            ui.end_row();
+            ui.label(tr("Working directory"));
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut o.working_dir).hint_text(tr("The project folder")).desired_width(346.0));
+                if theme::icon_button(ui, rc_kit::ico::OPEN, true, tr("Choose a folder")).clicked()
+                    && let Some(d) = rfd::FileDialog::new().set_directory(project.parent().unwrap_or(project)).pick_folder()
+                {
+                    o.working_dir = d.display().to_string();
+                }
+            });
+            ui.end_row();
+            ui.label("");
+            ui.checkbox(&mut o.build_first, tr("Build before running"));
+            ui.end_row();
+        });
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new(tr("Variables here are added to the profile's; one NAME=value per line.")).size(12.0).color(p.muted));
+        if settings_file.is_some() {
+            ui.add_space(4.0);
+            if ui.link(tr("Open launchSettings.json")).clicked() {
+                open_settings = true;
+            }
+        }
+        buttons(ui, tr("OK"), true)
+    });
+    if open_settings && let Some(f) = settings_file {
+        app.open_file(&f);
+        return Outcome::Close;
+    }
+    if ok {
+        if *o == rc_core::session::RunOptions::default() {
+            app.runner.options.remove(name);
+        } else {
+            app.runner.options.insert(name.to_string(), o.clone());
+        }
+        app.session_dirty = true;
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

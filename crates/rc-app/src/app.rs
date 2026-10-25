@@ -197,6 +197,7 @@ impl DotCraftApp {
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
         self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         self.runner.compounds = session.compounds.clone();
+        self.runner.options = session.run_options.clone();
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         self.workspace = Some(WorkspaceState { ws, solution });
         self.restore_session(session);
@@ -322,6 +323,7 @@ impl DotCraftApp {
             },
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
+            run_options: self.runner.options.clone(),
             breakpoints,
             disabled_breakpoints: self
                 .docs
@@ -551,7 +553,8 @@ impl DotCraftApp {
                 match self.runner.selected_config().cloned() {
                     Some(config) => {
                         let dotnet = dotnet_path(&self.settings);
-                        let outs = self.debugger.start(config, &dotnet, self.settings.netcoredbg_path.as_deref(), &self.docs);
+                        let request = self.runner.request_for(&config);
+                        let outs = self.debugger.start(config, request, &dotnet, self.settings.netcoredbg_path.as_deref(), &self.docs);
                         self.handle_debug(outs);
                     }
                     None => self.notify(tr("There is no run configuration to debug"), false),

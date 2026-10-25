@@ -98,7 +98,15 @@ pub fn plan_launch(dotnet: &Dotnet, req: &RunRequest, props: &ProjectProperties,
         Some(p) if !p.is_project() => anyhow::bail!("launch profile '{}' ({}) cannot be run here", p.name, p.command_name),
         _ => {
             anyhow::ensure!(!props.target_path.as_os_str().is_empty(), "the project has no TargetPath");
-            if props.target_path.extension().is_some_and(|e| e.eq_ignore_ascii_case("dll")) {
+            let run_command = props.raw.get("RunCommand").map(|s| s.trim()).filter(|s| !s.is_empty());
+            if let (Some(cmd), true) = (run_command, !framework_dependent(&props.target_path)) {
+                // Not on a shared framework (self-contained, or Blazor WebAssembly, which `dotnet run`
+                // serves with its dev server): `dotnet app.dll` cannot run it, so start what
+                // `dotnet run` starts. A bare `dotnet` is the SDK in use (apps opened from Finder
+                // have no `dotnet` on PATH).
+                let program = if matches!(cmd, "dotnet" | "dotnet.exe") { dotnet.path.clone() } else { PathBuf::from(cmd) };
+                (program, split_command_line(props.raw.get("RunArguments").map(String::as_str).unwrap_or("")))
+            } else if props.target_path.extension().is_some_and(|e| e.eq_ignore_ascii_case("dll")) {
                 (dotnet.path.clone(), vec![props.target_path.to_string_lossy().into_owned()])
             } else {
                 (props.target_path.clone(), Vec::new())
@@ -136,8 +144,10 @@ pub fn plan_launch(dotnet: &Dotnet, req: &RunRequest, props: &ProjectProperties,
         set(&mut env, "DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION", "1".into());
     }
 
+    let run_dir = props.raw.get("RunWorkingDirectory").map(|s| s.trim()).filter(|s| !s.is_empty()).map(PathBuf::from);
     let working_dir = match (&req.working_dir, profile.and_then(|p| p.working_directory.as_deref())) {
         (Some(d), _) => d.clone(),
+        (None, None) if run_dir.is_some() => run_dir.clone().unwrap_or_default(),
         (None, Some(w)) if !w.trim().is_empty() => {
             let w = PathBuf::from(expand(w));
             if w.is_absolute() { w } else { project_dir.join(w) }
@@ -152,6 +162,17 @@ pub fn plan_launch(dotnet: &Dotnet, req: &RunRequest, props: &ProjectProperties,
     });
 
     Ok(LaunchPlan { program, args, env, working_dir, urls, profile: profile.map(|p| p.name.clone()), browser_url })
+}
+
+/// Whether the built app runs on a shared framework (its `runtimeconfig.json` names one), so
+/// `dotnet app.dll` can start it. Self-contained apps list `includedFrameworks` instead. When the
+/// file cannot be read, assume framework-dependent (the usual case).
+fn framework_dependent(target_path: &Path) -> bool {
+    let config = target_path.with_extension("runtimeconfig.json");
+    let Ok(text) = std::fs::read_to_string(&config) else { return true };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else { return true };
+    let options = &json["runtimeOptions"];
+    options.get("framework").is_some() || options.get("frameworks").is_some()
 }
 
 /// Expands `$(ProjectDir)`, `$(TargetDir)` and `$(TargetPath)`.

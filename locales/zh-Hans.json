@@ -520,5 +520,19 @@
     "Name": "名称",
     "Start these applications together:": "同时启动这些应用程序：",
     "The compound configuration has no applications to run": "复合配置中没有要运行的应用程序"
+  },
+  "runoptions": {
+    "Build before running": "运行前生成",
+    "Default": "默认",
+    "Environment variables": "环境变量",
+    "Launch profile": "启动配置文件",
+    "None (ignore launchSettings.json)": "无（忽略 launchSettings.json）",
+    "Open launchSettings.json": "打开 launchSettings.json",
+    "Program arguments": "程序参数",
+    "Run Configuration: {name}": "运行配置：{name}",
+    "The profile's arguments": "配置文件的参数",
+    "The project folder": "项目文件夹",
+    "Variables here are added to the profile's; one NAME=value per line.": "这些变量会添加到配置文件的变量中；每行一个 NAME=value。",
+    "Working directory": "工作目录"
   }
 }

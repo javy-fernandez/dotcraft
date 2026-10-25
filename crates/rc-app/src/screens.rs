@@ -102,6 +102,15 @@ fn screens() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("compound-{suffix}.png"))).unwrap();
         h.state_mut().dialog = None;
+        // Editing an application run configuration.
+        let api = h.state().runner.configs.iter().find(|c| c.name.starts_with("Shop.Api")).cloned().unwrap();
+        if let crate::runner::ConfigKind::App { project, .. } = api.kind {
+            let options = rc_core::session::RunOptions { args: "--seed 42".into(), env: "ASPNETCORE_ENVIRONMENT=Staging".into(), ..Default::default() };
+            h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RunOptions { name: api.name.clone(), project, profiles: vec!["http".into(), "https".into()], options });
+            h.run_steps(4);
+            h.render().unwrap().save(out.join(format!("run-options-{suffix}.png"))).unwrap();
+            h.state_mut().dialog = None;
+        }
         // The explorer moved to the right side.
         h.state_mut().dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
         h.run_steps(4);

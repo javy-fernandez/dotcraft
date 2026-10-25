@@ -520,5 +520,19 @@
     "Name": "名前",
     "Start these applications together:": "これらのアプリケーションを同時に起動:",
     "The compound configuration has no applications to run": "複合構成に実行するアプリケーションがありません"
+  },
+  "runoptions": {
+    "Build before running": "実行前にビルド",
+    "Default": "既定",
+    "Environment variables": "環境変数",
+    "Launch profile": "起動プロファイル",
+    "None (ignore launchSettings.json)": "なし (launchSettings.json を無視)",
+    "Open launchSettings.json": "launchSettings.json を開く",
+    "Program arguments": "プログラム引数",
+    "Run Configuration: {name}": "実行構成: {name}",
+    "The profile's arguments": "プロファイルの引数",
+    "The project folder": "プロジェクト フォルダー",
+    "Variables here are added to the profile's; one NAME=value per line.": "ここで指定した変数はプロファイルの変数に追加されます。1 行に 1 つ NAME=value。",
+    "Working directory": "作業ディレクトリ"
   }
 }

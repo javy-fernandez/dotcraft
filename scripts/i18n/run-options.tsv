@@ -1,0 +1,14 @@
+# Run configuration editor. Import: python3 scripts/i18n_tsv.py runoptions scripts/i18n/run-options.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Build before running	Compilar antes de ejecutar	Compiler avant l'exécution	Compilar antes de executar	Vor dem Ausführen erstellen	Kompiluj przed uruchomieniem	运行前生成	実行前にビルド
+Default	Predeterminado	Par défaut	Padrão	Standard	Domyślny	默认	既定
+Environment variables	Variables de entorno	Variables d'environnement	Variáveis de ambiente	Umgebungsvariablen	Zmienne środowiskowe	环境变量	環境変数
+Launch profile	Perfil de inicio	Profil de lancement	Perfil de inicialização	Startprofil	Profil uruchamiania	启动配置文件	起動プロファイル
+None (ignore launchSettings.json)	Ninguno (ignorar launchSettings.json)	Aucun (ignorer launchSettings.json)	Nenhum (ignorar launchSettings.json)	Keines (launchSettings.json ignorieren)	Brak (ignoruj launchSettings.json)	无（忽略 launchSettings.json）	なし (launchSettings.json を無視)
+Open launchSettings.json	Abrir launchSettings.json	Ouvrir launchSettings.json	Abrir launchSettings.json	launchSettings.json öffnen	Otwórz launchSettings.json	打开 launchSettings.json	launchSettings.json を開く
+Program arguments	Argumentos del programa	Arguments du programme	Argumentos do programa	Programmargumente	Argumenty programu	程序参数	プログラム引数
+Run Configuration: {name}	Configuración de arranque: {name}	Configuration d'exécution : {name}	Configuração de execução: {name}	Ausführungskonfiguration: {name}	Konfiguracja uruchamiania: {name}	运行配置：{name}	実行構成: {name}
+The profile's arguments	Los argumentos del perfil	Les arguments du profil	Os argumentos do perfil	Die Argumente des Profils	Argumenty profilu	配置文件的参数	プロファイルの引数
+The project folder	La carpeta del proyecto	Le dossier du projet	A pasta do projeto	Der Projektordner	Folder projektu	项目文件夹	プロジェクト フォルダー
+Variables here are added to the profile's; one NAME=value per line.	Estas variables se añaden a las del perfil; una NOMBRE=valor por línea.	Ces variables s'ajoutent à celles du profil ; une NOM=valeur par ligne.	Estas variáveis são adicionadas às do perfil; uma NOME=valor por linha.	Diese Variablen ergänzen die des Profils; eine NAME=Wert pro Zeile.	Te zmienne są dodawane do zmiennych profilu; jedna NAZWA=wartość w wierszu.	这些变量会添加到配置文件的变量中；每行一个 NAME=value。	ここで指定した変数はプロファイルの変数に追加されます。1 行に 1 つ NAME=value。
+Working directory	Directorio de trabajo	Répertoire de travail	Diretório de trabalho	Arbeitsverzeichnis	Katalog roboczy	工作目录	作業ディレクトリ

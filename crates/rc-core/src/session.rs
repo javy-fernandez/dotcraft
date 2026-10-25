@@ -18,6 +18,41 @@ pub struct OpenFile {
     pub pinned: bool,
 }
 
+/// What the user changed in an application run configuration (Run › Edit Configuration).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RunOptions {
+    /// `None`: the configuration's launch profile; `Some("")`: no profile at all
+    /// (`--no-launch-profile`); `Some(name)`: that profile.
+    pub profile: Option<String>,
+    /// Program arguments (a command line); empty: the profile's.
+    pub args: String,
+    /// `NAME=value` per line, over the profile's environment.
+    pub env: String,
+    /// Empty: the profile's or the project folder.
+    pub working_dir: String,
+    pub build_first: bool,
+}
+
+impl Default for RunOptions {
+    fn default() -> Self {
+        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true }
+    }
+}
+
+impl RunOptions {
+    /// `NAME=value` lines as pairs (blank lines and `#` comments skipped).
+    pub fn env_pairs(&self) -> Vec<(String, String)> {
+        self.env
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .filter_map(|l| l.split_once('=').map(|(k, v)| (k.trim().to_string(), v.trim().to_string())))
+            .filter(|(k, _)| !k.is_empty())
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ToolWindowState {
@@ -50,6 +85,8 @@ pub struct Session {
     pub disabled_breakpoints: BTreeMap<PathBuf, Vec<usize>>,
     /// Compound run configurations: name and the configurations they start.
     pub compounds: Vec<(String, Vec<String>)>,
+    /// Edited application configurations, by name.
+    pub run_options: BTreeMap<String, RunOptions>,
 }
 
 impl Session {

@@ -175,6 +175,15 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                             app.runner.selected = i;
                             app.session_dirty = true;
                         }
+                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::App { project, .. } }) = app.runner.selected_config().cloned() {
+                            ui.separator();
+                            if theme::menu_item(ui, Some(ico::SETTINGS), &trf("Edit “{name}”…", &[("name", &name)]), false).clicked() {
+                                let profiles = rc_dotnet::LaunchSettings::load(&project).ok().flatten().map(|s| s.profiles.iter().filter(|p| p.is_project()).map(|p| p.name.clone()).collect()).unwrap_or_default();
+                                let options = app.runner.options.get(&name).cloned().unwrap_or_default();
+                                app.dialog = Some(crate::ui::dialogs::Dialog::RunOptions { name, project, profiles, options });
+                                ui.close();
+                            }
+                        }
                         // Compound configurations: several applications at once.
                         if app.runner.app_names().len() > 1 {
                             ui.separator();

@@ -145,11 +145,13 @@ pub struct Runner {
     dotnet: Option<Dotnet>,
     /// Compound configurations of the workspace (name, member names), kept in the session.
     pub compounds: Vec<(String, Vec<String>)>,
+    /// Edited application configurations, by name (kept in the session).
+    pub options: BTreeMap<String, rc_core::session::RunOptions>,
 }
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, compounds: Vec::new() }
+        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, compounds: Vec::new(), options: BTreeMap::new() }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -254,7 +256,7 @@ impl Runner {
             return vec![RunnerOutput::Notify(tr("There is nothing to run: the workspace has no executable or test projects").into(), false)];
         };
         match cfg.kind.clone() {
-            ConfigKind::App { project, profile, .. } => self.run_app(cfg, &project, profile),
+            ConfigKind::App { .. } => self.run_app(cfg),
             ConfigKind::Tests { target } => self.run_tests(&target, None),
             ConfigKind::Compound { members } => {
                 let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::App { .. })).cloned()).collect();
@@ -263,9 +265,7 @@ impl Runner {
                 }
                 let mut out = Vec::new();
                 for a in apps {
-                    if let ConfigKind::App { project, profile, .. } = a.kind.clone() {
-                        out.extend(self.run_app(a, &project, profile));
-                    }
+                    out.extend(self.run_app(a));
                 }
                 out
             }
@@ -310,7 +310,28 @@ impl Runner {
         self.configs.iter().filter(|c| matches!(c.kind, ConfigKind::App { .. })).map(|c| c.name.clone()).collect()
     }
 
-    fn run_app(&mut self, cfg: RunConfig, project: &Path, profile: Option<String>) -> Vec<RunnerOutput> {
+    /// What to run for an application configuration, with the user's edits applied.
+    pub fn request_for(&self, cfg: &RunConfig) -> Option<RunRequest> {
+        let ConfigKind::App { project, profile, .. } = &cfg.kind else { return None };
+        let mut req = RunRequest::new(project);
+        req.launch_profile = profile.clone();
+        if let Some(o) = self.options.get(&cfg.name) {
+            match o.profile.as_deref() {
+                Some("") => req.use_launch_profile = false,
+                Some(p) => req.launch_profile = Some(p.to_string()),
+                None => {}
+            }
+            req.args = rc_dotnet::process::split_command_line(&o.args);
+            req.env = o.env_pairs();
+            if !o.working_dir.trim().is_empty() {
+                req.working_dir = Some(PathBuf::from(o.working_dir.trim()));
+            }
+            req.build_first = o.build_first;
+        }
+        Some(req)
+    }
+
+    fn run_app(&mut self, cfg: RunConfig) -> Vec<RunnerOutput> {
         let dotnet = match self.dotnet() {
             Ok(d) => d,
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
@@ -322,8 +343,7 @@ impl Runner {
                 h.stop();
             }
         }
-        let mut req = RunRequest::new(project);
-        req.launch_profile = profile;
+        let Some(req) = self.request_for(&cfg) else { return Vec::new() };
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
