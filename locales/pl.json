@@ -570,5 +570,9 @@
     "Show All Tabs": "Pokaż wszystkie karty",
     "Show Tabs in Multiple Rows": "Pokaż karty w wielu wierszach",
     "Show tabs in multiple rows": "Pokazuj karty w wielu wierszach"
+  },
+  "format": {
+    "Reformat Code is available for C#, JSON and XML files": "Formatowanie kodu jest dostępne dla plików C#, JSON i XML",
+    "The file could not be formatted: check its syntax": "Nie można sformatować pliku: sprawdź składnię"
   }
 }

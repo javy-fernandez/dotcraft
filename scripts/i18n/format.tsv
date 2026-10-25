@@ -1,0 +1,4 @@
+# Reformat Code outside C#. Import: python3 scripts/i18n_tsv.py format scripts/i18n/format.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Reformat Code is available for C#, JSON and XML files	Reformatear código está disponible para archivos C#, JSON y XML	Reformater le code est disponible pour les fichiers C#, JSON et XML	Reformatar código está disponível para arquivos C#, JSON e XML	Code neu formatieren ist für C#-, JSON- und XML-Dateien verfügbar	Formatowanie kodu jest dostępne dla plików C#, JSON i XML	重新设置代码格式适用于 C#、JSON 和 XML 文件	コードの再フォーマットは C#、JSON、XML ファイルで使用できます
+The file could not be formatted: check its syntax	No se pudo formatear el archivo: revisa su sintaxis	Le fichier n'a pas pu être formaté : vérifiez sa syntaxe	Não foi possível formatar o arquivo: verifique a sintaxe	Die Datei konnte nicht formatiert werden: Syntax prüfen	Nie można sformatować pliku: sprawdź składnię	无法格式化文件：请检查其语法	ファイルをフォーマットできませんでした: 構文を確認してください

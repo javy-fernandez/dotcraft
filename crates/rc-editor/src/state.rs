@@ -95,6 +95,8 @@ pub enum EditorEvent {
     Focused,
     /// Text was pasted.
     Pasted,
+    /// Right-click in the text (after moving the caret there): the context menu opens.
+    TextSecondaryClicked,
 }
 
 /// One open document view.

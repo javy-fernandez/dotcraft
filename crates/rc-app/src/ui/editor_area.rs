@@ -80,6 +80,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         from_menu.extend(rc_editor::run_action(&ed_ui, &mut doc.editor, &app.editor_config, *a));
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
+    editor_context_menu(app, &out.response);
+    let doc = &mut app.docs.list[active];
     // While paused, hovering shows the debugger's value instead of the symbol's documentation.
     if app.debugger.stopped() {
         let insight_events: Vec<_> = out.events.iter().filter(|e| !matches!(e, EditorEvent::HoverAt { .. })).cloned().collect();
@@ -195,6 +197,56 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     for a in insight_actions {
         app.run_insight_action(a, caret_screen);
     }
+}
+
+/// Right-click in the editor (Rider): code actions and navigation for C#, editing, formatting.
+fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
+    use crate::native_menu::{MenuCommand, forward_edit};
+    let csharp = app.docs.active_doc().is_some_and(crate::insight::is_csharp);
+    let shortcut = |app: &DotCraftApp, a: Action| app.keymap.shortcut_text(a);
+    let mut actions = Vec::new();
+    let mut edit = None;
+    let mut usings = false;
+    resp.context_menu(|ui| {
+        ui.set_min_width(260.0);
+        ui.set_max_width(320.0);
+        let mut entry = |ui: &mut Ui, icon: Option<rc_kit::Ico>, text: &str, action: Action| {
+            if theme::menu_entry(ui, icon, text, shortcut(app, action).as_deref(), false, true).clicked() {
+                actions.push(action);
+                ui.close();
+            }
+        };
+        if csharp {
+            entry(ui, Some(ico::BULB), tr("Show Context Actions"), Action::ShowIntentions);
+            entry(ui, None, tr("Go to Declaration"), Action::GotoDeclaration);
+            entry(ui, None, tr("Go to Implementation"), Action::GotoImplementation);
+            entry(ui, Some(ico::TW_FIND), tr("Find Usages"), Action::FindUsages);
+            entry(ui, Some(ico::EDIT), tr("Rename…"), Action::Rename);
+            ui.separator();
+        }
+        for (icon, text, cmd) in [(ico::CUT, tr("Cut"), MenuCommand::Cut), (ico::COPY, tr("Copy"), MenuCommand::Copy), (ico::PASTE, tr("Paste"), MenuCommand::Paste)] {
+            if theme::menu_item(ui, Some(icon), text, false).clicked() {
+                edit = Some(cmd);
+                ui.close();
+            }
+        }
+        ui.separator();
+        entry(ui, Some(ico::REFORMAT), tr("Reformat Code"), Action::Reformat);
+        entry(ui, None, tr("Comment with Line Comment"), Action::CommentLine);
+        if csharp && theme::menu_item(ui, Some(ico::NAMESPACE), tr("Add Missing Usings"), false).clicked() {
+            usings = true;
+            ui.close();
+        }
+        ui.separator();
+        entry(ui, Some(ico::BREAKPOINT), tr("Toggle Line Breakpoint"), Action::ToggleBreakpoint);
+    });
+    if let Some(cmd) = edit {
+        forward_edit(&resp.ctx, cmd);
+    }
+    if usings && let Some(i) = app.docs.active {
+        app.insight.add_missing_usings(&app.docs.list[i]);
+    }
+    app.pending.extend(actions);
 }
 
 /// Whether `path` belongs to a test project (its nearest `.csproj`), cached per project.

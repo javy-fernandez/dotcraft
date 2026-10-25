@@ -155,6 +155,27 @@ fn screens() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("tabs-rows-{suffix}.png"))).unwrap();
         h.state_mut().settings.tabs_multirow = false;
+        // Right-click in the editor: the context menu.
+        let calc = fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs");
+        h.state_mut().open_file(&calc);
+        h.run_steps(3);
+        let at = egui::pos2(760.0, 300.0);
+        h.event(egui::Event::PointerMoved(at));
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("editor-menu-{suffix}.png"))).unwrap();
+        h.event(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+        h.run_steps(2);
+        // Reformat Code on a JSON file.
+        let json = samples.path().join("settings.json");
+        std::fs::write(&json, "{\"Logging\":{\"LogLevel\":{\"Default\":\"Information\"}},\"AllowedHosts\":\"*\",\"Ports\":[5000,5001]}\n").unwrap();
+        h.state_mut().open_file(&json);
+        h.state_mut().pending.push(rc_editor::Action::Reformat);
+        h.run_steps(4);
+        let formatted = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+        assert!(formatted.contains("\"LogLevel\": {\n"), "{formatted}");
+        h.render().unwrap().save(out.join(format!("json-format-{suffix}.png"))).unwrap();
         // The explorer moved to the right side.
         h.state_mut().dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
         h.run_steps(4);

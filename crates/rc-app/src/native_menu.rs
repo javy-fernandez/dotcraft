@@ -193,7 +193,7 @@ impl NativeMenu {
 }
 
 /// Edit commands become the egui events of their shortcut; returns whether it was one.
-fn forward_edit(ctx: &egui::Context, cmd: MenuCommand) -> bool {
+pub fn forward_edit(ctx: &egui::Context, cmd: MenuCommand) -> bool {
     use egui::{Event, Key, Modifiers as M};
     let cmd_mods = M::MAC_CMD | M::COMMAND;
     let key = |key: Key, modifiers: M| Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers };

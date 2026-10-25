@@ -410,6 +410,11 @@ impl DotCraftApp {
     /// Runs a code-insight action from the editor's keymap on the active document.
     pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
         let Some(i) = self.docs.active else { return };
+        // JSON and XML are formatted here; C# by the server.
+        if action == Action::Reformat && !crate::insight::is_csharp(&self.docs.list[i]) {
+            self.format_locally(i);
+            return;
+        }
         if !self.insight.ready() || !crate::insight::is_csharp(&self.docs.list[i]) {
             let msg = match &self.insight.status {
                 crate::insight::InsightStatus::NotInstalled => tr("Download the C# language server from the status bar to use this action"),
@@ -448,6 +453,47 @@ impl DotCraftApp {
             Action::Reformat => self.insight.format(doc),
             Action::FileStructure => self.dialog = Some(Dialog::FileStructure { filter: String::new(), selected: 0 }),
             _ => {}
+        }
+    }
+
+    /// Reformat Code for JSON and XML-like files: the document, or the selected lines.
+    fn format_locally(&mut self, i: usize) {
+        use rc_syntax::Lang;
+        let d = &mut self.docs.list[i];
+        let lang = d.editor.syntax.lang;
+        let unit = d.editor.indent.unit.clone();
+        let format = |text: &str| match lang {
+            Lang::Json => rc_text::format::json(text, &unit),
+            Lang::Xml => rc_text::format::xml(text, &unit),
+            _ => None,
+        };
+        if !matches!(lang, Lang::Json | Lang::Xml) {
+            self.notify(tr("Reformat Code is available for C#, JSON and XML files"), false);
+            return;
+        }
+        let rope = d.editor.buffer.rope().clone();
+        let sel = d.editor.selection.primary();
+        let (start, end) = if sel.is_empty() {
+            (0, rope.len_chars())
+        } else {
+            // Whole lines of the selection; XML keeps the depth of the lines above.
+            let (l0, l1) = (rope.char_to_line(sel.start()), rope.char_to_line(sel.end().saturating_sub(1).max(sel.start())));
+            (rope.line_to_char(l0), rope.line_to_char((l1 + 1).min(rope.len_lines())))
+        };
+        let text = rope.slice(start..end).to_string();
+        let formatted = if sel.is_empty() || lang == Lang::Json {
+            format(&text)
+        } else {
+            // Format from the top so the selection gets its real depth, then take its lines.
+            let before = rope.slice(0..start).to_string();
+            let n_before = before.lines().count();
+            let n_sel = text.lines().count();
+            format(&format!("{before}{text}")).map(|all| all.lines().skip(n_before).take(n_sel).map(|l| format!("{l}\n")).collect())
+        };
+        match formatted {
+            Some(f) if f != text => d.editor.apply_text_edits(vec![rc_text::Change::new(start, end, f)]),
+            Some(_) => {}
+            None => self.notify(tr("The file could not be formatted: check its syntax"), true),
         }
     }
 

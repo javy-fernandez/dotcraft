@@ -5,6 +5,7 @@
 pub mod buffer;
 pub mod change;
 pub mod commands;
+pub mod format;
 pub mod markup;
 pub mod selection;
 

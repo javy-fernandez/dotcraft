@@ -570,5 +570,9 @@
     "Show All Tabs": "すべてのタブを表示",
     "Show Tabs in Multiple Rows": "タブを複数行で表示",
     "Show tabs in multiple rows": "タブを複数行で表示する"
+  },
+  "format": {
+    "Reformat Code is available for C#, JSON and XML files": "コードの再フォーマットは C#、JSON、XML ファイルで使用できます",
+    "The file could not be formatted: check its syntax": "ファイルをフォーマットできませんでした: 構文を確認してください"
   }
 }

@@ -810,6 +810,19 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
         }
         return;
     }
+    // Right-click in the text: the caret goes there unless it hits the selection (the context
+    // menu then acts on that place).
+    if response.secondary_clicked()
+        && let Some(p) = response.interact_pointer_pos()
+        && text_rect.contains(p)
+    {
+        let (pos, _) = pos_at(ui, state, &config, m, text_rect, p);
+        if !state.selection.ranges().iter().any(|r| r.start() <= pos && pos <= r.end() && !r.is_empty()) {
+            state.set_selection(Selection::point(pos));
+        }
+        out.events.push(EditorEvent::TextSecondaryClicked);
+        return;
+    }
     // Gutter clicks.
     if response.clicked()
         && let Some(p) = response.interact_pointer_pos()

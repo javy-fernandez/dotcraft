@@ -570,5 +570,9 @@
     "Show All Tabs": "Alle Tabs anzeigen",
     "Show Tabs in Multiple Rows": "Tabs in mehreren Zeilen anzeigen",
     "Show tabs in multiple rows": "Tabs in mehreren Zeilen anzeigen"
+  },
+  "format": {
+    "Reformat Code is available for C#, JSON and XML files": "Code neu formatieren ist für C#-, JSON- und XML-Dateien verfügbar",
+    "The file could not be formatted: check its syntax": "Die Datei konnte nicht formatiert werden: Syntax prüfen"
   }
 }

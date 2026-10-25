@@ -570,5 +570,9 @@
     "Show All Tabs": "Afficher tous les onglets",
     "Show Tabs in Multiple Rows": "Afficher les onglets sur plusieurs lignes",
     "Show tabs in multiple rows": "Afficher les onglets sur plusieurs lignes"
+  },
+  "format": {
+    "Reformat Code is available for C#, JSON and XML files": "Reformater le code est disponible pour les fichiers C#, JSON et XML",
+    "The file could not be formatted: check its syntax": "Le fichier n'a pas pu être formaté : vérifiez sa syntaxe"
   }
 }

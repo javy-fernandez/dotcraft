@@ -570,5 +570,9 @@
     "Show All Tabs": "显示所有标签页",
     "Show Tabs in Multiple Rows": "多行显示标签页",
     "Show tabs in multiple rows": "多行显示标签页"
+  },
+  "format": {
+    "Reformat Code is available for C#, JSON and XML files": "重新设置代码格式适用于 C#、JSON 和 XML 文件",
+    "The file could not be formatted: check its syntax": "无法格式化文件：请检查其语法"
   }
 }
