@@ -401,5 +401,18 @@
     "{id} installed": "{id} instalado",
     "{id} removed": "{id} eliminado",
     "{n} downloads": "{n} descargas"
+  },
+  "debugger": {
+    "Cannot start the debugger: {error}": "No se puede iniciar el depurador: {error}",
+    "The build failed": "La compilación ha fallado",
+    "Cannot launch the project: {error}": "No se puede lanzar el proyecto: {error}",
+    "The debugger could not launch the program: {error}": "El depurador no pudo lanzar el programa: {error}",
+    "The debugger could not attach to process {pid}: {error}": "El depurador no pudo asociarse al proceso {pid}: {error}",
+    "The debugger exited unexpectedly": "El depurador se cerró inesperadamente",
+    "Paused on breakpoint": "En pausa en un punto de interrupción",
+    "Paused after step": "En pausa tras un paso",
+    "Paused on exception": "En pausa en una excepción",
+    "Paused on entry": "En pausa al inicio",
+    "Paused": "En pausa"
   }
 }

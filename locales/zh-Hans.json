@@ -401,5 +401,18 @@
     "{id} installed": "已安装 {id}",
     "{id} removed": "已移除 {id}",
     "{n} downloads": "{n} 次下载"
+  },
+  "debugger": {
+    "Cannot start the debugger: {error}": "无法启动调试器：{error}",
+    "The build failed": "生成失败",
+    "Cannot launch the project: {error}": "无法启动项目：{error}",
+    "The debugger could not launch the program: {error}": "调试器无法启动程序：{error}",
+    "The debugger could not attach to process {pid}: {error}": "调试器无法附加到进程 {pid}：{error}",
+    "The debugger exited unexpectedly": "调试器意外退出",
+    "Paused on breakpoint": "已在断点处暂停",
+    "Paused after step": "单步执行后已暂停",
+    "Paused on exception": "已在异常处暂停",
+    "Paused on entry": "已在入口处暂停",
+    "Paused": "已暂停"
   }
 }

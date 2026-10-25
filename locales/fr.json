@@ -401,5 +401,18 @@
     "{id} installed": "{id} installé",
     "{id} removed": "{id} supprimé",
     "{n} downloads": "{n} téléchargements"
+  },
+  "debugger": {
+    "Cannot start the debugger: {error}": "Impossible de démarrer le débogueur : {error}",
+    "The build failed": "La génération a échoué",
+    "Cannot launch the project: {error}": "Impossible de lancer le projet : {error}",
+    "The debugger could not launch the program: {error}": "Le débogueur n’a pas pu lancer le programme : {error}",
+    "The debugger could not attach to process {pid}: {error}": "Le débogueur n’a pas pu s’attacher au processus {pid} : {error}",
+    "The debugger exited unexpectedly": "Le débogueur s’est arrêté de façon inattendue",
+    "Paused on breakpoint": "En pause sur un point d’arrêt",
+    "Paused after step": "En pause après un pas",
+    "Paused on exception": "En pause sur une exception",
+    "Paused on entry": "En pause à l’entrée",
+    "Paused": "En pause"
   }
 }

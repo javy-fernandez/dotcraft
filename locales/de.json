@@ -401,5 +401,18 @@
     "{id} installed": "{id} installiert",
     "{id} removed": "{id} entfernt",
     "{n} downloads": "{n} Downloads"
+  },
+  "debugger": {
+    "Cannot start the debugger: {error}": "Der Debugger kann nicht gestartet werden: {error}",
+    "The build failed": "Der Build ist fehlgeschlagen",
+    "Cannot launch the project: {error}": "Das Projekt kann nicht gestartet werden: {error}",
+    "The debugger could not launch the program: {error}": "Der Debugger konnte das Programm nicht starten: {error}",
+    "The debugger could not attach to process {pid}: {error}": "Der Debugger konnte sich nicht an Prozess {pid} anhängen: {error}",
+    "The debugger exited unexpectedly": "Der Debugger wurde unerwartet beendet",
+    "Paused on breakpoint": "An Haltepunkt angehalten",
+    "Paused after step": "Nach Schritt angehalten",
+    "Paused on exception": "Bei Ausnahme angehalten",
+    "Paused on entry": "Beim Start angehalten",
+    "Paused": "Angehalten"
   }
 }

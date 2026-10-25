@@ -401,5 +401,18 @@
     "{id} installed": "{id} をインストールしました",
     "{id} removed": "{id} を削除しました",
     "{n} downloads": "{n} ダウンロード"
+  },
+  "debugger": {
+    "Cannot start the debugger: {error}": "デバッガーを起動できません: {error}",
+    "The build failed": "ビルドに失敗しました",
+    "Cannot launch the project: {error}": "プロジェクトを起動できません: {error}",
+    "The debugger could not launch the program: {error}": "デバッガーがプログラムを起動できませんでした: {error}",
+    "The debugger could not attach to process {pid}: {error}": "デバッガーがプロセス {pid} にアタッチできませんでした: {error}",
+    "The debugger exited unexpectedly": "デバッガーが予期せず終了しました",
+    "Paused on breakpoint": "ブレークポイントで一時停止中",
+    "Paused after step": "ステップ実行後に一時停止中",
+    "Paused on exception": "例外で一時停止中",
+    "Paused on entry": "エントリで一時停止中",
+    "Paused": "一時停止中"
   }
 }
