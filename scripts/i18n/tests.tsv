@@ -1,0 +1,3 @@
+# Tests window. Import: python3 scripts/i18n_tsv.py tests scripts/i18n/tests.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Run All Tests	Ejecutar todas las pruebas	Exécuter tous les tests	Executar todos os testes	Alle Tests ausführen	Uruchom wszystkie testy	运行所有测试	すべてのテストを実行

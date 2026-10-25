@@ -333,6 +333,11 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
 
 /// Centered icon, title and hint.
 pub fn empty_state(ui: &mut Ui, icon: Ico, title: &str, hint: &str) {
+    empty_state_with(ui, icon, title, hint, None);
+}
+
+/// Empty state with a button under the hint (e.g. "Run All Tests"); true when clicked.
+pub fn empty_state_with(ui: &mut Ui, icon: Ico, title: &str, hint: &str, button: Option<&str>) -> bool {
     let p = rc_kit::pal(ui);
     let rect = ui.available_rect_before_wrap();
     let c = rect.center() - vec2(0.0, 20.0);
@@ -340,6 +345,14 @@ pub fn empty_state(ui: &mut Ui, icon: Ico, title: &str, hint: &str) {
     ui.painter().text(c, Align2::CENTER_CENTER, title, theme::bold(13.0), p.text_muted);
     let g = ui.painter().layout(hint.to_string(), FontId::proportional(12.5), p.muted, (rect.width() - 40.0).max(120.0));
     let pos = pos2(c.x - g.size().x / 2.0, c.y + 14.0);
+    let below = pos.y + g.size().y + 14.0;
     ui.painter().galley(pos, g, p.muted);
+    let mut clicked = false;
+    if let Some(label) = button {
+        let r = Rect::from_center_size(pos2(c.x, below + 14.0), vec2(220.0, 28.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(r).layout(egui::Layout::top_down(egui::Align::Center)));
+        clicked = theme::primary_button(&mut child, label).clicked();
+    }
     ui.allocate_rect(rect, Sense::hover());
+    clicked
 }

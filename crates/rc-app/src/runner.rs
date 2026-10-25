@@ -342,6 +342,25 @@ impl Runner {
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Tests)]
     }
 
+    /// Runs every test of the workspace: the "All Tests" configuration, or `dotnet test` on the
+    /// solution or folder when no test project was recognised (it still finds them).
+    pub fn run_all_tests(&mut self, workspace: &Path) -> Vec<RunnerOutput> {
+        let target = self
+            .configs
+            .iter()
+            .find_map(|c| match &c.kind {
+                ConfigKind::Tests { target } if !rc_core::workspace::is_project(target) => Some(target.clone()),
+                _ => None,
+            })
+            .or_else(|| {
+                // A single test project (no solution).
+                let tests: Vec<&PathBuf> = self.configs.iter().filter_map(|c| if let ConfigKind::Tests { target } = &c.kind { Some(target) } else { None }).collect();
+                (tests.len() == 1).then(|| tests[0].clone())
+            })
+            .unwrap_or_else(|| workspace.to_path_buf());
+        self.run_tests(&target, None)
+    }
+
     /// Runs the tests that failed in the last run.
     pub fn rerun_failed(&mut self) -> Vec<RunnerOutput> {
         let Some(t) = &self.tests else { return Vec::new() };

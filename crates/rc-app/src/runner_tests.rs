@@ -50,8 +50,10 @@ fn shop_builds_runs_and_passes_its_tests() {
     assert!(text.contains("Total"), "console: {text}");
 
     // All tests.
-    app.runner.selected = app.runner.configs.iter().position(|c| matches!(c.kind, ConfigKind::Tests { .. }) && c.name == "All Tests").unwrap();
-    app.runner.run_selected();
+    // "Run Tests" runs them all whatever configuration is selected (Shop.Cli here).
+    assert!(matches!(app.runner.selected_config().unwrap().kind, ConfigKind::App { .. }));
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
+    assert_eq!(app.runner.tests.as_ref().unwrap().request.target, target);
     pump(&mut app, "tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
     let t = app.runner.tests.as_ref().unwrap();
     assert_eq!(t.failed, 0, "{:?}", t.failure);

@@ -622,6 +622,27 @@ pub fn toolbar_separator(ui: &mut Ui) {
 }
 
 /// Blue primary button (Button.default).
+/// A slider readable on both themes: grey rail, accent fill up to the value and a white knob
+/// with a border (egui draws the rail with the control background, white on Islands Light).
+pub fn slider(ui: &mut Ui, slider: egui::Slider<'_>) -> Response {
+    let p = pal(ui);
+    ui.scope(|ui| {
+        ui.spacing_mut().slider_width = 200.0;
+        let v = ui.visuals_mut();
+        v.selection.bg_fill = p.accent;
+        // The rail and the idle knob share `inactive.bg_fill`; the knob gets a darker border and
+        // turns white (light) or bright (dark) when hovered or dragged.
+        v.widgets.inactive.bg_fill = if p.dark { p.control_border } else { hex(0xD3D5DB) };
+        v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, p.muted);
+        for w in [&mut v.widgets.hovered, &mut v.widgets.active] {
+            w.bg_fill = if p.dark { p.text } else { Color32::WHITE };
+            w.fg_stroke = egui::Stroke::new(1.0, p.accent);
+        }
+        ui.add(slider.trailing_fill(true))
+    })
+    .inner
+}
+
 pub fn primary_button(ui: &mut Ui, text: &str) -> Response {
     let p = pal(ui);
     ui.add(

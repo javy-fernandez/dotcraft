@@ -497,10 +497,17 @@ impl DotCraftApp {
                     crate::ui::run_windows::handle_outputs(self, outs);
                 }
             }
-            Action::Run | Action::RunTests => {
+            Action::Run => {
                 self.save_all_docs();
                 let outs = self.runner.run_selected();
                 crate::ui::run_windows::handle_outputs(self, outs);
+            }
+            Action::RunTests => {
+                self.save_all_docs();
+                if let Some(target) = self.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
+                    let outs = self.runner.run_all_tests(&target);
+                    crate::ui::run_windows::handle_outputs(self, outs);
+                }
             }
             Action::StopRun => {
                 if self.debugger.active() {

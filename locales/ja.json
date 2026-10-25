@@ -451,5 +451,8 @@
     "Threads & Variables": "スレッドと変数",
     "Variables are shown when the program is paused": "プログラムが一時停止すると変数が表示されます",
     "netcoredbg is ready": "netcoredbg の準備ができました"
+  },
+  "tests": {
+    "Run All Tests": "すべてのテストを実行"
   }
 }

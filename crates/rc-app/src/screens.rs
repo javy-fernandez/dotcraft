@@ -74,6 +74,16 @@ fn screens() {
         let mut h = harness(app, vec2(1440.0, 900.0));
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("workspace-{suffix}.png"))).unwrap();
+        // Settings (appearance page, with the zoom slider).
+        let s = h.state().settings.clone();
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::settings(&s));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("settings-{suffix}.png"))).unwrap();
+        // The Tests window before any run: it offers to run them all.
+        h.state_mut().dialog = None;
+        h.state_mut().dock.show(crate::toolwindow::ToolWindow::Tests);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("tests-empty-{suffix}.png"))).unwrap();
     }
 }
 

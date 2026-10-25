@@ -227,29 +227,46 @@ pub fn tests(app: &mut DotCraftApp, ui: &mut Ui) {
     let running = app.runner.tests.as_ref().is_some_and(|t| t.running);
     let has = app.runner.tests.is_some();
     let show_passed = app.runner.tests.as_ref().is_none_or(|t| t.show_passed);
+    let ws = app.workspace.is_some();
+    let run_all = match app.keymap.shortcut_text(rc_editor::Action::RunTests) {
+        Some(s) => format!("{} ({s})", tr("Run All Tests")),
+        None => tr("Run All Tests").to_string(),
+    };
     let actions = [
+        (ico::RUN_ALL, run_all.as_str(), ws && !running),
         (ico::RERUN, tr("Rerun"), has && !running),
         (ico::RESTART_FAILED, tr("Rerun Failed Tests"), has && !running),
         (ico::STOP, tr("Stop"), running),
         (if show_passed { ico::SHOW_PASSED } else { ico::SHOW_IGNORED }, tr("Show Passed"), has),
     ];
-    match header(ui, tr("Tests"), &actions) {
+    let mut clicked = header(ui, tr("Tests"), &actions);
+    if app.runner.tests.is_none() {
+        let hint = tr("Run the tests of a project or file to see the results.");
+        if crate::ui::toolwindows::empty_state_with(ui, ToolWindow::Tests.icon(), tr("No tests run yet"), hint, ws.then_some(tr("Run All Tests"))) {
+            clicked = Some(0);
+        }
+    }
+    match clicked {
         Some(0) => {
+            let ctx = ui.ctx().clone();
+            app.run_ide_action(&ctx, rc_editor::Action::RunTests);
+        }
+        Some(1) => {
             let outs = app.runner.rerun_tests();
             handle_outputs(app, outs);
         }
-        Some(1) => {
+        Some(2) => {
             let outs = app.runner.rerun_failed();
             handle_outputs(app, outs);
         }
-        Some(2) => {
+        Some(3) => {
             if let Some(t) = &mut app.runner.tests
                 && let Some(h) = t.handle.take()
             {
                 h.cancel();
             }
         }
-        Some(3) => {
+        Some(4) => {
             if let Some(t) = &mut app.runner.tests {
                 t.show_passed = !t.show_passed;
             }
@@ -257,10 +274,7 @@ pub fn tests(app: &mut DotCraftApp, ui: &mut Ui) {
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Tests),
         _ => {}
     }
-    let Some(t) = &app.runner.tests else {
-        empty_state(ui, ToolWindow::Tests.icon(), tr("No tests run yet"), tr("Run the tests of a project or file to see the results."));
-        return;
-    };
+    let Some(t) = &app.runner.tests else { return };
     let p = rc_kit::pal(ui);
     if t.running {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));

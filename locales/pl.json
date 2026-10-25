@@ -451,5 +451,8 @@
     "Threads & Variables": "Wątki i zmienne",
     "Variables are shown when the program is paused": "Zmienne są wyświetlane, gdy program jest wstrzymany",
     "netcoredbg is ready": "netcoredbg jest gotowy"
+  },
+  "tests": {
+    "Run All Tests": "Uruchom wszystkie testy"
   }
 }

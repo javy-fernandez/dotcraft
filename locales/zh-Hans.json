@@ -451,5 +451,8 @@
     "Threads & Variables": "线程和变量",
     "Variables are shown when the program is paused": "程序暂停时显示变量",
     "netcoredbg is ready": "netcoredbg 已就绪"
+  },
+  "tests": {
+    "Run All Tests": "运行所有测试"
   }
 }

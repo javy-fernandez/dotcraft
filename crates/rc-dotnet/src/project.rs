@@ -47,6 +47,7 @@ impl ProjectInfo {
                 "TargetFrameworks" => info.target_frameworks = text().split(';').filter(|s| !s.is_empty()).map(str::to_string).collect(),
                 "OutputType" => info.output_type = text(),
                 "IsTestProject" => info.is_test |= text().eq_ignore_ascii_case("true"),
+                "Sdk" => info.is_test |= n.attribute("Name").is_some_and(|s| s.to_ascii_lowercase().starts_with("mstest.sdk")),
                 "PackageReference" => {
                     let name = n.attribute("Include").or(n.attribute("Update")).unwrap_or("").to_string();
                     let version = n
@@ -54,7 +55,7 @@ impl ProjectInfo {
                         .map(str::to_string)
                         .or_else(|| n.children().find(|c| c.has_tag_name("Version")).and_then(|c| c.text()).map(|t| t.trim().to_string()))
                         .unwrap_or_default();
-                    if ["Microsoft.NET.Test.Sdk", "xunit", "NUnit", "MSTest.TestFramework", "MSTest"].iter().any(|t| name.eq_ignore_ascii_case(t)) {
+                    if is_test_package(&name) {
                         info.is_test = true;
                     }
                     if !name.is_empty() {
@@ -79,8 +80,11 @@ impl ProjectInfo {
                 _ => {}
             }
         }
-        if info.sdk.eq_ignore_ascii_case("MSTest.Sdk") {
+        if info.sdk.to_ascii_lowercase().starts_with("mstest.sdk") {
             info.is_test = true;
+        }
+        if !info.is_test {
+            info.is_test = inherits_test_settings(dir, &info.name);
         }
         Ok(info)
     }
@@ -92,6 +96,66 @@ impl ProjectInfo {
     pub fn is_web(&self) -> bool {
         self.sdk.starts_with("Microsoft.NET.Sdk.Web") || self.sdk.starts_with("Microsoft.NET.Sdk.Razor")
     }
+}
+
+/// Packages that make a project a test project (test SDK, frameworks, adapters, the testing
+/// platform).
+fn is_test_package(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    n == "microsoft.net.test.sdk"
+        || n.starts_with("microsoft.testing.platform")
+        || n.starts_with("xunit")
+        || n.starts_with("nunit")
+        || n.starts_with("mstest")
+        || n == "tunit"
+        || n.starts_with("tunit.")
+}
+
+/// Whether a `Directory.Build.props` above the project makes it a test project: `IsTestProject`
+/// or a test package, unconditionally or under a condition on the project name such as
+/// `$(MSBuildProjectName.EndsWith('Tests'))` (the usual way to share test settings).
+fn inherits_test_settings(dir: &Path, project: &str) -> bool {
+    let mut d = Some(dir);
+    while let Some(cur) = d {
+        let props = cur.join("Directory.Build.props");
+        if let Ok(text) = std::fs::read_to_string(&props) {
+            if let Ok(doc) = roxmltree::Document::parse(&text) {
+                let applies = |n: roxmltree::Node| n.ancestors().filter_map(|a| a.attribute("Condition")).all(|c| condition_matches(c, project));
+                let test = doc.descendants().filter(|n| n.is_element()).any(|n| match n.tag_name().name() {
+                    "IsTestProject" => n.text().is_some_and(|t| t.trim().eq_ignore_ascii_case("true")) && applies(n),
+                    "PackageReference" => n.attribute("Include").is_some_and(is_test_package) && applies(n),
+                    _ => false,
+                });
+                if test {
+                    return true;
+                }
+            }
+            // MSBuild stops at the first Directory.Build.props unless it imports its parent.
+            if !text.contains("GetPathOfFileAbove") {
+                return false;
+            }
+        }
+        d = cur.parent();
+    }
+    false
+}
+
+/// Evaluates the conditions on the project name that test settings use; anything else is
+/// treated as not matching.
+fn condition_matches(condition: &str, project: &str) -> bool {
+    let c = condition.replace(' ', "");
+    let arg = |f: &str| c.split(&format!("MSBuildProjectName.{f}('")).nth(1).and_then(|r| r.split('\'').next()).map(str::to_string);
+    let negated = c.starts_with('!');
+    let result = if let Some(x) = arg("EndsWith") {
+        project.ends_with(&x)
+    } else if let Some(x) = arg("Contains") {
+        project.contains(&x)
+    } else if let Some(x) = arg("StartsWith") {
+        project.starts_with(&x)
+    } else {
+        return false;
+    };
+    result != negated
 }
 
 #[cfg(test)]
@@ -116,5 +180,29 @@ mod tests {
         assert!(p.is_executable() && p.is_test);
         assert_eq!(p.packages[1], PackageRef { name: "xunit".into(), version: "2.9.0".into() });
         assert_eq!(p.project_refs, vec![PathBuf::from("/w/Lib/Lib.csproj")]);
+    }
+
+    #[test]
+    fn recognises_test_projects_by_sdk_packages_and_shared_props() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(
+            root.join("Directory.Build.props"),
+            r#"<Project>
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+</Project>"#,
+        )
+        .unwrap();
+        let plain = r#"<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>"#;
+        std::fs::create_dir_all(root.join("App.Tests")).unwrap();
+        std::fs::create_dir_all(root.join("App")).unwrap();
+        assert!(ProjectInfo::parse(plain, &root.join("App.Tests/App.Tests.csproj")).unwrap().is_test);
+        assert!(!ProjectInfo::parse(plain, &root.join("App/App.csproj")).unwrap().is_test);
+        let mstest = r#"<Project Sdk="MSTest.Sdk/3.8.2"></Project>"#;
+        assert!(ProjectInfo::parse(mstest, &root.join("App/A.csproj")).unwrap().is_test);
+        let tunit = r#"<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="TUnit" Version="0.19" /></ItemGroup></Project>"#;
+        assert!(ProjectInfo::parse(tunit, &root.join("App/B.csproj")).unwrap().is_test);
     }
 }
