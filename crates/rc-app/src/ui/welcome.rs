@@ -73,7 +73,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                 app.open_workspace(path);
             }
             resp.context_menu(|ui| {
-                if ui.button(tr("Remove from Recent Projects")).clicked() {
+                if theme::menu_item(ui, Some(ico::REMOVE), tr("Remove from Recent Projects"), false).clicked() {
                     remove = Some(i);
                     ui.close();
                 }

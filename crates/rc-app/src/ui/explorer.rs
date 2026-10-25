@@ -5,7 +5,7 @@
 use rc_core::workspace::{FileNode, list_dir};
 use rc_dotnet::{ProjectInfo, Solution, SolutionItem};
 use rc_kit::i18n::tr;
-use rc_kit::{Ico, ico, icons};
+use rc_kit::{Ico, ico, icons, theme};
 use egui::{Align2, FontId, Id, Key, Rect, Sense, Ui, pos2, vec2};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -522,29 +522,29 @@ fn row_path(r: &Row) -> Option<PathBuf> {
 fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
     if let (NodeKind::Solution, Some(sln)) = (&row.kind, solution) {
-        if ui.button(tr("Add New Project…")).clicked() {
+        if theme::menu_item(ui, Some(ico::ADD), tr("Add New Project…"), false).clicked() {
             actions.push(ExplorerAction::AddProject(sln.to_path_buf()));
             ui.close();
         }
-        if ui.button(tr("Edit Solution File")).clicked() {
+        if theme::menu_item(ui, Some(ico::EDIT), tr("Edit Solution File"), false).clicked() {
             actions.push(ExplorerAction::Open(sln.to_path_buf()));
             ui.close();
         }
-        if ui.button(if cfg!(target_os = "macos") { tr("Reveal in Finder") } else { tr("Open in Explorer") }).clicked() {
+        if theme::menu_item(ui, Some(ico::OPEN), if cfg!(target_os = "macos") { tr("Reveal in Finder") } else { tr("Open in Explorer") }, false).clicked() {
             actions.push(ExplorerAction::Reveal(sln.to_path_buf()));
             ui.close();
         }
         return;
     }
     if let NodeKind::Project(p) = &row.kind
-        && ui.button(tr("Edit Project File")).clicked()
+        && theme::menu_item(ui, Some(ico::EDIT), tr("Edit Project File"), false).clicked()
     {
         actions.push(ExplorerAction::Open(p.clone()));
         ui.close();
     }
     let dir_of = |p: &Path, is_dir: bool| if is_dir { p.to_path_buf() } else { p.parent().unwrap_or(p).to_path_buf() };
     if let NodeKind::Project(p) | NodeKind::Packages(p) | NodeKind::Dependencies(p) = &row.kind
-        && ui.button(tr("Manage NuGet Packages…")).clicked()
+        && theme::menu_item(ui, Some(ico::PACKAGE), tr("Manage NuGet Packages…"), false).clicked()
     {
         actions.push(ExplorerAction::ManagePackages(p.clone()));
         ui.close();
@@ -564,39 +564,39 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, actions: &mut V
         _ => dir_of(&path, is_dir),
     };
     if let NodeKind::File(p) = &row.kind
-        && ui.button(tr("Open")).clicked()
+        && theme::menu_item(ui, Some(ico::OPEN), tr("Open"), false).clicked()
     {
         actions.push(ExplorerAction::Open(p.clone()));
         ui.close();
     }
-    if ui.button(tr("New C# File…")).clicked() {
+    if theme::menu_item(ui, Some(ico::NEW_FILE), tr("New C# File…"), false).clicked() {
         actions.push(ExplorerAction::NewFile(target_dir.clone()));
         ui.close();
     }
-    if ui.button(tr("New Folder…")).clicked() {
+    if theme::menu_item(ui, Some(ico::NEW_FOLDER), tr("New Folder…"), false).clicked() {
         actions.push(ExplorerAction::NewFolder(target_dir.clone()));
         ui.close();
     }
     ui.separator();
-    if ui.button(tr("Rename…")).clicked() {
+    if theme::menu_item(ui, Some(ico::EDIT), tr("Rename…"), false).clicked() {
         actions.push(ExplorerAction::Rename(path.clone()));
         ui.close();
     }
-    if ui.button(tr("Delete…")).clicked() {
+    if theme::menu_item(ui, Some(ico::DELETE), tr("Delete…"), false).clicked() {
         actions.push(ExplorerAction::Delete(path.clone()));
         ui.close();
     }
     ui.separator();
-    if ui.button(tr("Copy Path")).clicked() {
+    if theme::menu_item(ui, Some(ico::COPY), tr("Copy Path"), false).clicked() {
         actions.push(ExplorerAction::CopyPath(path.clone()));
         ui.close();
     }
     let reveal = if cfg!(target_os = "macos") { tr("Reveal in Finder") } else { tr("Open in Explorer") };
-    if ui.button(reveal).clicked() {
+    if theme::menu_item(ui, Some(ico::OPEN), reveal, false).clicked() {
         actions.push(ExplorerAction::Reveal(path.clone()));
         ui.close();
     }
-    if ui.button(tr("Open in Terminal")).clicked() {
+    if theme::menu_item(ui, Some(ico::FILE_SHELL), tr("Open in Terminal"), false).clicked() {
         actions.push(ExplorerAction::OpenInTerminal(target_dir));
         ui.close();
     }

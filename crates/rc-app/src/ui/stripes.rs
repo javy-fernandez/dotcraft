@@ -6,7 +6,7 @@ use crate::toolwindow::{Side, ToolWindow};
 use egui::{Rect, Sense, Ui, pos2, vec2};
 use rc_editor::Action;
 use rc_kit::i18n::tr;
-use rc_kit::icons;
+use rc_kit::{ico, icons, theme};
 
 const BUTTON: f32 = 30.0;
 const GAP: f32 = 6.0;
@@ -47,13 +47,13 @@ fn button(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
     resp.context_menu(|ui| {
         ui.label(egui::RichText::new(tr("Move To")).size(12.0).color(rc_kit::pal(ui).muted));
         for side in Side::ALL {
-            if ui.add_enabled(side != current, egui::Button::new(side.title())).clicked() {
+            if theme::menu_entry(ui, None, side.title(), None, false, side != current).clicked() {
                 moved = Some(side);
                 ui.close();
             }
         }
         ui.separator();
-        if ui.button(if app.dock.is_open(tw) { tr("Hide") } else { tr("Show") }).clicked() {
+        if theme::menu_item(ui, Some(if app.dock.is_open(tw) { ico::HIDE } else { ico::SHOW }), if app.dock.is_open(tw) { tr("Hide") } else { tr("Show") }, false).clicked() {
             app.toggle_tool(tw);
             ui.close();
         }

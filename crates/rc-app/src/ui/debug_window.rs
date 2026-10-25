@@ -264,13 +264,13 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
             }
             resp.context_menu(|ui| {
                 if let Some(id) = row.watch {
-                    if ui.button(tr("Remove Watch")).clicked() {
+                    if theme::menu_item(ui, Some(ico::REMOVE), tr("Remove Watch"), false).clicked() {
                         remove = Some(id);
                     }
-                } else if !row.scope && ui.button(tr("Add to Watches")).clicked() {
+                } else if !row.scope && theme::menu_item(ui, Some(ico::ADD_TO_WATCH), tr("Add to Watches"), false).clicked() {
                     add_watch = Some(row.name.clone());
                 }
-                if !row.scope && ui.button(tr("Copy Value")).clicked() {
+                if !row.scope && theme::menu_item(ui, Some(ico::COPY), tr("Copy Value"), false).clicked() {
                     ui.ctx().copy_text(row.value.clone());
                 }
             });

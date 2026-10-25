@@ -107,6 +107,15 @@ fn rasterize(key: Key) -> Option<ColorImage> {
     Some(ColorImage::new([w as usize, h as usize], pixels))
 }
 
+/// The icon as straight (unpremultiplied) RGBA pixels, `px` pixels for the 16-unit grid: for
+/// native menus, which draw their own images.
+pub fn rgba(ico: Ico, dark: bool, px: u32) -> Option<(Vec<u8>, u32, u32)> {
+    let img = rasterize(Key { name: ico.0, dark, px, variant: Variant::Normal })?;
+    let [w, h] = img.size;
+    let bytes = img.pixels.iter().flat_map(|c| c.to_srgba_unmultiplied()).collect();
+    Some((bytes, w as u32, h as u32))
+}
+
 /// Rect of `size` points centred in `rect`, snapped to whole physical pixels.
 pub fn snapped(ctx: &Context, rect: Rect, size: f32) -> (Rect, u32) {
     let ppp = ctx.pixels_per_point();

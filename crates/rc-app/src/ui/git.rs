@@ -106,15 +106,15 @@ pub fn commit_window(app: &mut DotCraftApp, ui: &mut Ui) {
                     }
                 }
                 resp.context_menu(|ui| {
-                    if ui.button(tr("Show Diff")).clicked() {
+                    if theme::menu_item(ui, Some(ico::DIFF), tr("Show Diff"), false).clicked() {
                         open_diff = Some(c.path.clone());
                         ui.close();
                     }
-                    if ui.button(tr("Open")).clicked() {
+                    if theme::menu_item(ui, Some(ico::OPEN), tr("Open"), false).clicked() {
                         open_file = Some(root.join(&c.path));
                         ui.close();
                     }
-                    if ui.button(tr("Rollback…")).clicked() {
+                    if theme::menu_item(ui, Some(ico::REVERT), tr("Rollback…"), false).clicked() {
                         app.dialog = Some(crate::ui::dialogs::Dialog::Rollback { paths: vec![c.path.clone()] });
                         ui.close();
                     }
@@ -263,7 +263,7 @@ pub fn branches_menu(app: &mut DotCraftApp, ui: &mut Ui) {
         app.vcs.pull();
         ui.close();
     }
-    if ui.button(tr("Commit…")).clicked() {
+    if theme::menu_item(ui, Some(ico::COMMIT), tr("Commit…"), false).clicked() {
         app.dock.show(ToolWindow::Commit);
         ui.close();
     }
@@ -276,7 +276,7 @@ pub fn branches_menu(app: &mut DotCraftApp, ui: &mut Ui) {
         ui.close();
     }
     ui.separator();
-    if ui.button(tr("New Branch…")).clicked() {
+    if theme::menu_item(ui, Some(ico::ADD), tr("New Branch…"), false).clicked() {
         app.dialog = Some(crate::ui::dialogs::Dialog::NewBranch { name: String::new() });
         ui.close();
     }
@@ -319,7 +319,7 @@ pub fn diff_view(app: &mut DotCraftApp, ui: &mut Ui) {
             if theme::icon_button(ui, ico::CLOSE_SMALL, true, tr("Close")).clicked() {
                 close = true;
             }
-            if ui.button(tr("Open File")).clicked() {
+            if theme::menu_item(ui, Some(ico::OPEN), tr("Open File"), false).clicked() {
                 close = true;
                 let path = app.vcs.diff.as_ref().map(|d| d.path.clone());
                 if let Some(path) = path {

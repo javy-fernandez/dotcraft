@@ -63,50 +63,50 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
                 resp.context_menu(|ui| {
                     ui.set_min_width(220.0);
                     let shortcut = app.keymap.shortcut_text(Action::CloseTab).unwrap_or_default();
-                    if ui.add(egui::Button::new(tr("Close")).shortcut_text(shortcut)).clicked() {
+                    if theme::menu_entry(ui, Some(ico::CLOSE), tr("Close"), Some(&shortcut), false, true).clicked() {
                         commands.push(TabCommand::Close(i));
                         ui.close();
                     }
-                    if ui.button(tr("Close Other Tabs")).clicked() {
+                    if theme::menu_item(ui, Some(ico::CLOSE), tr("Close Other Tabs"), false).clicked() {
                         commands.push(TabCommand::CloseOthers(i));
                         ui.close();
                     }
-                    if ui.button(tr("Close Tabs to the Right")).clicked() {
+                    if theme::menu_item(ui, Some(ico::CLOSE), tr("Close Tabs to the Right"), false).clicked() {
                         commands.push(TabCommand::CloseRight(i));
                         ui.close();
                     }
-                    if ui.button(tr("Close All Tabs")).clicked() {
+                    if theme::menu_item(ui, Some(ico::CLOSE), tr("Close All Tabs"), false).clicked() {
                         commands.push(TabCommand::CloseAll);
                         ui.close();
                     }
                     ui.separator();
                     let pin = if app.docs.list[i].pinned { tr("Unpin Tab") } else { tr("Pin Tab") };
-                    if ui.button(pin).clicked() {
+                    if theme::menu_item(ui, Some(ico::PIN), pin, false).clicked() {
                         commands.push(TabCommand::Pin(i));
                         ui.close();
                     }
                     ui.separator();
-                    if ui.button(tr("Copy Path")).clicked() {
+                    if theme::menu_item(ui, Some(ico::COPY), tr("Copy Path"), false).clicked() {
                         commands.push(TabCommand::CopyPath(i));
                         ui.close();
                     }
                     if app.vcs.repo.is_some() {
                         let on = app.vcs.blame_for.as_deref() == Some(app.docs.list[i].path.as_path());
-                        if ui.add(egui::Button::selectable(on, tr("Annotate with Git Blame"))).clicked() {
+                        if theme::menu_entry(ui, Some(ico::HISTORY), tr("Annotate with Git Blame"), None, on, true).clicked() {
                             commands.push(TabCommand::Blame(i));
                             ui.close();
                         }
-                        if ui.button(tr("Show Diff")).clicked() {
+                        if theme::menu_item(ui, Some(ico::DIFF), tr("Show Diff"), false).clicked() {
                             commands.push(TabCommand::Diff(i));
                             ui.close();
                         }
                     }
-                    if ui.button(tr("Select in Explorer")).clicked() {
+                    if theme::menu_item(ui, Some(ico::LOCATE), tr("Select in Explorer"), false).clicked() {
                         commands.push(TabCommand::Locate(i));
                         ui.close();
                     }
                     let reveal = if cfg!(target_os = "macos") { tr("Reveal in Finder") } else { tr("Open in Explorer") };
-                    if ui.button(reveal).clicked() {
+                    if theme::menu_item(ui, Some(ico::OPEN), reveal, false).clicked() {
                         commands.push(TabCommand::Reveal(i));
                         ui.close();
                     }

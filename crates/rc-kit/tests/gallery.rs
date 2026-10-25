@@ -34,3 +34,38 @@ fn icon_gallery() {
         h.render().unwrap().save(out.join(if dark { "icons-dark.png" } else { "icons-light.png" })).unwrap();
     }
 }
+
+/// A popup menu built with `theme::menu_entry`: icons, an empty icon column, shortcuts, a
+/// selected and a disabled row. → target/snapshots/menu-*.png
+#[test]
+#[ignore = "Requires a GPU; writes a menu sample to target/snapshots"]
+fn menu_sample() {
+    use rc_kit::{ico, theme};
+    for dark in [true, false] {
+        let mut first = true;
+        let mut h = Harness::builder().with_size(vec2(340.0, 250.0)).build_ui(move |ui| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                rc_kit::theme::apply(ui.ctx(), dark);
+                return;
+            }
+            let p = rc_kit::pal(ui);
+            ui.painter().rect_filled(ui.ctx().content_rect(), 0.0, p.main_bg);
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.set_width(300.0);
+                theme::menu_entry(ui, Some(ico::CLOSE), "Close", Some("⌘W"), false, true);
+                theme::menu_item(ui, Some(ico::PIN), "Pin Tab", false);
+                theme::menu_entry(ui, Some(ico::HISTORY), "Annotate with Git Blame", None, true, true);
+                theme::menu_item(ui, Some(ico::COPY), "Copy Path", false);
+                ui.separator();
+                theme::menu_item(ui, None, "Left", false);
+                theme::menu_entry(ui, None, "Right", None, false, false);
+                theme::menu_item(ui, Some(ico::LOCATE), "Select in Explorer", false);
+            });
+        });
+        h.run_steps(3);
+        let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+        std::fs::create_dir_all(&out).unwrap();
+        h.render().unwrap().save(out.join(if dark { "menu-dark.png" } else { "menu-light.png" })).unwrap();
+    }
+}

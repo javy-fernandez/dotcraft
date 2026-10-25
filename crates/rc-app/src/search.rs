@@ -275,3 +275,57 @@ impl FindInFiles {
         self.results.iter().map(|f| f.match_count()).sum()
     }
 }
+
+/// The icon of an IDE action, shared by the native menu, popup menus and Search Everywhere.
+pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
+    use Action::*;
+    use rc_kit::ico;
+    Some(match action {
+        Build => ico::BUILD,
+        Run => ico::RUN,
+        Debug => ico::DEBUG,
+        StopRun => ico::STOP,
+        RunTests => ico::RUN_ALL,
+        StepOver => ico::STEP_OVER,
+        StepInto => ico::STEP_INTO,
+        StepOut => ico::STEP_OUT,
+        RunToCursor => ico::RUN_TO_CURSOR,
+        Resume => ico::RESUME,
+        Evaluate => ico::EVALUATE,
+        ToggleBreakpoint => ico::BREAKPOINT,
+        ShowSettings => ico::SETTINGS,
+        Find | SearchEverywhere => ico::SEARCH,
+        Replace | ReplaceInFiles => ico::REPLACE,
+        FindInFiles => ico::TW_FIND,
+        GotoFile => ico::FILE_CS,
+        GotoClass => ico::CLASS,
+        GotoSymbol => ico::METHOD,
+        GotoLine => ico::ARROW_RIGHT,
+        NavigateBack => ico::CHEVRON_LEFT,
+        NavigateForward => ico::CHEVRON_RIGHT,
+        RecentFiles | RecentLocations => ico::HISTORY,
+        Reformat => ico::REFORMAT,
+        FileStructure => ico::TW_STRUCTURE,
+        ToggleProjectWindow => ico::TW_PROJECT,
+        ToggleTerminal => ico::FILE_SHELL,
+        ToggleProblems => ico::TW_PROBLEMS,
+        ToggleGitWindow => ico::TW_VCS,
+        Commit => ico::COMMIT,
+        HideToolWindows => ico::HIDE,
+        SaveAll | Save => ico::SAVE,
+        CloseTab => ico::CLOSE,
+        FoldAll | Fold => ico::COLLAPSE_ALL,
+        UnfoldAll | Unfold => ico::EXPAND_ALL,
+        Rename => ico::EDIT,
+        FindUsages => ico::TW_FIND,
+        GotoDeclaration | GotoImplementation | GotoTypeDeclaration => ico::ARROW_RIGHT,
+        ShowIntentions => ico::BULB,
+        QuickDoc => ico::INFO,
+        Complete => ico::METHOD,
+        CommentLine | CommentBlock => ico::EDIT,
+        DuplicateLine => ico::COPY,
+        NextError | PreviousError => ico::ERROR,
+        OpenFolder => ico::OPEN,
+        _ => return None,
+    })
+}

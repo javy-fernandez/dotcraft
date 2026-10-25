@@ -14,8 +14,9 @@
 
 use rc_editor::{Action, Keymap};
 use rc_kit::i18n::{tr, tr_ctx};
+use rc_kit::{Ico, ico};
 use muda::accelerator::{Accelerator, Code, Modifiers};
-use muda::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
+use muda::{CheckMenuItem, IconMenuItem, Menu, MenuEvent, PredefinedMenuItem, Submenu};
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc::{Receiver, channel};
 
@@ -42,6 +43,40 @@ impl MenuCommand {
     fn id(self) -> String {
         format!("dotcraft.{self:?}")
     }
+
+    fn icon(self) -> Option<Ico> {
+        Some(match self {
+            MenuCommand::Act(a) => return crate::search::action_icon(a),
+            MenuCommand::About => ico::INFO,
+            MenuCommand::NewSolution => ico::ADD,
+            MenuCommand::OpenProject | MenuCommand::OpenFile => ico::OPEN,
+            MenuCommand::CloseProject => ico::CLOSE,
+            MenuCommand::Undo => ico::UNDO,
+            MenuCommand::Redo => ico::REDO,
+            MenuCommand::Cut => ico::CUT,
+            MenuCommand::Copy => ico::COPY,
+            MenuCommand::Paste => ico::PASTE,
+            _ => return None,
+        })
+    }
+}
+
+/// A New UI icon for a native menu item: 16 pt artwork on an 18 pt canvas (the height muda
+/// gives menu images), rendered at 2× for Retina, in the variant of the menu bar's appearance.
+fn menu_icon(icon: Ico, dark: bool) -> Option<muda::Icon> {
+    let (px, pad) = (32u32, 2u32);
+    let (rgba, w, h) = rc_kit::icons::rgba(icon, dark, px)?;
+    let size = px + 2 * pad;
+    let (ox, oy) = ((size - w.min(size)) / 2, (size - h.min(size)) / 2);
+    let mut out = vec![0u8; (size * size * 4) as usize];
+    for y in 0..h.min(size) {
+        for x in 0..w.min(size) {
+            let src = ((y * w + x) * 4) as usize;
+            let dst = (((y + oy) * size + x + ox) * 4) as usize;
+            out[dst..dst + 4].copy_from_slice(&rgba[src..src + 4]);
+        }
+    }
+    muda::Icon::from_rgba(out, size, size).ok()
 }
 
 /// Native menu installed in NSApp. Keep it alive for the lifetime of the app.
@@ -54,10 +89,13 @@ pub struct NativeMenu {
     theme_dark: CheckMenuItem,
     labels: Vec<Labeled>,
     synced: Cell<Option<bool>>,
+    icons: Vec<(IconMenuItem, Ico)>,
+    /// Appearance the icons were drawn for (the system's, which the menu bar follows).
+    icons_dark: Cell<bool>,
 }
 
 enum Entry {
-    Item(MenuItem),
+    Item(IconMenuItem),
     Submenu(Submenu),
     Predefined(PredefinedMenuItem),
 }
@@ -84,7 +122,8 @@ impl NativeMenu {
         if !cfg!(target_os = "macos") || std::thread::current().name() != Some("main") {
             return None;
         }
-        let built = match build(keymap) {
+        let dark = ctx.system_theme().is_none_or(|t| t == egui::Theme::Dark);
+        let built = match build(keymap, dark) {
             Ok(b) => b,
             Err(e) => {
                 eprintln!("native menu: {e}");
@@ -108,6 +147,8 @@ impl NativeMenu {
             theme_dark: built.theme_dark,
             labels: built.labels,
             synced: Cell::new(None),
+            icons: built.icons,
+            icons_dark: Cell::new(dark),
         })
     }
 
@@ -125,6 +166,13 @@ impl NativeMenu {
     }
 
     pub fn sync(&self, dark: bool) {
+        let system_dark = self.ctx.system_theme().is_none_or(|t| t == egui::Theme::Dark);
+        if system_dark != self.icons_dark.get() {
+            for (item, icon) in &self.icons {
+                item.set_icon(menu_icon(*icon, system_dark));
+            }
+            self.icons_dark.set(system_dark);
+        }
         if self.synced.get() == Some(dark) {
             return;
         }
@@ -265,20 +313,26 @@ struct Built {
     theme_light: CheckMenuItem,
     theme_dark: CheckMenuItem,
     labels: Vec<Labeled>,
+    icons: Vec<(IconMenuItem, Ico)>,
 }
 
 type Label = fn() -> &'static str;
 
-fn build(keymap: &Keymap) -> muda::Result<Built> {
+fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
     let labels = RefCell::new(Vec::new());
     let commands = RefCell::new(Vec::new());
+    let icons = RefCell::new(Vec::new());
     let keep = |entry: Entry, text: Label| labels.borrow_mut().push(Labeled { entry, text });
     let cmd = Modifiers::META;
     let acc = |mods: Modifiers, code: Code| Some(Accelerator::new(mods, code));
     let item = |c: MenuCommand, text: Label, a: Option<Accelerator>| {
         commands.borrow_mut().push(c);
-        let i = MenuItem::with_id(c.id(), text(), true, a);
+        let icon = c.icon();
+        let i = IconMenuItem::with_id(c.id(), text(), true, icon.and_then(|ic| menu_icon(ic, dark)), a);
         keep(Entry::Item(i.clone()), text);
+        if let Some(ic) = icon {
+            icons.borrow_mut().push((i.clone(), ic));
+        }
         i
     };
     let act = |action: Action, text: Label| item(MenuCommand::Act(action), text, accelerator(keymap, action));
@@ -462,5 +516,34 @@ fn build(keymap: &Keymap) -> muda::Result<Built> {
         &window_menu,
         &help_menu,
     ])?;
-    Ok(Built { menu, commands: commands.into_inner(), theme_light, theme_dark, labels: labels.into_inner() })
+    Ok(Built { menu, commands: commands.into_inner(), theme_light, theme_dark, labels: labels.into_inner(), icons: icons.into_inner() })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn menu_icons_are_18_points_at_2x_in_both_appearances() {
+        for a in [Action::Run, Action::Debug, Action::Build, Action::Commit, Action::FindInFiles] {
+            let icon = MenuCommand::Act(a).icon().unwrap();
+            for dark in [false, true] {
+                let (rgba, w, h) = rc_kit::icons::rgba(icon, dark, 32).unwrap();
+                assert_eq!((w, h, rgba.len()), (32, 32, 32 * 32 * 4));
+                assert!(rgba.chunks(4).any(|p| p[3] > 0), "{a:?} is empty");
+                assert!(menu_icon(icon, dark).is_some());
+            }
+        }
+        // Raw RGBA dumps for a visual check (`DOTCRAFT_DUMP_MENU_ICONS=1`).
+        if std::env::var_os("DOTCRAFT_DUMP_MENU_ICONS").is_some() {
+            let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+            std::fs::create_dir_all(&out).unwrap();
+            for a in [Action::Run, Action::Debug, Action::StopRun, Action::Build, Action::Commit, Action::FindInFiles, Action::StepOver, Action::ToggleBreakpoint] {
+                for dark in [false, true] {
+                    let (rgba, _, _) = rc_kit::icons::rgba(crate::search::action_icon(a).unwrap(), dark, 32).unwrap();
+                    std::fs::write(out.join(format!("menu-{a:?}-{}.rgba", if dark { "dark" } else { "light" })), rgba).unwrap();
+                }
+            }
+        }
+    }
 }

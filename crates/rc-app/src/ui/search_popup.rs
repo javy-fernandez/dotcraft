@@ -192,7 +192,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
                                 (icons::for_file(&name), name, rel.rsplit_once('/').map(|(d, _)| d.to_string()).unwrap_or_default(), String::new(), hl)
                             }
                             Hit::Symbol(s) => (crate::convert::symbol_icon(s.kind), s.name.clone(), s.container.clone(), s.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), Vec::new()),
-                            Hit::Action(l, a) => (ico::RUN_ANYTHING, l.to_string(), String::new(), app.keymap.shortcut_text(*a).unwrap_or_default(), Vec::new()),
+                            Hit::Action(l, a) => (crate::search::action_icon(*a).unwrap_or(ico::RUN_ANYTHING), l.to_string(), String::new(), app.keymap.shortcut_text(*a).unwrap_or_default(), Vec::new()),
                         };
                         icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 18.0, r.center().y), vec2(16.0, 16.0)), icon, &p, true);
                         // Name with the matched chars in bold accent.

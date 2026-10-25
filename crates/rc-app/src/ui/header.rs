@@ -119,21 +119,21 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                     let more = theme::icon_button_sized(ui, ico::MORE_VERT, true, tr("More actions"), 30.0);
                     egui::Popup::menu(&more).show(|ui| {
                         ui.set_min_width(200.0);
-                        if ui.button(tr("Rebuild Solution")).clicked() {
+                        if theme::menu_item(ui, Some(ico::REBUILD), tr("Rebuild Solution"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
                                 let outs = app.runner.build(&t, rc_dotnet::BuildAction::Rebuild);
                                 crate::ui::run_windows::handle_outputs(app, outs);
                             }
                             ui.close();
                         }
-                        if ui.button(tr("Clean Solution")).clicked() {
+                        if theme::menu_item(ui, Some(ico::DELETE), tr("Clean Solution"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
                                 let outs = app.runner.build(&t, rc_dotnet::BuildAction::Clean);
                                 crate::ui::run_windows::handle_outputs(app, outs);
                             }
                             ui.close();
                         }
-                        if ui.button(tr("Restore NuGet Packages")).clicked() {
+                        if theme::menu_item(ui, Some(ico::DOWNLOAD), tr("Restore NuGet Packages"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
                                 let outs = app.runner.build(&t, rc_dotnet::BuildAction::Restore);
                                 crate::ui::run_windows::handle_outputs(app, outs);
@@ -227,29 +227,29 @@ fn project_widget(app: &mut DotCraftApp, ui: &mut Ui) {
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(260.0);
-        if ui.button(tr("New Solution…")).clicked() {
+        if theme::menu_item(ui, Some(ico::ADD), tr("New Solution…"), false).clicked() {
             app.new_project_dialog(None);
             ui.close();
         }
         if let Some(sln) = app.workspace.as_ref().and_then(|w| w.ws.solution().map(std::path::Path::to_path_buf))
-            && ui.button(tr("Add New Project…")).clicked()
+            && theme::menu_item(ui, Some(ico::ADD), tr("Add New Project…"), false).clicked()
         {
             app.new_project_dialog(Some(sln));
             ui.close();
         }
-        if ui.button(tr("Open…")).clicked() {
+        if theme::menu_item(ui, Some(ico::OPEN), tr("Open…"), false).clicked() {
             app.pick_and_open();
             ui.close();
         }
-        if ui.button(tr("Open Solution or Project…")).clicked() {
+        if theme::menu_item(ui, Some(ico::SOLUTION), tr("Open Solution or Project…"), false).clicked() {
             app.pick_solution();
             ui.close();
         }
-        if ui.button(tr("Open File…")).clicked() {
+        if theme::menu_item(ui, Some(ico::OPEN), tr("Open File…"), false).clicked() {
             app.pick_file();
             ui.close();
         }
-        if app.workspace.is_some() && ui.button(tr("Close Project")).clicked() {
+        if app.workspace.is_some() && theme::menu_item(ui, Some(ico::CLOSE), tr("Close Project"), false).clicked() {
             app.close_workspace();
             ui.close();
         }
@@ -259,7 +259,8 @@ fn project_widget(app: &mut DotCraftApp, ui: &mut Ui) {
             ui.label(egui::RichText::new(tr("Recent Projects")).color(p.muted).size(12.0));
             for r in recents.iter().take(10) {
                 let label = r.file_stem().map_or_else(|| r.display().to_string(), |s| s.to_string_lossy().into_owned());
-                if ui.button(label).on_hover_text(r.display().to_string()).clicked() {
+                let icon = if r.is_dir() { ico::FOLDER } else { rc_kit::icons::for_file(&r.to_string_lossy()) };
+                if theme::menu_item(ui, Some(icon), &label, false).on_hover_text(r.display().to_string()).clicked() {
                     app.open_workspace(r);
                     ui.close();
                 }
