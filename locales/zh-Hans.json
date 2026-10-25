@@ -9,7 +9,6 @@
     " columns": " 列",
     "(not found)": "(未找到)",
     ".NET CLI": ".NET CLI",
-    "1 project": "1 个项目",
     "1 to {n}": "1 到 {n}",
     "A file or folder with this name already exists": "已存在同名的文件或文件夹",
     "A lightweight IDE for .NET": "轻量级 .NET IDE",
@@ -215,7 +214,6 @@
     "netcoredbg debugger": "netcoredbg 调试器",
     "not found": "未找到",
     "{line}:{col} ({n} chars)": "{line}:{col}（{n} 个字符）",
-    "{n} projects": "{n} 个项目",
     "{n} spaces": "{n} 个空格"
   },
   "terminal": {
@@ -574,5 +572,28 @@
   "format": {
     "Reformat Code is available for C#, JSON and XML files": "重新设置代码格式适用于 C#、JSON 和 XML 文件",
     "The file could not be formatted: check its syntax": "无法格式化文件：请检查其语法"
+  },
+  "nugetwindow": {
+    "Browse": "浏览",
+    "Consolidate ({n})": "合并 ({n})",
+    "Every package is up to date": "所有包都是最新的",
+    "Every project uses the same versions": "所有项目使用相同的版本",
+    "Filter installed packages": "筛选已安装的包",
+    "Install or update in {n} selected": "在 {n} 个所选项目中安装或更新",
+    "Installed ({n})": "已安装 ({n})",
+    "Installing {id} {version} in {project}…": "正在将 {id} {version} 安装到 {project}…",
+    "Project": "项目",
+    "Project site": "项目网站",
+    "Remove from selected": "从所选项目中移除",
+    "Removing {id} from {project}…": "正在从 {project} 移除 {id}…",
+    "Search packages": "搜索包",
+    "Select a package to see its details and the projects that use it": "选择一个包以查看其详细信息和使用它的项目",
+    "Source": "源",
+    "The solution has no package references": "解决方案没有包引用",
+    "Updates ({n})": "更新 ({n})",
+    "by {authors}": "作者：{authors}",
+    "{id}: done": "{id}：完成",
+    "1 project": "1 个项目",
+    "{n} projects": "{n} 个项目"
   }
 }

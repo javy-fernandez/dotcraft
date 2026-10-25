@@ -9,7 +9,6 @@
     " columns": " 列",
     "(not found)": "(見つかりません)",
     ".NET CLI": ".NET CLI",
-    "1 project": "1 プロジェクト",
     "1 to {n}": "1 から {n}",
     "A file or folder with this name already exists": "この名前のファイルまたはフォルダーは既に存在します",
     "A lightweight IDE for .NET": ".NET 向けの軽量 IDE",
@@ -215,7 +214,6 @@
     "netcoredbg debugger": "netcoredbg デバッガー",
     "not found": "見つかりません",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} 文字)",
-    "{n} projects": "{n} プロジェクト",
     "{n} spaces": "{n} スペース"
   },
   "terminal": {
@@ -574,5 +572,28 @@
   "format": {
     "Reformat Code is available for C#, JSON and XML files": "コードの再フォーマットは C#、JSON、XML ファイルで使用できます",
     "The file could not be formatted: check its syntax": "ファイルをフォーマットできませんでした: 構文を確認してください"
+  },
+  "nugetwindow": {
+    "Browse": "参照",
+    "Consolidate ({n})": "統合 ({n})",
+    "Every package is up to date": "すべてのパッケージが最新です",
+    "Every project uses the same versions": "すべてのプロジェクトが同じバージョンを使用しています",
+    "Filter installed packages": "インストール済みパッケージを絞り込む",
+    "Install or update in {n} selected": "選択した {n} 件にインストールまたは更新",
+    "Installed ({n})": "インストール済み ({n})",
+    "Installing {id} {version} in {project}…": "{project} に {id} {version} をインストール中…",
+    "Project": "プロジェクト",
+    "Project site": "プロジェクト サイト",
+    "Remove from selected": "選択した項目から削除",
+    "Removing {id} from {project}…": "{project} から {id} を削除中…",
+    "Search packages": "パッケージを検索",
+    "Select a package to see its details and the projects that use it": "パッケージを選択すると詳細と使用しているプロジェクトが表示されます",
+    "Source": "ソース",
+    "The solution has no package references": "ソリューションにパッケージ参照がありません",
+    "Updates ({n})": "更新 ({n})",
+    "by {authors}": "作成者: {authors}",
+    "{id}: done": "{id}: 完了",
+    "1 project": "1 プロジェクト",
+    "{n} projects": "{n} プロジェクト"
   }
 }

@@ -1,0 +1,23 @@
+# NuGet tool window. Import: python3 scripts/i18n_tsv.py nugetwindow scripts/i18n/nuget-window.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Browse	Explorar	Parcourir	Procurar	Durchsuchen	Przeglądaj	浏览	参照
+Consolidate ({n})	Consolidar ({n})	Consolider ({n})	Consolidar ({n})	Konsolidieren ({n})	Konsoliduj ({n})	合并 ({n})	統合 ({n})
+Every package is up to date	Todos los paquetes están actualizados	Tous les packages sont à jour	Todos os pacotes estão atualizados	Alle Pakete sind aktuell	Wszystkie pakiety są aktualne	所有包都是最新的	すべてのパッケージが最新です
+Every project uses the same versions	Todos los proyectos usan las mismas versiones	Tous les projets utilisent les mêmes versions	Todos os projetos usam as mesmas versões	Alle Projekte verwenden dieselben Versionen	Wszystkie projekty używają tych samych wersji	所有项目使用相同的版本	すべてのプロジェクトが同じバージョンを使用しています
+Filter installed packages	Filtrar paquetes instalados	Filtrer les packages installés	Filtrar pacotes instalados	Installierte Pakete filtern	Filtruj zainstalowane pakiety	筛选已安装的包	インストール済みパッケージを絞り込む
+Install or update in {n} selected	Instalar o actualizar en {n} seleccionados	Installer ou mettre à jour dans {n} sélectionnés	Instalar ou atualizar em {n} selecionados	In {n} ausgewählten installieren oder aktualisieren	Zainstaluj lub zaktualizuj w {n} zaznaczonych	在 {n} 个所选项目中安装或更新	選択した {n} 件にインストールまたは更新
+Installed ({n})	Instalados ({n})	Installés ({n})	Instalados ({n})	Installiert ({n})	Zainstalowane ({n})	已安装 ({n})	インストール済み ({n})
+Installing {id} {version} in {project}…	Instalando {id} {version} en {project}…	Installation de {id} {version} dans {project}…	Instalando {id} {version} em {project}…	{id} {version} wird in {project} installiert…	Instalowanie {id} {version} w {project}…	正在将 {id} {version} 安装到 {project}…	{project} に {id} {version} をインストール中…
+Project	Proyecto	Projet	Projeto	Projekt	Projekt	项目	プロジェクト
+Project site	Sitio del proyecto	Site du projet	Site do projeto	Projektwebsite	Strona projektu	项目网站	プロジェクト サイト
+Remove from selected	Quitar de los seleccionados	Supprimer des sélectionnés	Remover dos selecionados	Aus ausgewählten entfernen	Usuń z zaznaczonych	从所选项目中移除	選択した項目から削除
+Removing {id} from {project}…	Quitando {id} de {project}…	Suppression de {id} de {project}…	Removendo {id} de {project}…	{id} wird aus {project} entfernt…	Usuwanie {id} z {project}…	正在从 {project} 移除 {id}…	{project} から {id} を削除中…
+Search packages	Buscar paquetes	Rechercher des packages	Pesquisar pacotes	Pakete suchen	Szukaj pakietów	搜索包	パッケージを検索
+Select a package to see its details and the projects that use it	Selecciona un paquete para ver sus detalles y los proyectos que lo usan	Sélectionnez un package pour voir ses détails et les projets qui l'utilisent	Selecione um pacote para ver os detalhes e os projetos que o usam	Wählen Sie ein Paket, um Details und die Projekte zu sehen, die es verwenden	Wybierz pakiet, aby zobaczyć szczegóły i projekty, które go używają	选择一个包以查看其详细信息和使用它的项目	パッケージを選択すると詳細と使用しているプロジェクトが表示されます
+Source	Origen	Source	Origem	Quelle	Źródło	源	ソース
+The solution has no package references	La solución no tiene referencias a paquetes	La solution n'a aucune référence de package	A solução não tem referências de pacote	Die Projektmappe hat keine Paketverweise	Rozwiązanie nie ma odwołań do pakietów	解决方案没有包引用	ソリューションにパッケージ参照がありません
+Updates ({n})	Actualizaciones ({n})	Mises à jour ({n})	Atualizações ({n})	Updates ({n})	Aktualizacje ({n})	更新 ({n})	更新 ({n})
+by {authors}	de {authors}	par {authors}	por {authors}	von {authors}	autor: {authors}	作者：{authors}	作成者: {authors}
+{id}: done	{id}: hecho	{id} : terminé	{id}: concluído	{id}: fertig	{id}: gotowe	{id}：完成	{id}: 完了
+1 project	1 proyecto	1 projet	1 projeto	1 Projekt	1 projekt	1 个项目	1 プロジェクト
+{n} projects	{n} proyectos	{n} projets	{n} projetos	{n} Projekte	{n} projektów	{n} 个项目	{n} プロジェクト

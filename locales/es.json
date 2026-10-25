@@ -9,7 +9,6 @@
     " columns": " columnas",
     "(not found)": "(no encontrado)",
     ".NET CLI": "CLI de .NET",
-    "1 project": "1 proyecto",
     "1 to {n}": "1 a {n}",
     "A file or folder with this name already exists": "Ya existe un archivo o carpeta con este nombre",
     "A lightweight IDE for .NET": "Un IDE ligero para .NET",
@@ -215,7 +214,6 @@
     "netcoredbg debugger": "Depurador netcoredbg",
     "not found": "no encontrado",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} caracteres)",
-    "{n} projects": "{n} proyectos",
     "{n} spaces": "{n} espacios"
   },
   "terminal": {
@@ -574,5 +572,28 @@
   "format": {
     "Reformat Code is available for C#, JSON and XML files": "Reformatear código está disponible para archivos C#, JSON y XML",
     "The file could not be formatted: check its syntax": "No se pudo formatear el archivo: revisa su sintaxis"
+  },
+  "nugetwindow": {
+    "Browse": "Explorar",
+    "Consolidate ({n})": "Consolidar ({n})",
+    "Every package is up to date": "Todos los paquetes están actualizados",
+    "Every project uses the same versions": "Todos los proyectos usan las mismas versiones",
+    "Filter installed packages": "Filtrar paquetes instalados",
+    "Install or update in {n} selected": "Instalar o actualizar en {n} seleccionados",
+    "Installed ({n})": "Instalados ({n})",
+    "Installing {id} {version} in {project}…": "Instalando {id} {version} en {project}…",
+    "Project": "Proyecto",
+    "Project site": "Sitio del proyecto",
+    "Remove from selected": "Quitar de los seleccionados",
+    "Removing {id} from {project}…": "Quitando {id} de {project}…",
+    "Search packages": "Buscar paquetes",
+    "Select a package to see its details and the projects that use it": "Selecciona un paquete para ver sus detalles y los proyectos que lo usan",
+    "Source": "Origen",
+    "The solution has no package references": "La solución no tiene referencias a paquetes",
+    "Updates ({n})": "Actualizaciones ({n})",
+    "by {authors}": "de {authors}",
+    "{id}: done": "{id}: hecho",
+    "1 project": "1 proyecto",
+    "{n} projects": "{n} proyectos"
   }
 }

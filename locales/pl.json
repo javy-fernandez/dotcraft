@@ -9,7 +9,6 @@
     " columns": " kolumn",
     "(not found)": "(nie znaleziono)",
     ".NET CLI": ".NET CLI",
-    "1 project": "1 projekt",
     "1 to {n}": "1 do {n}",
     "A file or folder with this name already exists": "Plik lub folder o tej nazwie już istnieje",
     "A lightweight IDE for .NET": "Lekkie IDE dla .NET",
@@ -215,7 +214,6 @@
     "netcoredbg debugger": "Debuger netcoredbg",
     "not found": "nie znaleziono",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} znaków)",
-    "{n} projects": "Projekty: {n}",
     "{n} spaces": "{n} spacji"
   },
   "terminal": {
@@ -574,5 +572,28 @@
   "format": {
     "Reformat Code is available for C#, JSON and XML files": "Formatowanie kodu jest dostępne dla plików C#, JSON i XML",
     "The file could not be formatted: check its syntax": "Nie można sformatować pliku: sprawdź składnię"
+  },
+  "nugetwindow": {
+    "Browse": "Przeglądaj",
+    "Consolidate ({n})": "Konsoliduj ({n})",
+    "Every package is up to date": "Wszystkie pakiety są aktualne",
+    "Every project uses the same versions": "Wszystkie projekty używają tych samych wersji",
+    "Filter installed packages": "Filtruj zainstalowane pakiety",
+    "Install or update in {n} selected": "Zainstaluj lub zaktualizuj w {n} zaznaczonych",
+    "Installed ({n})": "Zainstalowane ({n})",
+    "Installing {id} {version} in {project}…": "Instalowanie {id} {version} w {project}…",
+    "Project": "Projekt",
+    "Project site": "Strona projektu",
+    "Remove from selected": "Usuń z zaznaczonych",
+    "Removing {id} from {project}…": "Usuwanie {id} z {project}…",
+    "Search packages": "Szukaj pakietów",
+    "Select a package to see its details and the projects that use it": "Wybierz pakiet, aby zobaczyć szczegóły i projekty, które go używają",
+    "Source": "Źródło",
+    "The solution has no package references": "Rozwiązanie nie ma odwołań do pakietów",
+    "Updates ({n})": "Aktualizacje ({n})",
+    "by {authors}": "autor: {authors}",
+    "{id}: done": "{id}: gotowe",
+    "1 project": "1 projekt",
+    "{n} projects": "{n} projektów"
   }
 }

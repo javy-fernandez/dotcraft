@@ -9,7 +9,6 @@
     " columns": " Spalten",
     "(not found)": "(nicht gefunden)",
     ".NET CLI": ".NET-CLI",
-    "1 project": "1 Projekt",
     "1 to {n}": "1 bis {n}",
     "A file or folder with this name already exists": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits",
     "A lightweight IDE for .NET": "Eine schlanke IDE für .NET",
@@ -215,7 +214,6 @@
     "netcoredbg debugger": "netcoredbg-Debugger",
     "not found": "nicht gefunden",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} Zeichen)",
-    "{n} projects": "{n} Projekte",
     "{n} spaces": "{n} Leerzeichen"
   },
   "terminal": {
@@ -574,5 +572,28 @@
   "format": {
     "Reformat Code is available for C#, JSON and XML files": "Code neu formatieren ist für C#-, JSON- und XML-Dateien verfügbar",
     "The file could not be formatted: check its syntax": "Die Datei konnte nicht formatiert werden: Syntax prüfen"
+  },
+  "nugetwindow": {
+    "Browse": "Durchsuchen",
+    "Consolidate ({n})": "Konsolidieren ({n})",
+    "Every package is up to date": "Alle Pakete sind aktuell",
+    "Every project uses the same versions": "Alle Projekte verwenden dieselben Versionen",
+    "Filter installed packages": "Installierte Pakete filtern",
+    "Install or update in {n} selected": "In {n} ausgewählten installieren oder aktualisieren",
+    "Installed ({n})": "Installiert ({n})",
+    "Installing {id} {version} in {project}…": "{id} {version} wird in {project} installiert…",
+    "Project": "Projekt",
+    "Project site": "Projektwebsite",
+    "Remove from selected": "Aus ausgewählten entfernen",
+    "Removing {id} from {project}…": "{id} wird aus {project} entfernt…",
+    "Search packages": "Pakete suchen",
+    "Select a package to see its details and the projects that use it": "Wählen Sie ein Paket, um Details und die Projekte zu sehen, die es verwenden",
+    "Source": "Quelle",
+    "The solution has no package references": "Die Projektmappe hat keine Paketverweise",
+    "Updates ({n})": "Updates ({n})",
+    "by {authors}": "von {authors}",
+    "{id}: done": "{id}: fertig",
+    "1 project": "1 Projekt",
+    "{n} projects": "{n} Projekte"
   }
 }

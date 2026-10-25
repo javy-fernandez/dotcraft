@@ -47,7 +47,7 @@ pub struct DotCraftApp {
     window_title: String,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
-    pub nuget: Option<crate::ui::nuget::NugetDialog>,
+    pub nuget: crate::ui::nuget::NugetManager,
     pub new_project: Option<crate::ui::new_project::NewProjectDialog>,
     pub search_everywhere: Option<crate::search::SearchEverywhere>,
     pub find_bar: Option<crate::search::FindBar>,
@@ -121,7 +121,7 @@ impl DotCraftApp {
             window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
-            nuget: None,
+            nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             new_project: None,
             search_everywhere: None,
             find_bar: None,
@@ -173,6 +173,7 @@ impl DotCraftApp {
             }
         };
         self.close_workspace();
+        self.nuget = crate::ui::nuget::NugetManager::new(self.waker.clone());
         let (solution, solution_error) = match ws.solution() {
             Some(sln) => match Solution::load(sln) {
                 Ok(s) => (Some(s), None),
@@ -201,6 +202,16 @@ impl DotCraftApp {
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         self.workspace = Some(WorkspaceState { ws, solution });
         self.restore_session(session);
+    }
+
+    /// Every project of the workspace (its solution's, or the ones found in the folder).
+    pub fn solution_projects(&self) -> Vec<PathBuf> {
+        let Some(w) = &self.workspace else { return Vec::new() };
+        match (&w.solution, &w.ws.kind) {
+            (Some(s), _) => s.projects().into_iter().map(|p| p.path.clone()).filter(|p| rc_core::workspace::is_project(p)).collect(),
+            (None, rc_core::WorkspaceKind::Project(p)) => vec![p.clone()],
+            _ => find_projects(&w.ws.root, 4),
+        }
     }
 
     /// Opens the workspace again (after adding a project: run configurations, explorer and the
@@ -929,7 +940,10 @@ impl DotCraftApp {
                 ExplorerAction::Reveal(path) => reveal_in_file_manager(&path),
                 ExplorerAction::OpenInTerminal(dir) => self.open_terminal(Some(dir)),
                 ExplorerAction::AddProject(sln) => self.new_project_dialog(Some(sln)),
-                ExplorerAction::ManagePackages(project) => self.nuget = Some(crate::ui::nuget::NugetDialog::new(project, self.waker.clone())),
+                ExplorerAction::ManagePackages(project) => {
+                    self.nuget.focus_project(&project);
+                    self.dock.show(ToolWindow::Nuget);
+                }
             }
         }
     }

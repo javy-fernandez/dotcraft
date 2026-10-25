@@ -176,6 +176,19 @@ fn screens() {
         let formatted = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
         assert!(formatted.contains("\"LogLevel\": {\n"), "{formatted}");
         h.render().unwrap().save(out.join(format!("json-format-{suffix}.png"))).unwrap();
+        // NuGet: installed packages with updates from nuget.org, one selected.
+        h.state_mut().dock.show(crate::toolwindow::ToolWindow::Nuget);
+        h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 420.0);
+        h.run_steps(3);
+        h.state_mut().nuget.select_for_test("xunit");
+        let start = std::time::Instant::now();
+        while start.elapsed() < std::time::Duration::from_secs(25) && !h.state().nuget.ready_for_test() {
+            h.run_steps(1);
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("nuget-{suffix}.png"))).unwrap();
+        h.state_mut().dock.bottom = None;
         // The explorer moved to the right side.
         h.state_mut().dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
         h.run_steps(4);
