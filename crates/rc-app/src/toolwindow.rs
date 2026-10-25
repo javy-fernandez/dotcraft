@@ -243,10 +243,10 @@ impl Dock {
             }
         }
         for (id, st) in map {
-            if let Some(tw) = ToolWindow::from_id(id) {
-                if st.visible {
-                    dock.show(tw);
-                }
+            if let Some(tw) = ToolWindow::from_id(id)
+                && st.visible
+            {
+                dock.show(tw);
             }
         }
         dock
