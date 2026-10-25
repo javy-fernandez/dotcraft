@@ -2,7 +2,7 @@
 
 use crate::app::DotCraftApp;
 use egui::{Align2, FontId, Rect, Sense, Ui, pos2, vec2};
-use rc_kit::i18n::tr;
+use rc_kit::i18n::{tr, trf};
 use rc_kit::{ico, icons, theme};
 
 pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
@@ -17,7 +17,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         y = logo.bottom() + 18.0;
         ui.painter().text(pos2(rect.center().x, y), Align2::CENTER_TOP, tr("Welcome to DotCraft"), theme::bold(20.0), p.text);
         y += 34.0;
-        ui.painter().text(pos2(rect.center().x, y), Align2::CENTER_TOP, tr("A lightweight IDE for .NET"), FontId::proportional(13.0), p.text_muted);
+        let subtitle = format!("{} · {}", tr("A lightweight IDE for .NET"), trf("Version {version}", &[("version", &env!("CARGO_PKG_VERSION"))]));
+        ui.painter().text(pos2(rect.center().x, y), Align2::CENTER_TOP, subtitle, FontId::proportional(13.0), p.text_muted);
         y += 40.0;
 
         // Primary actions.

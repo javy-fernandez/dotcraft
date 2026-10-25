@@ -534,5 +534,10 @@
     "The project folder": "プロジェクト フォルダー",
     "Variables here are added to the profile's; one NAME=value per line.": "ここで指定した変数はプロファイルの変数に追加されます。1 行に 1 つ NAME=value。",
     "Working directory": "作業ディレクトリ"
+  },
+  "runconfig": {
+    "Edit Run Configuration…": "実行構成を編集…",
+    "Test configurations have nothing to edit": "テスト構成には編集できる項目がありません",
+    "There is no run configuration to edit": "編集する実行構成がありません"
   }
 }

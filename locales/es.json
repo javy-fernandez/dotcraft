@@ -534,5 +534,10 @@
     "The project folder": "La carpeta del proyecto",
     "Variables here are added to the profile's; one NAME=value per line.": "Estas variables se añaden a las del perfil; una NOMBRE=valor por línea.",
     "Working directory": "Directorio de trabajo"
+  },
+  "runconfig": {
+    "Edit Run Configuration…": "Editar configuración de arranque…",
+    "Test configurations have nothing to edit": "Las configuraciones de pruebas no tienen nada que editar",
+    "There is no run configuration to edit": "No hay ninguna configuración de arranque que editar"
   }
 }

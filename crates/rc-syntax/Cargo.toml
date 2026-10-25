@@ -11,6 +11,7 @@ tree-sitter-c-sharp.workspace = true
 tree-sitter-xml.workspace = true
 tree-sitter-json.workspace = true
 tree-sitter-md.workspace = true
+tree-sitter-razor-modern.workspace = true
 crossbeam-channel.workspace = true
 streaming-iterator = "0.1"
 

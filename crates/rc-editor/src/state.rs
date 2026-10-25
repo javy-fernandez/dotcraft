@@ -579,7 +579,7 @@ impl EditorState {
             let rope = self.buffer.rope();
             let mut lines = match self.syntax.tree() {
                 Some(tree) => rc_syntax::highlight_lines(self.syntax.lang, tree, rope, start, total),
-                None => vec![Vec::new(); total],
+                None => rc_syntax::highlight_lexical(self.syntax.lang, rope, start, total).unwrap_or_else(|| vec![Vec::new(); total]),
             };
             for (i, spans) in lines.iter_mut().enumerate() {
                 if let Some(sem) = self.semantic.get(start + i)

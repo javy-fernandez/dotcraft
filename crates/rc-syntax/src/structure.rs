@@ -111,7 +111,17 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                 }
             }
         }),
-        Lang::Plain => {}
+        // Razor: C# blocks, `@code { }` / `@if { }`… and multi-line HTML elements.
+        Lang::Razor => walk(tree.root_node(), &mut |node| {
+            let kind = node.kind();
+            let (sr, er) = (node.start_position().row, node.end_position().row);
+            let foldable = CS_BLOCKS.contains(&kind) || matches!(kind, "razor_block" | "element" | "razor_comment" | "html_comment");
+            if foldable && er > sr {
+                let fold = if kind.ends_with("comment") { FoldKind::Comment } else { FoldKind::Block };
+                out.push(FoldRange { start_line: sr, end_line: er, kind: fold, start_col: char_col(rope, node), end_col: end_col(rope, node) });
+            }
+        }),
+        Lang::Sln | Lang::Plain => {}
     }
     out.sort_by_key(|f| (f.start_line, std::cmp::Reverse(f.end_line)));
     // One fold per start line (the outermost), like IntelliJ.

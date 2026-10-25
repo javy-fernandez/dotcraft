@@ -211,6 +211,32 @@ impl DotCraftApp {
         }
     }
 
+    /// Edit the run configuration `name` (the selected one when `None`): an application's
+    /// options or a compound's members.
+    pub fn edit_run_config(&mut self, name: Option<String>) {
+        use crate::runner::{ConfigKind, RunConfig};
+        let cfg = match name {
+            Some(n) => self.runner.configs.iter().find(|c| c.name == n).cloned(),
+            None => self.runner.selected_config().cloned(),
+        };
+        match cfg {
+            Some(RunConfig { name, kind: ConfigKind::App { project, .. } }) => {
+                let profiles = rc_dotnet::LaunchSettings::load(&project).ok().flatten().map(|s| s.profiles.iter().filter(|p| p.is_project()).map(|p| p.name.clone()).collect()).unwrap_or_default();
+                let options = self.runner.options.get(&name).cloned().unwrap_or_default();
+                self.dialog = Some(Dialog::RunOptions { name, project, profiles, options });
+            }
+            Some(RunConfig { name, kind: ConfigKind::Compound { members } }) => {
+                let all = self.runner.app_names().into_iter().map(|n| {
+                    let on = members.contains(&n);
+                    (n, on)
+                });
+                self.dialog = Some(Dialog::Compound { old: Some(name.clone()), name, members: all.collect() });
+            }
+            Some(_) => self.notify(tr("Test configurations have nothing to edit"), false),
+            None => self.notify(tr("There is no run configuration to edit"), false),
+        }
+    }
+
     /// New Solution, or Add New Project when `solution` is given.
     pub fn new_project_dialog(&mut self, solution: Option<PathBuf>) {
         self.new_project = Some(crate::ui::new_project::NewProjectDialog::new(self, solution, self.waker.clone()));
@@ -980,6 +1006,7 @@ impl eframe::App for DotCraftApp {
                     MenuCommand::OpenProject => self.pick_and_open(),
                     MenuCommand::OpenFile => self.pick_file(),
                     MenuCommand::NewSolution => self.new_project_dialog(None),
+                    MenuCommand::EditRunConfig => self.edit_run_config(None),
                     MenuCommand::CloseProject => self.close_workspace(),
                     MenuCommand::ThemeLight | MenuCommand::ThemeDark => {
                         let mut s = self.settings.clone();

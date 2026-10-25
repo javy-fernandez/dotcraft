@@ -137,6 +137,31 @@ pub fn highlight_lines(lang: Lang, tree: &Tree, rope: &Rope, first: usize, count
         }
     }
 
+    // Razor leaves HTML to an injection: colour the markup of its elements with a lexer, where
+    // the query (Razor and C#) coloured nothing.
+    if lang == Lang::Razor {
+        let mut elements = Vec::new();
+        collect_elements(tree.root_node(), start_byte, end_byte, &mut elements);
+        for (es, ee) in elements {
+            // Start a little before the viewport so a tag cut by it is still recognised.
+            let from = es.max(start_byte.saturating_sub(4096));
+            let to = ee.min(end_byte);
+            if from >= to {
+                continue;
+            }
+            let text: Vec<u8> = rope.byte_slice(from..to).bytes().collect();
+            for (s, e, hl) in html_spans(&text) {
+                let (s, e) = ((from + s).max(start_byte), (from + e).min(end_byte));
+                for slot in roles.get_mut(s.saturating_sub(start_byte)..e.saturating_sub(start_byte)).into_iter().flatten() {
+                    // The C# patterns see a tag's `<`, `=` and `>` as operators: markup wins there.
+                    if slot.is_none_or(|(_, _, h)| matches!(h, Hl::Operator | Hl::Punct)) {
+                        *slot = Some((usize::MAX, 0, hl));
+                    }
+                }
+            }
+        }
+    }
+
     // Byte roles → char spans per line.
     let mut out = Vec::with_capacity(last - first);
     for line in first..last {
@@ -159,6 +184,176 @@ pub fn highlight_lines(lang: Lang, tree: &Tree, rope: &Rope, first: usize, count
         out.push(spans);
     }
     out
+}
+
+/// Outermost HTML `element` nodes of a Razor tree that overlap `start..end` (bytes).
+fn collect_elements(node: Node, start: usize, end: usize, out: &mut Vec<(usize, usize)>) {
+    if node.end_byte() <= start || node.start_byte() >= end {
+        return;
+    }
+    if node.kind() == "element" {
+        out.push((node.start_byte(), node.end_byte()));
+        return;
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_elements(child, start, end, out);
+    }
+}
+
+/// HTML markup roles in `text` (byte ranges): tags and their punctuation, attribute names,
+/// quoted values, entities. Text between tags stays plain.
+pub fn html_spans(text: &[u8]) -> Vec<(usize, usize, Hl)> {
+    let name_char = |c: u8| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_' | b':' | b'.' | b'@');
+    let mut out = Vec::new();
+    let mut i = 0;
+    let n = text.len();
+    while i < n {
+        match text[i] {
+            b'<' if i + 1 < n && (text[i + 1].is_ascii_alphabetic() || text[i + 1] == b'/') => {
+                let start = i;
+                i += 1;
+                if text.get(i) == Some(&b'/') {
+                    i += 1;
+                }
+                while i < n && name_char(text[i]) {
+                    i += 1;
+                }
+                out.push((start, i, Hl::Tag));
+                // Attributes up to the closing `>` or `/>`.
+                while i < n {
+                    let c = text[i];
+                    if c.is_ascii_whitespace() {
+                        i += 1;
+                    } else if c == b'>' {
+                        out.push((i, i + 1, Hl::Tag));
+                        i += 1;
+                        break;
+                    } else if c == b'/' && text.get(i + 1) == Some(&b'>') {
+                        out.push((i, i + 2, Hl::Tag));
+                        i += 2;
+                        break;
+                    } else if c == b'=' {
+                        out.push((i, i + 1, Hl::Tag));
+                        i += 1;
+                    } else if c == b'"' || c == b'\'' {
+                        let s = i;
+                        i += 1;
+                        while i < n && text[i] != c {
+                            i += 1;
+                        }
+                        i = (i + 1).min(n);
+                        out.push((s, i, Hl::String));
+                    } else if name_char(c) {
+                        let s = i;
+                        while i < n && name_char(text[i]) {
+                            i += 1;
+                        }
+                        out.push((s, i, Hl::XmlAttr));
+                    } else if c == b'<' {
+                        break;
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+            b'&' => {
+                let s = i;
+                let mut j = i + 1;
+                while j < n && j - s < 12 && (text[j].is_ascii_alphanumeric() || text[j] == b'#') {
+                    j += 1;
+                }
+                if j < n && text[j] == b';' && j > s + 1 {
+                    out.push((s, j + 1, Hl::Entity));
+                    i = j + 1;
+                } else {
+                    i += 1;
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    out
+}
+
+/// Highlighting of languages without a grammar (`.sln`); `None` for the others.
+pub fn highlight_lexical(lang: Lang, rope: &Rope, first: usize, count: usize) -> Option<Vec<Vec<Span>>> {
+    if lang != Lang::Sln {
+        return None;
+    }
+    let last = (first + count).min(rope.len_lines());
+    Some((first..last).map(|l| sln_line(&rope.line(l).to_string())).collect())
+}
+
+/// One line of a `.sln`: comments, section keywords, strings, GUIDs and version numbers.
+fn sln_line(line: &str) -> Vec<Span> {
+    let chars: Vec<char> = line.trim_end_matches(['\n', '\r']).chars().collect();
+    let mut roles = vec![Hl::Plain; chars.len()];
+    let lead = chars.iter().take_while(|c| c.is_whitespace()).count();
+    if chars.get(lead) == Some(&'#') {
+        roles[lead..].fill(Hl::Comment);
+    } else {
+        const KEYWORDS: &[&str] = &["Project", "EndProject", "ProjectSection", "EndProjectSection", "Global", "EndGlobal", "GlobalSection", "EndGlobalSection", "preSolution", "postSolution", "preProject", "postProject"];
+        const PROPERTIES: &[&str] = &["VisualStudioVersion", "MinimumVisualStudioVersion"];
+        let mut i = 0;
+        while i < chars.len() {
+            let c = chars[i];
+            if c == '"' {
+                let s = i;
+                i += 1;
+                while i < chars.len() && chars[i] != '"' {
+                    i += 1;
+                }
+                i = (i + 1).min(chars.len());
+                roles[s..i].fill(Hl::String);
+            } else if c.is_ascii_alphabetic() {
+                let s = i;
+                while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
+                    i += 1;
+                }
+                let word: String = chars[s..i].iter().collect();
+                if KEYWORDS.contains(&word.as_str()) {
+                    roles[s..i].fill(Hl::Keyword);
+                } else if PROPERTIES.contains(&word.as_str()) {
+                    roles[s..i].fill(Hl::Property);
+                }
+            } else if c.is_ascii_digit() {
+                let s = i;
+                while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
+                    i += 1;
+                }
+                roles[s..i].fill(Hl::Number);
+            } else if c == '=' {
+                roles[i] = Hl::Operator;
+                i += 1;
+            } else {
+                i += 1;
+            }
+        }
+        // GUIDs, also inside strings: `{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}`.
+        let mut i = 0;
+        while i < chars.len() {
+            if chars[i] == '{'
+                && let Some(len) = chars[i..].iter().position(|&c| c == '}')
+                && len == 37
+                && chars[i + 1..i + len].iter().all(|c| c.is_ascii_hexdigit() || *c == '-')
+            {
+                roles[i..=i + len].fill(Hl::Constant);
+                i += len + 1;
+            } else {
+                i += 1;
+            }
+        }
+    }
+    let mut spans: Vec<Span> = Vec::new();
+    for (col, hl) in roles.into_iter().enumerate() {
+        match spans.last_mut() {
+            Some(sp) if sp.hl == hl && sp.end == col => sp.end = col + 1,
+            _ => spans.push(Span { start: col, end: col + 1, hl }),
+        }
+    }
+    spans.retain(|s| s.hl != Hl::Plain);
+    spans
 }
 
 #[cfg(test)]
@@ -206,5 +401,34 @@ mod tests {
         assert!(roles.iter().any(|(t, h)| t == "Sdk" && *h == Hl::XmlAttr), "{roles:?}");
         assert!(roles.iter().any(|(t, h)| t == "\"Microsoft.NET.Sdk\"" && *h == Hl::String), "{roles:?}");
         assert!(roles.iter().any(|(t, h)| t == "<!-- c -->" && *h == Hl::Comment), "{roles:?}");
+    }
+
+    #[test]
+    fn razor_colours_directives_csharp_and_html() {
+        let src = "@page \"/orders\"\n@inject OrderService Orders\n\n<h1 class=\"title\">Orders &amp; more</h1>\n@if (count > 0)\n{\n    <p>@count items</p>\n}\n\n@code {\n    private int count = 3;\n}\n";
+        let roles = roles_of(Lang::Razor, src);
+        let has = |text: &str, hl: Hl| roles.iter().any(|(t, h)| t == text && *h == hl);
+        assert!(roles.iter().any(|(t, h)| t.starts_with("@page") && *h == Hl::Keyword) || has("@page", Hl::Keyword), "{roles:?}");
+        assert!(has("\"/orders\"", Hl::String), "{roles:?}");
+        assert!(has("<h1", Hl::Tag) && has("</h1>", Hl::Tag) && has("<p>", Hl::Tag), "{roles:?}");
+        assert!(has("class", Hl::XmlAttr), "{roles:?}");
+        assert!(has("\"title\"", Hl::String), "{roles:?}");
+        assert!(has("&amp;", Hl::Entity), "{roles:?}");
+        assert!(roles.iter().any(|(t, h)| t.contains("@if") && *h == Hl::Keyword), "{roles:?}");
+        assert!(has("int", Hl::Keyword) && has("3", Hl::Number), "{roles:?}");
+    }
+
+    #[test]
+    fn solution_files_get_keywords_strings_and_guids() {
+        let src = "Microsoft Visual Studio Solution File, Format Version 12.00\n# Visual Studio Version 17\nVisualStudioVersion = 17.0.31903.59\nProject(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"App\", \"App\\App.csproj\", \"{0A1B2C3D-0000-0000-0000-000000000001}\"\nEndProject\nGlobal\n\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\n\tEndGlobalSection\nEndGlobal\n";
+        let rope = Rope::from_str(src);
+        let lines = highlight_lexical(Lang::Sln, &rope, 0, rope.len_lines()).unwrap();
+        let text = |l: usize, s: &Span| rope.line(l).chars().skip(s.start).take(s.end - s.start).collect::<String>();
+        let found = |l: usize, want: &str, hl: Hl| lines[l].iter().any(|s| s.hl == hl && text(l, s) == want);
+        assert!(found(1, "# Visual Studio Version 17", Hl::Comment));
+        assert!(found(2, "VisualStudioVersion", Hl::Property) && found(2, "17.0.31903.59", Hl::Number));
+        assert!(found(3, "Project", Hl::Keyword) && found(3, "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}", Hl::Constant) && found(3, "\"App\"", Hl::String));
+        assert!(found(6, "GlobalSection", Hl::Keyword) && found(6, "preSolution", Hl::Keyword));
+        assert!(highlight_lexical(Lang::CSharp, &rope, 0, 1).is_none());
     }
 }

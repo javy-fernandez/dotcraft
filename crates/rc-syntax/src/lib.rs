@@ -12,7 +12,7 @@ mod parse;
 mod structure;
 pub mod sample;
 
-pub use highlight::{Hl, Span, highlight_lines};
+pub use highlight::{Hl, Span, highlight_lexical, highlight_lines};
 pub use lang::Lang;
 pub use parse::{ParseResult, ParserPool, parse_now};
 pub use tree_sitter;
@@ -87,7 +87,7 @@ impl Syntax {
     /// Queues a parse of `rope` (at `version`, the newest text) on the pool.
     pub fn request_parse(&mut self, pool: &ParserPool, doc: u64, rope: Rope, version: u64) {
         self.version = version;
-        if self.lang == Lang::Plain {
+        if matches!(self.lang, Lang::Plain | Lang::Sln) {
             return;
         }
         pool.submit(doc, self.lang, rope, version, self.tree.clone());

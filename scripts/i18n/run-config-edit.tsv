@@ -1,0 +1,5 @@
+# Edit Run Configuration entry points. Import: python3 scripts/i18n_tsv.py runconfig scripts/i18n/run-config-edit.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Edit Run Configuration…	Editar configuración de arranque…	Modifier la configuration d'exécution…	Editar configuração de execução…	Ausführungskonfiguration bearbeiten…	Edytuj konfigurację uruchamiania…	编辑运行配置…	実行構成を編集…
+Test configurations have nothing to edit	Las configuraciones de pruebas no tienen nada que editar	Les configurations de test n'ont rien à modifier	As configurações de teste não têm nada para editar	Testkonfigurationen haben nichts zu bearbeiten	Konfiguracje testów nie mają nic do edycji	测试配置没有可编辑的内容	テスト構成には編集できる項目がありません
+There is no run configuration to edit	No hay ninguna configuración de arranque que editar	Aucune configuration d'exécution à modifier	Não há configuração de execução para editar	Keine Ausführungskonfiguration zum Bearbeiten	Brak konfiguracji uruchamiania do edycji	没有可编辑的运行配置	編集する実行構成がありません

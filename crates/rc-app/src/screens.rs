@@ -73,6 +73,23 @@ fn screens() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("loose-file-{suffix}.png"))).unwrap();
 
+        // Razor and solution files.
+        let samples = tempfile::Builder::new().prefix("dotcraft-razor").tempdir().unwrap();
+        let razor = samples.path().join("Orders.razor");
+        std::fs::write(&razor, "@page \"/orders\"\n@using Shop.Core\n@inject OrderService Orders\n\n<PageTitle>Orders</PageTitle>\n\n<h1 class=\"title\">Orders &amp; quotes</h1>\n\n@if (orders is null)\n{\n    <p><em>Loading…</em></p>\n}\nelse\n{\n    <table class=\"table\">\n        @foreach (var order in orders)\n        {\n            <tr @key=\"order.Id\">\n                <td>@order.Customer</td>\n                <td>@order.Total.ToString(\"0.00\")</td>\n                <td><button class=\"btn\" @onclick=\"() => Remove(order)\">Remove</button></td>\n            </tr>\n        }\n    </table>\n}\n\n@code {\n    private List<Order>? orders;\n\n    protected override async Task OnInitializedAsync()\n    {\n        // Load the sample orders.\n        orders = await Orders.GetAllAsync();\n    }\n\n    private void Remove(Order order) => orders?.Remove(order);\n}\n").unwrap();
+        let mut app = test_app(home.path(), dark);
+        let sln = fixtures().join("Shop/Shop.sln");
+        app.open_path(&sln);
+        app.open_file(&sln);
+        app.open_path(&razor);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("razor-{suffix}.png"))).unwrap();
+        let i = h.state().docs.index_of(&sln).unwrap();
+        h.state_mut().docs.activate(i);
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("sln-{suffix}.png"))).unwrap();
+
         // A solution with files open.
         let mut app = test_app(home.path(), dark);
         app.open_workspace(&fixtures().join("Shop/Shop.sln"));

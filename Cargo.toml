@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/javy-fernandez/dotcraft"
@@ -19,6 +19,7 @@ tree-sitter-c-sharp = "0.23"
 tree-sitter-xml = "0.7"
 tree-sitter-json = "0.24"
 tree-sitter-md = "0.5"
+tree-sitter-razor-modern = "0.1"
 crossbeam-channel = "0.5"
 egui = "0.36"
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu_no_default_features", "persistence"] }

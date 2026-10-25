@@ -161,7 +161,12 @@ pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
     let active = app.runner.active_run;
     let running = app.runner.runs.get(active).is_some_and(|r| r.running());
     let url = app.runner.runs.get(active).and_then(|r| r.urls.first().cloned());
-    let actions = [(ico::RERUN, tr("Rerun"), !app.runner.runs.is_empty()), (ico::STOP, tr("Stop"), running), (ico::EXTERNAL_LINK, tr("Open in Browser"), url.is_some())];
+    let actions = [
+        (ico::RERUN, tr("Rerun"), !app.runner.runs.is_empty()),
+        (ico::STOP, tr("Stop"), running),
+        (ico::EXTERNAL_LINK, tr("Open in Browser"), url.is_some()),
+        (ico::SETTINGS, tr("Edit Run Configuration…"), !app.runner.configs.is_empty()),
+    ];
     match header(ui, tr("Run"), &actions) {
         Some(0) => {
             if let Some(cfg) = app.runner.runs.get(active).map(|r| r.config.clone())
@@ -181,6 +186,11 @@ pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
             if let Some(u) = url {
                 open_url(&u.replace("0.0.0.0", "localhost").replace("[::]", "localhost").replace("*", "localhost"));
             }
+        }
+        // The configuration of the run shown (else the selected one).
+        Some(3) => {
+            let name = app.runner.runs.get(active).map(|r| r.config.name.clone());
+            app.edit_run_config(name);
         }
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Run),
         _ => {}
