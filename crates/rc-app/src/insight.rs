@@ -1237,19 +1237,6 @@ pub fn apply_workspace_edit(docs: &mut Docs, edit: &lsp::WorkspaceEdit) -> Resul
     Ok(count)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn call_paren_skips_nested_calls() {
-        let rope = rc_text::Rope::from_str("Foo(a, Bar(b), c");
-        assert_eq!(call_open_paren(&rope, 16), Some(3));
-        assert_eq!(call_open_paren(&rope, 12), Some(10));
-        assert_eq!(call_open_paren(&rc_text::Rope::from_str("x; y"), 4), None);
-    }
-}
-
 /// Applies an auto-insert edit: a snippet whose `$0` (or `${0}`) marks where the caret goes.
 fn apply_auto_insert(d: &mut Doc, edit: &lsp::TextEdit) {
     let rope = d.editor.buffer.rope().clone();
@@ -1267,4 +1254,17 @@ fn apply_auto_insert(d: &mut Doc, edit: &lsp::TextEdit) {
     };
     d.editor.apply_text_edits(vec![rc_text::Change::new(a, b, text)]);
     d.editor.selection = rc_text::Selection::point(caret);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn call_paren_skips_nested_calls() {
+        let rope = rc_text::Rope::from_str("Foo(a, Bar(b), c");
+        assert_eq!(call_open_paren(&rope, 16), Some(3));
+        assert_eq!(call_open_paren(&rope, 12), Some(10));
+        assert_eq!(call_open_paren(&rc_text::Rope::from_str("x; y"), 4), None);
+    }
 }

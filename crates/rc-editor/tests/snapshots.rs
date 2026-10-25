@@ -112,7 +112,7 @@ fn markup_typing_assists() {
         state,
     );
     h.run_steps(2);
-    let mut typed = |h: &mut Harness<'static, EditorState>, text: &str| {
+    let typed = |h: &mut Harness<'static, EditorState>, text: &str| {
         for ch in text.chars() {
             if ch == '\n' {
                 h.key_press(egui::Key::Enter);

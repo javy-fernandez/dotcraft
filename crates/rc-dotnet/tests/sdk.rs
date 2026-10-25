@@ -483,7 +483,7 @@ fn watch_reloads_a_web_app_after_a_change() {
         Some(out)
     };
     let mut log = String::new();
-    let mut wait = |what: &str, want: &str, log: &mut String| {
+    let wait = |what: &str, want: &str, log: &mut String| {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(240);
         loop {
             for ev in inbox.drain() {

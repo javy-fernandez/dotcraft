@@ -25,12 +25,18 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         let buttons = [(tr("New Solution…"), ico::ADD, 2), (tr("Open…"), ico::OPEN, 0), (tr("Open Solution or Project…"), ico::SOLUTION, 1)];
         let bw = (col_w - 24.0) / 3.0;
         for (i, (label, icon, kind)) in buttons.into_iter().enumerate() {
-            let r = Rect::from_min_size(pos2(left + i as f32 * (bw + 12.0), y), vec2(bw, 64.0));
+            let r = Rect::from_min_size(pos2(left + i as f32 * (bw + 12.0), y), vec2(bw, 72.0));
             let resp = ui.interact(r, ui.id().with(("welcome", i)), Sense::click());
             let fill = if resp.hovered() { theme::blend(p.island_bg, p.hover) } else { p.island_bg };
             ui.painter().rect(r, 10.0, fill, egui::Stroke::new(1.0, if resp.hovered() { p.accent } else { p.control_border }), egui::StrokeKind::Inside);
-            icons::paint(ui.painter(), Rect::from_center_size(pos2(r.center().x, r.top() + 22.0), vec2(16.0, 16.0)), icon, &p, true);
-            ui.painter().text(pos2(r.center().x, r.bottom() - 18.0), Align2::CENTER_CENTER, label, FontId::proportional(13.0), p.text);
+            icons::paint(ui.painter(), Rect::from_center_size(pos2(r.center().x, r.top() + 20.0), vec2(16.0, 16.0)), icon, &p, true);
+            // Long labels (translations) wrap to two centred lines inside the button.
+            let mut job = egui::text::LayoutJob::simple(label.to_string(), FontId::proportional(13.0), p.text, r.width() - 20.0);
+            job.halign = egui::Align::Center;
+            job.wrap.max_rows = 2;
+            job.wrap.overflow_character = Some('…');
+            let g = ui.painter().layout_job(job);
+            ui.painter().galley(pos2(r.center().x, (r.top() + 48.0 - g.size().y / 2.0).round()), g, p.text);
             resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
             if resp.clicked() {
                 match kind {
@@ -40,7 +46,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                 }
             }
         }
-        y += 64.0 + 32.0;
+        y += 72.0 + 32.0;
 
         // Recent projects.
         let recents: Vec<std::path::PathBuf> = app.settings.recent_workspaces.clone();

@@ -60,6 +60,11 @@ fn screens() {
         app.settings.recent_workspaces = vec![fixtures().join("Shop/Shop.sln"), fixtures().join("TenProjects/TenProjects.slnx")];
         let mut h = harness(app, vec2(1280.0, 800.0));
         h.render().unwrap().save(out.join(format!("welcome-{suffix}.png"))).unwrap();
+        // Long Spanish labels wrap inside the buttons.
+        rc_kit::i18n::set_lang(rc_kit::i18n::Lang::Es);
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("welcome-es-{suffix}.png"))).unwrap();
+        rc_kit::i18n::set_lang(rc_kit::i18n::Lang::En);
         // New Solution.
         h.state_mut().new_project_dialog(None);
         h.run_steps(4);
