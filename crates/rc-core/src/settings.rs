@@ -37,6 +37,8 @@ pub struct Settings {
     pub right_margin: usize,
     /// Save files when the window loses focus or when switching tabs (IntelliJ autosave).
     pub autosave: bool,
+    /// Open files from the explorer with a single click (otherwise a double click).
+    pub single_click_open: bool,
     /// Explicit path to `dotnet` (otherwise found on PATH / the default install).
     pub dotnet_path: Option<PathBuf>,
     /// Explicit path to the Roslyn language server DLL or executable.
@@ -59,6 +61,7 @@ impl Default for Settings {
             show_indent_guides: true,
             right_margin: 120,
             autosave: true,
+            single_click_open: false,
             dotnet_path: None,
             roslyn_path: None,
             netcoredbg_path: None,

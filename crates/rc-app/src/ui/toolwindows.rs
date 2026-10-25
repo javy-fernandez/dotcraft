@@ -16,6 +16,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
             let Some(w) = &app.workspace else { return };
             let (root, name) = (w.ws.root.clone(), w.ws.name());
             let active = app.docs.active_doc().map(|d| d.path.clone());
+            app.explorer.single_click = app.settings.single_click_open;
             let actions = explorer::show(ui, &mut app.explorer, w.solution.as_ref(), &root, &name, active.as_deref());
             if ui.ctx().data_mut(|d| d.remove_temp::<bool>(Id::new("explorer_hide")).unwrap_or(false)) {
                 app.toggle_tool(ToolWindow::Explorer);

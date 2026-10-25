@@ -1,0 +1,8 @@
+# Tool window sides and explorer options. Import: python3 scripts/i18n_tsv.py layout scripts/i18n/layout.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Bottom	Abajo	En bas	Embaixo	Unten	Dół	底部	下
+Left	Izquierda	Gauche	Esquerda	Links	Lewo	左侧	左
+Right	Derecha	Droite	Direita	Rechts	Prawo	右侧	右
+Move To	Mover a	Déplacer vers	Mover para	Verschieben nach	Przenieś do	移动到	移動先
+Show	Mostrar	Afficher	Mostrar	Anzeigen	Pokaż	显示	表示
+Open files with a single click in the Explorer	Abrir archivos con un solo clic en el Explorador	Ouvrir les fichiers d'un simple clic dans l'Explorateur	Abrir arquivos com um clique no Explorador	Dateien im Explorer mit einem Klick öffnen	Otwieraj pliki jednym kliknięciem w Eksploratorze	在资源管理器中单击打开文件	エクスプローラーでシングルクリックでファイルを開く

@@ -777,6 +777,10 @@ impl DotCraftApp {
         for a in actions {
             match a {
                 ExplorerAction::Open(p) => self.open_file(&p),
+                ExplorerAction::Preview(p) => {
+                    self.open_file(&p);
+                    self.focus_editor = false;
+                }
                 ExplorerAction::Collapse => {
                     self.explorer.expanded.retain(|k| k == "sln");
                     self.session_dirty = true;

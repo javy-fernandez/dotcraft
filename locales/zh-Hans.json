@@ -454,5 +454,13 @@
   },
   "tests": {
     "Run All Tests": "运行所有测试"
+  },
+  "layout": {
+    "Bottom": "底部",
+    "Left": "左侧",
+    "Right": "右侧",
+    "Move To": "移动到",
+    "Show": "显示",
+    "Open files with a single click in the Explorer": "在资源管理器中单击打开文件"
   }
 }

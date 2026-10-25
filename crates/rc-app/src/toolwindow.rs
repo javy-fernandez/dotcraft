@@ -28,6 +28,30 @@ pub enum Side {
     Right,
 }
 
+impl Side {
+    pub const ALL: [Side; 3] = [Side::Left, Side::Right, Side::Bottom];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Side::Left => "left",
+            Side::Bottom => "bottom",
+            Side::Right => "right",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Side> {
+        Side::ALL.into_iter().find(|s| s.id() == id)
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Side::Left => tr("Left"),
+            Side::Bottom => tr("Bottom"),
+            Side::Right => tr("Right"),
+        }
+    }
+}
+
 impl ToolWindow {
     /// Order of the buttons on the stripes.
     pub const ALL: [ToolWindow; 12] = [
@@ -105,8 +129,8 @@ impl ToolWindow {
     }
 
     /// Whether the button sits on the lower part of the left stripe (bottom tool windows).
-    pub fn default_size(self) -> f32 {
-        match self.side() {
+    pub fn default_size(self, side: Side) -> f32 {
+        match side {
             Side::Left => 300.0,
             Side::Right => 320.0,
             Side::Bottom => 260.0,
@@ -125,11 +149,13 @@ pub struct Dock {
     pub bottom: Option<ToolWindow>,
     pub right: Option<ToolWindow>,
     pub sizes: BTreeMap<ToolWindow, f32>,
+    /// Tool windows moved away from their default side.
+    pub sides: BTreeMap<ToolWindow, Side>,
 }
 
 impl Default for Dock {
     fn default() -> Self {
-        Dock { left: Some(ToolWindow::Explorer), bottom: None, right: None, sizes: BTreeMap::new() }
+        Dock { left: Some(ToolWindow::Explorer), bottom: None, right: None, sizes: BTreeMap::new(), sides: BTreeMap::new() }
     }
 }
 
@@ -150,18 +176,40 @@ impl Dock {
         }
     }
 
+    /// The side `tw` is docked on (its default unless moved).
+    pub fn side_of(&self, tw: ToolWindow) -> Side {
+        self.sides.get(&tw).copied().unwrap_or(tw.side())
+    }
+
     pub fn is_open(&self, tw: ToolWindow) -> bool {
-        self.open_on(tw.side()) == Some(tw)
+        self.open_on(self.side_of(tw)) == Some(tw)
     }
 
     /// Stripe click: opens `tw` (replacing the other window of its side) or hides it.
     pub fn toggle(&mut self, tw: ToolWindow) {
-        let slot = self.slot(tw.side());
+        let slot = self.slot(self.side_of(tw));
         *slot = if *slot == Some(tw) { None } else { Some(tw) };
     }
 
     pub fn show(&mut self, tw: ToolWindow) {
-        *self.slot(tw.side()) = Some(tw);
+        *self.slot(self.side_of(tw)) = Some(tw);
+    }
+
+    /// "Move to": docks `tw` on `side`, keeping it open if it was.
+    pub fn move_to(&mut self, tw: ToolWindow, side: Side) {
+        let was_open = self.is_open(tw);
+        if was_open {
+            *self.slot(self.side_of(tw)) = None;
+        }
+        if side == tw.side() {
+            self.sides.remove(&tw);
+        } else {
+            self.sides.insert(tw, side);
+        }
+        self.sizes.remove(&tw);
+        if was_open {
+            self.show(tw);
+        }
     }
 
     pub fn hide_all(&mut self) {
@@ -171,13 +219,13 @@ impl Dock {
     }
 
     pub fn size(&self, tw: ToolWindow) -> f32 {
-        self.sizes.get(&tw).copied().unwrap_or_else(|| tw.default_size())
+        self.sizes.get(&tw).copied().unwrap_or_else(|| tw.default_size(self.side_of(tw)))
     }
 
     pub fn to_session(&self) -> BTreeMap<String, ToolWindowState> {
         ToolWindow::ALL
             .into_iter()
-            .map(|tw| (tw.id().to_string(), ToolWindowState { visible: self.is_open(tw), size: self.size(tw) }))
+            .map(|tw| (tw.id().to_string(), ToolWindowState { visible: self.is_open(tw), size: self.size(tw), side: self.sides.get(&tw).map(|s| s.id().to_string()) }))
             .collect()
     }
 
@@ -185,10 +233,17 @@ impl Dock {
         if map.is_empty() {
             return Dock::default();
         }
-        let mut dock = Dock { left: None, bottom: None, right: None, sizes: BTreeMap::new() };
+        let mut dock = Dock { left: None, bottom: None, right: None, sizes: BTreeMap::new(), sides: BTreeMap::new() };
         for (id, st) in map {
             if let Some(tw) = ToolWindow::from_id(id) {
                 dock.sizes.insert(tw, st.size);
+                if let Some(side) = st.side.as_deref().and_then(Side::from_id).filter(|s| *s != tw.side()) {
+                    dock.sides.insert(tw, side);
+                }
+            }
+        }
+        for (id, st) in map {
+            if let Some(tw) = ToolWindow::from_id(id) {
                 if st.visible {
                     dock.show(tw);
                 }
@@ -215,5 +270,20 @@ mod tests {
         let back = Dock::from_session(&d.to_session());
         assert_eq!(back, Dock { sizes: back.sizes.clone(), ..d.clone() });
         assert_eq!(back.size(ToolWindow::Explorer), 333.0);
+    }
+
+    #[test]
+    fn moving_a_window_to_another_side_keeps_it_open_and_is_remembered() {
+        let mut d = Dock::default();
+        d.move_to(ToolWindow::Explorer, Side::Right);
+        assert_eq!((d.left, d.right), (None, Some(ToolWindow::Explorer)));
+        d.toggle(ToolWindow::Commit);
+        assert_eq!(d.left, Some(ToolWindow::Commit));
+        let back = Dock::from_session(&d.to_session());
+        assert_eq!(back.side_of(ToolWindow::Explorer), Side::Right);
+        assert_eq!(back.right, Some(ToolWindow::Explorer));
+        d.move_to(ToolWindow::Explorer, Side::Left);
+        assert!(d.sides.is_empty());
+        assert_eq!(d.left, Some(ToolWindow::Explorer));
     }
 }

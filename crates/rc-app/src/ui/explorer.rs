@@ -50,12 +50,16 @@ pub struct ExplorerState {
     /// Scroll the selected row into view on the next frame.
     pub reveal: bool,
     pub has_focus: bool,
+    /// Open files with a single click (Settings › Editor).
+    pub single_click: bool,
 }
 
 /// What the user asked for in the explorer this frame.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExplorerAction {
     Open(PathBuf),
+    /// Single-click open: show the file but keep the focus in the explorer.
+    Preview(PathBuf),
     NewFile(PathBuf),
     NewFolder(PathBuf),
     Rename(PathBuf),
@@ -410,6 +414,11 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             }
             if resp.double_clicked() {
                 open_row = Some(i);
+            } else if resp.clicked()
+                && state.single_click
+                && let NodeKind::File(p) = &row.kind
+            {
+                actions.push(ExplorerAction::Preview(p.clone()));
             }
             if resp.secondary_clicked() {
                 context = Some((i, resp.clone()));

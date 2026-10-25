@@ -454,5 +454,13 @@
   },
   "tests": {
     "Run All Tests": "Executar todos os testes"
+  },
+  "layout": {
+    "Bottom": "Embaixo",
+    "Left": "Esquerda",
+    "Right": "Direita",
+    "Move To": "Mover para",
+    "Show": "Mostrar",
+    "Open files with a single click in the Explorer": "Abrir arquivos com um clique no Explorador"
   }
 }

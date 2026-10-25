@@ -84,6 +84,10 @@ fn screens() {
         h.state_mut().dock.show(crate::toolwindow::ToolWindow::Tests);
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("tests-empty-{suffix}.png"))).unwrap();
+        // The explorer moved to the right side.
+        h.state_mut().dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("explorer-right-{suffix}.png"))).unwrap();
     }
 }
 

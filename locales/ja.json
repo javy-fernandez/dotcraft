@@ -454,5 +454,13 @@
   },
   "tests": {
     "Run All Tests": "すべてのテストを実行"
+  },
+  "layout": {
+    "Bottom": "下",
+    "Left": "左",
+    "Right": "右",
+    "Move To": "移動先",
+    "Show": "表示",
+    "Open files with a single click in the Explorer": "エクスプローラーでシングルクリックでファイルを開く"
   }
 }

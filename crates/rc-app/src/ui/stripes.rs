@@ -5,6 +5,7 @@ use crate::app::DotCraftApp;
 use crate::toolwindow::{Side, ToolWindow};
 use egui::{Rect, Sense, Ui, pos2, vec2};
 use rc_editor::Action;
+use rc_kit::i18n::tr;
 use rc_kit::icons;
 
 const BUTTON: f32 = 30.0;
@@ -36,8 +37,30 @@ fn button(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
         None => tw.title().to_string(),
     };
     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, open, tw.title()));
-    if resp.on_hover_text(tip).clicked() {
+    let resp = resp.on_hover_text(tip);
+    if resp.clicked() {
         app.toggle_tool(tw);
+    }
+    // Right-click: move the tool window to another side (Rider's "Move To").
+    let current = app.dock.side_of(tw);
+    let mut moved = None;
+    resp.context_menu(|ui| {
+        ui.label(egui::RichText::new(tr("Move To")).size(12.0).color(rc_kit::pal(ui).muted));
+        for side in Side::ALL {
+            if ui.add_enabled(side != current, egui::Button::new(side.title())).clicked() {
+                moved = Some(side);
+                ui.close();
+            }
+        }
+        ui.separator();
+        if ui.button(if app.dock.is_open(tw) { tr("Hide") } else { tr("Show") }).clicked() {
+            app.toggle_tool(tw);
+            ui.close();
+        }
+    });
+    if let Some(side) = moved {
+        app.dock.move_to(tw, side);
+        app.session_dirty = true;
     }
 }
 
@@ -47,12 +70,13 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, side: Side) {
     match side {
         Side::Left => {
             let mut y = rect.top() + 4.0;
-            for tw in ToolWindow::ALL.into_iter().filter(|t| t.side() == Side::Left) {
+            let list: Vec<ToolWindow> = ToolWindow::ALL.into_iter().filter(|t| app.dock.side_of(*t) == Side::Left).collect();
+            for tw in list {
                 button(app, ui, tw, pos2(x, y));
                 y += BUTTON + GAP;
             }
             // Bottom tool windows sit at the lower end of the left stripe.
-            let bottoms: Vec<ToolWindow> = ToolWindow::ALL.into_iter().filter(|t| t.side() == Side::Bottom).collect();
+            let bottoms: Vec<ToolWindow> = ToolWindow::ALL.into_iter().filter(|t| app.dock.side_of(*t) == Side::Bottom).collect();
             let mut y = rect.bottom() - 4.0 - bottoms.len() as f32 * (BUTTON + GAP) + GAP;
             for tw in bottoms {
                 button(app, ui, tw, pos2(x, y));
@@ -61,7 +85,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, side: Side) {
         }
         Side::Right => {
             let mut y = rect.top() + 4.0;
-            for tw in ToolWindow::ALL.into_iter().filter(|t| t.side() == Side::Right) {
+            let list: Vec<ToolWindow> = ToolWindow::ALL.into_iter().filter(|t| app.dock.side_of(*t) == Side::Right).collect();
+            for tw in list {
                 button(app, ui, tw, pos2(x, y));
                 y += BUTTON + GAP;
             }

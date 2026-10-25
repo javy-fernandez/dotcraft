@@ -24,11 +24,13 @@ pub struct ToolWindowState {
     pub visible: bool,
     /// Width (side windows) or height (bottom windows) in points.
     pub size: f32,
+    /// `left`, `right` or `bottom` when moved from its default side.
+    pub side: Option<String>,
 }
 
 impl Default for ToolWindowState {
     fn default() -> Self {
-        ToolWindowState { visible: false, size: 280.0 }
+        ToolWindowState { visible: false, size: 280.0, side: None }
     }
 }
 
