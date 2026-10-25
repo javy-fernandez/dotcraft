@@ -595,5 +595,11 @@
     "{id}: done": "{id}：完成",
     "1 project": "1 个项目",
     "{n} projects": "{n} 个项目"
+  },
+  "split": {
+    "Open in New Window": "在新窗口中打开",
+    "Split Down": "向下拆分",
+    "Split Right": "向右拆分",
+    "Unsplit": "取消拆分"
   }
 }

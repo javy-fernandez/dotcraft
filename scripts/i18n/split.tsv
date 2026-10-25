@@ -1,0 +1,6 @@
+# Editor split and floating windows. Import: python3 scripts/i18n_tsv.py split scripts/i18n/split.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Open in New Window	Abrir en una ventana nueva	Ouvrir dans une nouvelle fenêtre	Abrir em uma nova janela	In neuem Fenster öffnen	Otwórz w nowym oknie	在新窗口中打开	新しいウィンドウで開く
+Split Down	Dividir hacia abajo	Diviser vers le bas	Dividir para baixo	Nach unten teilen	Podziel w dół	向下拆分	下に分割
+Split Right	Dividir a la derecha	Diviser à droite	Dividir à direita	Nach rechts teilen	Podziel w prawo	向右拆分	右に分割
+Unsplit	Quitar división	Annuler la division	Desfazer divisão	Teilung aufheben	Cofnij podział	取消拆分	分割を解除

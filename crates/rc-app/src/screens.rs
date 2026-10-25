@@ -189,6 +189,28 @@ fn screens() {
         h.run_steps(3);
         h.render().unwrap().save(out.join(format!("nuget-{suffix}.png"))).unwrap();
         h.state_mut().dock.bottom = None;
+        // Split right, then a tab in its own window.
+        {
+            let app = h.state_mut();
+            let calc = app.docs.index_of(&fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs").canonicalize().unwrap()).unwrap();
+            let program = app.docs.index_of(&fixtures().join("Shop/src/Shop.Cli/Program.cs").canonicalize().unwrap()).unwrap();
+            app.docs.activate(calc);
+            let (main, other) = (app.docs.list[calc].editor.id, app.docs.list[program].editor.id);
+            app.split = Some(crate::app::Split { vertical: true, main, other, focus_second: true, ratio: 0.5 });
+            app.docs.activate(program);
+        }
+        h.run_steps(5);
+        h.render().unwrap().save(out.join(format!("split-{suffix}.png"))).unwrap();
+        {
+            let app = h.state_mut();
+            app.split = None;
+            let json = app.docs.list.iter().position(|d| d.name() == "appsettings.json").unwrap();
+            let id = app.docs.list[json].editor.id;
+            app.floating.push(id);
+        }
+        h.run_steps(5);
+        h.render().unwrap().save(out.join(format!("floating-{suffix}.png"))).unwrap();
+        h.state_mut().floating.clear();
         // The explorer moved to the right side.
         h.state_mut().dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
         h.run_steps(4);

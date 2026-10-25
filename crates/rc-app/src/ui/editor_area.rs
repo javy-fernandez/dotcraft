@@ -21,6 +21,8 @@ enum TabCommand {
     Locate(usize),
     Blame(usize),
     Diff(usize),
+    Split(usize, bool),
+    Float(usize),
 }
 
 pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
@@ -41,8 +43,110 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     ui.painter().hline(full.x_range(), tabs_rect.bottom() - 0.5, egui::Stroke::new(1.0, p.island_border));
 
     run_tab_commands(app, ui, commands);
-    let Some(active) = app.docs.active else { return };
-    let editor_rect = Rect::from_min_max(pos2(full.left(), tabs_rect.bottom()), full.max);
+    if app.docs.active.is_none() {
+        return;
+    }
+    let body = Rect::from_min_max(pos2(full.left(), tabs_rect.bottom()), full.max);
+    let focus = std::mem::take(&mut app.focus_editor);
+    let Some(active) = main_doc(app) else { return };
+    // Split: two panes, the focused one is the active document.
+    let split = app.split.clone().filter(|s| s.main != s.other && app.docs.list.iter().any(|d| d.editor.id == s.other) && !app.floating.contains(&s.other));
+    let Some(mut split) = split else {
+        app.split = None;
+        editor_pane(app, ui, active, body, editor_actions, focus, true);
+        return;
+    };
+    let id_of = |app: &DotCraftApp, i: usize| app.docs.list[i].editor.id;
+    let index_of = |app: &DotCraftApp, id: u64| app.docs.list.iter().position(|d| d.editor.id == id);
+    // A tab chosen in the strip goes to the focused pane.
+    let active_id = id_of(app, active);
+    if active_id != split.main && active_id != split.other {
+        if split.focus_second {
+            split.other = active_id;
+        } else {
+            split.main = active_id;
+        }
+    }
+    split.focus_second = active_id == split.other;
+    let (Some(a), Some(b)) = (index_of(app, split.main), index_of(app, split.other)) else {
+        app.split = None;
+        return;
+    };
+    let p = rc_kit::pal(ui);
+    let (ra, rb) = if split.vertical {
+        let x = (body.left() + body.width() * split.ratio).round();
+        (Rect::from_min_max(body.min, pos2(x - 1.0, body.bottom())), Rect::from_min_max(pos2(x + 1.0, body.top()), body.max))
+    } else {
+        let y = (body.top() + body.height() * split.ratio).round();
+        (Rect::from_min_max(body.min, pos2(body.right(), y - 1.0)), Rect::from_min_max(pos2(body.left(), y + 1.0), body.max))
+    };
+    // The divider drags to resize.
+    let divider = if split.vertical { Rect::from_min_max(pos2(ra.right() - 2.0, body.top()), pos2(rb.left() + 2.0, body.bottom())) } else { Rect::from_min_max(pos2(body.left(), ra.bottom() - 2.0), pos2(body.right(), rb.top() + 2.0)) };
+    let dresp = ui.interact(divider, egui::Id::new("split_divider"), Sense::drag());
+    let line = if dresp.hovered() || dresp.dragged() { p.accent } else { p.island_border };
+    if split.vertical {
+        ui.painter().vline(divider.center().x, body.y_range(), egui::Stroke::new(1.0, line));
+        if dresp.hovered() || dresp.dragged() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        }
+    } else {
+        ui.painter().hline(body.x_range(), divider.center().y, egui::Stroke::new(1.0, line));
+        if dresp.hovered() || dresp.dragged() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+        }
+    }
+    if dresp.dragged()
+        && let Some(pos) = dresp.interact_pointer_pos()
+    {
+        split.ratio = if split.vertical { (pos.x - body.left()) / body.width() } else { (pos.y - body.top()) / body.height() }.clamp(0.15, 0.85);
+    }
+    app.split = Some(split.clone());
+    let focused_second = split.focus_second;
+    let (actions_a, actions_b) = if focused_second { (Vec::new(), editor_actions) } else { (editor_actions, Vec::new()) };
+    for (idx, rect, actions, second) in [(a, ra, actions_a, false), (b, rb, actions_b, true)] {
+        let header = Rect::from_min_size(rect.min, vec2(rect.width(), 26.0));
+        let focused = second == focused_second;
+        ui.painter().rect_filled(header, 0.0, if focused { theme::blend(p.island_bg, p.selection.gamma_multiply(0.35)) } else { p.island_bg });
+        let name = app.docs.list[idx].name();
+        icons::paint(ui.painter(), Rect::from_center_size(pos2(header.left() + 16.0, header.center().y), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
+        ui.painter().text(pos2(header.left() + 30.0, header.center().y), Align2::LEFT_CENTER, &name, FontId::proportional(12.5), if focused { p.text } else { p.muted });
+        if second {
+            let cr = Rect::from_center_size(pos2(header.right() - 16.0, header.center().y), vec2(22.0, 22.0));
+            let mut c = ui.new_child(egui::UiBuilder::new().max_rect(cr));
+            if theme::icon_button(&mut c, ico::CLOSE_SMALL, true, tr("Unsplit")).clicked() {
+                app.split = None;
+            }
+        }
+        let pane = Rect::from_min_max(pos2(rect.left(), header.bottom()), rect.max);
+        if editor_pane(app, ui, idx, pane, actions, focus && focused, focused) && !focused {
+            // A click in the other pane focuses it.
+            app.docs.activate(idx);
+            if let Some(sp) = &mut app.split {
+                sp.focus_second = second;
+            }
+        }
+    }
+}
+
+/// The document the main pane shows: the active one, unless it is in its own window (then the
+/// last one shown here).
+fn main_doc(app: &mut DotCraftApp) -> Option<usize> {
+    let active = app.docs.active?;
+    let id = app.docs.list[active].editor.id;
+    if !app.floating.contains(&id) {
+        app.last_main = Some(id);
+        return Some(active);
+    }
+    app.last_main
+        .and_then(|m| app.docs.list.iter().position(|d| d.editor.id == m && !app.floating.contains(&m)))
+        .or_else(|| app.docs.list.iter().position(|d| !app.floating.contains(&d.editor.id)))
+}
+
+/// One editor: conflict banner, find bar (when focused), the editor and its events. Returns
+/// whether it was clicked or got the keyboard (so a split pane becomes the active one).
+pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect, editor_actions: Vec<Action>, focus: bool, focused: bool) -> bool {
+    let p = rc_kit::pal(ui);
+    let editor_rect = rect;
     // Conflict banner: the file changed on disk while it had unsaved edits.
     let mut editor_rect = editor_rect;
     if app.docs.list[active].conflict {
@@ -69,17 +173,19 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         }
         editor_rect.min.y = banner.bottom();
     }
-    let bar_h = crate::ui::search_popup::find_bar(app, ui, editor_rect);
-    editor_rect.min.y += bar_h;
+    if focused {
+        let bar_h = crate::ui::search_popup::find_bar(app, ui, editor_rect);
+        editor_rect.min.y += bar_h;
+    }
     let mut ed_ui = ui.new_child(egui::UiBuilder::new().max_rect(editor_rect));
     ed_ui.set_clip_rect(editor_rect.intersect(ui.clip_rect()));
-    let focus = std::mem::take(&mut app.focus_editor);
     let doc = &mut app.docs.list[active];
     let mut from_menu = Vec::new();
     for a in &editor_actions {
         from_menu.extend(rc_editor::run_action(&ed_ui, &mut doc.editor, &app.editor_config, *a));
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
+    let touched = out.response.clicked() || out.response.secondary_clicked() || out.events.contains(&EditorEvent::Focused);
     editor_context_menu(app, &out.response);
     let doc = &mut app.docs.list[active];
     // While paused, hovering shows the debugger's value instead of the symbol's documentation.
@@ -187,6 +293,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
                     doc.editor.current_match = Some(next);
                 }
             }
+            // Global shortcuts typed in a floating window or a split pane.
+            other if other.is_ide() => app.pending.push(other),
             other => insight_actions.push(other),
         }
     }
@@ -197,6 +305,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     for a in insight_actions {
         app.run_insight_action(a, caret_screen);
     }
+    touched
 }
 
 /// Right-click in the editor (Rider): code actions and navigation for C#, editing, formatting.
@@ -304,6 +413,9 @@ fn tab_strip(app: &mut DotCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec<
         ui.spacing_mut().item_spacing = vec2(2.0, 4.0);
         for i in 0..app.docs.list.len() {
             let doc = &app.docs.list[i];
+            if app.floating.contains(&doc.editor.id) {
+                continue;
+            }
             let selected = app.docs.active == Some(i);
             let mut title = doc.name();
             if doc.is_modified() {
@@ -427,6 +539,20 @@ fn tab_menu(app: &mut DotCraftApp, resp: &egui::Response, i: usize, commands: &m
             commands.push(TabCommand::Pin(i));
             ui.close();
         }
+        let others = app.docs.list.len() > 1;
+        if theme::menu_entry(ui, Some(ico::SPLIT_RIGHT), tr("Split Right"), None, false, others).clicked() {
+            commands.push(TabCommand::Split(i, true));
+            ui.close();
+        }
+        if theme::menu_entry(ui, Some(ico::SPLIT_DOWN), tr("Split Down"), None, false, others).clicked() {
+            commands.push(TabCommand::Split(i, false));
+            ui.close();
+        }
+        if theme::menu_entry(ui, Some(ico::EXTERNAL_LINK), tr("Open in New Window"), None, false, true).clicked() {
+            commands.push(TabCommand::Float(i));
+            ui.close();
+        }
+        ui.separator();
         if theme::menu_entry(ui, None, tr("Show Tabs in Multiple Rows"), None, app.settings.tabs_multirow, true).clicked() {
             app.settings.tabs_multirow = !app.settings.tabs_multirow;
             let _ = app.settings.save();
@@ -499,6 +625,25 @@ fn run_tab_commands(app: &mut DotCraftApp, ui: &Ui, commands: Vec<TabCommand>) {
                 app.docs.active = Some(pos);
                 app.session_dirty = true;
             }
+            TabCommand::Split(i, vertical) => {
+                // The tab goes to the new pane; the main pane keeps the current (or another) file.
+                let other = app.docs.list[i].editor.id;
+                let current = app.docs.active.map(|a| app.docs.list[a].editor.id).filter(|&c| c != other);
+                let main = current.or_else(|| app.docs.list.iter().map(|d| d.editor.id).find(|&id| id != other && !app.floating.contains(&id)));
+                if let Some(main) = main {
+                    app.split = Some(crate::app::Split { vertical, main, other, focus_second: true, ratio: 0.5 });
+                    app.docs.activate(i);
+                }
+            }
+            TabCommand::Float(i) => {
+                let id = app.docs.list[i].editor.id;
+                if !app.floating.contains(&id) {
+                    app.floating.push(id);
+                }
+                if app.split.as_ref().is_some_and(|s| s.main == id || s.other == id) {
+                    app.split = None;
+                }
+            }
             TabCommand::CopyPath(i) => ui.ctx().copy_text(app.docs.list[i].path.display().to_string()),
             TabCommand::Reveal(i) => crate::app::reveal_in_file_manager(&app.docs.list[i].path),
             TabCommand::Blame(i) => {
@@ -550,6 +695,34 @@ fn empty_state(app: &mut DotCraftApp, ui: &mut Ui) {
     for path in dropped {
         if path.is_file() {
             app.open_file(&path);
+        }
+    }
+}
+
+/// Documents in windows of their own ("Open in New Window"): each an OS window with its
+/// editor; closing it brings the tab back to the main window.
+pub fn floating_windows(app: &mut DotCraftApp, ctx: &egui::Context) {
+    let ids = app.floating.clone();
+    for id in ids {
+        let Some(idx) = app.docs.list.iter().position(|d| d.editor.id == id) else {
+            app.floating.retain(|f| *f != id);
+            continue;
+        };
+        let name = app.docs.list[idx].name();
+        let modified = if app.docs.list[idx].is_modified() { " *" } else { "" };
+        let builder = egui::ViewportBuilder::default().with_title(format!("{name}{modified} – DotCraft")).with_inner_size([960.0, 720.0]);
+        let closed = ctx.show_viewport_immediate(egui::ViewportId::from_hash_of(("dotcraft_doc", id)), builder, |ui, _| {
+            let p = rc_kit::pal(ui);
+            let rect = ui.max_rect();
+            ui.painter().rect_filled(rect, 0.0, p.island_bg);
+            let focused = app.docs.active == Some(idx);
+            if editor_pane(app, ui, idx, rect.shrink(4.0), Vec::new(), false, focused) && !focused {
+                app.docs.activate(idx);
+            }
+            ui.input(|i| i.viewport().close_requested())
+        });
+        if closed {
+            app.floating.retain(|f| *f != id);
         }
     }
 }

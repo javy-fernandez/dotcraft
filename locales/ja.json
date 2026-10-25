@@ -595,5 +595,11 @@
     "{id}: done": "{id}: 完了",
     "1 project": "1 プロジェクト",
     "{n} projects": "{n} プロジェクト"
+  },
+  "split": {
+    "Open in New Window": "新しいウィンドウで開く",
+    "Split Down": "下に分割",
+    "Split Right": "右に分割",
+    "Unsplit": "分割を解除"
   }
 }

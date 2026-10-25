@@ -26,6 +26,18 @@ pub struct Notice {
     pub at: f64,
 }
 
+/// The editor split in two panes (documents by editor id).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Split {
+    /// Side by side (else one above the other).
+    pub vertical: bool,
+    pub main: u64,
+    pub other: u64,
+    pub focus_second: bool,
+    /// Size of the first pane (0..1).
+    pub ratio: f32,
+}
+
 pub struct WorkspaceState {
     pub ws: Workspace,
     pub solution: Option<Solution>,
@@ -48,6 +60,11 @@ pub struct DotCraftApp {
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
     pub nuget: crate::ui::nuget::NugetManager,
+    pub split: Option<Split>,
+    /// Documents shown in windows of their own (editor ids).
+    pub floating: Vec<u64>,
+    /// The last document of the main pane (when the active one is in another window).
+    pub last_main: Option<u64>,
     pub new_project: Option<crate::ui::new_project::NewProjectDialog>,
     pub search_everywhere: Option<crate::search::SearchEverywhere>,
     pub find_bar: Option<crate::search::FindBar>,
@@ -122,6 +139,9 @@ impl DotCraftApp {
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
+            split: None,
+            floating: Vec::new(),
+            last_main: None,
             new_project: None,
             search_everywhere: None,
             find_bar: None,

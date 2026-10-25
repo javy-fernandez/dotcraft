@@ -595,5 +595,11 @@
     "{id}: done": "{id} : terminé",
     "1 project": "1 projet",
     "{n} projects": "{n} projets"
+  },
+  "split": {
+    "Open in New Window": "Ouvrir dans une nouvelle fenêtre",
+    "Split Down": "Diviser vers le bas",
+    "Split Right": "Diviser à droite",
+    "Unsplit": "Annuler la division"
   }
 }
