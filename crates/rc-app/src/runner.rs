@@ -312,9 +312,11 @@ impl Runner {
 
     /// What to run for an application configuration, with the user's edits applied.
     pub fn request_for(&self, cfg: &RunConfig) -> Option<RunRequest> {
-        let ConfigKind::App { project, profile, .. } = &cfg.kind else { return None };
+        let ConfigKind::App { project, profile, web } = &cfg.kind else { return None };
         let mut req = RunRequest::new(project);
         req.launch_profile = profile.clone();
+        // Web apps run under `dotnet watch` by default: saving a view refreshes the browser.
+        req.watch = *web;
         if let Some(o) = self.options.get(&cfg.name) {
             match o.profile.as_deref() {
                 Some("") => req.use_launch_profile = false,
@@ -327,6 +329,7 @@ impl Runner {
                 req.working_dir = Some(PathBuf::from(o.working_dir.trim()));
             }
             req.build_first = o.build_first;
+            req.watch = o.hot_reload.unwrap_or(*web);
         }
         Some(req)
     }

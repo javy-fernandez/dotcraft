@@ -539,5 +539,9 @@
     "Edit Run Configuration…": "Edytuj konfigurację uruchamiania…",
     "Test configurations have nothing to edit": "Konfiguracje testów nie mają nic do edycji",
     "There is no run configuration to edit": "Brak konfiguracji uruchamiania do edycji"
+  },
+  "hotreload": {
+    "Hot Reload: apply saved changes and refresh the browser (dotnet watch)": "Hot Reload: stosuj zapisane zmiany i odświeżaj przeglądarkę (dotnet watch)",
+    "Use controllers (instead of minimal APIs)": "Użyj kontrolerów (zamiast minimalnych API)"
   }
 }

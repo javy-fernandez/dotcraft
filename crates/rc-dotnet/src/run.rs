@@ -34,6 +34,9 @@ pub struct RunRequest {
     /// Overrides the profile's working directory and the project folder.
     pub working_dir: Option<PathBuf>,
     pub build_first: bool,
+    /// Run with `dotnet watch`: rebuilds on save, applies Hot Reload (Razor, CSS, C#) and
+    /// refreshes the browser.
+    pub watch: bool,
 }
 
 impl RunRequest {
@@ -48,6 +51,7 @@ impl RunRequest {
             env: Vec::new(),
             working_dir: None,
             build_first: true,
+            watch: false,
         }
     }
 }
@@ -255,6 +259,9 @@ pub fn start_run(dotnet: &Dotnet, req: RunRequest, outbox: Outbox<RunEvent>) -> 
 
 /// Runs to the end; returns the last event (`Exited` or `Failed`) instead of reporting it.
 pub async fn run(dotnet: &Dotnet, req: &RunRequest, cancel: &CancelToken, input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
+    if req.watch {
+        return run_watch(dotnet, req, cancel, input, pid, on_event).await;
+    }
     if req.build_first {
         let mut b = BuildRequest::new(&req.project, BuildAction::Build);
         b.configuration = req.configuration.clone();
@@ -292,6 +299,67 @@ pub async fn run(dotnet: &Dotnet, req: &RunRequest, cancel: &CancelToken, input:
     )
     .await
     .map_err(|e| anyhow::anyhow!("cannot start {}: {e}", plan.program.display()))?;
+    Ok(RunEvent::Exited { code: outcome.code, cancelled: outcome.cancelled, duration: started.elapsed() })
+}
+
+/// `dotnet watch run`: it builds, starts and restarts the app itself. The launch plan is still
+/// resolved (without a build) for the URLs and the environment. `dotnet watch` opens the browser
+/// when the profile asks (`launchBrowser`) and refreshes it after each change.
+async fn run_watch(dotnet: &Dotnet, req: &RunRequest, cancel: &CancelToken, input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
+    let props = evaluate(dotnet, &req.project, &req.configuration, req.target_framework.as_deref()).await.unwrap_or_default();
+    let settings = if req.use_launch_profile { LaunchSettings::load(&req.project)? } else { None };
+    let mut plan = plan_launch(dotnet, req, &props, settings.as_ref()).unwrap_or_else(|_| LaunchPlan {
+        program: dotnet.path.clone(),
+        args: Vec::new(),
+        env: req.env.clone(),
+        working_dir: req.project.parent().unwrap_or(Path::new(".")).to_path_buf(),
+        urls: Vec::new(),
+        profile: None,
+        browser_url: None,
+    });
+    // The profile is applied here (its environment, URL and arguments merged with the
+    // configuration's in `plan`), so `dotnet watch` runs without it: otherwise its values would
+    // win over the user's.
+    let app_args: Vec<String> = if !req.args.is_empty() {
+        req.args.clone()
+    } else {
+        plan.profile.as_deref().and_then(|n| settings.as_ref()?.profile(n)).and_then(|p| p.command_line_args.as_deref()).map(split_command_line).unwrap_or_default()
+    };
+    let mut args: Vec<String> = vec!["watch".into(), "--project".into(), req.project.to_string_lossy().into_owned(), "--non-interactive".into(), "run".into(), "-c".into(), req.configuration.clone(), "--no-launch-profile".into()];
+    if let Some(tf) = &req.target_framework {
+        args.extend(["--framework".into(), tf.clone()]);
+    }
+    if !app_args.is_empty() {
+        args.push("--".into());
+        args.extend(app_args);
+    }
+    plan.program = dotnet.path.clone();
+    plan.args = args;
+    // No prompts in the console: changes Hot Reload cannot apply restart the app.
+    for (k, v) in [("DOTNET_WATCH_RESTART_ON_RUDE_EDIT", "1"), ("DOTNET_WATCH_SUPPRESS_EMOJIS", "1")] {
+        plan.env.retain(|(ek, _)| ek != k);
+        plan.env.push((k.into(), v.into()));
+    }
+    let mut cmd = dotnet.command();
+    cmd.args(&plan.args).current_dir(&plan.working_dir);
+    for (k, v) in &plan.env {
+        cmd.env(k, v);
+    }
+    let started = Instant::now();
+    let events = std::sync::Mutex::new(on_event);
+    let opts = StreamOpts { partial_lines: true, grace: STOP_GRACE, stdin: Some(input) };
+    let outcome = run_streaming(
+        cmd,
+        cancel,
+        opts,
+        &mut |p| {
+            pid.store(p, Ordering::SeqCst);
+            (events.lock().unwrap())(RunEvent::Started { pid: p, plan: plan.clone() });
+        },
+        &mut |line| (events.lock().unwrap())(RunEvent::Output(line)),
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("cannot start dotnet watch: {e}"))?;
     Ok(RunEvent::Exited { code: outcome.code, cancelled: outcome.cancelled, duration: started.elapsed() })
 }
 

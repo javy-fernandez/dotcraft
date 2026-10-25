@@ -38,6 +38,8 @@ pub struct NewProject {
     pub project_name: String,
     /// `net8.0`, `net10.0`… (`None`: the template's default).
     pub framework: Option<String>,
+    /// Web API: controllers instead of minimal APIs (`--use-controllers`).
+    pub use_controllers: bool,
     pub target: Target,
 }
 
@@ -90,6 +92,9 @@ impl NewProject {
         let mut project = vec!["new".to_string(), self.template.to_string(), "-n".into(), self.project_name.clone(), "-o".into(), dir.to_string_lossy().into_owned()];
         if let Some(f) = &self.framework {
             project.extend(["-f".into(), f.clone()]);
+        }
+        if self.use_controllers && self.template == "webapi" {
+            project.push("--use-controllers".into());
         }
         match &self.target {
             Target::NewSolution { location, solution_name, git } => {
@@ -160,6 +165,7 @@ mod tests {
             template: "console",
             project_name: "App".into(),
             framework: Some("net8.0".into()),
+            use_controllers: false,
             target: Target::NewSolution { location: "/w".into(), solution_name: "Demo".into(), git: true },
         };
         assert_eq!(p.project_file(), PathBuf::from("/w/Demo/App/App.csproj"));
@@ -170,8 +176,10 @@ mod tests {
         assert_eq!(cmds[3].1, ["sln", "add", "/w/Demo/App/App.csproj"]);
         assert!(cmds.iter().all(|(d, _)| d == Path::new("/w/Demo")));
 
-        let add = NewProject { template: "xunit", project_name: "App.Tests".into(), framework: None, target: Target::AddTo { solution: "/w/Demo/Demo.slnx".into() } };
+        let add = NewProject { template: "xunit", project_name: "App.Tests".into(), framework: None, use_controllers: false, target: Target::AddTo { solution: "/w/Demo/Demo.slnx".into() } };
         assert_eq!(add.commands()[1].1, ["sln", "/w/Demo/Demo.slnx", "add", "/w/Demo/App.Tests/App.Tests.csproj"]);
-        assert_eq!(NewProject { project_name: "a/b".into(), ..add }.problem(), Some("Enter a valid project name"));
+        assert_eq!(NewProject { project_name: "a/b".into(), ..add.clone() }.problem(), Some("Enter a valid project name"));
+        let api = NewProject { template: "webapi", use_controllers: true, ..add };
+        assert!(api.commands()[0].1.contains(&"--use-controllers".to_string()));
     }
 }

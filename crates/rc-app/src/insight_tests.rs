@@ -89,5 +89,24 @@ fn csharp_insight_end_to_end() {
     pump(&mut app, "rename", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("greeter.Greet(")));
     let lib = std::fs::read_to_string(root.join("Lib/Greeter.cs")).unwrap();
     assert!(lib.contains("public string Greet("), "{lib}");
+
+    // `///` above a method: Roslyn inserts the doc comment skeleton with its parameter.
+    app.open_file(&root.join("Lib/Greeter.cs"));
+    pump(&mut app, "Greeter.cs to load", |a| a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty()));
+    let doc = app.docs.active_doc_mut().unwrap();
+    let text = doc.editor.buffer.rope().to_string();
+    let at = text.find("    public string Greet(").unwrap();
+    let pos = doc.editor.buffer.rope().byte_to_char(at);
+    doc.editor.replace(pos, pos, "    ///\n");
+    doc.editor.selection = rc_text::Selection::point(pos + 7);
+    let i = app.docs.active.unwrap();
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Typed('/')]);
+    pump(&mut app, "the doc comment", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("<summary>")));
+    let d = app.docs.active_doc().unwrap();
+    let text = d.editor.buffer.rope().to_string();
+    assert!(text.contains("/// <param name=\"name\">") && text.contains("/// <returns>"), "{text}");
+    // The caret waits inside the summary.
+    let caret_line = d.editor.buffer.rope().char_to_line(d.editor.caret());
+    assert!(text.lines().nth(caret_line - 1).unwrap().contains("<summary>"), "{text}");
     app.close_workspace();
 }

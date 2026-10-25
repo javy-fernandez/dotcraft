@@ -32,11 +32,13 @@ pub struct RunOptions {
     /// Empty: the profile's or the project folder.
     pub working_dir: String,
     pub build_first: bool,
+    /// Run with `dotnet watch` (Hot Reload and browser refresh); `None`: on for web projects.
+    pub hot_reload: Option<bool>,
 }
 
 impl Default for RunOptions {
     fn default() -> Self {
-        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true }
+        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None }
     }
 }
 

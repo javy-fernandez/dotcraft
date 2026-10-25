@@ -123,7 +123,7 @@ fn screens() {
         let api = h.state().runner.configs.iter().find(|c| c.name.starts_with("Shop.Api")).cloned().unwrap();
         if let crate::runner::ConfigKind::App { project, .. } = api.kind {
             let options = rc_core::session::RunOptions { args: "--seed 42".into(), env: "ASPNETCORE_ENVIRONMENT=Staging".into(), ..Default::default() };
-            h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RunOptions { name: api.name.clone(), project, profiles: vec!["http".into(), "https".into()], options });
+            h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RunOptions { name: api.name.clone(), project, profiles: vec!["http".into(), "https".into()], options, web: true });
             h.run_steps(4);
             h.render().unwrap().save(out.join(format!("run-options-{suffix}.png"))).unwrap();
             h.state_mut().dialog = None;

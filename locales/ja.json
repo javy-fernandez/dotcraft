@@ -539,5 +539,9 @@
     "Edit Run Configuration…": "実行構成を編集…",
     "Test configurations have nothing to edit": "テスト構成には編集できる項目がありません",
     "There is no run configuration to edit": "編集する実行構成がありません"
+  },
+  "hotreload": {
+    "Hot Reload: apply saved changes and refresh the browser (dotnet watch)": "ホット リロード: 保存した変更を適用してブラウザーを更新 (dotnet watch)",
+    "Use controllers (instead of minimal APIs)": "コントローラーを使用 (最小 API の代わりに)"
   }
 }

@@ -539,5 +539,9 @@
     "Edit Run Configuration…": "编辑运行配置…",
     "Test configurations have nothing to edit": "测试配置没有可编辑的内容",
     "There is no run configuration to edit": "没有可编辑的运行配置"
+  },
+  "hotreload": {
+    "Hot Reload: apply saved changes and refresh the browser (dotnet watch)": "热重载：应用已保存的更改并刷新浏览器 (dotnet watch)",
+    "Use controllers (instead of minimal APIs)": "使用控制器（而不是最小 API）"
   }
 }

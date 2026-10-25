@@ -364,7 +364,9 @@ pub fn newline(rope: &Rope, sel: &Selection, indent: &Indent) -> Edited {
             end += 1;
         }
         let prev = trimmed.chars().last();
-        let (text, caret_offset) = if prev == Some('{') && char_at(rope, end) == Some('}') {
+        // `{|}` and `<div>|</div>` open an indented block.
+        let block = (prev == Some('{') && char_at(rope, end) == Some('}')) || (prev == Some('>') && end == r.end() && crate::markup::between_tags(rope, r.end()));
+        let (text, caret_offset) = if block {
             let inner = format!("\n{base}{}", indent.unit);
             let n = inner.chars().count();
             (format!("{inner}\n{base}"), n)

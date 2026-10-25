@@ -41,6 +41,9 @@ pub struct Settings {
     pub single_click_open: bool,
     /// Last folder a new solution was created in.
     pub new_project_location: Option<PathBuf>,
+    /// The last tool window layout (sides, sizes, open windows): solutions opened for the
+    /// first time start with it.
+    pub tool_windows: std::collections::BTreeMap<String, crate::session::ToolWindowState>,
     /// Explicit path to `dotnet` (otherwise found on PATH / the default install).
     pub dotnet_path: Option<PathBuf>,
     /// Explicit path to the Roslyn language server DLL or executable.
@@ -65,6 +68,7 @@ impl Default for Settings {
             autosave: true,
             single_click_open: false,
             new_project_location: None,
+            tool_windows: Default::default(),
             dotnet_path: None,
             roslyn_path: None,
             netcoredbg_path: None,

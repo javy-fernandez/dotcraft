@@ -393,10 +393,13 @@ fn creates_a_solution_and_adds_a_project() {
     let dir = tempfile::tempdir().unwrap();
     let fw = rc_dotnet::new_project::frameworks(&dotnet);
     assert!(fw.iter().any(|f| f == "net8.0"), "{fw:?}");
-    let p = NewProject { template: "console", project_name: "Demo.App".into(), framework: Some("net8.0".into()), target: Target::NewSolution { location: dir.path().to_path_buf(), solution_name: "Demo".into(), git: true } };
+    let p = NewProject { template: "console", project_name: "Demo.App".into(), framework: Some("net8.0".into()), use_controllers: false, target: Target::NewSolution { location: dir.path().to_path_buf(), solution_name: "Demo".into(), git: true } };
     let sln = rc_core::Runtime::block_on(p.create(&dotnet, &mut |_| {})).unwrap();
     assert!(sln.exists() && dir.path().join("Demo/.git").exists() && dir.path().join("Demo/.gitignore").exists());
-    let t = NewProject { template: "xunit", project_name: "Demo.Tests".into(), framework: Some("net8.0".into()), target: Target::AddTo { solution: sln.clone() } };
+    let api = NewProject { template: "webapi", project_name: "Demo.Api".into(), framework: Some("net8.0".into()), use_controllers: true, target: Target::AddTo { solution: sln.clone() } };
+    rc_core::Runtime::block_on(api.create(&dotnet, &mut |_| {})).unwrap();
+    assert!(api.project_dir().join("Controllers").is_dir(), "no Controllers folder");
+    let t = NewProject { template: "xunit", project_name: "Demo.Tests".into(), framework: Some("net8.0".into()), use_controllers: true, target: Target::AddTo { solution: sln.clone() } };
     rc_core::Runtime::block_on(t.create(&dotnet, &mut |_| {})).unwrap();
     let solution = rc_dotnet::Solution::load(&sln).unwrap();
     let names: Vec<String> = solution.projects().iter().map(|p| p.name.clone()).collect();
@@ -451,5 +454,60 @@ fn runs_a_blazor_webassembly_app_with_its_dev_server() {
     let mut out = String::new();
     let _ = s.read_to_string(&mut out);
     assert!(out.starts_with("HTTP/1.1 200"), "{out}");
+    handle.stop();
+}
+
+/// `watch`: a web app started with `dotnet watch` picks up a saved change without being
+/// started again (Hot Reload, or a restart for edits it cannot apply).
+#[test]
+fn watch_reloads_a_web_app_after_a_change() {
+    use std::io::{Read, Write};
+    let dotnet = rc_dotnet::Dotnet::locate(None).expect("dotnet");
+    let dir = tempfile::Builder::new().prefix("dotcraft-watch").tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let ok = dotnet.std_command().args(["new", "web", "-n", "Hot", "-o"]).arg(root.join("Hot")).args(["-f", "net8.0"]).output().unwrap();
+    assert!(ok.status.success(), "{}", String::from_utf8_lossy(&ok.stdout));
+    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let mut req = rc_dotnet::RunRequest::new(root.join("Hot/Hot.csproj"));
+    req.watch = true;
+    req.env.push(("ASPNETCORE_URLS".into(), format!("http://127.0.0.1:{port}")));
+    req.env.push(("DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER".into(), "1".into()));
+    let inbox = rc_core::Inbox::new(rc_core::Waker::noop());
+    let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
+    let get = || -> Option<String> {
+        let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).ok()?;
+        s.set_read_timeout(Some(std::time::Duration::from_secs(20))).ok()?;
+        write!(s, "GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n").ok()?;
+        let mut out = String::new();
+        let _ = s.read_to_string(&mut out);
+        Some(out)
+    };
+    let mut log = String::new();
+    let mut wait = |what: &str, want: &str, log: &mut String| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(240);
+        loop {
+            for ev in inbox.drain() {
+                match ev {
+                    rc_dotnet::RunEvent::Output(l) => log.push_str(&format!("{}\n", l.text)),
+                    rc_dotnet::RunEvent::Failed(e) => panic!("{e}\n{log}"),
+                    rc_dotnet::RunEvent::Exited { code, .. } => panic!("exited: {code:?}\n{log}"),
+                    _ => {}
+                }
+            }
+            if get().is_some_and(|r| r.contains(want)) {
+                return;
+            }
+            assert!(std::time::Instant::now() < deadline, "timed out waiting for {what}\n{log}");
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+    };
+    wait("the app", "Hello World!", &mut log);
+    // `dotnet watch` starts watching the files once the app is up.
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    let program = root.join("Hot/Program.cs");
+    let code = std::fs::read_to_string(&program).unwrap().replace("Hello World!", "Hello Hot Reload!");
+    std::fs::write(&program, code).unwrap();
+    wait("the change", "Hello Hot Reload!", &mut log);
+    assert!(log.contains("dotnet watch") || log.contains("watch"), "{log}");
     handle.stop();
 }

@@ -114,3 +114,22 @@ fn edited_run_configurations_reach_the_process_and_the_session() {
     again.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
     assert_eq!(again.runner.options.get(&cli.name), Some(&options));
 }
+
+#[test]
+fn a_new_solution_starts_with_the_last_layout() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
+    app.save_session();
+    // Kept in the settings file too.
+    let saved = Settings::load();
+    assert_eq!(saved.tool_windows.get("explorer").and_then(|t| t.side.clone()).as_deref(), Some("right"));
+    app.open_workspace(&crate::screens::fixtures().join("TenProjects/TenProjects.slnx"));
+    assert_eq!(app.dock.side_of(crate::toolwindow::ToolWindow::Explorer), crate::toolwindow::Side::Right);
+    assert_eq!(app.dock.right, Some(crate::toolwindow::ToolWindow::Explorer));
+}

@@ -220,10 +220,10 @@ impl DotCraftApp {
             None => self.runner.selected_config().cloned(),
         };
         match cfg {
-            Some(RunConfig { name, kind: ConfigKind::App { project, .. } }) => {
+            Some(RunConfig { name, kind: ConfigKind::App { project, web, .. } }) => {
                 let profiles = rc_dotnet::LaunchSettings::load(&project).ok().flatten().map(|s| s.profiles.iter().filter(|p| p.is_project()).map(|p| p.name.clone()).collect()).unwrap_or_default();
                 let options = self.runner.options.get(&name).cloned().unwrap_or_default();
-                self.dialog = Some(Dialog::RunOptions { name, project, profiles, options });
+                self.dialog = Some(Dialog::RunOptions { name, project, profiles, options, web });
             }
             Some(RunConfig { name, kind: ConfigKind::Compound { members } }) => {
                 let all = self.runner.app_names().into_iter().map(|n| {
@@ -268,7 +268,8 @@ impl DotCraftApp {
     }
 
     fn restore_session(&mut self, s: Session) {
-        self.dock = Dock::from_session(&s.tool_windows);
+        // A solution without a layout of its own starts with the last one used.
+        self.dock = Dock::from_session(if s.tool_windows.is_empty() { &self.settings.tool_windows } else { &s.tool_windows });
         self.explorer.expanded = s.expanded.iter().cloned().collect();
         if self.explorer.expanded.is_empty() {
             // First open: the solution and its top folders expanded, like Rider.
@@ -362,6 +363,11 @@ impl DotCraftApp {
     }
 
     pub fn save_session(&mut self) {
+        let layout = self.dock.to_session();
+        if self.workspace.is_some() && self.settings.tool_windows != layout {
+            self.settings.tool_windows = layout;
+            let _ = self.settings.save();
+        }
         if let Some(w) = &self.workspace
             && let Err(e) = self.session().save(w.ws.key_path())
         {

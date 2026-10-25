@@ -39,7 +39,7 @@ pub enum Dialog {
     /// Right-click on a breakpoint: condition and enabled state (0-based line).
     BreakpointProperties { path: PathBuf, line: usize, condition: String, enabled: bool, focus: bool },
     /// Edit an application run configuration: launch profile, arguments, environment, folder.
-    RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions },
+    RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions, web: bool },
     /// A compound run configuration: its name and which applications it starts.
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
@@ -76,7 +76,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::BreakpointProperties { path, line, condition, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, enabled, focus),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
-        Dialog::RunOptions { name, project, profiles, options } => run_options(app, ctx, name, project, profiles, options),
+        Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -305,7 +305,7 @@ fn goto_line(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus: &mu
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn run_options(app: &mut DotCraftApp, ctx: &Context, name: &str, project: &std::path::Path, profiles: &[String], o: &mut rc_core::session::RunOptions) -> Outcome {
+fn run_options(app: &mut DotCraftApp, ctx: &Context, name: &str, project: &std::path::Path, profiles: &[String], o: &mut rc_core::session::RunOptions, web: bool) -> Outcome {
     let settings_file = project.parent().map(|d| d.join("Properties/launchSettings.json")).filter(|p| p.exists());
     let mut open_settings = false;
     let ((ok, cancel), esc) = modal(ctx, "run_options", 560.0, |ui| {
@@ -343,7 +343,13 @@ fn run_options(app: &mut DotCraftApp, ctx: &Context, name: &str, project: &std::
             });
             ui.end_row();
             ui.label("");
-            ui.checkbox(&mut o.build_first, tr("Build before running"));
+            let mut watch = o.hot_reload.unwrap_or(web);
+            if ui.checkbox(&mut watch, tr("Hot Reload: apply saved changes and refresh the browser (dotnet watch)")).changed() {
+                o.hot_reload = if watch == web { None } else { Some(watch) };
+            }
+            ui.end_row();
+            ui.label("");
+            ui.add_enabled(!watch, egui::Checkbox::new(&mut o.build_first, tr("Build before running")));
             ui.end_row();
         });
         ui.add_space(6.0);

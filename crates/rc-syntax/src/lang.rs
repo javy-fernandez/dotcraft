@@ -26,7 +26,8 @@ impl Lang {
             | "vbproj" | "runsettings" | "xsd" | "svg" => Lang::Xml,
             "json" | "jsonc" => Lang::Json,
             "md" | "markdown" => Lang::Markdown,
-            "razor" | "cshtml" => Lang::Razor,
+            // Plain HTML reads well as Razor without `@` (its markup lexer colours the tags).
+            "razor" | "cshtml" | "html" | "htm" => Lang::Razor,
             "sln" => Lang::Sln,
             _ => {
                 let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");

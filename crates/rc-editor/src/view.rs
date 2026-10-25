@@ -1071,6 +1071,7 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
             commands::type_char(&rope, &state.selection, ch, config.auto_pair)
         };
         state.apply(edited, EditKind::Insert);
+        markup_assist(state, ch);
         out.events.push(EditorEvent::Typed(ch));
         // Typing filters an open completion list.
         if let Some(c) = &mut state.popups.completion {
@@ -1086,6 +1087,44 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
         let edited = commands::replace_selections(&state.selection, text, None);
         state.apply(edited, EditKind::Other);
     }
+}
+
+/// Markup typing assists (Razor/HTML/XML), with one caret: `>` closes the tag, `</` completes
+/// the open element's name, `=` in a tag adds the attribute's quotes.
+fn markup_assist(state: &mut EditorState, ch: char) {
+    use rc_syntax::Lang;
+    use rc_text::markup;
+    let lang = state.syntax.lang;
+    if !matches!(lang, Lang::Razor | Lang::Xml) || state.selection.len() != 1 || !state.selection.primary().is_empty() {
+        return;
+    }
+    let html = lang == Lang::Razor;
+    let caret = state.caret();
+    let rope = state.buffer.rope().clone();
+    let mut remove = 0;
+    let (text, caret_after) = match ch {
+        '>' => match markup::close_tag(&rope, caret, html) {
+            Some(t) => (t, caret),
+            None => return,
+        },
+        '/' => match markup::close_open_element(&rope, caret, html) {
+            Some(t) => {
+                // The closing tag inserted with `>` is right after: typing it replaces that one.
+                let dup = format!("</{t}");
+                let after: String = rope.slice(caret..(caret + dup.chars().count()).min(rope.len_chars())).chars().collect();
+                if after == dup {
+                    remove = dup.chars().count();
+                }
+                let n = t.chars().count();
+                (t, caret + n)
+            }
+            None => return,
+        },
+        '=' if markup::quote_attribute(&rope, caret) => ("\"\"".to_string(), caret + 1),
+        _ => return,
+    };
+    let cs = rc_text::ChangeSet::single(rc_text::Change::new(caret, caret + remove, text));
+    state.apply(commands::Edited { changes: cs, selection: Selection::point(caret_after) }, EditKind::Insert);
 }
 
 fn electric_close_brace(rope: &rc_text::Rope, state: &EditorState) -> Option<commands::Edited> {
@@ -1194,6 +1233,8 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         Enter if !ro => {
             let e = commands::newline(&rope, &sel, &indent);
             state.apply(e, EditKind::Other);
+            // The language server may continue a `///` comment on the new line.
+            out.events.push(EditorEvent::Typed('\n'));
         }
         StartNewLine if !ro => {
             let end = commands::move_selection(&rope, &sel, Motion::LineEnd, false, tab);

@@ -106,6 +106,10 @@ pub struct Insight {
     action_resolve: Option<Pending<lsp::CodeAction>>,
     /// Formatting of (document, version).
     format: Option<(u64, Versioned<Option<Vec<lsp::TextEdit>>>)>,
+    /// Formatting after typing `;` or `}` (document, version).
+    type_format: Option<(u64, Versioned<Option<Vec<lsp::TextEdit>>>)>,
+    /// `///` doc comment skeletons and their continuation on Enter (document, version).
+    auto_insert: Option<(u64, Versioned<Value>)>,
     semantic: HashMap<u64, Versioned<Option<lsp::SemanticTokensResult>>>,
     inlay: HashMap<u64, Versioned<Option<Vec<lsp::InlayHint>>>>,
     diag_pull: HashMap<u64, (u64, Pending<Value>)>,
@@ -149,6 +153,8 @@ impl Insight {
             actions: None,
             action_resolve: None,
             format: None,
+            type_format: None,
+            auto_insert: None,
             semantic: HashMap::new(),
             inlay: HashMap::new(),
             diag_pull: HashMap::new(),
@@ -236,6 +242,8 @@ impl Insight {
         self.actions = None;
         self.action_resolve = None;
         self.format = None;
+        self.type_format = None;
+        self.auto_insert = None;
         self.semantic.clear();
         self.inlay.clear();
         self.diag_pull.clear();
@@ -553,6 +561,35 @@ impl Insight {
                 d.editor.popups.signature = r.ok().flatten().filter(|h| !h.signatures.is_empty()).map(|h| signature_help(h, anchor));
             }
         }
+        if let Some((doc, (version, p))) = &mut self.type_format
+            && let Some(r) = p.poll()
+        {
+            let (doc, version) = (*doc, *version);
+            self.type_format = None;
+            if let (Ok(Some(edits)), Some(d)) = (r, docs.list.iter_mut().find(|d| d.editor.id == doc))
+                && d.editor.buffer.version() == version
+                && !edits.is_empty()
+            {
+                let rope = d.editor.buffer.rope().clone();
+                let changes = edits.iter().map(|e| {
+                    let (a, b) = convert::range_chars(&rope, &e.range);
+                    rc_text::Change::new(a, b, e.new_text.replace("\r\n", "\n"))
+                });
+                d.editor.apply_text_edits(changes.collect());
+            }
+        }
+        if let Some((doc, (version, p))) = &mut self.auto_insert
+            && let Some(r) = p.poll()
+        {
+            let (doc, version) = (*doc, *version);
+            self.auto_insert = None;
+            if let (Ok(v), Some(d)) = (r, docs.list.iter_mut().find(|d| d.editor.id == doc))
+                && d.editor.buffer.version() == version
+                && let Some(edit) = v.get("_vs_textEdit").cloned().and_then(|e| serde_json::from_value::<lsp::TextEdit>(e).ok())
+            {
+                apply_auto_insert(d, &edit);
+            }
+        }
         if let Some((doc, (version, p))) = &mut self.format
             && let Some(r) = p.poll()
         {
@@ -705,6 +742,11 @@ impl Insight {
                 self.complete(doc, Some(c));
             }
         }
+        if c == '/' || c == '\n' {
+            self.request_auto_insert(doc, c);
+        } else if c == ';' || c == '}' {
+            self.request_type_format(doc, c);
+        }
         if c == '(' || c == ',' {
             if let Some(anchor) = call_open_paren(doc.editor.buffer.rope(), doc.editor.caret()) {
                 self.request_signature(doc, anchor);
@@ -712,6 +754,42 @@ impl Insight {
         } else if c == ')' {
             doc.editor.popups.signature = None;
         }
+    }
+
+    /// Roslyn's `_vs_onAutoInsert` (what VS and VS Code use): the doc comment skeleton after the
+    /// third `/` of `///`, and `/// ` on the line after Enter inside one.
+    fn request_auto_insert(&mut self, doc: &Doc, c: char) {
+        let Some(session) = &self.session else { return };
+        let rope = doc.editor.buffer.rope();
+        let caret = doc.editor.caret();
+        // Only where it can apply: after `///`, or on a line following a `///` line.
+        let line = rope.char_to_line(caret);
+        let text_of = |l: usize| rope.line(l).to_string();
+        let applies = match c {
+            '/' => rope.slice(rope.line_to_char(line)..caret).to_string().trim_start() == "///",
+            _ => line > 0 && text_of(line - 1).trim_start().starts_with("///"),
+        };
+        if !applies {
+            return;
+        }
+        let options = json!({ "tabSize": doc.editor.indent.tab_width, "insertSpaces": doc.editor.indent.unit != "\t" });
+        let p = session.client.request_raw(
+            "textDocument/_vs_onAutoInsert",
+            json!({ "_vs_textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "_vs_position": convert::lsp_position(rope, caret), "_vs_ch": c.to_string(), "_vs_options": options }),
+        );
+        self.auto_insert = Some((doc.editor.id, (doc.editor.buffer.version(), p)));
+    }
+
+    /// `textDocument/onTypeFormatting` after `;` or `}`: Roslyn re-indents the statement or block.
+    fn request_type_format(&mut self, doc: &Doc, c: char) {
+        let Some(session) = &self.session else { return };
+        let rope = doc.editor.buffer.rope();
+        let options = json!({ "tabSize": doc.editor.indent.tab_width, "insertSpaces": doc.editor.indent.unit != "\t" });
+        let p = session.client.request_raw(
+            "textDocument/onTypeFormatting",
+            json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(rope, doc.editor.caret()), "ch": c.to_string(), "options": options }),
+        );
+        self.type_format = Some((doc.editor.id, (doc.editor.buffer.version(), p)));
     }
 
     /// Code completion at the caret (⌃Space, or typing).
@@ -1170,4 +1248,23 @@ mod tests {
         assert_eq!(call_open_paren(&rope, 12), Some(10));
         assert_eq!(call_open_paren(&rc_text::Rope::from_str("x; y"), 4), None);
     }
+}
+
+/// Applies an auto-insert edit: a snippet whose `$0` (or `${0}`) marks where the caret goes.
+fn apply_auto_insert(d: &mut Doc, edit: &lsp::TextEdit) {
+    let rope = d.editor.buffer.rope().clone();
+    let (a, b) = convert::range_chars(&rope, &edit.range);
+    let text = edit.new_text.replace("\r\n", "\n");
+    let (text, caret) = match text.find("$0").map(|i| (i, 2)).or_else(|| text.find("${0}").map(|i| (i, 4))) {
+        Some((i, n)) => {
+            let caret = a + text[..i].chars().count();
+            (format!("{}{}", &text[..i], &text[i + n..]), caret)
+        }
+        None => {
+            let n = text.chars().count();
+            (text, a + n)
+        }
+    };
+    d.editor.apply_text_edits(vec![rc_text::Change::new(a, b, text)]);
+    d.editor.selection = rc_text::Selection::point(caret);
 }

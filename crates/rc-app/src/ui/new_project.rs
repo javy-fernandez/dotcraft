@@ -26,6 +26,7 @@ pub struct NewProjectDialog {
     frameworks: Vec<String>,
     framework: usize,
     git: bool,
+    use_controllers: bool,
     busy: Option<String>,
     error: Option<String>,
     inbox: Inbox<Event>,
@@ -76,6 +77,7 @@ impl NewProjectDialog {
             frameworks,
             framework: 0,
             git: true,
+            use_controllers: true,
             busy: None,
             error: None,
             inbox: Inbox::new(waker),
@@ -88,7 +90,7 @@ impl NewProjectDialog {
             Some(s) => Target::AddTo { solution: s.clone() },
             None => Target::NewSolution { location: PathBuf::from(self.location.trim()), solution_name: self.solution_name.trim().to_string(), git: self.git },
         };
-        NewProject { template: TEMPLATES[self.template].short_name, project_name: self.project_name.trim().to_string(), framework: self.frameworks.get(self.framework).cloned(), target }
+        NewProject { template: TEMPLATES[self.template].short_name, project_name: self.project_name.trim().to_string(), framework: self.frameworks.get(self.framework).cloned(), use_controllers: self.use_controllers, target }
     }
 }
 
@@ -203,6 +205,11 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> b
                 }
             });
             ui.end_row();
+            if TEMPLATES[d.template].short_name == "webapi" {
+                ui.label("");
+                ui.checkbox(&mut d.use_controllers, tr("Use controllers (instead of minimal APIs)"));
+                ui.end_row();
+            }
             if d.add_to.is_none() {
                 ui.label("");
                 ui.checkbox(&mut d.git, tr("Create Git repository"));
