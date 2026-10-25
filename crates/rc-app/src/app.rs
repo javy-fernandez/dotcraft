@@ -870,8 +870,7 @@ impl DotCraftApp {
                     self.session_dirty = true;
                 }
                 ExplorerAction::LocateActive => self.locate_active(),
-                ExplorerAction::NewFile(dir) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), folder: false, error: None }),
-                ExplorerAction::NewFolder(dir) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), folder: true, error: None }),
+                ExplorerAction::NewItem(dir, kind) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind, error: None }),
                 ExplorerAction::Rename(path) => {
                     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     self.dialog = Some(Dialog::Rename { path, name, error: None });

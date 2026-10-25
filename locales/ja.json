@@ -517,7 +517,6 @@
     "Delete “{name}”": "「{name}」を削除",
     "Edit Compound Configuration": "複合構成を編集",
     "Edit “{name}”…": "「{name}」を編集…",
-    "Name": "名前",
     "Start these applications together:": "これらのアプリケーションを同時に起動:",
     "The compound configuration has no applications to run": "複合構成に実行するアプリケーションがありません"
   },
@@ -543,5 +542,24 @@
   "hotreload": {
     "Hot Reload: apply saved changes and refresh the browser (dotnet watch)": "ホット リロード: 保存した変更を適用してブラウザーを更新 (dotnet watch)",
     "Use controllers (instead of minimal APIs)": "コントローラーを使用 (最小 API の代わりに)"
+  },
+  "additems": {
+    "Add": "追加",
+    "New {item}": "新規: {item}",
+    "Class": "クラス",
+    "Interface": "インターフェイス",
+    "Record": "レコード",
+    "Struct": "構造体",
+    "Enum": "列挙型",
+    "API Controller": "API コントローラー",
+    "MVC Controller": "MVC コントローラー",
+    "Razor Component": "Razor コンポーネント",
+    "Razor Page": "Razor ページ",
+    "MVC View": "MVC ビュー",
+    "Unit Test Class": "単体テスト クラス",
+    "JSON File": "JSON ファイル",
+    "Text File": "テキスト ファイル",
+    "Directory": "ディレクトリ",
+    "Name": "名前"
   }
 }

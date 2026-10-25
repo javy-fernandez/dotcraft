@@ -517,7 +517,6 @@
     "Delete “{name}”": "Excluir “{name}”",
     "Edit Compound Configuration": "Editar configuração composta",
     "Edit “{name}”…": "Editar “{name}”…",
-    "Name": "Nome",
     "Start these applications together:": "Iniciar estes aplicativos juntos:",
     "The compound configuration has no applications to run": "A configuração composta não tem aplicativos para executar"
   },
@@ -543,5 +542,24 @@
   "hotreload": {
     "Hot Reload: apply saved changes and refresh the browser (dotnet watch)": "Hot Reload: aplicar as alterações salvas e atualizar o navegador (dotnet watch)",
     "Use controllers (instead of minimal APIs)": "Usar controladores (em vez de APIs mínimas)"
+  },
+  "additems": {
+    "Add": "Adicionar",
+    "New {item}": "Novo: {item}",
+    "Class": "Classe",
+    "Interface": "Interface",
+    "Record": "Record",
+    "Struct": "Struct",
+    "Enum": "Enum",
+    "API Controller": "Controlador de API",
+    "MVC Controller": "Controlador MVC",
+    "Razor Component": "Componente Razor",
+    "Razor Page": "Página Razor",
+    "MVC View": "Exibição MVC",
+    "Unit Test Class": "Classe de teste de unidade",
+    "JSON File": "Arquivo JSON",
+    "Text File": "Arquivo de texto",
+    "Directory": "Diretório",
+    "Name": "Nome"
   }
 }

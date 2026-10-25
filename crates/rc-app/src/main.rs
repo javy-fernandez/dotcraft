@@ -4,6 +4,7 @@ mod app;
 mod convert;
 mod debugger;
 mod insight;
+mod item_templates;
 mod runner;
 mod search;
 mod vcs;

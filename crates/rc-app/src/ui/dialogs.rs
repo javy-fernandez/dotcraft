@@ -21,7 +21,7 @@ pub enum Dialog {
     Settings { draft: Box<Settings>, page: SettingsPage },
     About,
     GotoLine { text: String, focus: bool },
-    NewFile { dir: PathBuf, name: String, folder: bool, error: Option<String> },
+    NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, error: Option<String> },
     Rename { path: PathBuf, name: String, error: Option<String> },
     ConfirmDelete { path: PathBuf },
     RecentFiles { selected: usize, filter: String },
@@ -63,7 +63,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
         Dialog::About => about(ctx),
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
-        Dialog::NewFile { dir, name, folder, error } => new_file(app, ctx, dir, name, *folder, error),
+        Dialog::NewFile { dir, name, kind, error } => new_file(app, ctx, dir, name, *kind, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
@@ -523,12 +523,17 @@ fn evaluate(app: &mut DotCraftApp, ctx: &Context, expression: &mut String, focus
 
 /// A new file name gets `.cs` when it has no extension, and a C# file gets a class skeleton
 /// in the namespace of its folder.
-fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &mut String, folder: bool, error: &mut Option<String>) -> Outcome {
-    let heading = if folder { tr("New Folder") } else { tr("New C# File") };
+fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &mut String, kind: crate::item_templates::ItemKind, error: &mut Option<String>) -> Outcome {
+    let heading = trf("New {item}", &[("item", &tr(kind.title()))]);
     let ((ok, cancel), esc) = modal(ctx, "new_file", 380.0, |ui| {
-        title(ui, heading);
-        let resp = ui.add(egui::TextEdit::singleline(name).hint_text(if folder { tr("Folder name") } else { tr("Class name or file name") }).desired_width(f32::INFINITY));
+        title(ui, &heading);
+        let resp = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Name")).desired_width(f32::INFINITY));
         resp.request_focus();
+        if !kind.is_folder() && !name.trim().is_empty() {
+            let files = kind.files(dir, name);
+            let shown: Vec<String> = files.iter().filter_map(|(p, _)| p.file_name().map(|n| n.to_string_lossy().into_owned())).collect();
+            ui.label(egui::RichText::new(format!("{} · {}", shown.join(", "), crate::item_templates::namespace_for(dir))).size(12.0).color(rc_kit::pal(ui).muted));
+        }
         if let Some(e) = error.as_ref() {
             ui.colored_label(rc_kit::pal(ui).error, e);
         }
@@ -537,33 +542,28 @@ fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &
         (ok || enter && !name.trim().is_empty(), cancel)
     });
     if ok {
-        let mut file = name.trim().to_string();
-        if !folder && !file.contains('.') {
-            file.push_str(".cs");
-        }
-        let path = dir.join(&file);
-        if path.exists() {
+        let files = kind.files(dir, name);
+        if files.iter().any(|(p, _)| p.exists()) {
             *error = Some(tr("A file or folder with this name already exists").to_string());
             return Outcome::Keep;
         }
-        let res = if folder {
-            std::fs::create_dir_all(&path)
-        } else {
-            let content = if file.ends_with(".cs") { csharp_skeleton(dir, &file) } else { String::new() };
-            std::fs::write(&path, content)
-        };
+        let res: std::io::Result<()> = files.iter().try_for_each(|(p, content)| {
+            if kind.is_folder() {
+                std::fs::create_dir_all(p)
+            } else {
+                std::fs::write(p, content.replace("$0", ""))
+            }
+        });
         match res {
             Ok(()) => {
-                app.explorer.invalidate(&path);
-                if !folder {
-                    app.open_file(&path);
-                    if let Some(d) = app.docs.active_doc_mut() {
-                        // Caret inside the class body.
-                        let text = d.editor.buffer.rope().to_string();
-                        if let Some(b) = text.rfind("{\n") {
-                            let pos = d.editor.buffer.rope().byte_to_char(b + 2);
-                            d.editor.set_selection(rc_text::Selection::point(pos));
-                        }
+                let (first, content) = &files[0];
+                app.explorer.invalidate(first);
+                if !kind.is_folder() {
+                    app.open_file(first);
+                    // The caret where the template put `$0`.
+                    if let (Some(d), Some(at)) = (app.docs.active_doc_mut(), content.find("$0")) {
+                        let pos = content[..at].chars().count();
+                        d.editor.set_selection(rc_text::Selection::point(pos));
                     }
                 }
                 return Outcome::Close;
@@ -575,25 +575,6 @@ fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &
         }
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
-}
-
-/// `namespace` from the nearest project folder and the relative path, like `dotnet new class`.
-fn csharp_skeleton(dir: &std::path::Path, file: &str) -> String {
-    let class = file.trim_end_matches(".cs");
-    let mut parts: Vec<String> = Vec::new();
-    let mut d = Some(dir);
-    while let Some(cur) = d {
-        let has_project = std::fs::read_dir(cur).map(|rd| rd.flatten().any(|e| e.path().extension().is_some_and(|x| x == "csproj"))).unwrap_or(false);
-        let name = cur.file_name().map(|n| n.to_string_lossy().replace([' ', '-'], "_")).unwrap_or_default();
-        parts.push(name);
-        if has_project {
-            break;
-        }
-        d = cur.parent();
-    }
-    parts.reverse();
-    let ns = parts.join(".");
-    format!("namespace {ns};\n\npublic class {class}\n{{\n    \n}}\n")
 }
 
 fn rename(app: &mut DotCraftApp, ctx: &Context, path: &mut PathBuf, name: &mut String, error: &mut Option<String>) -> Outcome {
@@ -987,7 +968,7 @@ mod tests {
         let proj = dir.path().join("Shop.Core");
         std::fs::create_dir_all(proj.join("Models")).unwrap();
         std::fs::write(proj.join("Shop.Core.csproj"), "<Project/>").unwrap();
-        let s = super::csharp_skeleton(&proj.join("Models"), "Order.cs");
+        let s = crate::item_templates::ItemKind::Class.files(&proj.join("Models"), "Order")[0].1.clone();
         assert!(s.starts_with("namespace Shop.Core.Models;"), "{s}");
         assert!(s.contains("public class Order"));
     }

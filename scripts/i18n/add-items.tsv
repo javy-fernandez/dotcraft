@@ -1,0 +1,19 @@
+# Explorer Add menu. Import: python3 scripts/i18n_tsv.py additems scripts/i18n/add-items.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Add	Añadir	Ajouter	Adicionar	Hinzufügen	Dodaj	添加	追加
+New {item}	Nuevo: {item}	Nouveau : {item}	Novo: {item}	Neu: {item}	Nowy: {item}	新建：{item}	新規: {item}
+Class	Clase	Classe	Classe	Klasse	Klasa	类	クラス
+Interface	Interfaz	Interface	Interface	Schnittstelle	Interfejs	接口	インターフェイス
+Record	Record	Record	Record	Record	Rekord	记录	レコード
+Struct	Struct	Struct	Struct	Struktur	Struktura	结构	構造体
+Enum	Enum	Énumération	Enum	Enumeration	Wyliczenie	枚举	列挙型
+API Controller	Controlador API	Contrôleur API	Controlador de API	API-Controller	Kontroler API	API 控制器	API コントローラー
+MVC Controller	Controlador MVC	Contrôleur MVC	Controlador MVC	MVC-Controller	Kontroler MVC	MVC 控制器	MVC コントローラー
+Razor Component	Componente Razor	Composant Razor	Componente Razor	Razor-Komponente	Komponent Razor	Razor 组件	Razor コンポーネント
+Razor Page	Página Razor	Page Razor	Página Razor	Razor-Seite	Strona Razor	Razor 页面	Razor ページ
+MVC View	Vista MVC	Vue MVC	Exibição MVC	MVC-Ansicht	Widok MVC	MVC 视图	MVC ビュー
+Unit Test Class	Clase de pruebas unitarias	Classe de tests unitaires	Classe de teste de unidade	Komponententestklasse	Klasa testów jednostkowych	单元测试类	単体テスト クラス
+JSON File	Archivo JSON	Fichier JSON	Arquivo JSON	JSON-Datei	Plik JSON	JSON 文件	JSON ファイル
+Text File	Archivo de texto	Fichier texte	Arquivo de texto	Textdatei	Plik tekstowy	文本文件	テキスト ファイル
+Directory	Directorio	Répertoire	Diretório	Verzeichnis	Katalog	目录	ディレクトリ
+Name	Nombre	Nom	Nome	Name	Nazwa	名称	名前

@@ -133,6 +133,11 @@ fn screens() {
             h.render().unwrap().save(out.join(format!("run-options-{suffix}.png"))).unwrap();
             h.state_mut().dialog = None;
         }
+        // Add › API Controller.
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewFile { dir: fixtures().join("Shop/src/Shop.Api/Controllers"), name: "Customers".into(), kind: crate::item_templates::ItemKind::ApiController, error: None });
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("add-item-{suffix}.png"))).unwrap();
+        h.state_mut().dialog = None;
         // The explorer moved to the right side.
         h.state_mut().dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
         h.run_steps(4);

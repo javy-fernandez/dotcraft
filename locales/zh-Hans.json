@@ -517,7 +517,6 @@
     "Delete “{name}”": "删除“{name}”",
     "Edit Compound Configuration": "编辑复合配置",
     "Edit “{name}”…": "编辑“{name}”…",
-    "Name": "名称",
     "Start these applications together:": "同时启动这些应用程序：",
     "The compound configuration has no applications to run": "复合配置中没有要运行的应用程序"
   },
@@ -543,5 +542,24 @@
   "hotreload": {
     "Hot Reload: apply saved changes and refresh the browser (dotnet watch)": "热重载：应用已保存的更改并刷新浏览器 (dotnet watch)",
     "Use controllers (instead of minimal APIs)": "使用控制器（而不是最小 API）"
+  },
+  "additems": {
+    "Add": "添加",
+    "New {item}": "新建：{item}",
+    "Class": "类",
+    "Interface": "接口",
+    "Record": "记录",
+    "Struct": "结构",
+    "Enum": "枚举",
+    "API Controller": "API 控制器",
+    "MVC Controller": "MVC 控制器",
+    "Razor Component": "Razor 组件",
+    "Razor Page": "Razor 页面",
+    "MVC View": "MVC 视图",
+    "Unit Test Class": "单元测试类",
+    "JSON File": "JSON 文件",
+    "Text File": "文本文件",
+    "Directory": "目录",
+    "Name": "名称"
   }
 }

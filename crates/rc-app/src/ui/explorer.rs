@@ -60,8 +60,8 @@ pub enum ExplorerAction {
     Open(PathBuf),
     /// Single-click open: show the file but keep the focus in the explorer.
     Preview(PathBuf),
-    NewFile(PathBuf),
-    NewFolder(PathBuf),
+    /// Add › item in this folder.
+    NewItem(PathBuf, crate::item_templates::ItemKind),
     Rename(PathBuf),
     Delete(PathBuf),
     Reveal(PathBuf),
@@ -569,14 +569,24 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, actions: &mut V
         actions.push(ExplorerAction::Open(p.clone()));
         ui.close();
     }
-    if theme::menu_item(ui, Some(ico::NEW_FILE), tr("New C# File…"), false).clicked() {
-        actions.push(ExplorerAction::NewFile(target_dir.clone()));
-        ui.close();
-    }
-    if theme::menu_item(ui, Some(ico::NEW_FOLDER), tr("New Folder…"), false).clicked() {
-        actions.push(ExplorerAction::NewFolder(target_dir.clone()));
-        ui.close();
-    }
+    // Add › (Rider): types, controllers, Razor, tests, files and folders.
+    ui.menu_button(tr("Add"), |ui| {
+        ui.set_min_width(220.0);
+        for entry in crate::item_templates::ItemKind::MENU {
+            match entry {
+                None => {
+                    ui.separator();
+                }
+                Some(kind) => {
+                    let label = format!("{}…", tr(kind.title()));
+                    if theme::menu_item(ui, Some(kind.icon()), &label, false).clicked() {
+                        actions.push(ExplorerAction::NewItem(target_dir.clone(), *kind));
+                        ui.close();
+                    }
+                }
+            }
+        }
+    });
     ui.separator();
     if theme::menu_item(ui, Some(ico::EDIT), tr("Rename…"), false).clicked() {
         actions.push(ExplorerAction::Rename(path.clone()));
