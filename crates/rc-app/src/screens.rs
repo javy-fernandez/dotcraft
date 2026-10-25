@@ -96,6 +96,12 @@ fn screens() {
         h.state_mut().dock.show(crate::toolwindow::ToolWindow::Tests);
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("tests-empty-{suffix}.png"))).unwrap();
+        // A compound run configuration.
+        let members = h.state().runner.app_names().into_iter().map(|n| (n, true)).collect();
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Compound { old: None, name: "All Applications".into(), members });
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("compound-{suffix}.png"))).unwrap();
+        h.state_mut().dialog = None;
         // The explorer moved to the right side.
         h.state_mut().dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
         h.run_steps(4);

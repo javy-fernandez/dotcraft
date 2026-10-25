@@ -1,0 +1,12 @@
+# Compound run configurations. Import: python3 scripts/i18n_tsv.py compound scripts/i18n/compound.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+A configuration with that name already exists	Ya existe una configuración con ese nombre	Une configuration portant ce nom existe déjà	Já existe uma configuração com esse nome	Eine Konfiguration mit diesem Namen existiert bereits	Konfiguracja o tej nazwie już istnieje	已存在同名配置	その名前の構成は既に存在します
+Add Compound Configuration	Añadir configuración compuesta	Ajouter une configuration composée	Adicionar configuração composta	Zusammengesetzte Konfiguration hinzufügen	Dodaj konfigurację złożoną	添加复合配置	複合構成を追加
+Add Compound Configuration…	Añadir configuración compuesta…	Ajouter une configuration composée…	Adicionar configuração composta…	Zusammengesetzte Konfiguration hinzufügen…	Dodaj konfigurację złożoną…	添加复合配置…	複合構成を追加…
+All Applications	Todas las aplicaciones	Toutes les applications	Todos os aplicativos	Alle Anwendungen	Wszystkie aplikacje	所有应用程序	すべてのアプリケーション
+Delete “{name}”	Eliminar «{name}»	Supprimer « {name} »	Excluir “{name}”	„{name}“ löschen	Usuń „{name}”	删除“{name}”	「{name}」を削除
+Edit Compound Configuration	Editar configuración compuesta	Modifier la configuration composée	Editar configuração composta	Zusammengesetzte Konfiguration bearbeiten	Edytuj konfigurację złożoną	编辑复合配置	複合構成を編集
+Edit “{name}”…	Editar «{name}»…	Modifier « {name} »…	Editar “{name}”…	„{name}“ bearbeiten…	Edytuj „{name}”…	编辑“{name}”…	「{name}」を編集…
+Name	Nombre	Nom	Nome	Name	Nazwa	名称	名前
+Start these applications together:	Iniciar estas aplicaciones a la vez:	Démarrer ces applications ensemble :	Iniciar estes aplicativos juntos:	Diese Anwendungen gemeinsam starten:	Uruchom te aplikacje razem:	同时启动这些应用程序：	これらのアプリケーションを同時に起動:
+The compound configuration has no applications to run	La configuración compuesta no tiene aplicaciones que ejecutar	La configuration composée n'a aucune application à exécuter	A configuração composta não tem aplicativos para executar	Die zusammengesetzte Konfiguration hat keine Anwendungen zum Ausführen	Konfiguracja złożona nie ma aplikacji do uruchomienia	复合配置中没有要运行的应用程序	複合構成に実行するアプリケーションがありません

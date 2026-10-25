@@ -15,6 +15,8 @@ pub enum ConfigKind {
     App { project: PathBuf, profile: Option<String>, web: bool },
     /// Every test of a solution or test project.
     Tests { target: PathBuf },
+    /// Several application configurations started together (by name).
+    Compound { members: Vec<String> },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -29,6 +31,7 @@ impl RunConfig {
             ConfigKind::App { web: true, .. } => rc_kit::ico::CONFIG_WEB,
             ConfigKind::App { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Tests { .. } => rc_kit::ico::RUN_ALL,
+            ConfigKind::Compound { .. } => rc_kit::ico::TW_SERVICES,
         }
     }
 }
@@ -140,11 +143,13 @@ pub struct Runner {
     pub test_outcomes: BTreeMap<String, TestState>,
     waker: Waker,
     dotnet: Option<Dotnet>,
+    /// Compound configurations of the workspace (name, member names), kept in the session.
+    pub compounds: Vec<(String, Vec<String>)>,
 }
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None }
+        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, compounds: Vec::new() }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -179,6 +184,7 @@ impl Runner {
                 }
             }
         }
+        self.insert_compounds();
         if !test_projects.is_empty() {
             if let Some(s) = solution {
                 self.configs.push(RunConfig { name: tr("All Tests").to_string(), kind: ConfigKind::Tests { target: s.path.clone() } });
@@ -250,7 +256,58 @@ impl Runner {
         match cfg.kind.clone() {
             ConfigKind::App { project, profile, .. } => self.run_app(cfg, &project, profile),
             ConfigKind::Tests { target } => self.run_tests(&target, None),
+            ConfigKind::Compound { members } => {
+                let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::App { .. })).cloned()).collect();
+                if apps.is_empty() {
+                    return vec![RunnerOutput::Notify(tr("The compound configuration has no applications to run").into(), true)];
+                }
+                let mut out = Vec::new();
+                for a in apps {
+                    if let ConfigKind::App { project, profile, .. } = a.kind.clone() {
+                        out.extend(self.run_app(a, &project, profile));
+                    }
+                }
+                out
+            }
         }
+    }
+
+    /// Compound configurations go right after the applications (before the tests).
+    fn insert_compounds(&mut self) {
+        let selected = self.selected_config().map(|c| c.name.clone());
+        self.configs.retain(|c| !matches!(c.kind, ConfigKind::Compound { .. }));
+        let at = self.configs.iter().rposition(|c| matches!(c.kind, ConfigKind::App { .. })).map_or(0, |i| i + 1);
+        for (i, (name, members)) in self.compounds.iter().enumerate() {
+            self.configs.insert(at + i, RunConfig { name: name.clone(), kind: ConfigKind::Compound { members: members.clone() } });
+        }
+        if let Some(n) = selected
+            && let Some(i) = self.configs.iter().position(|c| c.name == n)
+        {
+            self.selected = i;
+        }
+    }
+
+    /// Adds or replaces (by `old` name) a compound configuration and selects it.
+    pub fn save_compound(&mut self, old: Option<&str>, name: String, members: Vec<String>) {
+        match old.and_then(|o| self.compounds.iter().position(|(n, _)| n == o)) {
+            Some(i) => self.compounds[i] = (name.clone(), members),
+            None => self.compounds.push((name.clone(), members)),
+        }
+        self.insert_compounds();
+        if let Some(i) = self.configs.iter().position(|c| c.name == name) {
+            self.selected = i;
+        }
+    }
+
+    pub fn remove_compound(&mut self, name: &str) {
+        self.compounds.retain(|(n, _)| n != name);
+        self.insert_compounds();
+        self.selected = self.selected.min(self.configs.len().saturating_sub(1));
+    }
+
+    /// Names of the application configurations (members a compound can have).
+    pub fn app_names(&self) -> Vec<String> {
+        self.configs.iter().filter(|c| matches!(c.kind, ConfigKind::App { .. })).map(|c| c.name.clone()).collect()
     }
 
     fn run_app(&mut self, cfg: RunConfig, project: &Path, profile: Option<String>) -> Vec<RunnerOutput> {

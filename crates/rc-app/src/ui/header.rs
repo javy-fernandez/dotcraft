@@ -4,7 +4,7 @@
 use crate::app::DotCraftApp;
 use egui::{Align2, Color32, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_editor::Action;
-use rc_kit::i18n::tr;
+use rc_kit::i18n::{tr, trf};
 use rc_kit::{ico, icons, theme};
 
 /// Colours of the project badge (New UI picks one per project).
@@ -166,7 +166,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                         }
                         let mut chosen = None;
                         for (i, c) in app.runner.configs.iter().enumerate() {
-                            if ui.add(egui::Button::selectable(i == app.runner.selected, &c.name)).clicked() {
+                            if theme::menu_item(ui, Some(c.icon()), &c.name, i == app.runner.selected).clicked() {
                                 chosen = Some(i);
                                 ui.close();
                             }
@@ -174,6 +174,27 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                         if let Some(i) = chosen {
                             app.runner.selected = i;
                             app.session_dirty = true;
+                        }
+                        // Compound configurations: several applications at once.
+                        if app.runner.app_names().len() > 1 {
+                            ui.separator();
+                            if theme::menu_item(ui, Some(ico::ADD), tr("Add Compound Configuration…"), false).clicked() {
+                                let members = app.runner.app_names().into_iter().map(|n| (n, true)).collect();
+                                app.dialog = Some(crate::ui::dialogs::Dialog::Compound { old: None, name: tr("All Applications").to_string(), members });
+                                ui.close();
+                            }
+                            if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::Compound { members } }) = app.runner.selected_config().cloned() {
+                                if theme::menu_item(ui, Some(ico::EDIT), &trf("Edit “{name}”…", &[("name", &name)]), false).clicked() {
+                                    let all = app.runner.app_names().into_iter().map(|n| { let on = members.contains(&n); (n, on) }).collect();
+                                    app.dialog = Some(crate::ui::dialogs::Dialog::Compound { old: Some(name.clone()), name: name.clone(), members: all });
+                                    ui.close();
+                                }
+                                if theme::menu_item(ui, Some(ico::DELETE), &trf("Delete “{name}”", &[("name", &name)]), false).clicked() {
+                                    app.runner.remove_compound(&name);
+                                    app.session_dirty = true;
+                                    ui.close();
+                                }
+                            }
                         }
                     });
                 }

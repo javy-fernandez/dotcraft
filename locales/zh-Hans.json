@@ -508,5 +508,17 @@
     "Enter a valid solution name": "请输入有效的解决方案名称",
     "The location does not exist": "该位置不存在",
     "A folder with that name already exists": "已存在同名文件夹"
+  },
+  "compound": {
+    "A configuration with that name already exists": "已存在同名配置",
+    "Add Compound Configuration": "添加复合配置",
+    "Add Compound Configuration…": "添加复合配置…",
+    "All Applications": "所有应用程序",
+    "Delete “{name}”": "删除“{name}”",
+    "Edit Compound Configuration": "编辑复合配置",
+    "Edit “{name}”…": "编辑“{name}”…",
+    "Name": "名称",
+    "Start these applications together:": "同时启动这些应用程序：",
+    "The compound configuration has no applications to run": "复合配置中没有要运行的应用程序"
   }
 }

@@ -22,6 +22,8 @@ pub struct ProjectInfo {
     pub project_refs: Vec<PathBuf>,
     /// Test project (references a test SDK or sets `IsTestProject`).
     pub is_test: bool,
+    /// .NET Aspire app host (runs the other projects).
+    pub aspire_host: bool,
 }
 
 impl ProjectInfo {
@@ -47,7 +49,16 @@ impl ProjectInfo {
                 "TargetFrameworks" => info.target_frameworks = text().split(';').filter(|s| !s.is_empty()).map(str::to_string).collect(),
                 "OutputType" => info.output_type = text(),
                 "IsTestProject" => info.is_test |= text().eq_ignore_ascii_case("true"),
-                "Sdk" => info.is_test |= n.attribute("Name").is_some_and(|s| s.to_ascii_lowercase().starts_with("mstest.sdk")),
+                "IsAspireHost" => info.aspire_host |= text().eq_ignore_ascii_case("true"),
+                // `<Sdk Name="…"/>`: the project's SDK when the root has none, or an extra one.
+                "Sdk" => {
+                    let name = n.attribute("Name").unwrap_or("");
+                    info.is_test |= name.to_ascii_lowercase().starts_with("mstest.sdk");
+                    info.aspire_host |= name.to_ascii_lowercase().starts_with("aspire.apphost.sdk");
+                    if info.sdk.is_empty() {
+                        info.sdk = name.to_string();
+                    }
+                }
                 "PackageReference" => {
                     let name = n.attribute("Include").or(n.attribute("Update")).unwrap_or("").to_string();
                     let version = n
@@ -80,6 +91,7 @@ impl ProjectInfo {
                 _ => {}
             }
         }
+        info.aspire_host |= info.sdk.to_ascii_lowercase().starts_with("aspire.apphost.sdk");
         if info.sdk.to_ascii_lowercase().starts_with("mstest.sdk") {
             info.is_test = true;
         }
@@ -89,12 +101,24 @@ impl ProjectInfo {
         Ok(info)
     }
 
+    /// The SDK name without its version (`Microsoft.NET.Sdk.Web/8.0.0` → `Microsoft.NET.Sdk.Web`).
+    pub fn sdk_name(&self) -> &str {
+        self.sdk.split('/').next().unwrap_or("").trim()
+    }
+
+    /// Whether `dotnet run` can start it: an Exe, or a web, Blazor WebAssembly, worker or Aspire
+    /// project (their SDKs make them executables).
     pub fn is_executable(&self) -> bool {
-        self.output_type.eq_ignore_ascii_case("Exe") || self.output_type.eq_ignore_ascii_case("WinExe") || self.sdk.eq_ignore_ascii_case("Microsoft.NET.Sdk.Web")
+        let sdk = self.sdk_name().to_ascii_lowercase();
+        self.output_type.eq_ignore_ascii_case("Exe")
+            || self.output_type.eq_ignore_ascii_case("WinExe")
+            || self.aspire_host
+            || ["microsoft.net.sdk.web", "microsoft.net.sdk.blazorwebassembly", "microsoft.net.sdk.worker"].contains(&sdk.as_str())
     }
 
     pub fn is_web(&self) -> bool {
-        self.sdk.starts_with("Microsoft.NET.Sdk.Web") || self.sdk.starts_with("Microsoft.NET.Sdk.Razor")
+        let sdk = self.sdk_name().to_ascii_lowercase();
+        sdk.starts_with("microsoft.net.sdk.web") || sdk.starts_with("microsoft.net.sdk.blazorwebassembly")
     }
 }
 
@@ -204,5 +228,17 @@ mod tests {
         assert!(ProjectInfo::parse(mstest, &root.join("App/A.csproj")).unwrap().is_test);
         let tunit = r#"<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="TUnit" Version="0.19" /></ItemGroup></Project>"#;
         assert!(ProjectInfo::parse(tunit, &root.join("App/B.csproj")).unwrap().is_test);
+    }
+
+    #[test]
+    fn web_blazor_worker_and_aspire_projects_are_executables() {
+        let parse = |t: &str| ProjectInfo::parse(t, Path::new("/w/P/P.csproj")).unwrap();
+        assert!(parse(r#"<Project Sdk="Microsoft.NET.Sdk.Web/8.0.0"></Project>"#).is_executable());
+        assert!(parse(r#"<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly"></Project>"#).is_web());
+        assert!(parse(r#"<Project><Sdk Name="Microsoft.NET.Sdk.Web" /></Project>"#).is_executable());
+        assert!(parse(r#"<Project Sdk="Microsoft.NET.Sdk.Worker"></Project>"#).is_executable());
+        assert!(parse(r#"<Project Sdk="Microsoft.NET.Sdk"><Sdk Name="Aspire.AppHost.Sdk" Version="9.0.0" /></Project>"#).is_executable());
+        assert!(!parse(r#"<Project Sdk="Microsoft.NET.Sdk.Razor"></Project>"#).is_executable());
+        assert!(!parse(r#"<Project Sdk="Microsoft.NET.Sdk"></Project>"#).is_executable());
     }
 }

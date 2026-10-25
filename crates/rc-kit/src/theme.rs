@@ -622,6 +622,40 @@ pub fn toolbar_separator(ui: &mut Ui) {
 }
 
 /// Blue primary button (Button.default).
+/// A menu row (New UI popup menus): 16 pt icon column (kept empty without an icon so the texts
+/// line up), the text, and the shortcut right-aligned in grey.
+pub fn menu_entry(ui: &mut Ui, icon: Option<crate::Ico>, text: &str, shortcut: Option<&str>, selected: bool, enabled: bool) -> Response {
+    let p = pal(ui);
+    let font = FontId::proportional(13.0);
+    let fg = if enabled { p.text } else { p.disabled };
+    let g = ui.painter().layout_no_wrap(text.to_string(), font.clone(), fg);
+    let sc = shortcut.map(|s| ui.painter().layout_no_wrap(s.to_string(), FontId::proportional(12.5), p.muted));
+    let want = 34.0 + g.size().x + sc.as_ref().map_or(0.0, |s| 28.0 + s.size().x) + 12.0;
+    let sense = if enabled { Sense::click() } else { Sense::hover() };
+    let (r, resp) = ui.allocate_exact_size(egui::vec2(want.max(ui.available_width()), 24.0), sense);
+    if ui.is_rect_visible(r) {
+        if selected {
+            ui.painter().rect_filled(r, 4.0, p.selection);
+        } else if enabled && resp.hovered() {
+            ui.painter().rect_filled(r, 4.0, p.row_hover);
+        }
+        if let Some(ico) = icon {
+            crate::icons::paint(ui.painter(), Rect::from_center_size(egui::pos2(r.left() + 16.0, r.center().y), egui::vec2(16.0, 16.0)), ico, &p, enabled);
+        }
+        ui.painter().galley(egui::pos2(r.left() + 34.0, (r.center().y - g.size().y / 2.0).round()), g, fg);
+        if let Some(sc) = sc {
+            ui.painter().galley(egui::pos2(r.right() - 10.0 - sc.size().x, (r.center().y - sc.size().y / 2.0).round()), sc, p.muted);
+        }
+    }
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, enabled, selected, text));
+    resp
+}
+
+/// [`menu_entry`] without a shortcut.
+pub fn menu_item(ui: &mut Ui, icon: Option<crate::Ico>, text: &str, selected: bool) -> Response {
+    menu_entry(ui, icon, text, None, selected, true)
+}
+
 /// A slider readable on both themes: grey rail, accent fill up to the value and a white knob
 /// with a border (egui draws the rail with the control background, white on Islands Light).
 pub fn slider(ui: &mut Ui, slider: egui::Slider<'_>) -> Response {

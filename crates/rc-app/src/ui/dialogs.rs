@@ -38,6 +38,8 @@ pub enum Dialog {
     FileStructure { filter: String, selected: usize },
     /// Right-click on a breakpoint: condition and enabled state (0-based line).
     BreakpointProperties { path: PathBuf, line: usize, condition: String, enabled: bool, focus: bool },
+    /// A compound run configuration: its name and which applications it starts.
+    Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
     Evaluate { expression: String, focus: bool },
 }
@@ -71,6 +73,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, enabled, focus),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
+        Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -294,6 +297,33 @@ fn goto_line(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus: &mu
                 d.editor.goto(line.saturating_sub(1), col.saturating_sub(1));
             }
         }
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn compound(app: &mut DotCraftApp, ctx: &Context, old: Option<&str>, name: &mut String, members: &mut [(String, bool)]) -> Outcome {
+    let taken = app.runner.configs.iter().any(|c| c.name == name.trim() && Some(c.name.as_str()) != old);
+    let chosen = members.iter().filter(|(_, on)| *on).count();
+    let valid = !name.trim().is_empty() && !taken && chosen > 0;
+    let ((ok, cancel), esc) = modal(ctx, "compound", 420.0, |ui| {
+        title(ui, if old.is_some() { tr("Edit Compound Configuration") } else { tr("Add Compound Configuration") });
+        ui.label(tr("Name"));
+        ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY));
+        ui.add_space(8.0);
+        ui.label(tr("Start these applications together:"));
+        for (n, on) in members.iter_mut() {
+            ui.checkbox(on, n.as_str());
+        }
+        if taken {
+            ui.label(egui::RichText::new(tr("A configuration with that name already exists")).size(12.5).color(rc_kit::pal(ui).error));
+        }
+        buttons(ui, tr("OK"), valid)
+    });
+    if ok && valid {
+        let list = members.iter().filter(|(_, on)| *on).map(|(n, _)| n.clone()).collect();
+        app.runner.save_compound(old, name.trim().to_string(), list);
+        app.session_dirty = true;
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

@@ -508,5 +508,17 @@
     "Enter a valid solution name": "Wpisz prawidłową nazwę rozwiązania",
     "The location does not exist": "Lokalizacja nie istnieje",
     "A folder with that name already exists": "Folder o tej nazwie już istnieje"
+  },
+  "compound": {
+    "A configuration with that name already exists": "Konfiguracja o tej nazwie już istnieje",
+    "Add Compound Configuration": "Dodaj konfigurację złożoną",
+    "Add Compound Configuration…": "Dodaj konfigurację złożoną…",
+    "All Applications": "Wszystkie aplikacje",
+    "Delete “{name}”": "Usuń „{name}”",
+    "Edit Compound Configuration": "Edytuj konfigurację złożoną",
+    "Edit “{name}”…": "Edytuj „{name}”…",
+    "Name": "Nazwa",
+    "Start these applications together:": "Uruchom te aplikacje razem:",
+    "The compound configuration has no applications to run": "Konfiguracja złożona nie ma aplikacji do uruchomienia"
   }
 }

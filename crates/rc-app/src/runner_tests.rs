@@ -60,3 +60,30 @@ fn shop_builds_runs_and_passes_its_tests() {
     assert!(t.passed >= 10, "passed {}", t.passed);
     assert!(app.runner.test_outcomes.values().all(|s| *s == crate::runner::TestState::Passed));
 }
+
+#[test]
+fn a_compound_configuration_starts_several_applications() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    let apps = app.runner.app_names();
+    assert!(apps.len() >= 2, "{apps:?}");
+    app.runner.save_compound(None, "Both".into(), apps.clone());
+    // Right after the applications, before the tests; selected.
+    let i = app.runner.configs.iter().position(|c| c.name == "Both").unwrap();
+    assert!(matches!(app.runner.configs[i - 1].kind, ConfigKind::App { .. }));
+    assert_eq!(app.runner.selected_config().unwrap().name, "Both");
+    app.runner.run_selected();
+    assert_eq!(app.runner.runs.iter().map(|r| r.name.clone()).collect::<Vec<_>>(), apps);
+    app.runner.stop_all();
+    pump(&mut app, "the runs to stop", |a| a.runner.runs.iter().all(|r| r.exit.is_some()));
+    // Kept in the session.
+    app.save_session();
+    let mut again = DotCraftApp::with_settings(Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() }, Waker::noop(), None);
+    again.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    assert!(again.runner.configs.iter().any(|c| c.name == "Both" && matches!(c.kind, ConfigKind::Compound { .. })));
+}

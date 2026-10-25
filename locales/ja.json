@@ -508,5 +508,17 @@
     "Enter a valid solution name": "有効なソリューション名を入力してください",
     "The location does not exist": "場所が存在しません",
     "A folder with that name already exists": "その名前のフォルダーは既に存在します"
+  },
+  "compound": {
+    "A configuration with that name already exists": "その名前の構成は既に存在します",
+    "Add Compound Configuration": "複合構成を追加",
+    "Add Compound Configuration…": "複合構成を追加…",
+    "All Applications": "すべてのアプリケーション",
+    "Delete “{name}”": "「{name}」を削除",
+    "Edit Compound Configuration": "複合構成を編集",
+    "Edit “{name}”…": "「{name}」を編集…",
+    "Name": "名前",
+    "Start these applications together:": "これらのアプリケーションを同時に起動:",
+    "The compound configuration has no applications to run": "複合構成に実行するアプリケーションがありません"
   }
 }
