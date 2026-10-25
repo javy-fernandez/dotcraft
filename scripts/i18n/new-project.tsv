@@ -1,0 +1,42 @@
+# New Solution / Add New Project. Import: python3 scripts/i18n_tsv.py newproject scripts/i18n/new-project.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Add New Project	Añadir nuevo proyecto	Ajouter un nouveau projet	Adicionar novo projeto	Neues Projekt hinzufügen	Dodaj nowy projekt	添加新项目	新しいプロジェクトを追加
+Add New Project…	Añadir nuevo proyecto…	Ajouter un nouveau projet…	Adicionar novo projeto…	Neues Projekt hinzufügen…	Dodaj nowy projekt…	添加新项目…	新しいプロジェクトを追加…
+Choose a folder	Elegir una carpeta	Choisir un dossier	Escolher uma pasta	Ordner auswählen	Wybierz folder	选择文件夹	フォルダーを選択
+Create Git repository	Crear repositorio Git	Créer un dépôt Git	Criar repositório Git	Git-Repository erstellen	Utwórz repozytorium Git	创建 Git 仓库	Git リポジトリを作成
+Creating…	Creando…	Création…	Criando…	Wird erstellt…	Tworzenie…	正在创建…	作成中…
+Edit Project File	Editar archivo de proyecto	Modifier le fichier projet	Editar arquivo do projeto	Projektdatei bearbeiten	Edytuj plik projektu	编辑项目文件	プロジェクト ファイルを編集
+Edit Solution File	Editar archivo de solución	Modifier le fichier solution	Editar arquivo da solução	Projektmappendatei bearbeiten	Edytuj plik rozwiązania	编辑解决方案文件	ソリューション ファイルを編集
+Framework	Framework	Framework	Framework	Framework	Framework	框架	フレームワーク
+Location	Ubicación	Emplacement	Local	Speicherort	Lokalizacja	位置	場所
+New Solution	Nueva solución	Nouvelle solution	Nova solução	Neue Projektmappe	Nowe rozwiązanie	新建解决方案	新しいソリューション
+New Solution…	Nueva solución…	Nouvelle solution…	Nova solução…	Neue Projektmappe…	Nowe rozwiązanie…	新建解决方案…	新しいソリューション…
+Project name	Nombre del proyecto	Nom du projet	Nome do projeto	Projektname	Nazwa projektu	项目名称	プロジェクト名
+Solution name	Nombre de la solución	Nom de la solution	Nome da solução	Projektmappenname	Nazwa rozwiązania	解决方案名称	ソリューション名
+Template default	Predeterminado de la plantilla	Valeur par défaut du modèle	Padrão do modelo	Vorlagenstandard	Domyślny szablonu	模板默认值	テンプレートの既定値
+The project will be created in {path}	El proyecto se creará en {path}	Le projet sera créé dans {path}	O projeto será criado em {path}	Das Projekt wird in {path} erstellt	Projekt zostanie utworzony w {path}	项目将创建在 {path}	プロジェクトは {path} に作成されます
+{name} created	{name} creado	{name} créé	{name} criado	{name} erstellt	Utworzono {name}	已创建 {name}	{name} を作成しました
+Console Application	Aplicación de consola	Application console	Aplicativo de console	Konsolenanwendung	Aplikacja konsolowa	控制台应用	コンソール アプリケーション
+Class Library	Biblioteca de clases	Bibliothèque de classes	Biblioteca de classes	Klassenbibliothek	Biblioteka klas	类库	クラス ライブラリ
+ASP.NET Core Web API	ASP.NET Core Web API	API web ASP.NET Core	API Web do ASP.NET Core	ASP.NET Core-Web-API	ASP.NET Core Web API	ASP.NET Core Web API	ASP.NET Core Web API
+ASP.NET Core Empty	ASP.NET Core vacío	ASP.NET Core vide	ASP.NET Core vazio	ASP.NET Core (leer)	ASP.NET Core (pusty)	ASP.NET Core 空	ASP.NET Core (空)
+ASP.NET Core MVC	ASP.NET Core MVC	ASP.NET Core MVC	ASP.NET Core MVC	ASP.NET Core MVC	ASP.NET Core MVC	ASP.NET Core MVC	ASP.NET Core MVC
+Blazor Web App	Aplicación web Blazor	Application web Blazor	Aplicativo Web Blazor	Blazor-Web-App	Aplikacja internetowa Blazor	Blazor Web 应用	Blazor Web アプリ
+Worker Service	Servicio de trabajo	Service Worker	Serviço de trabalho	Workerdienst	Usługa procesu roboczego	辅助角色服务	ワーカー サービス
+xUnit Test Project	Proyecto de pruebas xUnit	Projet de test xUnit	Projeto de teste xUnit	xUnit-Testprojekt	Projekt testów xUnit	xUnit 测试项目	xUnit テスト プロジェクト
+NUnit Test Project	Proyecto de pruebas NUnit	Projet de test NUnit	Projeto de teste NUnit	NUnit-Testprojekt	Projekt testów NUnit	NUnit 测试项目	NUnit テスト プロジェクト
+MSTest Test Project	Proyecto de pruebas MSTest	Projet de test MSTest	Projeto de teste MSTest	MSTest-Testprojekt	Projekt testów MSTest	MSTest 测试项目	MSTest テスト プロジェクト
+A command-line application	Una aplicación de línea de comandos	Une application en ligne de commande	Um aplicativo de linha de comando	Eine Befehlszeilenanwendung	Aplikacja wiersza poleceń	命令行应用程序	コマンドライン アプリケーション
+A library of reusable code	Una biblioteca de código reutilizable	Une bibliothèque de code réutilisable	Uma biblioteca de código reutilizável	Eine Bibliothek mit wiederverwendbarem Code	Biblioteka kodu wielokrotnego użytku	可重用代码库	再利用可能なコードのライブラリ
+An HTTP API with controllers or minimal APIs	Una API HTTP con controladores o API mínimas	Une API HTTP avec contrôleurs ou API minimales	Uma API HTTP com controladores ou APIs mínimas	Eine HTTP-API mit Controllern oder minimalen APIs	API HTTP z kontrolerami lub minimalnymi API	带有控制器或最小 API 的 HTTP API	コントローラーまたは最小 API を使った HTTP API
+An empty ASP.NET Core application	Una aplicación ASP.NET Core vacía	Une application ASP.NET Core vide	Um aplicativo ASP.NET Core vazio	Eine leere ASP.NET Core-Anwendung	Pusta aplikacja ASP.NET Core	空的 ASP.NET Core 应用程序	空の ASP.NET Core アプリケーション
+A web application with views and controllers	Una aplicación web con vistas y controladores	Une application web avec vues et contrôleurs	Um aplicativo Web com exibições e controladores	Eine Webanwendung mit Ansichten und Controllern	Aplikacja internetowa z widokami i kontrolerami	带有视图和控制器的 Web 应用程序	ビューとコントローラーを備えた Web アプリケーション
+Interactive web UI with Razor components	Interfaz web interactiva con componentes Razor	Interface web interactive avec des composants Razor	Interface Web interativa com componentes Razor	Interaktive Weboberfläche mit Razor-Komponenten	Interaktywny interfejs WWW z komponentami Razor	使用 Razor 组件的交互式 Web UI	Razor コンポーネントによる対話型 Web UI
+A long-running background service	Un servicio en segundo plano de larga duración	Un service d'arrière-plan de longue durée	Um serviço em segundo plano de longa duração	Ein lang laufender Hintergrunddienst	Długotrwała usługa w tle	长时间运行的后台服务	長時間実行されるバックグラウンド サービス
+Unit tests with xUnit	Pruebas unitarias con xUnit	Tests unitaires avec xUnit	Testes de unidade com xUnit	Komponententests mit xUnit	Testy jednostkowe z xUnit	使用 xUnit 的单元测试	xUnit による単体テスト
+Unit tests with NUnit	Pruebas unitarias con NUnit	Tests unitaires avec NUnit	Testes de unidade com NUnit	Komponententests mit NUnit	Testy jednostkowe z NUnit	使用 NUnit 的单元测试	NUnit による単体テスト
+Unit tests with MSTest	Pruebas unitarias con MSTest	Tests unitaires avec MSTest	Testes de unidade com MSTest	Komponententests mit MSTest	Testy jednostkowe z MSTest	使用 MSTest 的单元测试	MSTest による単体テスト
+Enter a valid project name	Escribe un nombre de proyecto válido	Saisissez un nom de projet valide	Digite um nome de projeto válido	Geben Sie einen gültigen Projektnamen ein	Wpisz prawidłową nazwę projektu	请输入有效的项目名称	有効なプロジェクト名を入力してください
+Enter a valid solution name	Escribe un nombre de solución válido	Saisissez un nom de solution valide	Digite um nome de solução válido	Geben Sie einen gültigen Projektmappennamen ein	Wpisz prawidłową nazwę rozwiązania	请输入有效的解决方案名称	有効なソリューション名を入力してください
+The location does not exist	La ubicación no existe	L'emplacement n'existe pas	O local não existe	Der Speicherort existiert nicht	Lokalizacja nie istnieje	该位置不存在	場所が存在しません
+A folder with that name already exists	Ya existe una carpeta con ese nombre	Un dossier portant ce nom existe déjà	Já existe uma pasta com esse nome	Ein Ordner mit diesem Namen existiert bereits	Folder o tej nazwie już istnieje	已存在同名文件夹	その名前のフォルダーは既に存在します

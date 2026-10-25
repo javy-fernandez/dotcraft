@@ -6,6 +6,7 @@ pub mod dialogs;
 pub mod editor_area;
 pub mod explorer;
 pub mod git;
+pub mod new_project;
 pub mod nuget;
 pub mod header;
 pub mod status;
@@ -36,6 +37,11 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     if app.workspace.is_none() && app.docs.list.is_empty() {
         egui::CentralPanel::default().frame(bar.inner_margin(Margin { left: 6, right: 6, top: 0, bottom: 0 })).show(ui, |ui| welcome::show(app, ui));
         dialogs::show(app, &ctx);
+        if let Some(mut d) = app.new_project.take()
+            && new_project::show(app, &ctx, &mut d)
+        {
+            app.new_project = Some(d);
+        }
         if cfg!(target_os = "windows") {
             rc_kit::window_chrome::resize_edges(&ctx);
         }
@@ -57,6 +63,11 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         && nuget::show(app, &ctx, &mut d)
     {
         app.nuget = Some(d);
+    }
+    if let Some(mut d) = app.new_project.take()
+        && new_project::show(app, &ctx, &mut d)
+    {
+        app.new_project = Some(d);
     }
     if cfg!(target_os = "windows") {
         rc_kit::window_chrome::resize_edges(&ctx);

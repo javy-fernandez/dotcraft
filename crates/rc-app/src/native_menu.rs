@@ -26,6 +26,7 @@ pub enum MenuCommand {
     Quit,
     OpenProject,
     OpenFile,
+    NewSolution,
     CloseProject,
     ThemeLight,
     ThemeDark,
@@ -312,6 +313,7 @@ fn build(keymap: &Keymap) -> muda::Result<Built> {
     let file_menu = submenu(
         || tr("File"),
         &[
+            &item(MenuCommand::NewSolution, || tr("New Solution…"), None),
             &item(MenuCommand::OpenProject, || tr("Open…"), None),
             &item(MenuCommand::OpenFile, || tr("Open File…"), None),
             &item(MenuCommand::CloseProject, || tr("Close Project"), None),

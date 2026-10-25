@@ -39,6 +39,8 @@ pub struct Settings {
     pub autosave: bool,
     /// Open files from the explorer with a single click (otherwise a double click).
     pub single_click_open: bool,
+    /// Last folder a new solution was created in.
+    pub new_project_location: Option<PathBuf>,
     /// Explicit path to `dotnet` (otherwise found on PATH / the default install).
     pub dotnet_path: Option<PathBuf>,
     /// Explicit path to the Roslyn language server DLL or executable.
@@ -62,6 +64,7 @@ impl Default for Settings {
             right_margin: 120,
             autosave: true,
             single_click_open: false,
+            new_project_location: None,
             dotnet_path: None,
             roslyn_path: None,
             netcoredbg_path: None,

@@ -29,6 +29,7 @@ rc-search.workspace = true
 rc-vcs.workspace = true
 rc-dap.workspace = true
 rfd = "0.17"
+dirs = "6"
 muda = { version = "0.21", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]

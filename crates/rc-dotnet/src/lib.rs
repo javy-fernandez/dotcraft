@@ -11,6 +11,7 @@ pub mod build;
 pub mod diagnostics;
 pub mod launch;
 pub mod msbuild;
+pub mod new_project;
 pub mod nuget;
 pub mod process;
 pub mod project;

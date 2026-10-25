@@ -206,6 +206,16 @@ fn project_widget(app: &mut DotCraftApp, ui: &mut Ui) {
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(260.0);
+        if ui.button(tr("New Solution…")).clicked() {
+            app.new_project_dialog(None);
+            ui.close();
+        }
+        if let Some(sln) = app.workspace.as_ref().and_then(|w| w.ws.solution().map(std::path::Path::to_path_buf))
+            && ui.button(tr("Add New Project…")).clicked()
+        {
+            app.new_project_dialog(Some(sln));
+            ui.close();
+        }
         if ui.button(tr("Open…")).clicked() {
             app.pick_and_open();
             ui.close();

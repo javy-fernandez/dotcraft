@@ -60,6 +60,10 @@ fn screens() {
         app.settings.recent_workspaces = vec![fixtures().join("Shop/Shop.sln"), fixtures().join("TenProjects/TenProjects.slnx")];
         let mut h = harness(app, vec2(1280.0, 800.0));
         h.render().unwrap().save(out.join(format!("welcome-{suffix}.png"))).unwrap();
+        // New Solution.
+        h.state_mut().new_project_dialog(None);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("new-solution-{suffix}.png"))).unwrap();
 
         // A file on its own, without a workspace (Finder's "Open With").
         let mut app = test_app(home.path(), dark);

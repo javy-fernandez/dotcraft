@@ -383,3 +383,25 @@ fn searches_nuget_org_and_lists_versions() {
         assert!(versions.contains(&"13.0.3".to_string()));
     });
 }
+
+/// `dotnet new` through `new_project`: a solution with a console app, then a test project
+/// added to it; the solution builds.
+#[test]
+fn creates_a_solution_and_adds_a_project() {
+    use rc_dotnet::new_project::{NewProject, Target};
+    let dotnet = rc_dotnet::Dotnet::locate(None).expect("dotnet");
+    let dir = tempfile::tempdir().unwrap();
+    let fw = rc_dotnet::new_project::frameworks(&dotnet);
+    assert!(fw.iter().any(|f| f == "net8.0"), "{fw:?}");
+    let p = NewProject { template: "console", project_name: "Demo.App".into(), framework: Some("net8.0".into()), target: Target::NewSolution { location: dir.path().to_path_buf(), solution_name: "Demo".into(), git: true } };
+    let sln = rc_core::Runtime::block_on(p.create(&dotnet, &mut |_| {})).unwrap();
+    assert!(sln.exists() && dir.path().join("Demo/.git").exists() && dir.path().join("Demo/.gitignore").exists());
+    let t = NewProject { template: "xunit", project_name: "Demo.Tests".into(), framework: Some("net8.0".into()), target: Target::AddTo { solution: sln.clone() } };
+    rc_core::Runtime::block_on(t.create(&dotnet, &mut |_| {})).unwrap();
+    let solution = rc_dotnet::Solution::load(&sln).unwrap();
+    let names: Vec<String> = solution.projects().iter().map(|p| p.name.clone()).collect();
+    assert!(names.contains(&"Demo.App".to_string()) && names.contains(&"Demo.Tests".to_string()), "{names:?}");
+    assert!(rc_dotnet::ProjectInfo::load(&t.project_file()).unwrap().is_test);
+    let out = dotnet.std_command().args(["build", "-nologo", "-v", "q"]).arg(&sln).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
+}

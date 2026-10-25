@@ -68,6 +68,8 @@ pub enum ExplorerAction {
     CopyPath(PathBuf),
     OpenInTerminal(PathBuf),
     ManagePackages(PathBuf),
+    /// Add New Project to this solution.
+    AddProject(PathBuf),
     Collapse,
     LocateActive,
 }
@@ -424,7 +426,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
                 context = Some((i, resp.clone()));
             }
             resp.context_menu(|ui| {
-                context_menu(ui, &rows[i], &mut actions);
+                context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), &mut actions);
             });
         }
         // Empty space below the rows clears focus to the tree too.
@@ -517,8 +519,29 @@ fn row_path(r: &Row) -> Option<PathBuf> {
     }
 }
 
-fn context_menu(ui: &mut Ui, row: &Row, actions: &mut Vec<ExplorerAction>) {
+fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
+    if let (NodeKind::Solution, Some(sln)) = (&row.kind, solution) {
+        if ui.button(tr("Add New Project…")).clicked() {
+            actions.push(ExplorerAction::AddProject(sln.to_path_buf()));
+            ui.close();
+        }
+        if ui.button(tr("Edit Solution File")).clicked() {
+            actions.push(ExplorerAction::Open(sln.to_path_buf()));
+            ui.close();
+        }
+        if ui.button(if cfg!(target_os = "macos") { tr("Reveal in Finder") } else { tr("Open in Explorer") }).clicked() {
+            actions.push(ExplorerAction::Reveal(sln.to_path_buf()));
+            ui.close();
+        }
+        return;
+    }
+    if let NodeKind::Project(p) = &row.kind
+        && ui.button(tr("Edit Project File")).clicked()
+    {
+        actions.push(ExplorerAction::Open(p.clone()));
+        ui.close();
+    }
     let dir_of = |p: &Path, is_dir: bool| if is_dir { p.to_path_buf() } else { p.parent().unwrap_or(p).to_path_buf() };
     if let NodeKind::Project(p) | NodeKind::Packages(p) | NodeKind::Dependencies(p) = &row.kind
         && ui.button(tr("Manage NuGet Packages…")).clicked()

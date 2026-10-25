@@ -21,8 +21,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         y += 40.0;
 
         // Primary actions.
-        let buttons = [(tr("Open…"), ico::OPEN, 0), (tr("Open Solution or Project…"), ico::SOLUTION, 1)];
-        let bw = (col_w - 12.0) / 2.0;
+        let buttons = [(tr("New Solution…"), ico::ADD, 2), (tr("Open…"), ico::OPEN, 0), (tr("Open Solution or Project…"), ico::SOLUTION, 1)];
+        let bw = (col_w - 24.0) / 3.0;
         for (i, (label, icon, kind)) in buttons.into_iter().enumerate() {
             let r = Rect::from_min_size(pos2(left + i as f32 * (bw + 12.0), y), vec2(bw, 64.0));
             let resp = ui.interact(r, ui.id().with(("welcome", i)), Sense::click());
@@ -32,7 +32,11 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
             ui.painter().text(pos2(r.center().x, r.bottom() - 18.0), Align2::CENTER_CENTER, label, FontId::proportional(13.0), p.text);
             resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
             if resp.clicked() {
-                if kind == 0 { app.pick_and_open() } else { app.pick_solution() }
+                match kind {
+                    0 => app.pick_and_open(),
+                    1 => app.pick_solution(),
+                    _ => app.new_project_dialog(None),
+                }
             }
         }
         y += 64.0 + 32.0;

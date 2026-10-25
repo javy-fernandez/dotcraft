@@ -48,6 +48,7 @@ pub struct DotCraftApp {
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
     pub nuget: Option<crate::ui::nuget::NugetDialog>,
+    pub new_project: Option<crate::ui::new_project::NewProjectDialog>,
     pub search_everywhere: Option<crate::search::SearchEverywhere>,
     pub find_bar: Option<crate::search::FindBar>,
     pub find_in_files: Option<crate::search::FindInFiles>,
@@ -121,6 +122,7 @@ impl DotCraftApp {
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: None,
+            new_project: None,
             search_everywhere: None,
             find_bar: None,
             find_in_files: None,
@@ -197,6 +199,19 @@ impl DotCraftApp {
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         self.workspace = Some(WorkspaceState { ws, solution });
         self.restore_session(session);
+    }
+
+    /// Opens the workspace again (after adding a project: run configurations, explorer and the
+    /// language server pick it up).
+    pub fn reload_workspace(&mut self) {
+        if let Some(path) = self.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
+            self.open_workspace(&path);
+        }
+    }
+
+    /// New Solution, or Add New Project when `solution` is given.
+    pub fn new_project_dialog(&mut self, solution: Option<PathBuf>) {
+        self.new_project = Some(crate::ui::new_project::NewProjectDialog::new(self, solution, self.waker.clone()));
     }
 
     pub fn close_workspace(&mut self) {
@@ -828,6 +843,7 @@ impl DotCraftApp {
                 ExplorerAction::CopyPath(path) => ctx.copy_text(path.display().to_string()),
                 ExplorerAction::Reveal(path) => reveal_in_file_manager(&path),
                 ExplorerAction::OpenInTerminal(dir) => self.open_terminal(Some(dir)),
+                ExplorerAction::AddProject(sln) => self.new_project_dialog(Some(sln)),
                 ExplorerAction::ManagePackages(project) => self.nuget = Some(crate::ui::nuget::NugetDialog::new(project, self.waker.clone())),
             }
         }
@@ -870,6 +886,9 @@ impl DotCraftApp {
                 && w.ws.solution() == Some(p.as_path())
                 && let Ok(s) = Solution::load(&p)
             {
+                // Projects added or removed by hand: new run configurations too.
+                let remembered = self.runner.selected_config().map(|c| c.name.clone());
+                self.runner.set_workspace(Some(&s), &[], &dotnet_path(&self.settings), remembered.as_deref());
                 w.solution = Some(s);
             }
         }
@@ -955,6 +974,7 @@ impl eframe::App for DotCraftApp {
                     MenuCommand::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
                     MenuCommand::OpenProject => self.pick_and_open(),
                     MenuCommand::OpenFile => self.pick_file(),
+                    MenuCommand::NewSolution => self.new_project_dialog(None),
                     MenuCommand::CloseProject => self.close_workspace(),
                     MenuCommand::ThemeLight | MenuCommand::ThemeDark => {
                         let mut s = self.settings.clone();
