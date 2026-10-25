@@ -1,0 +1,4 @@
+# Opening loose files. Import: python3 scripts/i18n_tsv.py files scripts/i18n/open-files.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Open File…	Abrir archivo…	Ouvrir un fichier…	Abrir arquivo…	Datei öffnen…	Otwórz plik…	打开文件…	ファイルを開く…
+the file does not exist	el archivo no existe	le fichier n'existe pas	o arquivo não existe	die Datei existiert nicht	plik nie istnieje	文件不存在	ファイルが存在しません

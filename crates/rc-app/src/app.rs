@@ -44,6 +44,7 @@ pub struct DotCraftApp {
     pub insight: Insight,
     pub runner: Runner,
     pub debugger: crate::debugger::Debugger,
+    window_title: String,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
     pub nuget: Option<crate::ui::nuget::NugetDialog>,
@@ -87,9 +88,14 @@ impl DotCraftApp {
         let keymap = Keymap::new(keymap_kind(settings.keymap));
         let native_menu = NativeMenu::install(&cc.egui_ctx, &keymap);
         let mut app = Self::with_settings(settings, waker, native_menu);
-        let to_open = open.or_else(|| app.settings.recent_workspaces.first().cloned().filter(|p| p.exists()));
-        if let Some(path) = to_open {
-            app.open_workspace(&path);
+        crate::open_files::set_context(&cc.egui_ctx);
+        // Files sent by Finder at launch arrive before the first frame: open them instead of
+        // the last project.
+        let mut from_system = crate::open_files::take();
+        from_system.extend(open);
+        let to_open = if from_system.is_empty() { app.settings.recent_workspaces.first().cloned().filter(|p| p.exists()).into_iter().collect() } else { from_system };
+        for path in to_open {
+            app.open_path(&path);
         }
         app
     }
@@ -111,6 +117,7 @@ impl DotCraftApp {
             insight: Insight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
+            window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: None,
@@ -736,6 +743,31 @@ impl DotCraftApp {
         ctx.request_repaint();
     }
 
+    /// Opens a folder, solution or project as the workspace, and any other file in an editor
+    /// (without a workspace it is edited on its own, like Rider's LightEdit).
+    pub fn open_path(&mut self, path: &Path) {
+        use rc_core::workspace::{is_project, is_solution};
+        if path.is_dir() || is_solution(path) || is_project(path) {
+            self.open_workspace(path);
+        } else if path.is_file() {
+            self.open_file(path);
+        } else {
+            self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &tr("the file does not exist"))]), true);
+        }
+    }
+
+    pub fn pick_file(&mut self) {
+        let mut dialog = rfd::FileDialog::new().set_title(tr("Open File"));
+        if let Some(dir) = self.docs.active_doc().and_then(|d| d.path.parent().map(Path::to_path_buf)).or_else(|| self.workspace.as_ref().map(|w| w.ws.root.clone())) {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(paths) = dialog.pick_files() {
+            for p in paths {
+                self.open_path(&p);
+            }
+        }
+    }
+
     pub fn pick_and_open(&mut self) {
         let dialog = rfd::FileDialog::new().set_title(tr("Open Folder, Solution or Project"));
         if let Some(path) = dialog.pick_folder() {
@@ -900,6 +932,21 @@ impl DotCraftApp {
 
 impl eframe::App for DotCraftApp {
     fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // Window title: active file and workspace (Mission Control, the Window menu).
+        let title = match (self.docs.active_doc(), &self.workspace) {
+            (Some(d), Some(w)) => format!("{} – {} – DotCraft", d.name(), w.ws.name()),
+            (Some(d), None) => format!("{} – DotCraft", d.name()),
+            (None, Some(w)) => format!("{} – DotCraft", w.ws.name()),
+            (None, None) => "DotCraft".to_string(),
+        };
+        if self.window_title != title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.window_title = title;
+        }
+        for path in crate::open_files::take() {
+            self.open_path(&path);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
         if let Some(menu) = &self.native_menu {
             for cmd in menu.poll() {
                 match cmd {
@@ -907,6 +954,7 @@ impl eframe::App for DotCraftApp {
                     MenuCommand::About => self.dialog = Some(Dialog::About),
                     MenuCommand::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
                     MenuCommand::OpenProject => self.pick_and_open(),
+                    MenuCommand::OpenFile => self.pick_file(),
                     MenuCommand::CloseProject => self.close_workspace(),
                     MenuCommand::ThemeLight | MenuCommand::ThemeDark => {
                         let mut s = self.settings.clone();

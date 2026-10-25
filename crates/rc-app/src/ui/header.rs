@@ -214,6 +214,10 @@ fn project_widget(app: &mut DotCraftApp, ui: &mut Ui) {
             app.pick_solution();
             ui.close();
         }
+        if ui.button(tr("Open File…")).clicked() {
+            app.pick_file();
+            ui.close();
+        }
         if app.workspace.is_some() && ui.button(tr("Close Project")).clicked() {
             app.close_workspace();
             ui.close();

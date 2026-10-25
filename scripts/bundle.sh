@@ -65,6 +65,50 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSRequiresAquaSystemAppearance</key><false/>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>.NET Solution or Project</string>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>sln</string><string>slnx</string><string>slnf</string>
+        <string>csproj</string><string>fsproj</string><string>vbproj</string>
+        <string>props</string><string>targets</string>
+      </array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Source Code</string>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>cs</string><string>csx</string><string>fs</string><string>vb</string>
+        <string>razor</string><string>cshtml</string><string>xaml</string><string>axaml</string>
+        <string>editorconfig</string><string>http</string><string>resx</string><string>config</string>
+      </array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Text Document</string>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.text</string>
+        <string>public.plain-text</string>
+        <string>public.source-code</string>
+        <string>public.script</string>
+        <string>public.shell-script</string>
+        <string>public.json</string>
+        <string>public.xml</string>
+        <string>public.yaml</string>
+        <string>public.comma-separated-values-text</string>
+        <string>net.daringfireball.markdown</string>
+        <string>public.log</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST

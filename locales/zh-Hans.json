@@ -462,5 +462,9 @@
     "Move To": "移动到",
     "Show": "显示",
     "Open files with a single click in the Explorer": "在资源管理器中单击打开文件"
+  },
+  "files": {
+    "Open File…": "打开文件…",
+    "the file does not exist": "文件不存在"
   }
 }

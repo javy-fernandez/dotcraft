@@ -462,5 +462,9 @@
     "Move To": "Przenieś do",
     "Show": "Pokaż",
     "Open files with a single click in the Explorer": "Otwieraj pliki jednym kliknięciem w Eksploratorze"
+  },
+  "files": {
+    "Open File…": "Otwórz plik…",
+    "the file does not exist": "plik nie istnieje"
   }
 }

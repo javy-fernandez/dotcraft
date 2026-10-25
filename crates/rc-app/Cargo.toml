@@ -31,6 +31,10 @@ rc-dap.workspace = true
 rfd = "0.17"
 muda = { version = "0.21", default-features = false }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSURL", "NSString"] }
+
 [target.'cfg(windows)'.dependencies]
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "wgsl"] }
 

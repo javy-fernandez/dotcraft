@@ -462,5 +462,9 @@
     "Move To": "移動先",
     "Show": "表示",
     "Open files with a single click in the Explorer": "エクスプローラーでシングルクリックでファイルを開く"
+  },
+  "files": {
+    "Open File…": "ファイルを開く…",
+    "the file does not exist": "ファイルが存在しません"
   }
 }

@@ -61,6 +61,14 @@ fn screens() {
         let mut h = harness(app, vec2(1280.0, 800.0));
         h.render().unwrap().save(out.join(format!("welcome-{suffix}.png"))).unwrap();
 
+        // A file on its own, without a workspace (Finder's "Open With").
+        let mut app = test_app(home.path(), dark);
+        app.open_path(&fixtures().join("Shop/src/Shop.Api/appsettings.json"));
+        assert!(app.workspace.is_none());
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("loose-file-{suffix}.png"))).unwrap();
+
         // A solution with files open.
         let mut app = test_app(home.path(), dark);
         app.open_workspace(&fixtures().join("Shop/Shop.sln"));
