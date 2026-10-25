@@ -1,0 +1,19 @@
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Could not search NuGet: {error}	No se pudo buscar en NuGet: {error}	Impossible de rechercher dans NuGet : {error}	Não foi possível pesquisar no NuGet: {error}	NuGet-Suche fehlgeschlagen: {error}	Nie można przeszukać NuGet: {error}	无法搜索 NuGet：{error}	NuGet を検索できませんでした: {error}
+Install	Instalar	Installer	Instalar	Installieren	Zainstaluj	安装	インストール
+Installed version: {version}	Versión instalada: {version}	Version installée : {version}	Versão instalada: {version}	Installierte Version: {version}	Zainstalowana wersja: {version}	已安装版本：{version}	インストール済みのバージョン: {version}
+Installed	Instalado	Installé	Instalado	Installiert	Zainstalowany	已安装	インストール済み
+Latest	Más reciente	La plus récente	Mais recente	Neueste	Najnowsza	最新	最新
+Manage NuGet Packages…	Administrar paquetes NuGet…	Gérer les paquets NuGet…	Gerenciar pacotes NuGet…	NuGet-Pakete verwalten…	Zarządzaj pakietami NuGet…	管理 NuGet 包…	NuGet パッケージの管理…
+No packages found	No se encontraron paquetes	Aucun paquet trouvé	Nenhum pacote encontrado	Keine Pakete gefunden	Nie znaleziono pakietów	未找到包	パッケージが見つかりません
+No packages installed. Type to search nuget.org.	No hay paquetes instalados. Escribe para buscar en nuget.org.	Aucun paquet installé. Tapez pour rechercher sur nuget.org.	Nenhum pacote instalado. Digite para pesquisar no nuget.org.	Keine Pakete installiert. Tippen, um nuget.org zu durchsuchen.	Brak zainstalowanych pakietów. Wpisz, aby przeszukać nuget.org.	未安装任何包。键入以搜索 nuget.org。	パッケージはインストールされていません。入力して nuget.org を検索します。
+NuGet Packages — {project}	Paquetes NuGet — {project}	Paquets NuGet — {project}	Pacotes NuGet — {project}	NuGet-Pakete — {project}	Pakiety NuGet — {project}	NuGet 包 — {project}	NuGet パッケージ — {project}
+Prerelease	Versión preliminar	Préversion	Pré-lançamento	Vorabversion	Wersja przedpremierowa	预发行版	プレリリース
+Remove	Quitar	Supprimer	Remover	Entfernen	Usuń	移除	削除
+Search packages on nuget.org	Buscar paquetes en nuget.org	Rechercher des paquets sur nuget.org	Pesquisar pacotes no nuget.org	Pakete auf nuget.org suchen	Szukaj pakietów w nuget.org	在 nuget.org 上搜索包	nuget.org でパッケージを検索
+Select a package to see its versions	Selecciona un paquete para ver sus versiones	Sélectionnez un paquet pour voir ses versions	Selecione um pacote para ver as versões	Wählen Sie ein Paket, um seine Versionen zu sehen	Wybierz pakiet, aby zobaczyć jego wersje	选择一个包以查看其版本	パッケージを選択するとバージョンが表示されます
+Update	Actualizar	Mettre à jour	Atualizar	Aktualisieren	Aktualizuj	更新	更新
+Version	Versión	Version	Versão	Version	Wersja	版本	バージョン
+{id} installed	{id} instalado	{id} installé	{id} instalado	{id} installiert	Zainstalowano {id}	已安装 {id}	{id} をインストールしました
+{id} removed	{id} eliminado	{id} supprimé	{id} removido	{id} entfernt	Usunięto {id}	已移除 {id}	{id} を削除しました
+{n} downloads	{n} descargas	{n} téléchargements	{n} downloads	{n} Downloads	Pobrania: {n}	{n} 次下载	{n} ダウンロード

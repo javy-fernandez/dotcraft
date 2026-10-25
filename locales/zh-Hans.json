@@ -381,5 +381,25 @@
     "Update Project…": "更新项目…",
     "Working tree": "工作树",
     "Write a commit message": "请编写提交消息"
+  },
+  "nuget": {
+    "Could not search NuGet: {error}": "无法搜索 NuGet：{error}",
+    "Install": "安装",
+    "Installed version: {version}": "已安装版本：{version}",
+    "Installed": "已安装",
+    "Latest": "最新",
+    "Manage NuGet Packages…": "管理 NuGet 包…",
+    "No packages found": "未找到包",
+    "No packages installed. Type to search nuget.org.": "未安装任何包。键入以搜索 nuget.org。",
+    "NuGet Packages — {project}": "NuGet 包 — {project}",
+    "Prerelease": "预发行版",
+    "Remove": "移除",
+    "Search packages on nuget.org": "在 nuget.org 上搜索包",
+    "Select a package to see its versions": "选择一个包以查看其版本",
+    "Update": "更新",
+    "Version": "版本",
+    "{id} installed": "已安装 {id}",
+    "{id} removed": "已移除 {id}",
+    "{n} downloads": "{n} 次下载"
   }
 }

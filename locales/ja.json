@@ -381,5 +381,25 @@
     "Update Project…": "プロジェクトを更新…",
     "Working tree": "作業ツリー",
     "Write a commit message": "コミットメッセージを入力してください"
+  },
+  "nuget": {
+    "Could not search NuGet: {error}": "NuGet を検索できませんでした: {error}",
+    "Install": "インストール",
+    "Installed version: {version}": "インストール済みのバージョン: {version}",
+    "Installed": "インストール済み",
+    "Latest": "最新",
+    "Manage NuGet Packages…": "NuGet パッケージの管理…",
+    "No packages found": "パッケージが見つかりません",
+    "No packages installed. Type to search nuget.org.": "パッケージはインストールされていません。入力して nuget.org を検索します。",
+    "NuGet Packages — {project}": "NuGet パッケージ — {project}",
+    "Prerelease": "プレリリース",
+    "Remove": "削除",
+    "Search packages on nuget.org": "nuget.org でパッケージを検索",
+    "Select a package to see its versions": "パッケージを選択するとバージョンが表示されます",
+    "Update": "更新",
+    "Version": "バージョン",
+    "{id} installed": "{id} をインストールしました",
+    "{id} removed": "{id} を削除しました",
+    "{n} downloads": "{n} ダウンロード"
   }
 }

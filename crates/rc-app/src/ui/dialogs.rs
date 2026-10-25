@@ -32,6 +32,8 @@ pub enum Dialog {
     /// Confirm rolling back files to HEAD.
     Rollback { paths: Vec<String> },
     NewBranch { name: String },
+    /// ⇧⌘E: the places the caret jumped from.
+    RecentLocations { selected: usize },
     /// ⌘F12 file structure popup.
     FileStructure { filter: String, selected: usize },
 }
@@ -62,6 +64,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::FileStructure { filter, selected } => file_structure(app, ctx, filter, selected),
         Dialog::Rollback { paths } => rollback(app, ctx, paths),
         Dialog::NewBranch { name } => new_branch(app, ctx, name),
+        Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -588,6 +591,60 @@ fn rename_symbol(app: &mut DotCraftApp, ctx: &Context, doc: u64, pos: usize, ori
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn recent_locations(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize) -> Outcome {
+    let items: Vec<(PathBuf, usize, String)> = app
+        .nav_back
+        .iter()
+        .rev()
+        .take(30)
+        .map(|(path, pos)| {
+            let line_text = match app.docs.index_of(path) {
+                Some(i) => {
+                    let e = &app.docs.list[i].editor;
+                    let (l, _) = e.buffer.line_col((*pos).min(e.buffer.len_chars()));
+                    (l, e.buffer.line_text(l))
+                }
+                None => (0, String::new()),
+            };
+            (path.clone(), line_text.0, line_text.1)
+        })
+        .collect();
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let mut open = None;
+    let (_, esc) = modal(ctx, "recent_locations", 620.0, |ui| {
+        title(ui, tr("Recent Locations"));
+        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
+            *selected = (*selected + 1).min(items.len().saturating_sub(1));
+        }
+        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
+            *selected = selected.saturating_sub(1);
+        }
+        if ui.input(|i| i.key_pressed(Key::Enter)) {
+            open = items.get(*selected).cloned();
+        }
+        for (i, (path, line, text)) in items.iter().enumerate() {
+            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), egui::Sense::click());
+            if i == *selected {
+                ui.painter().rect_filled(r, 6.0, p.selection);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(r, 6.0, p.row_hover);
+            }
+            let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+            icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_top() + vec2(14.0, 13.0), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
+            ui.painter().text(r.left_top() + vec2(30.0, 13.0), Align2::LEFT_CENTER, format!("{name}:{}", line + 1), theme::bold(12.5), p.text);
+            ui.painter().text(r.left_top() + vec2(30.0, 31.0), Align2::LEFT_CENTER, text.trim(), FontId::monospace(12.0), p.text_muted);
+            if resp.clicked() {
+                open = Some((path.clone(), *line, text.clone()));
+            }
+        }
+    });
+    if let Some((path, line, _)) = open {
+        app.open_at(&path, line, 0);
+        return Outcome::Close;
+    }
+    if esc { Outcome::Close } else { Outcome::Keep }
 }
 
 fn rollback(app: &mut DotCraftApp, ctx: &Context, paths: &mut Vec<String>) -> Outcome {

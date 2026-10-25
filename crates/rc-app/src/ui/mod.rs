@@ -5,6 +5,7 @@ pub mod dialogs;
 pub mod editor_area;
 pub mod explorer;
 pub mod git;
+pub mod nuget;
 pub mod header;
 pub mod status;
 pub mod run_windows;
@@ -86,6 +87,11 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     });
     dialogs::show(app, &ctx);
     search_popup::show(app, &ctx);
+    if let Some(mut d) = app.nuget.take()
+        && nuget::show(app, &ctx, &mut d)
+    {
+        app.nuget = Some(d);
+    }
     if cfg!(target_os = "windows") {
         rc_kit::window_chrome::resize_edges(&ctx);
     }

@@ -381,5 +381,25 @@
     "Update Project…": "Projekt aktualisieren…",
     "Working tree": "Arbeitsverzeichnis",
     "Write a commit message": "Schreiben Sie eine Commit-Nachricht"
+  },
+  "nuget": {
+    "Could not search NuGet: {error}": "NuGet-Suche fehlgeschlagen: {error}",
+    "Install": "Installieren",
+    "Installed version: {version}": "Installierte Version: {version}",
+    "Installed": "Installiert",
+    "Latest": "Neueste",
+    "Manage NuGet Packages…": "NuGet-Pakete verwalten…",
+    "No packages found": "Keine Pakete gefunden",
+    "No packages installed. Type to search nuget.org.": "Keine Pakete installiert. Tippen, um nuget.org zu durchsuchen.",
+    "NuGet Packages — {project}": "NuGet-Pakete — {project}",
+    "Prerelease": "Vorabversion",
+    "Remove": "Entfernen",
+    "Search packages on nuget.org": "Pakete auf nuget.org suchen",
+    "Select a package to see its versions": "Wählen Sie ein Paket, um seine Versionen zu sehen",
+    "Update": "Aktualisieren",
+    "Version": "Version",
+    "{id} installed": "{id} installiert",
+    "{id} removed": "{id} entfernt",
+    "{n} downloads": "{n} Downloads"
   }
 }

@@ -46,6 +46,7 @@ pub struct DotCraftApp {
     pub runner: Runner,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
+    pub nuget: Option<crate::ui::nuget::NugetDialog>,
     pub search_everywhere: Option<crate::search::SearchEverywhere>,
     pub find_bar: Option<crate::search::FindBar>,
     pub find_in_files: Option<crate::search::FindInFiles>,
@@ -111,6 +112,7 @@ impl DotCraftApp {
             runner: Runner::new(waker.clone()),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
+            nuget: None,
             search_everywhere: None,
             find_bar: None,
             find_in_files: None,
@@ -516,6 +518,11 @@ impl DotCraftApp {
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
             Action::ZoomReset => self.set_zoom(ctx, 1.0),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
+            Action::RecentLocations => {
+                if !self.nav_back.is_empty() {
+                    self.dialog = Some(Dialog::RecentLocations { selected: 0 });
+                }
+            }
             Action::GotoLine => {
                 if let Some(d) = self.docs.active_doc() {
                     let (l, c) = d.editor.caret_line_col();
@@ -528,7 +535,7 @@ impl DotCraftApp {
             }
             other => {
                 // Not available yet in this build: say so instead of doing nothing.
-                if matches!(other, Action::RecentLocations | Action::Debug | Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::RunToCursor | Action::Evaluate) {
+                if matches!(other, Action::Debug | Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::RunToCursor | Action::Evaluate) {
                     self.notify(tr("This action is not available yet"), false);
                 }
             }
@@ -704,6 +711,7 @@ impl DotCraftApp {
                 ExplorerAction::CopyPath(path) => ctx.copy_text(path.display().to_string()),
                 ExplorerAction::Reveal(path) => reveal_in_file_manager(&path),
                 ExplorerAction::OpenInTerminal(dir) => self.open_terminal(Some(dir)),
+                ExplorerAction::ManagePackages(project) => self.nuget = Some(crate::ui::nuget::NugetDialog::new(project, self.waker.clone())),
             }
         }
     }
