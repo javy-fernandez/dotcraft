@@ -3,7 +3,7 @@
 //! movements), so they can be tested without any UI.
 
 use crate::buffer::line_len;
-use crate::change::{Change, ChangeSet};
+use crate::change::{Assoc, Change, ChangeSet};
 use crate::selection::{Range, Selection};
 use ropey::Rope;
 
@@ -349,7 +349,6 @@ pub fn type_char(rope: &Rope, sel: &Selection, ch: char, auto_pair: bool) -> Edi
 pub fn newline(rope: &Rope, sel: &Selection, indent: &Indent) -> Edited {
     let mut changes = Vec::new();
     let mut carets = Vec::new();
-    let mut delta: isize = 0;
     for r in sel.ranges() {
         let line = rope.char_to_line(r.start());
         let line_start = rope.line_to_char(line);
@@ -375,11 +374,14 @@ pub fn newline(rope: &Rope, sel: &Selection, indent: &Indent) -> Edited {
             let n = t.chars().count();
             (t, n)
         };
-        carets.push(Range::point((start as isize + delta) as usize + caret_offset));
-        delta += text.chars().count() as isize - (end - start) as isize;
+        carets.push((start, caret_offset));
         changes.push(Change::new(start, end, text));
     }
-    Edited { changes: ChangeSet::new(changes), selection: Selection::new(carets, sel.primary_index()) }
+    // Carets from the final change set (overlapping changes of several carets on one line merge).
+    let cs = ChangeSet::new(changes);
+    let len = cs.len_after(rope.len_chars());
+    let carets: Vec<Range> = carets.into_iter().map(|(start, off)| Range::point((cs.map_pos(start, Assoc::Before) + off).min(len))).collect();
+    Edited { changes: cs, selection: Selection::new(carets, sel.primary_index()) }
 }
 
 /// Backspace: deletes selections, a pair of brackets around the caret, a whole indent level
