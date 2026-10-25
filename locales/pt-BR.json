@@ -564,5 +564,11 @@
   },
   "usings": {
     "Add Missing Usings": "Adicionar usings ausentes"
+  },
+  "tabs": {
+    "Color tabs by kind of file": "Colorir as guias pelo tipo de arquivo",
+    "Show All Tabs": "Mostrar todas as guias",
+    "Show Tabs in Multiple Rows": "Mostrar guias em várias linhas",
+    "Show tabs in multiple rows": "Mostrar as guias em várias linhas"
   }
 }

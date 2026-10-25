@@ -768,19 +768,45 @@ pub const ISLAND_GAP: i8 = 3;
 /// Rounded tab (EditorTabs / tool window tabs). Returns the tab's response and whether its
 /// "×" was clicked.
 pub fn tab(ui: &mut Ui, selected: bool, ico: Option<Ico>, text: &str, closable: bool) -> (Response, bool) {
+    tab_ex(ui, selected, ico, text, closable, TabStyle::default())
+}
+
+/// How an editor tab is drawn beyond its text: preview (italics), pinned (a pin instead of the
+/// close button until hovered) and a colour mark (file colours).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TabStyle {
+    pub italic: bool,
+    pub pinned: bool,
+    pub color: Option<Color32>,
+    /// Drag to reorder.
+    pub draggable: bool,
+}
+
+pub fn tab_ex(ui: &mut Ui, selected: bool, ico: Option<Ico>, text: &str, closable: bool, style: TabStyle) -> (Response, bool) {
     let p = pal(ui);
     let font = FontId::proportional(13.0);
-    let galley = ui.painter().layout_no_wrap(text.to_owned(), font, p.text);
+    let mut job = egui::text::LayoutJob::default();
+    job.append(text, 0.0, egui::TextFormat { font_id: font, color: p.text, italics: style.italic, ..Default::default() });
+    let galley = ui.painter().layout_job(job);
     let icon_w = if ico.is_some() { 22.0 } else { 0.0 };
-    let close_w = if closable { 22.0 } else { 0.0 };
+    let close_w = if closable || style.pinned { 22.0 } else { 0.0 };
     let w = 10.0 + icon_w + galley.size().x + close_w + 10.0;
-    let (rect, resp) = ui.allocate_exact_size(vec2(w, 28.0), Sense::click());
+    let sense = if style.draggable { Sense::click_and_drag() } else { Sense::click() };
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, 28.0), sense);
     // The text is painted, so screen readers (and UI tests) need it spelled out.
     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, text));
+    if let Some(c) = style.color {
+        // File colour: a light tint behind the tab (Rider's file colours).
+        ui.painter().rect_filled(rect, 6.0, c.gamma_multiply(if p.dark { 0.16 } else { 0.12 }));
+    }
     if selected {
         ui.painter().rect(rect, 6.0, p.tab_selected_bg, Stroke::new(1.0, p.tab_selected_border), egui::StrokeKind::Inside);
     } else if resp.hovered() {
         ui.painter().rect_filled(rect, 6.0, p.hover);
+    }
+    if let Some(c) = style.color {
+        let bar = Rect::from_min_max(egui::pos2(rect.left() + 8.0, rect.bottom() - 3.0), egui::pos2(rect.right() - 8.0, rect.bottom() - 1.0));
+        ui.painter().rect_filled(bar, 1.0, c);
     }
     let mut x = rect.left() + 10.0;
     if let Some(ico) = ico {
@@ -790,16 +816,20 @@ pub fn tab(ui: &mut Ui, selected: bool, ico: Option<Ico>, text: &str, closable: 
     ui.painter().galley(egui::pos2(x, rect.center().y - galley.size().y / 2.0), galley.clone(), p.text);
     x += galley.size().x + 4.0;
     let mut close = false;
-    if closable {
+    if closable || style.pinned {
         let cr = Rect::from_min_size(egui::pos2(x, rect.center().y - 8.0), Vec2::splat(16.0));
         let cresp = ui.interact(cr, resp.id.with("close"), Sense::click());
         if cresp.hovered() {
             ui.painter().rect_filled(cr.expand(1.0), 4.0, p.hover);
         }
-        if selected || resp.hovered() || cresp.hovered() {
+        let hovered = resp.hovered() || cresp.hovered();
+        if style.pinned && !(closable && hovered) {
+            // Pinned: a small pin where the close button goes (the close shows on hover).
+            icons::paint(ui.painter(), cr.shrink(1.0), ico::PIN, &p, true);
+        } else if selected || hovered {
             icons::paint(ui.painter(), cr.shrink(2.0), ico::CLOSE_SMALL, &p, true);
         }
-        close = cresp.clicked();
+        close = closable && cresp.clicked();
     }
     (resp, close)
 }

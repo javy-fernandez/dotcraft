@@ -195,6 +195,12 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
                         ui.label("");
                         ui.checkbox(&mut draft.single_click_open, tr("Open files with a single click in the Explorer"));
                         ui.end_row();
+                        ui.label("");
+                        ui.checkbox(&mut draft.tabs_multirow, tr("Show tabs in multiple rows"));
+                        ui.end_row();
+                        ui.label("");
+                        ui.checkbox(&mut draft.tab_colors, tr("Color tabs by kind of file"));
+                        ui.end_row();
                     }
                     SettingsPage::Keymap => {
                         ui.label(tr("Keymap"));

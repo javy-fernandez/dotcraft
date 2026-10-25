@@ -7,3 +7,4 @@
 cc b1b2e1e5efe67c9681eab7a30e8a5c24a13b8c74c0f76779b7516ccc1be26252 # shrinks to text = "", steps = [[(0.0, 0.0, "")]]
 cc 034ac1d2a67b4c14f4dbe38b6f19cbba36634a5e4766b2f98c9f31ab7cacc2a3 # shrinks to text = "\n{ ({ (", frac = 0.1575436371037756
 cc 903aee28b81c4ec434d61de3b99df1348c18ae930d430f1a15adcff37b4221f4 # shrinks to text = "ñ ", a = 0.0, b = 0.5445595932368079, op = 2
+cc 7d6239d77a3519cb6a382d1e20d8d6470147b9607038decac42521e3147531ad # shrinks to text = " \t", a = 0.0, b = 0.0, op = 2

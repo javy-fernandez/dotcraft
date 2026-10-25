@@ -34,86 +34,9 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         return;
     }
     let full = ui.max_rect();
-    let tabs_rect = Rect::from_min_size(full.min, vec2(full.width(), TABS_H));
     let mut commands = Vec::new();
-    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(tabs_rect.shrink2(vec2(6.0, 0.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
-    child.set_clip_rect(tabs_rect.intersect(ui.clip_rect()));
-    egui::ScrollArea::horizontal().id_salt("editor_tabs").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).show(&mut child, |ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        ui.horizontal_centered(|ui| {
-            for i in 0..app.docs.list.len() {
-                let doc = &app.docs.list[i];
-                let selected = app.docs.active == Some(i);
-                let mut title = doc.name();
-                if doc.is_modified() {
-                    title.push_str(" *");
-                }
-                let (resp, close) = theme::tab(ui, selected, Some(icons::for_file(&doc.name())), &title, true);
-                if selected && app.focus_editor {
-                    resp.scroll_to_me(None);
-                }
-                let resp = resp.on_hover_text(doc.path.display().to_string());
-                if close || resp.middle_clicked() {
-                    commands.push(TabCommand::Close(i));
-                } else if resp.clicked() {
-                    app.docs.activate(i);
-                    app.focus_editor = true;
-                    app.session_dirty = true;
-                }
-                resp.context_menu(|ui| {
-                    ui.set_min_width(220.0);
-                    let shortcut = app.keymap.shortcut_text(Action::CloseTab).unwrap_or_default();
-                    if theme::menu_entry(ui, Some(ico::CLOSE), tr("Close"), Some(&shortcut), false, true).clicked() {
-                        commands.push(TabCommand::Close(i));
-                        ui.close();
-                    }
-                    if theme::menu_item(ui, Some(ico::CLOSE), tr("Close Other Tabs"), false).clicked() {
-                        commands.push(TabCommand::CloseOthers(i));
-                        ui.close();
-                    }
-                    if theme::menu_item(ui, Some(ico::CLOSE), tr("Close Tabs to the Right"), false).clicked() {
-                        commands.push(TabCommand::CloseRight(i));
-                        ui.close();
-                    }
-                    if theme::menu_item(ui, Some(ico::CLOSE), tr("Close All Tabs"), false).clicked() {
-                        commands.push(TabCommand::CloseAll);
-                        ui.close();
-                    }
-                    ui.separator();
-                    let pin = if app.docs.list[i].pinned { tr("Unpin Tab") } else { tr("Pin Tab") };
-                    if theme::menu_item(ui, Some(ico::PIN), pin, false).clicked() {
-                        commands.push(TabCommand::Pin(i));
-                        ui.close();
-                    }
-                    ui.separator();
-                    if theme::menu_item(ui, Some(ico::COPY), tr("Copy Path"), false).clicked() {
-                        commands.push(TabCommand::CopyPath(i));
-                        ui.close();
-                    }
-                    if app.vcs.repo.is_some() {
-                        let on = app.vcs.blame_for.as_deref() == Some(app.docs.list[i].path.as_path());
-                        if theme::menu_entry(ui, Some(ico::HISTORY), tr("Annotate with Git Blame"), None, on, true).clicked() {
-                            commands.push(TabCommand::Blame(i));
-                            ui.close();
-                        }
-                        if theme::menu_item(ui, Some(ico::DIFF), tr("Show Diff"), false).clicked() {
-                            commands.push(TabCommand::Diff(i));
-                            ui.close();
-                        }
-                    }
-                    if theme::menu_item(ui, Some(ico::LOCATE), tr("Select in Explorer"), false).clicked() {
-                        commands.push(TabCommand::Locate(i));
-                        ui.close();
-                    }
-                    let reveal = if cfg!(target_os = "macos") { tr("Reveal in Finder") } else { tr("Open in Explorer") };
-                    if theme::menu_item(ui, Some(ico::OPEN), reveal, false).clicked() {
-                        commands.push(TabCommand::Reveal(i));
-                        ui.close();
-                    }
-                });
-            }
-        });
-    });
+    let tabs_bottom = tab_strip(app, ui, full, &mut commands);
+    let tabs_rect = Rect::from_min_max(full.min, pos2(full.right(), tabs_bottom));
     // Separator under the tabs.
     ui.painter().hline(full.x_range(), tabs_rect.bottom() - 0.5, egui::Stroke::new(1.0, p.island_border));
 
@@ -201,6 +124,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
                 app.session_dirty = true;
             }
             EditorEvent::CaretMoved => app.session_dirty = true,
+            // Editing a preview tab keeps it.
+            EditorEvent::Changed => doc.preview = false,
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
             _ => {}
         }
@@ -270,6 +195,217 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     for a in insight_actions {
         app.run_insight_action(a, caret_screen);
     }
+}
+
+/// Whether `path` belongs to a test project (its nearest `.csproj`), cached per project.
+fn in_test_project(path: &std::path::Path) -> bool {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static CACHE: Mutex<Option<HashMap<std::path::PathBuf, bool>>> = Mutex::new(None);
+    let mut dir = path.parent();
+    while let Some(d) = dir {
+        let project = std::fs::read_dir(d).ok().and_then(|rd| rd.flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|x| x == "csproj")));
+        if let Some(p) = project {
+            let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            return *cache.get_or_insert_with(HashMap::new).entry(p.clone()).or_insert_with(|| rc_dotnet::ProjectInfo::load(&p).is_ok_and(|i| i.is_test));
+        }
+        dir = d.parent();
+    }
+    false
+}
+
+/// Rider's file colours, by kind of file: tests green, Razor/HTML/CSS orange, configuration
+/// and project files blue; C# keeps the plain tab.
+fn file_color(path: &std::path::Path) -> Option<egui::Color32> {
+    let name = path.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let in_tests = in_test_project(path);
+    let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    if ext == "cs" && (in_tests || name.ends_with("tests.cs")) {
+        Some(egui::Color32::from_rgb(0x5F, 0xB8, 0x65))
+    } else if matches!(ext.as_str(), "razor" | "cshtml" | "html" | "htm" | "css" | "scss" | "js" | "ts") {
+        Some(egui::Color32::from_rgb(0xE0, 0x8E, 0x3C))
+    } else if matches!(ext.as_str(), "json" | "xml" | "csproj" | "fsproj" | "sln" | "slnx" | "props" | "targets" | "config" | "yaml" | "yml" | "editorconfig") {
+        Some(egui::Color32::from_rgb(0x4A, 0x8F, 0xE0))
+    } else {
+        None
+    }
+}
+
+/// The tab strip: one scrolling row with a list of every tab (Rider's hidden tabs), or several
+/// rows (Settings › Editor). Tabs drag to reorder; returns the strip's bottom.
+fn tab_strip(app: &mut DotCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec<TabCommand>) -> f32 {
+    let multirow = app.settings.tabs_multirow;
+    let colors = app.settings.tab_colors;
+    let drag_id = egui::Id::new("tab_drag");
+    let list_w = if multirow { 0.0 } else { 34.0 };
+    // One row: the strip's height, tabs centred. Several rows: from the top, as tall as needed.
+    let area = if multirow {
+        Rect::from_min_max(full.min + vec2(6.0, 5.0), pos2(full.right() - 6.0, full.bottom()))
+    } else {
+        Rect::from_min_max(full.min + vec2(6.0, 0.0), pos2(full.right() - 6.0 - list_w, full.top() + TABS_H))
+    };
+    let mut rects: Vec<Rect> = Vec::new();
+    let layout = if multirow { egui::Layout::top_down(egui::Align::Min) } else { egui::Layout::left_to_right(egui::Align::Center) };
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area).layout(layout));
+    child.set_clip_rect(area.intersect(ui.clip_rect()));
+    let mut draw_tabs = |ui: &mut Ui, rects: &mut Vec<Rect>| {
+        ui.spacing_mut().item_spacing = vec2(2.0, 4.0);
+        for i in 0..app.docs.list.len() {
+            let doc = &app.docs.list[i];
+            let selected = app.docs.active == Some(i);
+            let mut title = doc.name();
+            if doc.is_modified() {
+                title.push_str(" *");
+            }
+            let style = theme::TabStyle { italic: doc.preview, pinned: doc.pinned, color: if colors { file_color(&doc.path) } else { None }, draggable: true };
+            let (resp, close) = theme::tab_ex(ui, selected, Some(icons::for_file(&doc.name())), &title, true, style);
+            rects.push(resp.rect);
+            if selected && app.focus_editor {
+                resp.scroll_to_me(None);
+            }
+            if resp.drag_started() {
+                ui.ctx().data_mut(|d| d.insert_temp(drag_id, i));
+            }
+            let resp = resp.on_hover_text(doc.path.display().to_string());
+            if close || resp.middle_clicked() {
+                commands.push(TabCommand::Close(i));
+            } else if resp.double_clicked() {
+                // Double click keeps a preview tab open (Rider, VS Code).
+                app.docs.list[i].preview = false;
+            } else if resp.clicked() {
+                app.docs.activate(i);
+                app.focus_editor = true;
+                app.session_dirty = true;
+            }
+            tab_menu(app, &resp, i, commands);
+        }
+    };
+    if multirow {
+        child.horizontal_wrapped(|ui| draw_tabs(ui, &mut rects));
+    } else {
+        // The mouse wheel scrolls the row sideways.
+        if ui.rect_contains_pointer(area) {
+            ui.input_mut(|i| {
+                if i.smooth_scroll_delta.x == 0.0 && i.smooth_scroll_delta.y != 0.0 {
+                    i.smooth_scroll_delta = vec2(i.smooth_scroll_delta.y, 0.0);
+                }
+            });
+        }
+        egui::ScrollArea::horizontal().id_salt("editor_tabs").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).show(&mut child, |ui| {
+            ui.horizontal_centered(|ui| draw_tabs(ui, &mut rects));
+        });
+    }
+    let bottom = if multirow { rects.iter().map(|r| r.bottom()).fold(full.top() + TABS_H - 5.0, f32::max) + 5.0 } else { full.top() + TABS_H };
+    // Dragging a tab: a marker where it would go, the move on release.
+    if let Some(from) = ui.ctx().data(|d| d.get_temp::<usize>(drag_id)) {
+        let pointer = ui.ctx().pointer_interact_pos();
+        let target = pointer.map(|p| {
+            rects
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| p.y >= r.top() - 2.0 && p.y <= r.bottom() + 2.0 || !multirow)
+                .find(|(_, r)| p.x < r.center().x)
+                .map(|(i, _)| i)
+                .unwrap_or(rects.len())
+        });
+        if let Some(t) = target
+            && let Some(r) = rects.get(t.min(rects.len().saturating_sub(1)))
+        {
+            let x = if t < rects.len() { r.left() - 1.0 } else { r.right() + 1.0 };
+            ui.painter().vline(x, r.y_range(), egui::Stroke::new(2.0, rc_kit::pal(ui).accent));
+        }
+        if !ui.input(|i| i.pointer.any_down()) {
+            ui.ctx().data_mut(|d| d.remove::<usize>(drag_id));
+            if let Some(t) = target {
+                let to = if t > from { t - 1 } else { t };
+                // Pinned tabs stay before the others.
+                let pinned = app.docs.list.iter().filter(|d| d.pinned).count();
+                let to = if app.docs.list[from].pinned { to.min(pinned.saturating_sub(1)) } else { to.max(pinned) };
+                app.docs.move_tab(from, to.min(app.docs.list.len() - 1));
+                app.session_dirty = true;
+            }
+        }
+    }
+    // Every open tab, for the ones scrolled out of sight.
+    if !multirow {
+        let br = Rect::from_center_size(pos2(full.right() - 6.0 - 15.0, full.top() + TABS_H / 2.0), vec2(26.0, 26.0));
+        let mut b = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        let resp = theme::icon_button(&mut b, ico::CHEVRON_DOWN, true, tr("Show All Tabs"));
+        egui::Popup::menu(&resp).show(|ui| {
+            ui.set_min_width(260.0);
+            let mut pick = None;
+            for (i, d) in app.docs.list.iter().enumerate() {
+                if theme::menu_item(ui, Some(icons::for_file(&d.name())), &d.name(), app.docs.active == Some(i)).on_hover_text(d.path.display().to_string()).clicked() {
+                    pick = Some(i);
+                    ui.close();
+                }
+            }
+            if let Some(i) = pick {
+                app.docs.activate(i);
+                app.focus_editor = true;
+            }
+        });
+    }
+    bottom
+}
+
+fn tab_menu(app: &mut DotCraftApp, resp: &egui::Response, i: usize, commands: &mut Vec<TabCommand>) {
+    resp.context_menu(|ui| {
+        ui.set_min_width(220.0);
+        let shortcut = app.keymap.shortcut_text(Action::CloseTab).unwrap_or_default();
+        if theme::menu_entry(ui, Some(ico::CLOSE), tr("Close"), Some(&shortcut), false, true).clicked() {
+            commands.push(TabCommand::Close(i));
+            ui.close();
+        }
+        if theme::menu_item(ui, Some(ico::CLOSE), tr("Close Other Tabs"), false).clicked() {
+            commands.push(TabCommand::CloseOthers(i));
+            ui.close();
+        }
+        if theme::menu_item(ui, Some(ico::CLOSE), tr("Close Tabs to the Right"), false).clicked() {
+            commands.push(TabCommand::CloseRight(i));
+            ui.close();
+        }
+        if theme::menu_item(ui, Some(ico::CLOSE), tr("Close All Tabs"), false).clicked() {
+            commands.push(TabCommand::CloseAll);
+            ui.close();
+        }
+        ui.separator();
+        let pin = if app.docs.list[i].pinned { tr("Unpin Tab") } else { tr("Pin Tab") };
+        if theme::menu_item(ui, Some(ico::PIN), pin, false).clicked() {
+            commands.push(TabCommand::Pin(i));
+            ui.close();
+        }
+        if theme::menu_entry(ui, None, tr("Show Tabs in Multiple Rows"), None, app.settings.tabs_multirow, true).clicked() {
+            app.settings.tabs_multirow = !app.settings.tabs_multirow;
+            let _ = app.settings.save();
+            ui.close();
+        }
+        ui.separator();
+        if theme::menu_item(ui, Some(ico::COPY), tr("Copy Path"), false).clicked() {
+            commands.push(TabCommand::CopyPath(i));
+            ui.close();
+        }
+        if app.vcs.repo.is_some() {
+            let on = app.vcs.blame_for.as_deref() == Some(app.docs.list[i].path.as_path());
+            if theme::menu_entry(ui, Some(ico::HISTORY), tr("Annotate with Git Blame"), None, on, true).clicked() {
+                commands.push(TabCommand::Blame(i));
+                ui.close();
+            }
+            if theme::menu_item(ui, Some(ico::DIFF), tr("Show Diff"), false).clicked() {
+                commands.push(TabCommand::Diff(i));
+                ui.close();
+            }
+        }
+        if theme::menu_item(ui, Some(ico::LOCATE), tr("Select in Explorer"), false).clicked() {
+            commands.push(TabCommand::Locate(i));
+            ui.close();
+        }
+        let reveal = if cfg!(target_os = "macos") { tr("Reveal in Finder") } else { tr("Open in Explorer") };
+        if theme::menu_item(ui, Some(ico::OPEN), reveal, false).clicked() {
+            commands.push(TabCommand::Reveal(i));
+            ui.close();
+        }
+    });
 }
 
 fn run_tab_commands(app: &mut DotCraftApp, ui: &Ui, commands: Vec<TabCommand>) {

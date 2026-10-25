@@ -564,5 +564,11 @@
   },
   "usings": {
     "Add Missing Usings": "Ajouter les using manquants"
+  },
+  "tabs": {
+    "Color tabs by kind of file": "Colorer les onglets selon le type de fichier",
+    "Show All Tabs": "Afficher tous les onglets",
+    "Show Tabs in Multiple Rows": "Afficher les onglets sur plusieurs lignes",
+    "Show tabs in multiple rows": "Afficher les onglets sur plusieurs lignes"
   }
 }

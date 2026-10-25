@@ -18,6 +18,9 @@ pub struct Doc {
     pub mtime: Option<SystemTime>,
     pub bom: bool,
     pub pinned: bool,
+    /// Opened with a single click and not edited yet: the next single-click open replaces it
+    /// (title in italics, like Rider and VS Code).
+    pub preview: bool,
     /// The file changed on disk while it had unsaved edits.
     pub conflict: bool,
 }
@@ -99,10 +102,42 @@ impl Docs {
         } else {
             editor.request_parse(&self.pool);
         }
-        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, conflict: false });
+        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)
+    }
+
+    /// Single-click open: shows `path` in the preview tab, replacing the previous preview.
+    pub fn open_preview(&mut self, path: &Path) -> Result<usize, String> {
+        let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        if let Some(i) = self.index_of(&canon) {
+            self.activate(i);
+            return Ok(i);
+        }
+        let old = self.list.iter().position(|d| d.preview && !d.is_modified());
+        let i = self.open(path)?;
+        self.list[i].preview = true;
+        match old {
+            Some(o) => {
+                let doc = self.list.remove(i);
+                self.list[o] = doc;
+                self.activate(o);
+                Ok(o)
+            }
+            None => Ok(i),
+        }
+    }
+
+    /// Moves tab `from` to `to` (drag and drop), keeping the active document.
+    pub fn move_tab(&mut self, from: usize, to: usize) {
+        if from >= self.list.len() || to >= self.list.len() || from == to {
+            return;
+        }
+        let active = self.active.map(|a| self.list[a].editor.id);
+        let doc = self.list.remove(from);
+        self.list.insert(to, doc);
+        self.active = active.and_then(|id| self.list.iter().position(|d| d.editor.id == id));
     }
 
     pub fn activate(&mut self, i: usize) {
@@ -232,5 +267,28 @@ mod tests {
         let p = dir.path().join("x.dll");
         std::fs::write(&p, [0u8, 1, 2, 3]).unwrap();
         assert!(read_text(&p).is_err());
+    }
+
+    #[test]
+    fn preview_tabs_are_replaced_until_kept_and_tabs_reorder() {
+        let dir = tempfile::tempdir().unwrap();
+        for f in ["a.cs", "b.cs", "c.cs", "d.cs"] {
+            std::fs::write(dir.path().join(f), "class X {}\n").unwrap();
+        }
+        let mut docs = Docs::new(ParserPool::new(Arc::new(|| {})));
+        docs.open(&dir.path().join("a.cs")).unwrap();
+        docs.open_preview(&dir.path().join("b.cs")).unwrap();
+        assert!(docs.list[1].preview);
+        // The next single-click open replaces the preview in place.
+        docs.open_preview(&dir.path().join("c.cs")).unwrap();
+        assert_eq!(docs.list.iter().map(|d| d.name()).collect::<Vec<_>>(), ["a.cs", "c.cs"]);
+        assert_eq!(docs.active, Some(1));
+        // Kept (edited or double-clicked): the next preview opens a new tab.
+        docs.list[1].preview = false;
+        docs.open_preview(&dir.path().join("d.cs")).unwrap();
+        assert_eq!(docs.list.len(), 3);
+        docs.move_tab(2, 0);
+        assert_eq!(docs.list.iter().map(|d| d.name()).collect::<Vec<_>>(), ["d.cs", "a.cs", "c.cs"]);
+        assert_eq!(docs.active_doc().unwrap().name(), "d.cs");
     }
 }

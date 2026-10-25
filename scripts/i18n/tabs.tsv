@@ -1,0 +1,6 @@
+# Editor tabs. Import: python3 scripts/i18n_tsv.py tabs scripts/i18n/tabs.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Color tabs by kind of file	Colorear las pestañas según el tipo de archivo	Colorer les onglets selon le type de fichier	Colorir as guias pelo tipo de arquivo	Tabs nach Dateiart einfärben	Koloruj karty według rodzaju pliku	按文件类型为标签页着色	ファイルの種類でタブに色を付ける
+Show All Tabs	Mostrar todas las pestañas	Afficher tous les onglets	Mostrar todas as guias	Alle Tabs anzeigen	Pokaż wszystkie karty	显示所有标签页	すべてのタブを表示
+Show Tabs in Multiple Rows	Mostrar pestañas en varias filas	Afficher les onglets sur plusieurs lignes	Mostrar guias em várias linhas	Tabs in mehreren Zeilen anzeigen	Pokaż karty w wielu wierszach	多行显示标签页	タブを複数行で表示
+Show tabs in multiple rows	Mostrar las pestañas en varias filas	Afficher les onglets sur plusieurs lignes	Mostrar as guias em várias linhas	Tabs in mehreren Zeilen anzeigen	Pokazuj karty w wielu wierszach	多行显示标签页	タブを複数行で表示する

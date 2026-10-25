@@ -39,6 +39,10 @@ pub struct Settings {
     pub autosave: bool,
     /// Open files from the explorer with a single click (otherwise a double click).
     pub single_click_open: bool,
+    /// Editor tabs wrap into several rows instead of scrolling.
+    pub tabs_multirow: bool,
+    /// Tabs tinted by kind of file (tests, web, configuration).
+    pub tab_colors: bool,
     /// Last folder a new solution was created in.
     pub new_project_location: Option<PathBuf>,
     /// The last tool window layout (sides, sizes, open windows): solutions opened for the
@@ -67,6 +71,8 @@ impl Default for Settings {
             right_margin: 120,
             autosave: true,
             single_click_open: false,
+            tabs_multirow: false,
+            tab_colors: true,
             new_project_location: None,
             tool_windows: Default::default(),
             dotnet_path: None,

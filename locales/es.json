@@ -564,5 +564,11 @@
   },
   "usings": {
     "Add Missing Usings": "Añadir usings que faltan"
+  },
+  "tabs": {
+    "Color tabs by kind of file": "Colorear las pestañas según el tipo de archivo",
+    "Show All Tabs": "Mostrar todas las pestañas",
+    "Show Tabs in Multiple Rows": "Mostrar pestañas en varias filas",
+    "Show tabs in multiple rows": "Mostrar las pestañas en varias filas"
   }
 }

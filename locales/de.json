@@ -564,5 +564,11 @@
   },
   "usings": {
     "Add Missing Usings": "Fehlende using-Direktiven hinzufügen"
+  },
+  "tabs": {
+    "Color tabs by kind of file": "Tabs nach Dateiart einfärben",
+    "Show All Tabs": "Alle Tabs anzeigen",
+    "Show Tabs in Multiple Rows": "Tabs in mehreren Zeilen anzeigen",
+    "Show tabs in multiple rows": "Tabs in mehreren Zeilen anzeigen"
   }
 }

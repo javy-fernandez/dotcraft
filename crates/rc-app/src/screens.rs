@@ -138,6 +138,23 @@ fn screens() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("add-item-{suffix}.png"))).unwrap();
         h.state_mut().dialog = None;
+        // Many tabs: one scrolling row, then several rows, with a pinned and a preview tab.
+        {
+            let app = h.state_mut();
+            for f in ["Shop/src/Shop.Core/Order.cs", "Shop/src/Shop.Core/OrderLine.cs", "Shop/src/Shop.Core/PriceCalculator.cs", "Shop/src/Shop.Api/Controllers/OrdersController.cs", "Shop/src/Shop.Api/appsettings.json", "Shop/tests/Shop.Core.XunitTests/PriceCalculatorTests.cs", "Shop/src/Shop.Cli/Program.cs", "Shop/Shop.sln"] {
+                app.open_file(&fixtures().join(f));
+            }
+            let i = app.docs.index_of(&fixtures().join("Shop/src/Shop.Core/Order.cs").canonicalize().unwrap()).unwrap();
+            app.docs.list[i].pinned = true;
+            app.docs.move_tab(i, 0);
+            app.docs.open_preview(&fixtures().join("Shop/src/Shop.Core/Shop.Core.csproj")).unwrap();
+        }
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("tabs-{suffix}.png"))).unwrap();
+        h.state_mut().settings.tabs_multirow = true;
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("tabs-rows-{suffix}.png"))).unwrap();
+        h.state_mut().settings.tabs_multirow = false;
         // The explorer moved to the right side.
         h.state_mut().dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
         h.run_steps(4);

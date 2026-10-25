@@ -862,8 +862,11 @@ impl DotCraftApp {
             match a {
                 ExplorerAction::Open(p) => self.open_file(&p),
                 ExplorerAction::Preview(p) => {
-                    self.open_file(&p);
-                    self.focus_editor = false;
+                    self.push_nav();
+                    match self.docs.open_preview(&p) {
+                        Ok(_) => self.session_dirty = true,
+                        Err(e) => self.notify(e, true),
+                    }
                 }
                 ExplorerAction::Collapse => {
                     self.explorer.expanded.retain(|k| k == "sln");

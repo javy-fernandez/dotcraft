@@ -564,5 +564,11 @@
   },
   "usings": {
     "Add Missing Usings": "不足している using を追加"
+  },
+  "tabs": {
+    "Color tabs by kind of file": "ファイルの種類でタブに色を付ける",
+    "Show All Tabs": "すべてのタブを表示",
+    "Show Tabs in Multiple Rows": "タブを複数行で表示",
+    "Show tabs in multiple rows": "タブを複数行で表示する"
   }
 }
