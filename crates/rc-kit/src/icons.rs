@@ -268,6 +268,7 @@ pub mod ico {
         RUN_TO_CURSOR = "run/runToCursor",
         EVALUATE = "run/evaluateExpression",
         SHOW_EXECUTION_POINT = "run/showCurrentFrame",
+        EXECUTION_POINT = "debugger/nextStatement",
         MUTE_BREAKPOINTS = "run/muteBreakpoints",
         VIEW_BREAKPOINTS = "run/viewBreakpoints",
         RESTART_FAILED = "run/restartFailedTests",

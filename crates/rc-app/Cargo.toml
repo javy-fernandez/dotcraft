@@ -27,6 +27,7 @@ rc-lsp.workspace = true
 rc-term.workspace = true
 rc-search.workspace = true
 rc-vcs.workspace = true
+rc-dap.workspace = true
 rfd = "0.17"
 muda = { version = "0.21", default-features = false }
 

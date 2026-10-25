@@ -157,7 +157,23 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         from_menu.extend(rc_editor::run_action(&ed_ui, &mut doc.editor, &app.editor_config, *a));
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
-    app.insight.on_editor_events(doc, &out.events);
+    // While paused, hovering shows the debugger's value instead of the symbol's documentation.
+    if app.debugger.stopped() {
+        let insight_events: Vec<_> = out.events.iter().filter(|e| !matches!(e, EditorEvent::HoverAt { .. })).cloned().collect();
+        app.insight.on_editor_events(doc, &insight_events);
+        for e in &out.events {
+            match e {
+                EditorEvent::HoverAt { pos, screen } => {
+                    let expr = crate::debugger::expression_at(doc.editor.buffer.rope(), *pos);
+                    app.debugger.hover(doc.editor.id, *pos, *screen, expr);
+                }
+                EditorEvent::HoverEnd | EditorEvent::Changed | EditorEvent::CaretMoved => app.debugger.hover_result = None,
+                _ => {}
+            }
+        }
+    } else {
+        app.insight.on_editor_events(doc, &out.events);
+    }
     if let Some(data) = out.accepted_completion {
         app.insight.completion_accepted(doc, data);
     }
@@ -168,6 +184,20 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         match ev {
             EditorEvent::GutterClicked { line } => {
                 doc.editor.toggle_breakpoint(line);
+                if !doc.editor.breakpoints.contains_key(&line) {
+                    app.debugger.conditions.remove(&(doc.path.clone(), line));
+                }
+                app.session_dirty = true;
+            }
+            EditorEvent::GutterSecondaryClicked { line, .. } => {
+                let path = doc.path.clone();
+                let present = doc.editor.breakpoints.get(&line).copied();
+                if present.is_none() {
+                    doc.editor.breakpoints.insert(line, rc_editor::BreakpointKind::Normal);
+                }
+                let condition = app.debugger.conditions.get(&(path.clone(), line)).cloned().unwrap_or_default();
+                let enabled = present != Some(rc_editor::BreakpointKind::Disabled);
+                app.dialog = Some(crate::ui::dialogs::Dialog::BreakpointProperties { path, line, condition, enabled, focus: true });
                 app.session_dirty = true;
             }
             EditorEvent::CaretMoved => app.session_dirty = true,
@@ -175,12 +205,26 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
             _ => {}
         }
     }
+    if let Some((d, _, screen, text)) = &app.debugger.hover_result
+        && *d == doc.editor.id
+    {
+        let p = rc_kit::pal(ui);
+        egui::Area::new(egui::Id::new("debug_hover")).order(egui::Order::Tooltip).fixed_pos(*screen + vec2(0.0, 14.0)).show(ui.ctx(), |ui| {
+            egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::symmetric(8, 5)).show(ui, |ui| {
+                ui.set_max_width(520.0);
+                ui.label(egui::RichText::new(text).monospace().size(12.5).color(p.text));
+            });
+        });
+    }
     let mut insight_actions = Vec::new();
     for a in out.actions {
         match a {
             Action::ToggleBreakpoint => {
                 let line = doc.editor.caret_line_col().0;
                 doc.editor.toggle_breakpoint(line);
+                if !doc.editor.breakpoints.contains_key(&line) {
+                    app.debugger.conditions.remove(&(doc.path.clone(), line));
+                }
                 app.session_dirty = true;
             }
             Action::NextError | Action::PreviousError => {

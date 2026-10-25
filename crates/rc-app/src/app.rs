@@ -43,6 +43,7 @@ pub struct DotCraftApp {
     pub notices: Vec<Notice>,
     pub insight: Insight,
     pub runner: Runner,
+    pub debugger: crate::debugger::Debugger,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
     pub nuget: Option<crate::ui::nuget::NugetDialog>,
@@ -109,6 +110,7 @@ impl DotCraftApp {
             notices: Vec::new(),
             insight: Insight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
+            debugger: crate::debugger::Debugger::new(waker.clone()),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: None,
@@ -251,8 +253,17 @@ impl DotCraftApp {
         for (path, bps) in &s.breakpoints {
             if let Some(i) = self.docs.index_of(path) {
                 for (line, cond) in bps {
+                    let cond = cond.as_ref().filter(|c| !c.is_empty());
                     let kind = if cond.is_some() { rc_editor::BreakpointKind::Conditional } else { rc_editor::BreakpointKind::Normal };
                     self.docs.list[i].editor.breakpoints.insert(*line, kind);
+                    if let Some(c) = cond {
+                        self.debugger.conditions.insert((path.clone(), *line), c.clone());
+                    }
+                }
+                for line in s.disabled_breakpoints.get(path).into_iter().flatten() {
+                    if let Some(k) = self.docs.list[i].editor.breakpoints.get_mut(line) {
+                        *k = rc_editor::BreakpointKind::Disabled;
+                    }
                 }
             }
         }
@@ -275,7 +286,7 @@ impl DotCraftApp {
             .list
             .iter()
             .filter(|d| !d.editor.breakpoints.is_empty())
-            .map(|d| (d.path.clone(), d.editor.breakpoints.iter().map(|(l, k)| (*l, (*k == rc_editor::BreakpointKind::Conditional).then(String::new))).collect()))
+            .map(|d| (d.path.clone(), d.editor.breakpoints.keys().map(|l| (*l, self.debugger.conditions.get(&(d.path.clone(), *l)).cloned())).collect()))
             .collect();
         Session {
             files,
@@ -288,6 +299,13 @@ impl DotCraftApp {
             },
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             breakpoints,
+            disabled_breakpoints: self
+                .docs
+                .list
+                .iter()
+                .map(|d| (d.path.clone(), d.editor.breakpoints.iter().filter(|(_, k)| **k == rc_editor::BreakpointKind::Disabled).map(|(l, _)| *l).collect::<Vec<_>>()))
+                .filter(|(_, v)| !v.is_empty())
+                .collect(),
         }
     }
 
@@ -484,7 +502,54 @@ impl DotCraftApp {
                 let outs = self.runner.run_selected();
                 crate::ui::run_windows::handle_outputs(self, outs);
             }
-            Action::StopRun => self.runner.stop_all(),
+            Action::StopRun => {
+                if self.debugger.active() {
+                    self.debugger.stop();
+                } else {
+                    self.runner.stop_all();
+                }
+            }
+            // F5 while paused continues (Visual Studio).
+            Action::Debug if self.debugger.stopped() => {
+                if let Some(s) = &mut self.debugger.session {
+                    s.continue_();
+                }
+            }
+            Action::Debug => {
+                self.save_all_docs();
+                match self.runner.selected_config().cloned() {
+                    Some(config) => {
+                        let dotnet = dotnet_path(&self.settings);
+                        let outs = self.debugger.start(config, &dotnet, self.settings.netcoredbg_path.as_deref(), &self.docs);
+                        self.handle_debug(outs);
+                    }
+                    None => self.notify(tr("There is no run configuration to debug"), false),
+                }
+            }
+            Action::Resume | Action::StepOver | Action::StepInto | Action::StepOut => {
+                if let Some(s) = self.debugger.session.as_mut().filter(|s| s.state().is_stopped()) {
+                    match action {
+                        Action::Resume => s.continue_(),
+                        Action::StepOver => s.step_over(),
+                        Action::StepInto => s.step_in(),
+                        _ => s.step_out(),
+                    }
+                }
+            }
+            Action::RunToCursor => {
+                if let Some((path, line)) = self.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col().0)) {
+                    self.debugger.run_to_cursor(&path, line);
+                }
+            }
+            Action::Evaluate => {
+                if self.debugger.stopped() {
+                    let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.contains('\n')).unwrap_or_default();
+                    if !text.is_empty() {
+                        self.debugger.evaluate(text.clone());
+                    }
+                    self.dialog = Some(Dialog::Evaluate { expression: text, focus: true });
+                }
+            }
             Action::Commit => self.dock.show(ToolWindow::Commit),
             Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => {
                 if self.workspace.is_some() {
@@ -532,10 +597,20 @@ impl DotCraftApp {
                 // Esc in a tool window returns to the editor (IntelliJ).
                 self.focus_editor = true;
             }
-            other => {
-                // Not available yet in this build: say so instead of doing nothing.
-                if matches!(other, Action::Debug | Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::RunToCursor | Action::Evaluate) {
-                    self.notify(tr("This action is not available yet"), false);
+            _ => {}
+        }
+    }
+
+    pub fn handle_debug(&mut self, outs: Vec<crate::debugger::DebugOutput>) {
+        use crate::debugger::DebugOutput;
+        for o in outs {
+            match o {
+                DebugOutput::Notify(m, err) => self.notify(m, err),
+                DebugOutput::ShowDebugWindow => self.dock.show(ToolWindow::Debug),
+                DebugOutput::ShowLine(path, line) => {
+                    if self.docs.active_doc().is_none_or(|d| d.path != path) || self.docs.active_doc().is_some_and(|d| d.editor.caret_line_col().0 != line) {
+                        self.open_at(&path, line, 0);
+                    }
                 }
             }
         }
@@ -869,6 +944,8 @@ impl eframe::App for DotCraftApp {
         self.handle_insight(outputs);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
+        let outs = self.debugger.update(&mut self.docs);
+        self.handle_debug(outs);
         for (_, ev) in self.terminals.poll() {
             if let rc_term::SessionEvent::Clipboard(text) = ev {
                 ctx.copy_text(text);
@@ -890,6 +967,7 @@ impl eframe::App for DotCraftApp {
 
     fn on_exit(&mut self) {
         self.runner.stop_all();
+        self.debugger.stop();
         self.insight.stop();
         self.save_all_docs();
         self.save_session();

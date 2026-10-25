@@ -1,0 +1,39 @@
+# Debugger UI (phase 4). Import: python3 scripts/i18n_tsv.py debugger scripts/i18n/phase4.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Add Watch	Añadir inspección	Ajouter un espion	Adicionar inspeção	Überwachung hinzufügen	Dodaj czujkę	添加监视	ウォッチを追加
+Add a watch (Enter)	Añadir una inspección (Intro)	Ajouter un espion (Entrée)	Adicionar uma inspeção (Enter)	Überwachung hinzufügen (Eingabe)	Dodaj czujkę (Enter)	添加监视（回车）	ウォッチを追加 (Enter)
+Add to Watches	Añadir a inspecciones	Ajouter aux espions	Adicionar às inspeções	Zu Überwachungen hinzufügen	Dodaj do czujek	添加到监视	ウォッチに追加
+Breakpoint at {file}:{line}	Punto de interrupción en {file}:{line}	Point d'arrêt à {file}:{line}	Ponto de interrupção em {file}:{line}	Haltepunkt bei {file}:{line}	Punkt przerwania w {file}:{line}	断点位于 {file}:{line}	{file}:{line} のブレークポイント
+Building…	Compilando…	Compilation…	Compilando…	Wird erstellt…	Budowanie…	正在生成…	ビルド中…
+Cannot evaluate while running	No se puede evaluar en ejecución	Impossible d'évaluer pendant l'exécution	Não é possível avaliar em execução	Während der Ausführung nicht auswertbar	Nie można obliczyć podczas działania	运行时无法求值	実行中は評価できません
+Choose an application run configuration to debug	Elige una configuración de ejecución de aplicación para depurar	Choisissez une configuration d'exécution d'application à déboguer	Escolha uma configuração de execução de aplicativo para depurar	Wählen Sie eine Anwendungs-Ausführungskonfiguration zum Debuggen	Wybierz konfigurację uruchamiania aplikacji do debugowania	请选择要调试的应用程序运行配置	デバッグするアプリケーションの実行構成を選択してください
+Condition	Condición	Condition	Condição	Bedingung	Warunek	条件	条件
+Console	Consola	Console	Console	Konsole	Konsola	控制台	コンソール
+Copy Value	Copiar valor	Copier la valeur	Copiar valor	Wert kopieren	Kopiuj wartość	复制值	値をコピー
+Could not download netcoredbg: {error}	No se pudo descargar netcoredbg: {error}	Impossible de télécharger netcoredbg : {error}	Não foi possível baixar o netcoredbg: {error}	netcoredbg konnte nicht heruntergeladen werden: {error}	Nie można pobrać netcoredbg: {error}	无法下载 netcoredbg：{error}	netcoredbg をダウンロードできませんでした: {error}
+Debugger disconnected	Depurador desconectado	Débogueur déconnecté	Depurador desconectado	Debugger getrennt	Debuger rozłączony	调试器已断开	デバッガーが切断されました
+Disconnected	Desconectado	Déconnecté	Desconectado	Getrennt	Rozłączono	已断开	切断済み
+Done	Hecho	Terminé	Concluído	Fertig	Gotowe	完成	完了
+Downloading netcoredbg…	Descargando netcoredbg…	Téléchargement de netcoredbg…	Baixando netcoredbg…	netcoredbg wird heruntergeladen…	Pobieranie netcoredbg…	正在下载 netcoredbg…	netcoredbg をダウンロード中…
+Downloading the netcoredbg debugger (first use)…	Descargando el depurador netcoredbg (primer uso)…	Téléchargement du débogueur netcoredbg (première utilisation)…	Baixando o depurador netcoredbg (primeiro uso)…	Der Debugger netcoredbg wird heruntergeladen (erste Verwendung)…	Pobieranie debugera netcoredbg (pierwsze użycie)…	正在下载 netcoredbg 调试器（首次使用）…	netcoredbg デバッガーをダウンロード中 (初回のみ)…
+Enabled	Activado	Activé	Ativado	Aktiviert	Włączony	已启用	有効
+Evaluate	Evaluar	Évaluer	Avaliar	Auswerten	Oblicz	求值	評価
+Evaluate Expression	Evaluar expresión	Évaluer l'expression	Avaliar expressão	Ausdruck auswerten	Oblicz wyrażenie	计算表达式	式の評価
+Exception	Excepción	Exception	Exceção	Ausnahme	Wyjątek	异常	例外
+Exited with code {code}	Terminó con código {code}	Terminé avec le code {code}	Encerrado com código {code}	Beendet mit Code {code}	Zakończono z kodem {code}	已退出，代码 {code}	コード {code} で終了
+Expression	Expresión	Expression	Expressão	Ausdruck	Wyrażenie	表达式	式
+Load more frames	Cargar más marcos	Charger plus de cadres	Carregar mais quadros	Weitere Frames laden	Wczytaj więcej ramek	加载更多帧	さらにフレームを読み込む
+No variables	Sin variables	Aucune variable	Sem variáveis	Keine Variablen	Brak zmiennych	没有变量	変数なし
+Pause Program	Pausar programa	Suspendre le programme	Pausar programa	Programm anhalten	Wstrzymaj program	暂停程序	プログラムを一時停止
+Remove Watch	Quitar inspección	Supprimer l'espion	Remover inspeção	Überwachung entfernen	Usuń czujkę	移除监视	ウォッチを削除
+Restart	Reiniciar	Redémarrer	Reiniciar	Neu starten	Uruchom ponownie	重新启动	再起動
+Running	En ejecución	En cours	Em execução	Läuft	Działa	正在运行	実行中
+Starting…	Iniciando…	Démarrage…	Iniciando…	Wird gestartet…	Uruchamianie…	正在启动…	起動中…
+Stop only when this C# expression is true	Detener solo cuando esta expresión C# sea verdadera	S'arrêter seulement si cette expression C# est vraie	Parar somente quando esta expressão C# for verdadeira	Nur anhalten, wenn dieser C#-Ausdruck wahr ist	Zatrzymaj tylko, gdy to wyrażenie C# jest prawdziwe	仅当此 C# 表达式为 true 时停止	この C# 式が true のときだけ停止
+The program is running	El programa se está ejecutando	Le programme est en cours d'exécution	O programa está em execução	Das Programm läuft	Program działa	程序正在运行	プログラムは実行中です
+The program must be paused to evaluate expressions	El programa debe estar en pausa para evaluar expresiones	Le programme doit être suspendu pour évaluer des expressions	O programa deve estar pausado para avaliar expressões	Das Programm muss angehalten sein, um Ausdrücke auszuwerten	Program musi być wstrzymany, aby obliczać wyrażenia	程序必须暂停才能计算表达式	式を評価するにはプログラムを一時停止する必要があります
+There is no run configuration to debug	No hay ninguna configuración de ejecución para depurar	Aucune configuration d'exécution à déboguer	Não há configuração de execução para depurar	Keine Ausführungskonfiguration zum Debuggen	Brak konfiguracji uruchamiania do debugowania	没有可调试的运行配置	デバッグする実行構成がありません
+Thread {id}	Hilo {id}	Thread {id}	Thread {id}	Thread {id}	Wątek {id}	线程 {id}	スレッド {id}
+Threads & Variables	Hilos y variables	Threads et variables	Threads e variáveis	Threads und Variablen	Wątki i zmienne	线程和变量	スレッドと変数
+Variables are shown when the program is paused	Las variables se muestran cuando el programa está en pausa	Les variables s'affichent quand le programme est suspendu	As variáveis são mostradas quando o programa está pausado	Variablen werden angezeigt, wenn das Programm angehalten ist	Zmienne są wyświetlane, gdy program jest wstrzymany	程序暂停时显示变量	プログラムが一時停止すると変数が表示されます
+netcoredbg is ready	netcoredbg está listo	netcoredbg est prêt	netcoredbg está pronto	netcoredbg ist bereit	netcoredbg jest gotowy	netcoredbg 已就绪	netcoredbg の準備ができました

@@ -3234,6 +3234,7 @@ dependencies = [
  "embed-resource",
  "muda",
  "rc-core",
+ "rc-dap",
  "rc-dotnet",
  "rc-editor",
  "rc-kit",

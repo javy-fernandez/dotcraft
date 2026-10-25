@@ -44,6 +44,8 @@ pub struct Session {
     pub run_configuration: Option<String>,
     /// Breakpoints: file → 0-based lines (with an optional condition).
     pub breakpoints: BTreeMap<PathBuf, Vec<(usize, Option<String>)>>,
+    /// Breakpoints that are disabled: file → 0-based lines.
+    pub disabled_breakpoints: BTreeMap<PathBuf, Vec<usize>>,
 }
 
 impl Session {

@@ -28,6 +28,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         }
         ToolWindow::Build => crate::ui::run_windows::build(app, ui),
         ToolWindow::Run => crate::ui::run_windows::run(app, ui),
+        ToolWindow::Debug => crate::ui::debug_window::show(app, ui),
         ToolWindow::Tests => crate::ui::run_windows::tests(app, ui),
         ToolWindow::Terminal => crate::ui::run_windows::terminal(app, ui),
         ToolWindow::Commit => crate::ui::git::commit_window(app, ui),

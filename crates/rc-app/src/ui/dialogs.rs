@@ -36,6 +36,10 @@ pub enum Dialog {
     RecentLocations { selected: usize },
     /// ⌘F12 file structure popup.
     FileStructure { filter: String, selected: usize },
+    /// Right-click on a breakpoint: condition and enabled state (0-based line).
+    BreakpointProperties { path: PathBuf, line: usize, condition: String, enabled: bool, focus: bool },
+    /// ⌥F8: evaluate an expression in the selected frame.
+    Evaluate { expression: String, focus: bool },
 }
 
 impl Dialog {
@@ -65,6 +69,8 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::Rollback { paths } => rollback(app, ctx, paths),
         Dialog::NewBranch { name } => new_branch(app, ctx, name),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
+        Dialog::BreakpointProperties { path, line, condition, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, enabled, focus),
+        Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -288,6 +294,122 @@ fn goto_line(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus: &mu
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn breakpoint_properties(app: &mut DotCraftApp, ctx: &Context, path: &std::path::Path, line: usize, condition: &mut String, enabled: &mut bool, focus: &mut bool) -> Outcome {
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let ((ok, cancel, remove), esc) = modal(ctx, "breakpoint_properties", 420.0, |ui| {
+        title(ui, &trf("Breakpoint at {file}:{line}", &[("file", &name), ("line", &(line + 1))]));
+        ui.checkbox(enabled, tr("Enabled"));
+        ui.add_space(6.0);
+        ui.label(tr("Condition"));
+        let resp = ui.add(egui::TextEdit::singleline(condition).hint_text(tr("Stop only when this C# expression is true")).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+        if std::mem::take(focus) {
+            resp.request_focus();
+        }
+        let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        let mut remove = false;
+        ui.add_space(14.0);
+        let mut res = (false, false);
+        ui.horizontal(|ui| {
+            remove = theme::secondary_button(ui, tr("Remove")).clicked();
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                res.0 = theme::primary_button(ui, tr("Done")).clicked();
+                res.1 = theme::secondary_button(ui, tr("Cancel")).clicked();
+            });
+        });
+        (res.0 || enter, res.1, remove)
+    });
+    if ok || remove {
+        let key = (path.to_path_buf(), line);
+        let cond = condition.trim().to_string();
+        if let Some(i) = app.docs.index_of(path) {
+            let bps = &mut app.docs.list[i].editor.breakpoints;
+            if remove {
+                bps.remove(&line);
+                app.debugger.conditions.remove(&key);
+            } else {
+                let kind = if !*enabled {
+                    rc_editor::BreakpointKind::Disabled
+                } else if cond.is_empty() {
+                    rc_editor::BreakpointKind::Normal
+                } else {
+                    rc_editor::BreakpointKind::Conditional
+                };
+                bps.insert(line, kind);
+                if cond.is_empty() {
+                    app.debugger.conditions.remove(&key);
+                } else {
+                    app.debugger.conditions.insert(key, cond);
+                }
+            }
+            app.session_dirty = true;
+        }
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn evaluate(app: &mut DotCraftApp, ctx: &Context, expression: &mut String, focus: &mut bool) -> Outcome {
+    let stopped = app.debugger.stopped();
+    let mut eval = false;
+    let mut watch = false;
+    let (close, esc) = modal(ctx, "evaluate", 560.0, |ui| {
+        title(ui, tr("Evaluate Expression"));
+        let resp = ui.add(egui::TextEdit::singleline(expression).hint_text(tr("Expression")).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+        if std::mem::take(focus) {
+            resp.request_focus();
+        }
+        if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+            eval = true;
+            resp.request_focus();
+        }
+        ui.add_space(8.0);
+        let p = rc_kit::pal(ui);
+        egui::Frame::new().fill(p.control_bg).corner_radius(6.0).inner_margin(8.0).show(ui, |ui| {
+            ui.set_min_height(120.0);
+            ui.set_width(ui.available_width());
+            if !stopped {
+                ui.label(egui::RichText::new(tr("The program must be paused to evaluate expressions")).color(p.muted));
+            }
+            match app.debugger.eval.clone() {
+                Some((_, e, None)) => {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::Spinner::new().size(12.0));
+                        ui.label(egui::RichText::new(e).monospace());
+                    });
+                }
+                Some((_, e, Some(Ok(v)))) => {
+                    crate::ui::debug_window::eval_tree(ui, &mut app.debugger, &e, &v);
+                }
+                Some((_, _, Some(Err(err)))) => {
+                    ui.label(egui::RichText::new(err).color(p.error));
+                }
+                None => {}
+            }
+        });
+        ui.add_space(14.0);
+        let mut close = false;
+        ui.horizontal(|ui| {
+            if ui.add_enabled_ui(stopped && !expression.trim().is_empty(), |ui| theme::secondary_button(ui, tr("Add to Watches"))).inner.clicked() {
+                watch = true;
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                close = theme::secondary_button(ui, tr("Close")).clicked();
+                if ui.add_enabled_ui(stopped && !expression.trim().is_empty(), |ui| theme::primary_button(ui, tr("Evaluate"))).inner.clicked() {
+                    eval = true;
+                }
+            });
+        });
+        close
+    });
+    if eval && stopped && !expression.trim().is_empty() {
+        app.debugger.evaluate(expression.trim().to_string());
+    }
+    if watch && let Some(s) = &mut app.debugger.session {
+        s.add_watch(expression.trim().to_string());
+    }
+    if close || esc { Outcome::Close } else { Outcome::Keep }
 }
 
 /// A new file name gets `.cs` when it has no extension, and a C# file gets a class skeleton

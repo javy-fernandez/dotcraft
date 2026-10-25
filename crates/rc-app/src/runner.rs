@@ -39,8 +39,17 @@ pub struct Console {
 }
 
 impl Console {
-    fn new(waker: &Waker) -> Self {
+    pub fn new(waker: &Waker) -> Self {
         Console { term: TermSession::output_only(160, 40, waker.clone()) }
+    }
+
+    /// Raw program output (may end mid-line).
+    pub fn raw(&self, text: &str, stream: Stream) {
+        let mut s = text.replace("\r\n", "\n").replace('\n', "\r\n");
+        if stream == Stream::Stderr && !s.contains('\x1b') {
+            s = format!("\x1b[31m{s}\x1b[0m");
+        }
+        self.term.feed(s.as_bytes());
     }
 
     pub fn line(&self, line: &OutputLine) {

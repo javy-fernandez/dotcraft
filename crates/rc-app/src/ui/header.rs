@@ -141,7 +141,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                             ui.close();
                         }
                     });
-                    if app.runner.busy() && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked() {
+                    if (app.runner.busy() || app.debugger.active()) && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked() {
                         app.pending.push(Action::StopRun);
                     }
                     if theme::icon_button_sized(ui, ico::DEBUG, true, &format!("{}{}", tr("Debug"), shortcut(Action::Debug)), 30.0).clicked() {

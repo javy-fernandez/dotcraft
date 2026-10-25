@@ -11,7 +11,7 @@ use rc_kit::{Ico, ico, icons, theme};
 
 /// Header with a title on the left and icon actions on the right; returns the clicked action
 /// index (or `usize::MAX` for "Hide").
-fn header(ui: &mut Ui, title: &str, actions: &[(Ico, &str, bool)]) -> Option<usize> {
+pub fn header(ui: &mut Ui, title: &str, actions: &[(Ico, &str, bool)]) -> Option<usize> {
     let p = rc_kit::pal(ui);
     let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
     ui.allocate_rect(r, Sense::hover());
@@ -35,7 +35,7 @@ fn header(ui: &mut Ui, title: &str, actions: &[(Ico, &str, bool)]) -> Option<usi
     clicked
 }
 
-fn console(ui: &mut Ui, term: &rc_term::TermSession) -> Vec<rc_term::ViewEvent> {
+pub fn console(ui: &mut Ui, term: &rc_term::TermSession) -> Vec<rc_term::ViewEvent> {
     let config = rc_term::TermConfig::default();
     rc_term::TerminalView::new(term, &config).show(ui).events
 }
@@ -50,7 +50,7 @@ pub fn handle_outputs(app: &mut DotCraftApp, outputs: Vec<RunnerOutput>) {
     }
 }
 
-fn open_link(app: &mut DotCraftApp, link: rc_term::Link, cwd: Option<std::path::PathBuf>) {
+pub fn open_link(app: &mut DotCraftApp, link: rc_term::Link, cwd: Option<std::path::PathBuf>) {
     match link {
         rc_term::Link::Url(u) => open_url(&u),
         rc_term::Link::File { path, line, column } => {

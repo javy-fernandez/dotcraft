@@ -35,6 +35,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                 ui.add_space(10.0);
                 ui.spacing_mut().item_spacing.x = 0.0;
                 insight_widget(app, ui);
+                debugger_widget(app, ui);
                 let Some(doc) = app.docs.active_doc() else { return };
                 let e = &doc.editor;
                 let widget = |ui: &mut Ui, text: String, tip: &str| {
@@ -62,6 +63,22 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
             }
         });
     });
+}
+
+/// netcoredbg download progress and the state of the debug session (click: Debug window).
+fn debugger_widget(app: &mut DotCraftApp, ui: &mut Ui) {
+    let (icon, text) = if let Some((done, total)) = app.debugger.downloading {
+        let pct = total.map(|t| format!(" {}%", done * 100 / t.max(1))).unwrap_or_default();
+        (ico::DEBUG, format!("{}{pct}", tr("Downloading netcoredbg…")))
+    } else if app.debugger.active() {
+        (if app.debugger.stopped() { ico::PAUSE } else { ico::DEBUG }, app.debugger.state_label())
+    } else {
+        return;
+    };
+    if theme::flat_button(ui, Some(icon), &text, FontId::proportional(12.5), false, true).on_hover_text(tr("Debug")).clicked() {
+        app.dock.show(crate::toolwindow::ToolWindow::Debug);
+    }
+    ui.add_space(4.0);
 }
 
 /// C# language server state: download offer, progress, failures with a restart button.

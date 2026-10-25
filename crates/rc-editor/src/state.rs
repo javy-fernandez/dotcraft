@@ -81,6 +81,8 @@ pub enum EditorEvent {
     CaretMoved,
     /// Click in the breakpoint area of the gutter (0-based line).
     GutterClicked { line: usize },
+    /// Right-click on a line number (0-based line).
+    GutterSecondaryClicked { line: usize, screen: egui::Pos2 },
     /// Click on an icon of the gutter's icon column.
     GutterIconClicked { line: usize, icon: GutterIcon },
     /// ⌘/Ctrl+click on a char offset.

@@ -629,7 +629,7 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
         // Execution point arrow.
         if Some(l) == state.execution_line {
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
-            icons::paint(&painter, r, ico::SHOW_EXECUTION_POINT, pal, true);
+            icons::paint(&painter, r, ico::EXECUTION_POINT, pal, true);
         } else if let Some(icon) = state.gutter_icons.get(&l) {
             let ic = match icon {
                 GutterIcon::RunTest => ico::GUTTER_RUN,
@@ -798,6 +798,18 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
     let (pointer, now, mods) = ui.input(|i| (i.pointer.clone(), i.time, i.modifiers));
     let gutter = Rect::from_min_max(rect.min, pos2(text_rect.left(), rect.bottom()));
 
+    // Right-click on the line numbers: breakpoint properties.
+    if response.secondary_clicked()
+        && let Some(p) = response.interact_pointer_pos()
+        && gutter.contains(p)
+        && p.x < m.icons_x - 2.0
+    {
+        let row = ((p.y - text_rect.top() + state.scroll.y) / m.row_h).floor().max(0.0) as usize;
+        if row < display_row_count(state) {
+            out.events.push(EditorEvent::GutterSecondaryClicked { line: line_of_row(state, row), screen: p });
+        }
+        return;
+    }
     // Gutter clicks.
     if response.clicked()
         && let Some(p) = response.interact_pointer_pos()
