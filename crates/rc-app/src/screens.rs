@@ -319,3 +319,40 @@ fn screens_insight() {
     h.render().unwrap().save(out.join("actions-dark.png")).unwrap();
     h.state_mut().insight.stop();
 }
+
+/// The README's main capture: Roslyn colours and inlay hints, the explorer and a finished run.
+#[test]
+#[ignore = "Requires a GPU, the .NET SDK and Roslyn in target/test-home; writes target/snapshots/readme-*.png"]
+fn screens_readme() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let roslyn = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/test-home/tools/roslyn").canonicalize().expect("run the rc-lsp tests first");
+    let roslyn = std::fs::read_dir(&roslyn).unwrap().flatten().map(|e| e.path().join("Microsoft.CodeAnalysis.LanguageServer")).find(|p| p.exists()).unwrap();
+    let shop = fixtures().join("Shop");
+    let calc = shop.join("src/Shop.Core/PriceCalculator.cs");
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some(roslyn.clone());
+        app.open_workspace(&shop.join("Shop.sln"));
+        app.explorer.expanded.insert(format!("proj:{}", shop.join("src/Shop.Core/Shop.Core.csproj").display()));
+        app.open_file(&shop.join("src/Shop.Core/Order.cs"));
+        app.open_file(&calc);
+        app.locate_active();
+        app.docs.active_doc_mut().unwrap().editor.goto(26, 12);
+        let mut h = harness(app, vec2(1440.0, 900.0));
+        run_frames(&mut h, "Roslyn", |a| {
+            a.insight.status == crate::insight::InsightStatus::Ready && a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty() && !d.editor.inlays.is_empty()) && a.vcs.branch_name().is_some() && !a.runner.configs.is_empty()
+        });
+        {
+            let app = h.state_mut();
+            app.runner.selected = app.runner.configs.iter().position(|c| c.name.starts_with("Shop.Cli")).unwrap();
+            app.pending.push(rc_editor::Action::Run);
+        }
+        run_frames(&mut h, "Shop.Cli", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+        h.run_steps(10);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("readme-workspace-{suffix}.png"))).unwrap();
+        h.state_mut().insight.stop();
+    }
+}

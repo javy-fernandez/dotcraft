@@ -42,3 +42,12 @@ or on the shared tokio runtime and reports back through channels that wake the U
   NUnit / MSTest projects; `TenProjects`: ten libraries in a `.slnx`).
 - **Commits.** One commit per finished task, short one-line Spanish messages, capitalized
   (e.g. "Añade parser de TRX"), no attribution trailers.
+
+## Packaging
+
+Everything the app needs (fonts, icons, translations) is embedded in the binary.
+`scripts/bundle.sh` builds `DotCraft.app` (`--universal`, `--dmg`, `--zip`) and the Windows
+x64/ARM64 executables with cargo-xwin (`--windows`, DirectX 12, statically linked C runtime,
+icon from `assets/icon.ico` via `crates/rc-app/build.rs`). Application icons are generated
+from `assets/icon.svg` by `scripts/make_icon.py`. The Roslyn language server and netcoredbg
+are not bundled: they are located or downloaded on first use into the data folder.
