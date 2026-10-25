@@ -104,9 +104,10 @@ pub struct Insight {
     rename: Option<Pending<Option<lsp::WorkspaceEdit>>>,
     actions: Option<Pending<Option<lsp::CodeActionResponse>>>,
     action_resolve: Option<Pending<lsp::CodeAction>>,
-    format: Option<(u64, u64, Pending<Option<Vec<lsp::TextEdit>>>)>,
-    semantic: HashMap<u64, (u64, Pending<Option<lsp::SemanticTokensResult>>)>,
-    inlay: HashMap<u64, (u64, Pending<Option<Vec<lsp::InlayHint>>>)>,
+    /// Formatting of (document, version).
+    format: Option<(u64, Versioned<Option<Vec<lsp::TextEdit>>>)>,
+    semantic: HashMap<u64, Versioned<Option<lsp::SemanticTokensResult>>>,
+    inlay: HashMap<u64, Versioned<Option<Vec<lsp::InlayHint>>>>,
     diag_pull: HashMap<u64, (u64, Pending<Value>)>,
     symbols: HashMap<u64, (u64, Pending<Option<lsp::DocumentSymbolResponse>>)>,
     /// Document structure of each open document.
@@ -118,6 +119,9 @@ pub struct Insight {
     pub last_completion_ms: Option<u128>,
     pending_apply: Vec<(Value, lsp::WorkspaceEdit)>,
 }
+
+/// A request made for one version of a document.
+type Versioned<T> = (u64, Pending<T>);
 
 const REFRESH_DELAY: Duration = Duration::from_millis(250);
 
@@ -549,7 +553,7 @@ impl Insight {
                 d.editor.popups.signature = r.ok().flatten().filter(|h| !h.signatures.is_empty()).map(|h| signature_help(h, anchor));
             }
         }
-        if let Some((doc, version, p)) = &mut self.format
+        if let Some((doc, (version, p))) = &mut self.format
             && let Some(r) = p.poll()
         {
             let (doc, version) = (*doc, *version);
@@ -888,7 +892,7 @@ impl Insight {
             let range = lsp::Range { start: convert::lsp_position(rope, sel.start()), end: convert::lsp_position(rope, sel.end()) };
             session.client.request_raw("textDocument/rangeFormatting", json!({ "textDocument": { "uri": uri.as_str() }, "range": range, "options": options }))
         };
-        self.format = Some((doc.editor.id, doc.editor.buffer.version(), p));
+        self.format = Some((doc.editor.id, (doc.editor.buffer.version(), p)));
     }
 
     /// `workspace/symbol` for Search Everywhere (`None` when the server is not ready).

@@ -5,7 +5,7 @@
 use crate::docs::Docs;
 use rc_core::{Inbox, Runtime, Waker};
 use rc_kit::i18n::{tr, trf};
-use rc_vcs::{Blame, Branch, Commit, CommitOptions, DiffSpec, FileState, LineChangeKind, LineChanges, LogOptions, PullOptions, PushOptions, Repository, Revision, Status, StatusOptions};
+use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PullOptions, PushOptions, Repository, Revision, Status, StatusOptions};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -129,12 +129,11 @@ impl Vcs {
             return;
         }
         let s = path.to_string_lossy();
-        if s.contains("/.git/") {
-            if s.ends_with("HEAD") || s.contains("/refs/") || s.ends_with("index") {
+        if s.contains("/.git/")
+            && (s.ends_with("HEAD") || s.contains("/refs/") || s.ends_with("index")) {
                 self.heads.clear();
                 self.marks_version.clear();
             }
-        }
         self.status_dirty = true;
     }
 
@@ -499,14 +498,6 @@ impl Vcs {
             e
         };
         DiffView { title, path: path.clone(), left: make(lt.join("\n"), lbg, left_numbers), right: make(rt.join("\n"), rbg, right_numbers) }
-    }
-
-    pub fn has_changes(&self) -> bool {
-        self.status.as_ref().is_some_and(|s| !s.entries.is_empty())
-    }
-
-    pub fn diff_spec_worktree() -> DiffSpec {
-        DiffSpec::WorktreeVsHead
     }
 }
 

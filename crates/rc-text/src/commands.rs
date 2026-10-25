@@ -545,9 +545,9 @@ pub fn delete_lines(rope: &Rope, sel: &Selection) -> Edited {
     let after = cs.len_after(rope.len_chars());
     let selection = sel.transform(|r| {
         let line = rope.char_to_line(r.head);
-        let col = r.head - rope.line_to_char(line);
+        let _col = r.head - rope.line_to_char(line);
         let p = cs.map_pos(rope.line_to_char(line), crate::change::Assoc::Before).min(after);
-        Range::point(p + col.min(0))
+        Range::point(p)
     });
     Edited { changes: cs, selection }
 }

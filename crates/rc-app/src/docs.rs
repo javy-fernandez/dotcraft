@@ -159,7 +159,7 @@ impl Docs {
             return; // our own save
         }
         let Ok((text, bom, mtime)) = read_text(path) else { return };
-        if doc.editor.buffer.rope().to_string() == text.replace("\r\n", "\n") {
+        if *doc.editor.buffer.rope() == text.replace("\r\n", "\n") {
             doc.mtime = mtime;
             return;
         }

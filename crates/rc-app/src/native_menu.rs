@@ -56,7 +56,6 @@ pub struct NativeMenu {
 
 enum Entry {
     Item(MenuItem),
-    Check(CheckMenuItem),
     Submenu(Submenu),
     Predefined(PredefinedMenuItem),
 }
@@ -71,7 +70,6 @@ impl Labeled {
         let text = (self.text)();
         match &self.entry {
             Entry::Item(i) => i.set_text(text),
-            Entry::Check(c) => c.set_text(text),
             Entry::Submenu(s) => s.set_text(text),
             Entry::Predefined(p) => p.set_text(text),
         }

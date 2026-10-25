@@ -29,7 +29,6 @@ pub struct Notice {
 pub struct WorkspaceState {
     pub ws: Workspace,
     pub solution: Option<Solution>,
-    pub solution_error: Option<String>,
 }
 
 pub struct DotCraftApp {
@@ -187,7 +186,7 @@ impl DotCraftApp {
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
         self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
-        self.workspace = Some(WorkspaceState { ws, solution, solution_error });
+        self.workspace = Some(WorkspaceState { ws, solution });
         self.restore_session(session);
     }
 

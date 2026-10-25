@@ -292,7 +292,7 @@ fn goto_line(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus: &mu
 
 /// A new file name gets `.cs` when it has no extension, and a C# file gets a class skeleton
 /// in the namespace of its folder.
-fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &mut PathBuf, name: &mut String, folder: bool, error: &mut Option<String>) -> Outcome {
+fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &mut String, folder: bool, error: &mut Option<String>) -> Outcome {
     let heading = if folder { tr("New Folder") } else { tr("New C# File") };
     let ((ok, cancel), esc) = modal(ctx, "new_file", 380.0, |ui| {
         title(ui, heading);
@@ -446,7 +446,7 @@ fn trash(path: &std::path::Path) -> std::io::Result<()> {
         if status.status.success() {
             return Ok(());
         }
-        return Err(std::io::Error::other(String::from_utf8_lossy(&status.stderr).trim().to_string()));
+        Err(std::io::Error::other(String::from_utf8_lossy(&status.stderr).trim().to_string()))
     }
     #[cfg(not(target_os = "macos"))]
     {

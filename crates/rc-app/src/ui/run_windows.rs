@@ -311,7 +311,7 @@ pub fn tests(app: &mut DotCraftApp, ui: &mut Ui) {
         for (class, tests) in &classes {
             let failed = tests.iter().any(|t| t.1 == TestState::Failed);
             let short = class.rsplit('.').next().unwrap_or(class);
-            row(ui, 0, if failed { ico::TEST_FAILED } else { ico::TEST_PASSED }, short, &class[..class.len() - short.len()].trim_end_matches('.').to_string(), false);
+            row(ui, 0, if failed { ico::TEST_FAILED } else { ico::TEST_PASSED }, short, class[..class.len() - short.len()].trim_end_matches('.'), false);
             for (name, state, dur) in tests {
                 let icon = match state {
                     TestState::Failed => ico::TEST_FAILED,

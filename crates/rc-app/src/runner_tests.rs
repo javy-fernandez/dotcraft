@@ -25,8 +25,7 @@ fn shop_builds_runs_and_passes_its_tests() {
     let home = tempfile::tempdir().unwrap();
     // SAFETY: serialized by HOME_LOCK.
     unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
-    let mut settings = Settings::default();
-    settings.roslyn_path = Some("/nonexistent".into());
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
     let names: Vec<String> = app.runner.configs.iter().map(|c| c.name.clone()).collect();

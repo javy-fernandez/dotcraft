@@ -487,7 +487,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
             let (mut a, mut b) = (d.start.max(ls) - ls, d.end.min(le) - ls);
             if a == b {
                 // Zero-width diagnostics underline the char before (or after) the spot.
-                if b < lay.len { b += 1 } else if a > 0 { a -= 1 }
+                if b < lay.len { b += 1 } else { a = a.saturating_sub(1) }
             }
             let (xa, xb) = (col_x(lay, a), col_x(lay, b).max(col_x(lay, a) + m.char_w));
             let y = y_of_row(first_row + i) + m.row_h - 3.0;

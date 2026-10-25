@@ -448,17 +448,7 @@ impl EditorState {
     }
 
     pub fn fold_all(&mut self) {
-        let mut tops: Vec<usize> = Vec::new();
-        for f in self.syntax.folds() {
-            // Keep the outermost type/namespace bodies open, like Rider's "Collapse all"
-            // which folds members and leaves the containing blocks readable.
-            if f.kind == rc_syntax::FoldKind::Block && f.end_line - f.start_line > 0 {
-                tops.push(f.start_line);
-            } else {
-                tops.push(f.start_line);
-            }
-        }
-        self.folded = tops.into_iter().collect();
+        self.folded = self.syntax.folds().iter().map(|f| f.start_line).collect();
         // Do not hide the caret.
         let (line, _) = self.caret_line_col();
         self.unfold_line(line);

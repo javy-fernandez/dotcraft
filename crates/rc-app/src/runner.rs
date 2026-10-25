@@ -72,7 +72,6 @@ pub struct BuildState {
 }
 
 pub struct RunTab {
-    pub id: u64,
     pub name: String,
     pub config: RunConfig,
     pub handle: Option<RunHandle>,
@@ -106,7 +105,6 @@ pub struct TestsState {
     pub passed: usize,
     pub failed: usize,
     pub skipped: usize,
-    pub started: Instant,
     pub duration: Option<std::time::Duration>,
     pub failure: Option<String>,
     pub request: TestRequest,
@@ -131,14 +129,13 @@ pub struct Runner {
     pub tests: Option<TestsState>,
     /// Last outcome per test (fully qualified name), for gutter icons.
     pub test_outcomes: BTreeMap<String, TestState>,
-    next_id: u64,
     waker: Waker,
     dotnet: Option<Dotnet>,
 }
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), next_id: 1, waker, dotnet: None }
+        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -265,9 +262,7 @@ impl Runner {
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
         let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
-        let id = self.next_id;
-        self.next_id += 1;
-        self.runs.push(RunTab { id, name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
         self.active_run = self.runs.len() - 1;
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
     }
@@ -329,7 +324,6 @@ impl Runner {
             passed: 0,
             failed: 0,
             skipped: 0,
-            started: Instant::now(),
             duration: None,
             failure: None,
             request: req,

@@ -45,7 +45,7 @@ pub fn decode(data: &[u32], legend: &[String], rope: &Rope) -> Vec<Vec<Span>> {
     let lines = rope.len_lines();
     let mut out: Vec<Vec<Span>> = vec![Vec::new(); lines];
     let (mut line, mut start) = (0u32, 0u32);
-    for t in data.chunks_exact(5) {
+    for t in data.as_chunks::<5>().0 {
         let (dl, ds, len, ty) = (t[0], t[1], t[2], t[3] as usize);
         line += dl;
         start = if dl == 0 { start + ds } else { ds };

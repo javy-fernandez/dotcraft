@@ -50,7 +50,6 @@ pub struct ExplorerState {
     /// Scroll the selected row into view on the next frame.
     pub reveal: bool,
     pub has_focus: bool,
-    pub filter: String,
 }
 
 /// What the user asked for in the explorer this frame.
@@ -445,17 +444,16 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             select_row = Some(cur.saturating_sub(1));
             state.reveal = true;
         }
-        if pressed(Key::ArrowRight) {
-            if let Some(r) = rows.get(cur) {
+        if pressed(Key::ArrowRight)
+            && let Some(r) = rows.get(cur) {
                 if r.expandable && !state.expanded.contains(&r.key) {
                     toggle_row = Some(cur);
                 } else if r.expandable {
                     select_row = Some((cur + 1).min(rows.len() - 1));
                 }
             }
-        }
-        if pressed(Key::ArrowLeft) {
-            if let Some(r) = rows.get(cur) {
+        if pressed(Key::ArrowLeft)
+            && let Some(r) = rows.get(cur) {
                 if r.expandable && state.expanded.contains(&r.key) {
                     toggle_row = Some(cur);
                 } else if let Some(parent) = (0..cur).rev().find(|&j| rows[j].depth < r.depth) {
@@ -463,7 +461,6 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
                     state.reveal = true;
                 }
             }
-        }
         if pressed(Key::Enter) {
             open_row = Some(cur);
         }

@@ -8,7 +8,11 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-include!(concat!(env!("OUT_DIR"), "/icons_table.rs"));
+#[allow(clippy::type_complexity)]
+mod table {
+    include!(concat!(env!("OUT_DIR"), "/icons_table.rs"));
+}
+use table::ICONS;
 
 /// An icon of the set, named `dir/file` as in `assets/icons` (e.g. `nodes/class`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

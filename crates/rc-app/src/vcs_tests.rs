@@ -40,8 +40,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     git(&root, &["add", "."]);
     git(&root, &["commit", "-q", "-m", "First"]);
 
-    let mut settings = Settings::default();
-    settings.roslyn_path = Some("/nonexistent".into());
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&root);
     pump(&mut app, "status", |a| a.vcs.status.is_some());
