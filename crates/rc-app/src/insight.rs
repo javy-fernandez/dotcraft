@@ -111,7 +111,7 @@ pub struct Insight {
     /// `///` doc comment skeletons and their continuation on Enter (document, version).
     auto_insert: Option<(u64, Versioned<Value>)>,
     /// Add Missing Usings: the fixes asked for each unresolved name (document, version).
-    usings: Option<(u64, u64, Vec<Pending<Value>>, Vec<Value>)>,
+    usings: Option<UsingsRequest>,
     /// Documents to import usings for once their diagnostics catch up (after a paste).
     auto_usings: HashMap<u64, u64>,
     semantic: HashMap<u64, Versioned<Option<lsp::SemanticTokensResult>>>,
@@ -127,6 +127,9 @@ pub struct Insight {
     pub last_completion_ms: Option<u128>,
     pending_apply: Vec<(Value, lsp::WorkspaceEdit)>,
 }
+
+/// Add Missing Usings in flight: document, version, fixes still pending, fixes received.
+type UsingsRequest = (u64, u64, Vec<Pending<Value>>, Vec<Value>);
 
 /// A request made for one version of a document.
 type Versioned<T> = (u64, Pending<T>);
