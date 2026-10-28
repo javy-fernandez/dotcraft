@@ -274,7 +274,8 @@
     "This action is available in C# files": "此操作在 C# 文件中可用",
     "This element cannot be renamed": "无法重命名此元素",
     "Usages": "用法",
-    "{n} problems": "{n} 个问题"
+    "{n} problems": "{n} 个问题",
+    "The C# server is still loading the solution; navigation continues when it is ready": "C# 服务器仍在加载解决方案；准备就绪后将继续导航"
   },
   "runner": {
     "All Tests": "所有测试",

@@ -274,7 +274,8 @@
     "This action is available in C# files": "Esta acción está disponible en archivos C#",
     "This element cannot be renamed": "Este elemento no se puede renombrar",
     "Usages": "Usos",
-    "{n} problems": "{n} problemas"
+    "{n} problems": "{n} problemas",
+    "The C# server is still loading the solution; navigation continues when it is ready": "El servidor de C# aún está cargando la solución; la navegación seguirá cuando termine"
   },
   "runner": {
     "All Tests": "Todas las pruebas",

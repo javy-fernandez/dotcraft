@@ -1,0 +1,3 @@
+# Navigation while loading. Import: python3 scripts/i18n_tsv.py insight scripts/i18n/navigation.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+The C# server is still loading the solution; navigation continues when it is ready	El servidor de C# aún está cargando la solución; la navegación seguirá cuando termine	Le serveur C# charge encore la solution ; la navigation reprendra dès qu'il sera prêt	O servidor C# ainda está carregando a solução; a navegação continua quando estiver pronto	Der C#-Server lädt die Projektmappe noch; die Navigation wird fortgesetzt, sobald er bereit ist	Serwer C# wciąż wczytuje rozwiązanie; nawigacja zostanie wykonana, gdy będzie gotowy	C# 服务器仍在加载解决方案；准备就绪后将继续导航	C# サーバーはまだソリューションを読み込んでいます。準備ができ次第ナビゲーションを続行します

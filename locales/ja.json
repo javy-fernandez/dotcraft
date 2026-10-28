@@ -274,7 +274,8 @@
     "This action is available in C# files": "このアクションは C# ファイルで使用できます",
     "This element cannot be renamed": "この要素の名前は変更できません",
     "Usages": "使用箇所",
-    "{n} problems": "{n} 件の問題"
+    "{n} problems": "{n} 件の問題",
+    "The C# server is still loading the solution; navigation continues when it is ready": "C# サーバーはまだソリューションを読み込んでいます。準備ができ次第ナビゲーションを続行します"
   },
   "runner": {
     "All Tests": "すべてのテスト",

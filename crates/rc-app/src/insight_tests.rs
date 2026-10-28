@@ -136,9 +136,9 @@ fn go_to_declaration_and_back() {
     let (program, greeter) = (root.join("App/Program.cs"), root.join("Lib/Greeter.cs"));
     let mut app = DotCraftApp::with_settings(Settings::default(), Waker::noop(), None);
     app.open_workspace(&sln);
-    pump(&mut app, "projects", |a| a.insight.status == InsightStatus::Ready);
     app.open_file(&program);
-    pump(&mut app, "Program.cs to load", |a| a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty()));
+    // Clicked while the projects still load: it goes there once they have.
+    pump(&mut app, "the server", |a| a.insight.ready());
     let click = |app: &mut DotCraftApp, word: &str| {
         let i = app.docs.active.unwrap();
         let d = &mut app.docs.list[i];
@@ -169,8 +169,9 @@ fn go_to_declaration_and_back() {
 
     // A framework type opens its decompiled or metadata source.
     click(&mut app, "Console.");
-    pump(&mut app, "Console's source", |a| a.docs.active_doc().is_some_and(|d| d.path != program) || !a.notices.is_empty());
+    pump(&mut app, "Console's source", |a| a.docs.active_doc().is_some_and(|d| d.path != program));
     let d = app.docs.active_doc().unwrap();
     assert!(d.path.ends_with("Console.cs") && d.editor.read_only && d.editor.buffer.rope().to_string().contains("class Console"), "{}", d.path.display());
     app.close_workspace();
 }
+

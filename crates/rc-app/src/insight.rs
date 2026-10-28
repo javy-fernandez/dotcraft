@@ -103,6 +103,8 @@ pub struct Insight {
     hover: Option<(u64, usize, egui::Pos2, Pending<Option<lsp::Hover>>)>,
     signature: Option<(u64, usize, Pending<Option<lsp::SignatureHelp>>)>,
     nav: Option<(NavKind, NavOrigin, Pending<Value>)>,
+    /// A navigation asked for while the projects were still loading: repeated once they are.
+    nav_retry: Option<(NavKind, NavOrigin)>,
     rename_prepare: Option<(u64, usize, Pending<Value>)>,
     rename: Option<Pending<Option<lsp::WorkspaceEdit>>>,
     actions: Option<Pending<Option<lsp::CodeActionResponse>>>,
@@ -158,6 +160,7 @@ impl Insight {
             hover: None,
             signature: None,
             nav: None,
+            nav_retry: None,
             rename_prepare: None,
             rename: None,
             actions: None,
@@ -249,6 +252,7 @@ impl Insight {
         self.hover = None;
         self.signature = None;
         self.nav = None;
+        self.nav_retry = None;
         self.rename_prepare = None;
         self.rename = None;
         self.actions = None;
@@ -279,11 +283,13 @@ impl Insight {
             }
         }
         let Some(session) = &mut self.session else { return out };
+        let mut retry = None;
         for ev in session.pump() {
             match ev {
                 LspEvent::StateChanged(ServerState::LoadingProjects) => self.status = InsightStatus::Loading(tr("Loading projects…").into()),
                 LspEvent::StateChanged(ServerState::Ready) => {
                     self.status = InsightStatus::Ready;
+                    retry = self.nav_retry.take();
                     // Everything is loaded: colours and problems become accurate now.
                     self.refreshed.clear();
                 }
@@ -322,6 +328,12 @@ impl Insight {
                 LspEvent::ShowMessage { error: true, text } => out.push(InsightOutput::Message(text)),
                 _ => {}
             }
+        }
+        if let Some((kind, (path, line, from, _))) = retry
+            && let Some(doc) = docs.list.iter().find(|d| d.path == path)
+        {
+            let pos = doc.editor.buffer.pos_at(line, from);
+            self.navigate(doc, pos, kind);
         }
         let applies = std::mem::take(&mut self.pending_apply);
         for (id, edit) in applies {
@@ -627,8 +639,15 @@ impl Insight {
     fn poll_goto(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
         let Some((_, _, p)) = &mut self.nav else { return };
         let Some(r) = p.poll() else { return };
-        let Some((kind, (path, line, from, to), _)) = self.nav.take() else { return };
+        let Some((kind, origin, _)) = self.nav.take() else { return };
         let targets = r.map(|v| locations(&v, docs)).unwrap_or_default();
+        // Nothing yet because the solution is still loading: go there once it has loaded.
+        if targets.is_empty() && self.status != InsightStatus::Ready {
+            self.nav_retry = Some((kind, origin));
+            out.push(InsightOutput::Message(tr("The C# server is still loading the solution; navigation continues when it is ready").into()));
+            return;
+        }
+        let (path, line, from, to) = origin;
         // ⌘+click on a declaration itself shows its usages (Rider).
         if kind == NavKind::Declaration
             && let [t] = targets.as_slice()
