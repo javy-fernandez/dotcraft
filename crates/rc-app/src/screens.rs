@@ -172,6 +172,15 @@ fn screens() {
         h.render().unwrap().save(out.join(format!("editor-menu-{suffix}.png"))).unwrap();
         h.event(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
         h.run_steps(2);
+        // ⌘ over a name: a link; Back is enabled in the toolbar.
+        h.state_mut().push_nav_at(calc.canonicalize().unwrap(), 0);
+        h.event(egui::Event::ModifiersChanged(egui::Modifiers::COMMAND));
+        h.event(egui::Event::PointerMoved(egui::pos2(640.0, 320.0)));
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("navigation-{suffix}.png"))).unwrap();
+        h.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
+        h.state_mut().nav_back.clear();
+        h.run_steps(2);
         // Reformat Code on a JSON file.
         let json = samples.path().join("settings.json");
         std::fs::write(&json, "{\"Logging\":{\"LogLevel\":{\"Default\":\"Information\"}},\"AllowedHosts\":\"*\",\"Ports\":[5000,5001]}\n").unwrap();

@@ -552,18 +552,23 @@ impl DotCraftApp {
 
     pub fn push_nav(&mut self) {
         if let Some(d) = self.docs.active_doc() {
-            let here = (d.path.clone(), d.editor.caret());
-            if self.nav_back.last() != Some(&here) {
-                self.nav_back.push(here);
-                if self.nav_back.len() > 100 {
-                    self.nav_back.remove(0);
-                }
-            }
-            self.nav_forward.clear();
+            self.push_nav_at(d.path.clone(), d.editor.caret());
         }
     }
 
-    fn navigate(&mut self, back: bool) {
+    /// Records a spot to come back to with Back (⌘[ or the toolbar arrow).
+    pub fn push_nav_at(&mut self, path: PathBuf, pos: usize) {
+        let here = (path, pos);
+        if self.nav_back.last() != Some(&here) {
+            self.nav_back.push(here);
+            if self.nav_back.len() > 100 {
+                self.nav_back.remove(0);
+            }
+        }
+        self.nav_forward.clear();
+    }
+
+    pub fn navigate(&mut self, back: bool) {
         let (from, to) = if back { (&mut self.nav_back, &mut self.nav_forward) } else { (&mut self.nav_forward, &mut self.nav_back) };
         let Some((path, pos)) = from.pop() else { return };
         if let Some(d) = self.docs.active_doc() {
@@ -1109,6 +1114,13 @@ impl DotCraftApp {
             })
         });
         self.pending.extend(found);
+        // The mouse's back / forward buttons.
+        let (back, forward) = ctx.input(|i| (i.pointer.button_pressed(egui::PointerButton::Extra1), i.pointer.button_pressed(egui::PointerButton::Extra2)));
+        if back {
+            self.pending.push(Action::NavigateBack);
+        } else if forward {
+            self.pending.push(Action::NavigateForward);
+        }
     }
 }
 

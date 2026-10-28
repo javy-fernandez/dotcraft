@@ -118,6 +118,8 @@ pub struct EditorState {
     pub(crate) drag_anchor: Option<Range>,
     pub(crate) column_drag: Option<(usize, usize)>,
     pub(crate) hover: Option<(usize, f64, bool)>,
+    /// The word under the pointer while ⌘/Ctrl is held: drawn as a link (⌘+click navigates).
+    pub(crate) link: Option<(usize, usize)>,
     pub(crate) alt_taps: (f64, u8, bool),
     pub(crate) ime_preedit: Option<String>,
     /// Lines copied without a selection paste as whole lines (IntelliJ).
@@ -177,6 +179,7 @@ impl EditorState {
             drag_anchor: None,
             column_drag: None,
             hover: None,
+            link: None,
             alt_taps: (0.0, 0, false),
             ime_preedit: None,
             line_clipboard: None,
@@ -226,6 +229,11 @@ impl EditorState {
 
     pub fn has_pending_edits(&self) -> bool {
         !self.edits.is_empty()
+    }
+
+    /// The word drawn as a link while ⌘/Ctrl is held over it.
+    pub fn link(&self) -> Option<(usize, usize)> {
+        self.link
     }
 
     pub fn caret(&self) -> usize {

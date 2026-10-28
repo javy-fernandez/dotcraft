@@ -204,6 +204,16 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                             }
                         }
                     });
+                    // Back / Forward through the navigation history (⌘[ / ⌘]).
+                    ui.add_space(4.0);
+                    theme::toolbar_separator(ui);
+                    ui.add_space(4.0);
+                    if theme::icon_button_sized(ui, ico::FORWARD, !app.nav_forward.is_empty(), &format!("{}{}", tr("Forward"), shortcut(Action::NavigateForward)), 30.0).clicked() {
+                        app.navigate(false);
+                    }
+                    if theme::icon_button_sized(ui, ico::BACK, !app.nav_back.is_empty(), &format!("{}{}", tr("Back"), shortcut(Action::NavigateBack)), 30.0).clicked() {
+                        app.navigate(true);
+                    }
                 }
             }
         });

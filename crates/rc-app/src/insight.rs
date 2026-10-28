@@ -31,6 +31,9 @@ pub enum InsightStatus {
     Failed(String),
 }
 
+/// Where a navigation request was made: (path, line, word start col, word end col).
+type NavOrigin = (PathBuf, usize, usize, usize);
+
 /// A navigation target.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Target {
@@ -99,7 +102,7 @@ pub struct Insight {
     resolve: Option<(usize, Option<Pending<lsp::CompletionItem>>)>,
     hover: Option<(u64, usize, egui::Pos2, Pending<Option<lsp::Hover>>)>,
     signature: Option<(u64, usize, Pending<Option<lsp::SignatureHelp>>)>,
-    nav: Option<(NavKind, Pending<Value>)>,
+    nav: Option<(NavKind, NavOrigin, Pending<Value>)>,
     rename_prepare: Option<(u64, usize, Pending<Value>)>,
     rename: Option<Pending<Option<lsp::WorkspaceEdit>>>,
     actions: Option<Pending<Option<lsp::CodeActionResponse>>>,
@@ -620,25 +623,39 @@ impl Insight {
         }
     }
 
-    fn poll_navigation(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
-        if let Some((kind, p)) = &mut self.nav
-            && let Some(r) = p.poll()
+    /// Go to Declaration / Implementation / Usages results.
+    fn poll_goto(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
+        let Some((_, _, p)) = &mut self.nav else { return };
+        let Some(r) = p.poll() else { return };
+        let Some((kind, (path, line, from, to), _)) = self.nav.take() else { return };
+        let targets = r.map(|v| locations(&v, docs)).unwrap_or_default();
+        // ⌘+click on a declaration itself shows its usages (Rider).
+        if kind == NavKind::Declaration
+            && let [t] = targets.as_slice()
+            && t.path == path
+            && t.line == line
+            && (from..=to).contains(&t.col)
+            && let Some(doc) = docs.list.iter().find(|d| d.path == path)
         {
-            let kind = *kind;
-            self.nav = None;
-            let targets = r.map(|v| locations(&v, docs)).unwrap_or_default();
-            match (kind, targets.len()) {
-                (_, 0) => out.push(InsightOutput::Message(match kind {
-                    NavKind::Usages => tr("No usages found").into(),
-                    NavKind::Implementation => tr("No implementations found").into(),
-                    _ => tr("Cannot find declaration to go to").into(),
-                })),
-                (NavKind::Usages, _) => out.push(InsightOutput::Usages { title: tr("Usages").into(), targets }),
-                (_, 1) => out.push(InsightOutput::Navigate(targets.into_iter().next().expect("one"))),
-                (NavKind::Implementation, _) => out.push(InsightOutput::Usages { title: tr("Implementations").into(), targets }),
-                _ => out.push(InsightOutput::Usages { title: tr("Declarations").into(), targets }),
-            }
+            let pos = doc.editor.buffer.pos_at(line, from);
+            self.navigate(doc, pos, NavKind::Usages);
+            return;
         }
+        match (kind, targets.len()) {
+            (_, 0) => out.push(InsightOutput::Message(match kind {
+                NavKind::Usages => tr("No usages found").into(),
+                NavKind::Implementation => tr("No implementations found").into(),
+                _ => tr("Cannot find declaration to go to").into(),
+            })),
+            (NavKind::Usages, _) => out.push(InsightOutput::Usages { title: tr("Usages").into(), targets }),
+            (_, 1) => out.push(InsightOutput::Navigate(targets.into_iter().next().expect("one"))),
+            (NavKind::Implementation, _) => out.push(InsightOutput::Usages { title: tr("Implementations").into(), targets }),
+            _ => out.push(InsightOutput::Usages { title: tr("Declarations").into(), targets }),
+        }
+    }
+
+    fn poll_navigation(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
+        self.poll_goto(docs, out);
         if let Some((doc, pos, p)) = &mut self.rename_prepare
             && let Some(r) = p.poll()
         {
@@ -953,7 +970,10 @@ impl Insight {
         if kind == NavKind::Usages {
             params["context"] = json!({ "includeDeclaration": false });
         }
-        self.nav = Some((kind, session.client.request_raw(method, params)));
+        let (from, to) = rc_text::commands::word_at(doc.editor.buffer.rope(), pos);
+        let (line, start) = doc.editor.buffer.line_col(from);
+        let origin = (doc.path.clone(), line, start, start + (to - from));
+        self.nav = Some((kind, origin, session.client.request_raw(method, params)));
     }
 
     /// Shift+F6: asks the server what can be renamed at the caret.

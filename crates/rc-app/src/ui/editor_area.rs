@@ -209,6 +209,8 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         app.insight.completion_accepted(doc, data);
     }
     let mut run_test_line = None;
+    // ⌘+click: the clicked spot goes into Back/Forward history.
+    let navigated_from = out.events.iter().find_map(|e| matches!(e, EditorEvent::NavigateAt(_)).then(|| (doc.path.clone(), doc.editor.caret())));
     let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
     app.caret_screen = Some(caret_screen);
     for ev in out.events {
@@ -301,6 +303,9 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     insight_actions.extend(from_menu);
     if let Some(line) = run_test_line {
         app.run_test_at(line);
+    }
+    if let Some((path, pos)) = navigated_from {
+        app.push_nav_at(path, pos);
     }
     for a in insight_actions {
         app.run_insight_action(a, caret_screen);

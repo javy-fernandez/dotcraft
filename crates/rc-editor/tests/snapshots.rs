@@ -133,3 +133,45 @@ fn markup_typing_assists() {
     typed(&mut h, "<ul><li>a</");
     assert_eq!(h.state().buffer.rope().to_string(), "<div class=\"box\">\n    <ul><li>a</li></ul>\n</div>");
 }
+
+/// ⌘ held over a word underlines it as a link (pointing hand); ⌘+click asks to navigate.
+#[test]
+fn command_click_navigates() {
+    let config = EditorConfig::default();
+    let keymap = Keymap::new(KeymapKind::RiderMac);
+    let mut s = state();
+    let add = s.buffer.rope().to_string().find("Add(name)").map(|b| s.buffer.rope().byte_to_char(b)).unwrap();
+    s.selection = rc_text::Selection::point(add + 1);
+    type St = (EditorState, Vec<rc_editor::EditorEvent>, Option<egui::Rect>);
+    let mut first = true;
+    let mut h = Harness::builder().with_size(vec2(900.0, 760.0)).build_ui_state(
+        move |ui, st: &mut St| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            let rect = ui.ctx().content_rect();
+            let mut root = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+            let out = EditorView::new(&mut st.0, &config, &keymap).focus(true).show(&mut root);
+            st.1.extend(out.events);
+            st.2 = out.caret_rect.or(st.2);
+        },
+        (s, Vec::new(), None),
+    );
+    h.run_steps(3);
+    let at = h.state().2.expect("caret on screen").center();
+    h.event(egui::Event::ModifiersChanged(egui::Modifiers::COMMAND));
+    h.event(egui::Event::PointerMoved(at));
+    h.run_steps(2);
+    assert_eq!(h.state().0.link(), Some((add, add + 3)));
+    assert_eq!(h.output().platform_output.cursor_icon, egui::CursorIcon::PointingHand);
+    h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::COMMAND });
+    h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::COMMAND });
+    h.run_steps(2);
+    assert!(h.state().1.iter().any(|e| matches!(e, rc_editor::EditorEvent::NavigateAt(p) if (add..=add + 3).contains(p))), "{:?}", h.state().1);
+    // Without ⌘ there is no link.
+    h.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
+    h.event(egui::Event::PointerMoved(at + vec2(1.0, 0.0)));
+    h.run_steps(2);
+    assert_eq!(h.state().0.link(), None);
+}

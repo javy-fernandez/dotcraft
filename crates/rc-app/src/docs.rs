@@ -102,6 +102,10 @@ impl Docs {
         } else {
             editor.request_parse(&self.pool);
         }
+        // Sources Roslyn decompiled from an assembly (⌘+click on a framework type) are read-only.
+        if path.components().any(|c| c.as_os_str() == "MetadataAsSource") {
+            editor.read_only = true;
+        }
         self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false });
         let i = self.list.len() - 1;
         self.activate(i);

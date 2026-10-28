@@ -172,7 +172,7 @@ impl<'a> EditorView<'a> {
             out.accepted_completion = Some(i);
         }
 
-        if response.hovered() || response.dragged() {
+        if (response.hovered() || response.dragged()) && state.link.is_none() {
             ui.ctx().set_cursor_icon(CursorIcon::Text);
         }
         out
@@ -469,6 +469,17 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
         // Hints carry their own background in the galley; strip it by painting with the
         // galley's colours (backgrounds are drawn above as rounded boxes).
         painter.galley(origin, lay.galley.clone(), scheme.text);
+    }
+
+    // ⌘/Ctrl+hover link: underlined like Rider's.
+    if let Some((a, b)) = state.link {
+        for (i, &l) in lines.iter().enumerate() {
+            let (ls, lay) = (line_start(l), &layouts[i]);
+            if a >= ls && b <= ls + lay.len {
+                let y = y_of_row(first_row + i) + m.row_h - 3.0;
+                painter.hline(col_x(lay, a - ls)..=col_x(lay, b - ls), y, Stroke::new(1.0, scheme.hyperlink));
+            }
+        }
     }
 
     // Diagnostics: wavy underlines.
@@ -970,6 +981,21 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
     if pointer.primary_released() {
         state.drag_anchor = None;
         state.column_drag = None;
+    }
+
+    // ⌘/Ctrl held over an identifier: it becomes a link (⌘+click goes to its declaration).
+    let link = pointer.hover_pos().filter(|p| mods.command && !pointer.any_down() && text_rect.contains(*p) && response.hovered()).and_then(|p| {
+        let (pos, _) = pos_at(ui, state, &config, m, text_rect, p);
+        let (ws, we) = commands::word_at(state.buffer.rope(), pos);
+        let first = state.buffer.rope().get_char(ws)?;
+        (ws < we && (first.is_alphabetic() || first == '_')).then_some((ws, we))
+    });
+    if link.is_some() {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    }
+    if link != state.link {
+        state.link = link;
+        ui.ctx().request_repaint();
     }
 
     // Hover (documentation / problems) after a delay.

@@ -121,3 +121,56 @@ fn csharp_insight_end_to_end() {
     assert!(text.lines().nth(caret_line - 1).unwrap().contains("<summary>"), "{text}");
     app.close_workspace();
 }
+
+/// ⌘+click: to the declaration in another file and back, its usages from the declaration
+/// itself, and a framework type.
+#[test]
+fn go_to_declaration_and_back() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/test-home").canonicalize().expect("run the rc-lsp tests first");
+    // SAFETY: as above.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", &home) };
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let sln = demo_solution(&root);
+    let (program, greeter) = (root.join("App/Program.cs"), root.join("Lib/Greeter.cs"));
+    let mut app = DotCraftApp::with_settings(Settings::default(), Waker::noop(), None);
+    app.open_workspace(&sln);
+    pump(&mut app, "projects", |a| a.insight.status == InsightStatus::Ready);
+    app.open_file(&program);
+    pump(&mut app, "Program.cs to load", |a| a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty()));
+    let click = |app: &mut DotCraftApp, word: &str| {
+        let i = app.docs.active.unwrap();
+        let d = &mut app.docs.list[i];
+        let pos = d.editor.buffer.rope().to_string().find(word).unwrap() + 2;
+        d.editor.set_selection(rc_text::Selection::point(pos));
+        let path = d.path.clone();
+        app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::NavigateAt(pos)]);
+        app.push_nav_at(path, pos);
+        pos
+    };
+    let at = |a: &DotCraftApp| a.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col()));
+
+    // To the method in the other project's file, on its name.
+    let from = click(&mut app, "Hello(\"world\")");
+    pump(&mut app, "Greeter.cs", |a| a.docs.active_doc().is_some_and(|d| d.path == greeter));
+    assert_eq!(at(&app).unwrap().1, (4, 18));
+    // Back to the call, forward to the method again.
+    app.navigate(true);
+    assert_eq!(at(&app).map(|(p, _)| p), Some(program.clone()));
+    assert_eq!(app.docs.active_doc().unwrap().editor.caret(), from);
+    app.navigate(false);
+    assert_eq!(at(&app), Some((greeter.clone(), (4, 18))));
+
+    // On the declaration itself: its usages (one, so it goes there).
+    click(&mut app, "Hello(string");
+    pump(&mut app, "the usage", |a| a.docs.active_doc().is_some_and(|d| d.path == program));
+    assert_eq!(at(&app).unwrap().1.0, 3);
+
+    // A framework type opens its decompiled or metadata source.
+    click(&mut app, "Console.");
+    pump(&mut app, "Console's source", |a| a.docs.active_doc().is_some_and(|d| d.path != program) || !a.notices.is_empty());
+    let d = app.docs.active_doc().unwrap();
+    assert!(d.path.ends_with("Console.cs") && d.editor.read_only && d.editor.buffer.rope().to_string().contains("class Console"), "{}", d.path.display());
+    app.close_workspace();
+}

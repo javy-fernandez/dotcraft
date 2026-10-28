@@ -421,6 +421,8 @@ pub mod ico {
         SHELVE = "vcs/shelve",
         UNVERSIONED = "vcs/showUnversionedFiles",
         ARROW_LEFT = "vcs/arrowLeft",
+        BACK = "actions/back",
+        FORWARD = "actions/forward",
         ARROW_RIGHT = "vcs/arrowRight",
         DIFF_SIDE_BY_SIDE = "diff/sideBySide",
         DIFF_UNIFIED = "diff/unified",
