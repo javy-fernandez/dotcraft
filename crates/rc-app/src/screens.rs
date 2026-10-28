@@ -190,6 +190,23 @@ fn screens() {
         let formatted = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
         assert!(formatted.contains("\"LogLevel\": {\n"), "{formatted}");
         h.render().unwrap().save(out.join(format!("json-format-{suffix}.png"))).unwrap();
+        // Markdown: editor and preview side by side, then the preview alone.
+        let md = samples.path().join("README.md");
+        std::fs::create_dir_all(samples.path().join("docs")).unwrap();
+        std::fs::copy(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/icon-64.png"), samples.path().join("docs/icon.png")).unwrap();
+        std::fs::write(
+            &md,
+            "# Shop\n\nSample solution for **DotCraft**: an API, a CLI and *three* test projects.\n\n![icon](docs/icon.png)\n\n## Projects\n\n- `Shop.Core`: orders and prices\n- `Shop.Api`: ASP.NET Core minimal API\n  - Swagger at `/swagger`\n- [ ] Blazor front end\n- [x] Tests\n\n## Run\n\n```bash\ndotnet run --project src/Shop.Api\n```\n\n| Project | Framework |\n| --- | --- |\n| Shop.Core | net8.0 |\n| Shop.Api | net8.0 |\n\n> Prices include VAT.\n\nSee the [.NET docs](https://learn.microsoft.com/dotnet/).\n",
+        )
+        .unwrap();
+        h.state_mut().open_file(&md);
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("markdown-{suffix}.png"))).unwrap();
+        if let Some(d) = h.state_mut().docs.active_doc_mut() {
+            d.md_view = Some(crate::docs::MdView::Preview);
+        }
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("markdown-preview-{suffix}.png"))).unwrap();
         // NuGet: installed packages with updates from nuget.org, one selected.
         h.state_mut().dock.show(crate::toolwindow::ToolWindow::Nuget);
         h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 420.0);

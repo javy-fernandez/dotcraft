@@ -6,6 +6,7 @@ pub mod dialogs;
 pub mod editor_area;
 pub mod explorer;
 pub mod git;
+pub mod markdown;
 pub mod new_project;
 pub mod nuget;
 pub mod header;

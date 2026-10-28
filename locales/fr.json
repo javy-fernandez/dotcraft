@@ -608,5 +608,10 @@
   },
   "settings": {
     "Reopen the last project on startup": "Rouvrir le dernier projet au démarrage"
+  },
+  "editor": {
+    "Editor Only": "Éditeur seul",
+    "Editor and Preview": "Éditeur et aperçu",
+    "Preview Only": "Aperçu seul"
   }
 }

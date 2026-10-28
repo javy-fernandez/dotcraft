@@ -608,5 +608,10 @@
   },
   "settings": {
     "Reopen the last project on startup": "起動時に前回のプロジェクトを開く"
+  },
+  "editor": {
+    "Editor Only": "エディターのみ",
+    "Editor and Preview": "エディターとプレビュー",
+    "Preview Only": "プレビューのみ"
   }
 }

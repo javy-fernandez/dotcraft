@@ -1,0 +1,5 @@
+# Markdown preview. Import: python3 scripts/i18n_tsv.py editor scripts/i18n/markdown.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Editor Only	Solo editor	Éditeur seul	Somente editor	Nur Editor	Tylko edytor	仅编辑器	エディターのみ
+Editor and Preview	Editor y vista previa	Éditeur et aperçu	Editor e visualização	Editor und Vorschau	Edytor i podgląd	编辑器和预览	エディターとプレビュー
+Preview Only	Solo vista previa	Aperçu seul	Somente visualização	Nur Vorschau	Tylko podgląd	仅预览	プレビューのみ

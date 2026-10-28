@@ -23,6 +23,16 @@ pub struct Doc {
     pub preview: bool,
     /// The file changed on disk while it had unsaved edits.
     pub conflict: bool,
+    /// Markdown files: editor, preview or both side by side.
+    pub md_view: Option<MdView>,
+}
+
+/// How a Markdown file is shown (Rider's editor / editor and preview / preview switch).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MdView {
+    Editor,
+    Split,
+    Preview,
 }
 
 impl Doc {
@@ -106,7 +116,8 @@ impl Docs {
         if path.components().any(|c| c.as_os_str() == "MetadataAsSource") {
             editor.read_only = true;
         }
-        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false });
+        let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
+        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)

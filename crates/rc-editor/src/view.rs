@@ -103,6 +103,7 @@ impl<'a> EditorView<'a> {
         }
 
         let m = metrics(ui, state, config, rect);
+        state.row_h = m.row_h;
         let text_rect = Rect::from_min_max(pos2(rect.left() + m.gutter_w, rect.top()), pos2(rect.right() - SCROLLBAR_W, rect.bottom()));
 
         // ---------------------------------------------------------------- input

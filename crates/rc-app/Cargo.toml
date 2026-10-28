@@ -31,6 +31,9 @@ rc-dap.workspace = true
 rfd = "0.17"
 dirs = "6"
 muda = { version = "0.21", default-features = false }
+egui_commonmark = { version = "0.25", default-features = false, features = ["pulldown_cmark", "load-images"] }
+egui_extras = { version = "0.36", default-features = false, features = ["image", "file"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
