@@ -174,4 +174,3 @@ fn go_to_declaration_and_back() {
     assert!(d.path.ends_with("Console.cs") && d.editor.read_only && d.editor.buffer.rope().to_string().contains("class Console"), "{}", d.path.display());
     app.close_workspace();
 }
-

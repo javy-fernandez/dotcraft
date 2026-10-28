@@ -190,11 +190,25 @@ pub fn args(cmd: &ServerCommand, log_dir: &Path) -> Vec<String> {
 pub fn start(cmd: &ServerCommand, workspace: &Path, dotnet_root: Option<&Path>, incoming: Outbox<Incoming>) -> std::io::Result<Client> {
     let log_dir = rc_core::paths::logs_dir().join("roslyn");
     let _ = std::fs::create_dir_all(&log_dir);
+    let env = server_env(dotnet_root);
+    Client::spawn(&cmd.program, &args(cmd, &log_dir), workspace, &env, incoming)
+}
+
+/// The server's environment: the SDK it should use, also first on PATH.
+fn server_env(dotnet_root: Option<&Path>) -> Vec<(String, String)> {
     let mut env = vec![("DOTNET_CLI_TELEMETRY_OPTOUT".to_string(), "1".to_string()), ("DOTNET_NOLOGO".into(), "1".into())];
     if let Some(root) = dotnet_root {
         env.push(("DOTNET_ROOT".into(), root.display().to_string()));
+        // The server loads projects through a build host that runs `dotnet` from PATH, and an app
+        // opened from Finder has a PATH without it (no /etc/paths.d): without this the projects
+        // never load and only the open file is understood.
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let dirs = std::iter::once(root.to_path_buf()).chain(std::env::split_paths(&path));
+        if let Ok(joined) = std::env::join_paths(dirs) {
+            env.push(("PATH".into(), joined.to_string_lossy().into_owned()));
+        }
     }
-    Client::spawn(&cmd.program, &args(cmd, &log_dir), workspace, &env, incoming)
+    env
 }
 
 /// The client capabilities DotCraft implements.
@@ -333,6 +347,16 @@ fn setting(section: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Opened from Finder the app's PATH lacks the SDK; the server's project loader needs it.
+    #[test]
+    fn server_path_starts_with_the_sdk() {
+        let env = server_env(Some(Path::new("/usr/local/share/dotnet")));
+        let get = |k: &str| env.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
+        assert_eq!(get("DOTNET_ROOT").as_deref(), Some("/usr/local/share/dotnet"));
+        let path = get("PATH").unwrap();
+        assert_eq!(std::env::split_paths(&path).next(), Some(PathBuf::from("/usr/local/share/dotnet")));
+    }
 
     #[test]
     fn configuration_requests_get_one_null_per_item() {
