@@ -87,6 +87,8 @@ pub struct DotCraftApp {
     /// Back/forward navigation: (file, char offset).
     pub nav_back: Vec<(PathBuf, usize)>,
     pub nav_forward: Vec<(PathBuf, usize)>,
+    /// Parsed Markdown and loaded images of the previews.
+    pub md_cache: egui_commonmark::CommonMarkCache,
     applied_dark: Option<bool>,
     applied_zoom: Option<f32>,
     pub shift_taps: (f64, u8, bool),
@@ -158,6 +160,7 @@ impl DotCraftApp {
             focus_editor: false,
             nav_back: Vec::new(),
             nav_forward: Vec::new(),
+            md_cache: Default::default(),
             applied_dark: None,
             applied_zoom: None,
             shift_taps: (0.0, 0, false),

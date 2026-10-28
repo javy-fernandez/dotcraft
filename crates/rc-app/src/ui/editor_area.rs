@@ -173,6 +173,20 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         }
         editor_rect.min.y = banner.bottom();
     }
+    // Markdown: the rendered page beside or instead of the editor.
+    let pane = editor_rect;
+    let mut preview_clicked = false;
+    if let Some(view) = app.docs.list[active].md_view {
+        let (ed, preview) = crate::ui::markdown::layout(view, editor_rect);
+        if let Some(r) = preview {
+            preview_clicked = crate::ui::markdown::preview(app, ui, active, r);
+        }
+        crate::ui::markdown::switcher(app, ui, active, pane);
+        match ed {
+            Some(r) => editor_rect = r,
+            None => return preview_clicked,
+        }
+    }
     if focused {
         let bar_h = crate::ui::search_popup::find_bar(app, ui, editor_rect);
         editor_rect.min.y += bar_h;
@@ -185,7 +199,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         from_menu.extend(rc_editor::run_action(&ed_ui, &mut doc.editor, &app.editor_config, *a));
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
-    let touched = out.response.clicked() || out.response.secondary_clicked() || out.events.contains(&EditorEvent::Focused);
+    let touched = preview_clicked || out.response.clicked() || out.response.secondary_clicked() || out.events.contains(&EditorEvent::Focused);
     editor_context_menu(app, &out.response);
     let doc = &mut app.docs.list[active];
     // While paused, hovering shows the debugger's value instead of the symbol's documentation.

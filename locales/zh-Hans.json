@@ -608,5 +608,10 @@
   },
   "settings": {
     "Reopen the last project on startup": "启动时重新打开上一个项目"
+  },
+  "editor": {
+    "Editor Only": "仅编辑器",
+    "Editor and Preview": "编辑器和预览",
+    "Preview Only": "仅预览"
   }
 }

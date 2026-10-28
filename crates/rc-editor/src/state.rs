@@ -120,6 +120,8 @@ pub struct EditorState {
     pub(crate) hover: Option<(usize, f64, bool)>,
     /// The word under the pointer while ⌘/Ctrl is held: drawn as a link (⌘+click navigates).
     pub(crate) link: Option<(usize, usize)>,
+    /// Row height of the last frame drawn.
+    pub(crate) row_h: f32,
     pub(crate) alt_taps: (f64, u8, bool),
     pub(crate) ime_preedit: Option<String>,
     /// Lines copied without a selection paste as whole lines (IntelliJ).
@@ -180,6 +182,7 @@ impl EditorState {
             column_drag: None,
             hover: None,
             link: None,
+            row_h: 0.0,
             alt_taps: (0.0, 0, false),
             ime_preedit: None,
             line_clipboard: None,
@@ -262,6 +265,13 @@ impl EditorState {
         let line = self.buffer.line_col(start).0;
         self.unfold_line(line);
         self.set_selection(Selection::single(Range::new(start, end)));
+    }
+
+    /// How far down the document the view is, from 0 (top) to 1 (last line at the top); used
+    /// to keep a side preview in step.
+    pub fn scroll_fraction(&self) -> f32 {
+        let lines = self.buffer.rope().len_lines().saturating_sub(1).max(1) as f32;
+        if self.row_h <= 0.0 { 0.0 } else { (self.scroll.y / self.row_h / lines).clamp(0.0, 1.0) }
     }
 
     /// Scroll offset in points (persisted with the session).
