@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=DotCraft
+GenericName=.NET IDE
+Comment=A lightweight native IDE for .NET and C#
+Exec=dotcraft %F
+Icon=dotcraft
+Terminal=false
+Categories=Development;IDE;
+MimeType=text/plain;text/x-csharp;application/xml;application/json;
+StartupWMClass=dotcraft

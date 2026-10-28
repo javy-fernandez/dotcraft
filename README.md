@@ -7,7 +7,7 @@
 <p align="center">
   <strong>A lightweight, native IDE for .NET and C#.</strong><br>
   Solutions, Roslyn code intelligence, build, run, tests, debugging and Git in a fast desktop app built with Rust and egui.<br>
-  macOS · Windows
+  macOS · Windows · Linux
 </p>
 
 <p align="center">
@@ -89,7 +89,7 @@ The debugger uses [netcoredbg](https://github.com/Samsung/netcoredbg) (MIT), dow
 
 ## Requirements
 
-- macOS 11 or later (Apple Silicon or Intel), or Windows 10/11 (x64 or ARM64, DirectX 12).
+- macOS 11 or later (Apple Silicon or Intel), Windows 10/11 (x64 or ARM64, DirectX 12), or Linux with glibc 2.35+ (x64 or ARM64; Vulkan or OpenGL ES, X11 or Wayland).
 - The [.NET SDK](https://dotnet.microsoft.com/download) 8 or later. DotCraft looks in the default install locations and on `PATH`; another location can be set in **Settings › Tools**.
 - Git on `PATH` for the Git features.
 - An internet connection the first time you open a C# file or start debugging, unless the language server and netcoredbg are already installed (their paths can be set in **Settings › Tools**).
@@ -114,7 +114,7 @@ scripts/bundle.sh --universal --dmg --zip
 scripts/bundle.sh --windows
 ```
 
-The first builds `DotCraft.app`, a universal `.dmg` and a `.zip` in `target/release`; the second cross-compiles the Windows x64 and ARM64 executables with [cargo-xwin](https://github.com/rust-cross/cargo-xwin) and zips them. Application icons are generated from `assets/icon.svg` with `scripts/make_icon.py`.
+The first builds `DotCraft.app`, a universal `.dmg` and a `.zip` in `target/release`; the second cross-compiles the Windows x64 and ARM64 executables with [cargo-xwin](https://github.com/rust-cross/cargo-xwin) and zips them. Linux builds come from the `Linux release build` workflow (`.github/workflows/linux.yml`), which runs on Ubuntu 22.04 when a release is published and attaches `DotCraft-<version>-linux-x64.tar.gz` and `-linux-arm64.tar.gz`; on Linux, `cargo build --release` is enough. Application icons are generated from `assets/icon.svg` with `scripts/make_icon.py`.
 
 ### Tests
 
