@@ -605,5 +605,8 @@
     "Split Down": "Dividir para baixo",
     "Split Right": "Dividir à direita",
     "Unsplit": "Desfazer divisão"
+  },
+  "settings": {
+    "Reopen the last project on startup": "Reabrir o último projeto ao iniciar"
   }
 }

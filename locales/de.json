@@ -605,5 +605,8 @@
     "Split Down": "Nach unten teilen",
     "Split Right": "Nach rechts teilen",
     "Unsplit": "Teilung aufheben"
+  },
+  "settings": {
+    "Reopen the last project on startup": "Letztes Projekt beim Start erneut öffnen"
   }
 }

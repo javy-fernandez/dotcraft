@@ -605,5 +605,8 @@
     "Split Down": "向下拆分",
     "Split Right": "向右拆分",
     "Unsplit": "取消拆分"
+  },
+  "settings": {
+    "Reopen the last project on startup": "启动时重新打开上一个项目"
   }
 }

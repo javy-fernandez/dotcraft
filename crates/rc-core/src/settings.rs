@@ -55,6 +55,10 @@ pub struct Settings {
     pub netcoredbg_path: Option<PathBuf>,
     /// Most recent first.
     pub recent_workspaces: Vec<PathBuf>,
+    /// Reopen the project that was open when DotCraft quit (Rider's "Reopen projects on startup").
+    pub reopen_last: bool,
+    /// The project open when DotCraft quit; `None` after Close Project.
+    pub last_workspace: Option<PathBuf>,
 }
 
 impl Default for Settings {
@@ -79,6 +83,8 @@ impl Default for Settings {
             roslyn_path: None,
             netcoredbg_path: None,
             recent_workspaces: Vec::new(),
+            reopen_last: true,
+            last_workspace: None,
         }
     }
 }

@@ -271,7 +271,7 @@ fn project_widget(app: &mut DotCraftApp, ui: &mut Ui) {
             ui.close();
         }
         if app.workspace.is_some() && theme::menu_item(ui, Some(ico::CLOSE), tr("Close Project"), false).clicked() {
-            app.close_workspace();
+            app.close_project();
             ui.close();
         }
         let recents: Vec<std::path::PathBuf> = app.settings.recent_workspaces.iter().filter(|r| app.workspace.as_ref().is_none_or(|w| w.ws.key_path() != r.as_path())).cloned().collect();

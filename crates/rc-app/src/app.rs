@@ -111,8 +111,7 @@ impl DotCraftApp {
         // the last project.
         let mut from_system = crate::open_files::take();
         from_system.extend(open);
-        let to_open = if from_system.is_empty() { app.settings.recent_workspaces.first().cloned().filter(|p| p.exists()).into_iter().collect() } else { from_system };
-        for path in to_open {
+        for path in startup_paths(&app.settings, from_system) {
             app.open_path(&path);
         }
         app
@@ -205,6 +204,7 @@ impl DotCraftApp {
             self.notify(trf("Could not read the solution: {error}", &[("error", err)]), true);
         }
         self.settings.add_recent(ws.key_path().to_path_buf());
+        self.settings.last_workspace = Some(ws.key_path().to_path_buf());
         let _ = self.settings.save();
         self._watcher = FileWatcher::new(&ws.root, self.fs_inbox.sender()).ok();
         self.files.open(&ws.root, self.waker.clone());
@@ -271,6 +271,16 @@ impl DotCraftApp {
     /// New Solution, or Add New Project when `solution` is given.
     pub fn new_project_dialog(&mut self, solution: Option<PathBuf>) {
         self.new_project = Some(crate::ui::new_project::NewProjectDialog::new(self, solution, self.waker.clone()));
+    }
+
+    /// File › Close Project: back to the welcome screen, which is also where the next start
+    /// begins.
+    pub fn close_project(&mut self) {
+        self.close_workspace();
+        self.settings.last_workspace = None;
+        if let Err(e) = self.settings.save() {
+            self.notify(trf("Could not save the settings: {error}", &[("error", &e)]), true);
+        }
     }
 
     pub fn close_workspace(&mut self) {
@@ -1124,6 +1134,15 @@ impl DotCraftApp {
     }
 }
 
+/// What a start opens: files sent by Finder or the command line, otherwise the project open
+/// at the last quit (none after Close Project, as in Rider).
+pub fn startup_paths(settings: &Settings, from_system: Vec<PathBuf>) -> Vec<PathBuf> {
+    if !from_system.is_empty() {
+        return from_system;
+    }
+    settings.last_workspace.clone().filter(|p| settings.reopen_last && p.exists()).into_iter().collect()
+}
+
 impl eframe::App for DotCraftApp {
     fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         // Window title: active file and workspace (Mission Control, the Window menu).
@@ -1157,7 +1176,7 @@ impl eframe::App for DotCraftApp {
                             self.insight.add_missing_usings(&self.docs.list[i]);
                         }
                     }
-                    MenuCommand::CloseProject => self.close_workspace(),
+                    MenuCommand::CloseProject => self.close_project(),
                     MenuCommand::ThemeLight | MenuCommand::ThemeDark => {
                         let mut s = self.settings.clone();
                         s.theme = if cmd == MenuCommand::ThemeDark { ThemeChoice::Dark } else { ThemeChoice::Light };

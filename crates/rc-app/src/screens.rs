@@ -234,6 +234,28 @@ fn screens() {
 
 /// Phase 1 closure: a 10-project solution opens with every project in the explorer, and the
 /// session (open tabs, caret, folds, tool windows, expanded nodes) is restored on reopen.
+/// Close Project, quit, start: the welcome screen. Quitting with a project open reopens it.
+#[test]
+fn closed_projects_are_not_reopened_on_startup() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let sln = fixtures().join("Shop/Shop.sln");
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(&sln);
+    assert_eq!(crate::app::startup_paths(&app.settings, Vec::new()), vec![sln.clone()]);
+    app.close_project();
+    assert!(crate::app::startup_paths(&rc_core::Settings::load(), Vec::new()).is_empty());
+    assert_eq!(rc_core::Settings::load().recent_workspaces.first(), Some(&sln));
+    app.open_workspace(&sln);
+    let mut settings = rc_core::Settings::load();
+    assert_eq!(crate::app::startup_paths(&settings, Vec::new()), vec![sln.clone()]);
+    settings.reopen_last = false;
+    assert!(crate::app::startup_paths(&settings, Vec::new()).is_empty());
+    // Files from Finder win.
+    let file = fixtures().join("Shop/README.md");
+    assert_eq!(crate::app::startup_paths(&settings, vec![file.clone()]), vec![file]);
+}
+
 #[test]
 fn files_dropped_on_the_welcome_screen_open_in_the_editor() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
