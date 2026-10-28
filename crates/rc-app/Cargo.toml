@@ -42,6 +42,11 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 [target.'cfg(windows)'.dependencies]
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "wgsl"] }
 
+# Linux: Vulkan (or OpenGL ES where there is none), on X11 and Wayland.
+[target.'cfg(target_os = "linux")'.dependencies]
+wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "vulkan", "gles", "wgsl"] }
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu_no_default_features", "persistence", "x11", "wayland"] }
+
 [dev-dependencies]
 egui_kittest.workspace = true
 tempfile = "3"
