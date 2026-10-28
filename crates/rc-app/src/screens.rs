@@ -226,6 +226,31 @@ fn screens() {
 /// Phase 1 closure: a 10-project solution opens with every project in the explorer, and the
 /// session (open tabs, caret, folds, tool windows, expanded nodes) is restored on reopen.
 #[test]
+fn files_dropped_on_the_welcome_screen_open_in_the_editor() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let file = home.path().join("cosa.txt");
+    std::fs::write(&file, "hola").unwrap();
+    let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
+    #[derive(Debug)]
+    struct Dropped(PathBuf);
+    impl egui::DroppedFile for Dropped {
+        fn path(&self) -> &Path {
+            &self.0
+        }
+        fn bytes(&self) -> Result<Vec<u8>, String> {
+            std::fs::read(&self.0).map_err(|e| e.to_string())
+        }
+    }
+    h.input_mut().dropped_files.push(std::sync::Arc::new(Dropped(file.clone())));
+    h.run_steps(3);
+    let app = h.state();
+    assert!(app.workspace.is_none());
+    assert_eq!(app.docs.active_doc().map(|d| d.path.clone()), Some(file.canonicalize().unwrap()));
+    assert!(app.notices.iter().all(|n| !n.error), "{:?}", app.notices.iter().map(|n| &n.text).collect::<Vec<_>>());
+}
+
+#[test]
 fn ten_project_solution_opens_and_its_session_is_restored() {
     use egui_kittest::kittest::Queryable;
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
