@@ -27,6 +27,7 @@ pub enum MenuCommand {
     Quit,
     OpenProject,
     OpenFile,
+    NewFile,
     NewSolution,
     EditRunConfig,
     AddUsings,
@@ -51,6 +52,7 @@ impl MenuCommand {
             MenuCommand::Act(a) => return crate::search::action_icon(a),
             MenuCommand::About => ico::INFO,
             MenuCommand::NewSolution => ico::ADD,
+            MenuCommand::NewFile => ico::NEW_FILE,
             MenuCommand::OpenProject | MenuCommand::OpenFile => ico::OPEN,
             MenuCommand::CloseProject => ico::CLOSE,
             MenuCommand::EditRunConfig => ico::SETTINGS,
@@ -372,6 +374,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         || tr("File"),
         &[
             &item(MenuCommand::NewSolution, || tr("New Solution…"), None),
+            &item(MenuCommand::NewFile, || tr("New File…"), None),
             &item(MenuCommand::OpenProject, || tr("Open…"), None),
             &item(MenuCommand::OpenFile, || tr("Open File…"), None),
             &item(MenuCommand::CloseProject, || tr("Close Project"), None),

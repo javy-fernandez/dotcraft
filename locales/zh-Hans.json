@@ -463,7 +463,10 @@
   },
   "files": {
     "Open File…": "打开文件…",
-    "the file does not exist": "文件不存在"
+    "the file does not exist": "文件不存在",
+    "New File": "新建文件",
+    "New File…": "新建文件…",
+    "Could not create {path}: {error}": "无法创建 {path}：{error}"
   },
   "newproject": {
     "Add New Project": "添加新项目",

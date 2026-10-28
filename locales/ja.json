@@ -463,7 +463,10 @@
   },
   "files": {
     "Open File…": "ファイルを開く…",
-    "the file does not exist": "ファイルが存在しません"
+    "the file does not exist": "ファイルが存在しません",
+    "New File": "新規ファイル",
+    "New File…": "新規ファイル…",
+    "Could not create {path}: {error}": "{path} を作成できませんでした: {error}"
   },
   "newproject": {
     "Add New Project": "新しいプロジェクトを追加",

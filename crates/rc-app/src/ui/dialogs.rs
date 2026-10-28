@@ -537,8 +537,15 @@ fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &
         resp.request_focus();
         if !kind.is_folder() && !name.trim().is_empty() {
             let files = kind.files(dir, name);
-            let shown: Vec<String> = files.iter().filter_map(|(p, _)| p.file_name().map(|n| n.to_string_lossy().into_owned())).collect();
-            ui.label(egui::RichText::new(format!("{} · {}", shown.join(", "), crate::item_templates::namespace_for(dir))).size(12.0).color(rc_kit::pal(ui).muted));
+            let detail = if kind.is_plain() {
+                // Where it lands, from the solution folder.
+                let root = app.workspace.as_ref().map(|w| w.ws.root.clone()).unwrap_or_default();
+                files[0].0.strip_prefix(&root).unwrap_or(&files[0].0).display().to_string()
+            } else {
+                let shown: Vec<String> = files.iter().filter_map(|(p, _)| p.file_name().map(|n| n.to_string_lossy().into_owned())).collect();
+                format!("{} · {}", shown.join(", "), crate::item_templates::namespace_for(dir))
+            };
+            ui.add(egui::Label::new(egui::RichText::new(detail).size(12.0).color(rc_kit::pal(ui).muted)).truncate());
         }
         if let Some(e) = error.as_ref() {
             ui.colored_label(rc_kit::pal(ui).error, e);
@@ -557,6 +564,8 @@ fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &
             if kind.is_folder() {
                 std::fs::create_dir_all(p)
             } else {
+                // "Folder/name.ext" creates the folders too.
+                p.parent().map_or(Ok(()), std::fs::create_dir_all)?;
                 std::fs::write(p, content.replace("$0", ""))
             }
         });

@@ -238,6 +238,10 @@ fn project_widget(app: &mut DotCraftApp, ui: &mut Ui) {
             app.new_project_dialog(None);
             ui.close();
         }
+        if theme::menu_item(ui, Some(ico::NEW_FILE), tr("New File…"), false).clicked() {
+            app.new_file_dialog();
+            ui.close();
+        }
         if let Some(sln) = app.workspace.as_ref().and_then(|w| w.ws.solution().map(std::path::Path::to_path_buf))
             && theme::menu_item(ui, Some(ico::ADD), tr("Add New Project…"), false).clicked()
         {

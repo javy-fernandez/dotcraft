@@ -1,0 +1,5 @@
+# New File. Import: python3 scripts/i18n_tsv.py files scripts/i18n/new-file.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+New File	Nuevo archivo	Nouveau fichier	Novo arquivo	Neue Datei	Nowy plik	新建文件	新規ファイル
+New File…	Nuevo archivo…	Nouveau fichier…	Novo arquivo…	Neue Datei…	Nowy plik…	新建文件…	新規ファイル…
+Could not create {path}: {error}	No se pudo crear {path}: {error}	Impossible de créer {path} : {error}	Não foi possível criar {path}: {error}	{path} konnte nicht erstellt werden: {error}	Nie można utworzyć {path}: {error}	无法创建 {path}：{error}	{path} を作成できませんでした: {error}

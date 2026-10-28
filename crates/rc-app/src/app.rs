@@ -897,6 +897,31 @@ impl DotCraftApp {
         }
     }
 
+    /// File › New File: asks for a name in the active file's folder (or the solution's), or for a
+    /// path when nothing is open.
+    pub fn new_file_dialog(&mut self) {
+        let root = self.workspace.as_ref().map(|w| w.ws.root.clone());
+        let active = self.docs.active_doc().and_then(|d| d.path.parent().map(Path::to_path_buf));
+        if let Some(root) = root {
+            let dir = active.filter(|d| d.starts_with(&root)).unwrap_or(root);
+            self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind: crate::item_templates::ItemKind::File, error: None });
+            return;
+        }
+        let mut dialog = rfd::FileDialog::new().set_title(tr("New File"));
+        if let Some(dir) = active {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(path) = dialog.save_file() {
+            if !path.exists()
+                && let Err(e) = std::fs::write(&path, "")
+            {
+                self.notify(trf("Could not create {path}: {error}", &[("path", &path.display()), ("error", &e)]), true);
+                return;
+            }
+            self.open_path(&path);
+        }
+    }
+
     pub fn pick_and_open(&mut self) {
         let dialog = rfd::FileDialog::new().set_title(tr("Open Folder, Solution or Project"));
         if let Some(path) = dialog.pick_folder() {
@@ -1093,6 +1118,7 @@ impl eframe::App for DotCraftApp {
                     MenuCommand::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
                     MenuCommand::OpenProject => self.pick_and_open(),
                     MenuCommand::OpenFile => self.pick_file(),
+                    MenuCommand::NewFile => self.new_file_dialog(),
                     MenuCommand::NewSolution => self.new_project_dialog(None),
                     MenuCommand::EditRunConfig => self.edit_run_config(None),
                     MenuCommand::AddUsings => {

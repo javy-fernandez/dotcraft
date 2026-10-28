@@ -138,6 +138,11 @@ fn screens() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("add-item-{suffix}.png"))).unwrap();
         h.state_mut().dialog = None;
+        // File › New File.
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewFile { dir: fixtures().join("Shop/src/Shop.Api"), name: "Properties/notes.md".into(), kind: crate::item_templates::ItemKind::File, error: None });
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("new-file-{suffix}.png"))).unwrap();
+        h.state_mut().dialog = None;
         // Many tabs: one scrolling row, then several rows, with a pinned and a preview tab.
         {
             let app = h.state_mut();

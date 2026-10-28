@@ -463,7 +463,10 @@
   },
   "files": {
     "Open File…": "Otwórz plik…",
-    "the file does not exist": "plik nie istnieje"
+    "the file does not exist": "plik nie istnieje",
+    "New File": "Nowy plik",
+    "New File…": "Nowy plik…",
+    "Could not create {path}: {error}": "Nie można utworzyć {path}: {error}"
   },
   "newproject": {
     "Add New Project": "Dodaj nowy projekt",
