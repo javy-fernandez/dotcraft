@@ -1,0 +1,132 @@
+# macOS and Windows builds for the releases. Publishing a release starts this workflow, which builds
+# the universal dmg and the macOS zip on a Mac and the Windows zips on Windows (x64 and ARM64), and
+# uploads them to it.
+# A pull request that touches this file builds without uploading, and "Run workflow" rebuilds the
+# files of an existing release (or only builds them, without a tag).
+name: macOS and Windows release build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and upload to (e.g. v0.3.1); leave empty to only build
+        required: false
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/bundle.sh
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-15
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.sha }}
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --target aarch64-apple-darwin,x86_64-apple-darwin
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-universal
+
+      - name: Build the dmg and the zip
+        run: |
+          scripts/bundle.sh --universal --dmg --zip
+          dmg=$(ls target/release/DotCraft-*-universal.dmg)
+          zip=$(ls target/release/DotCraft-*-macos-universal.zip)
+          lipo -archs target/release/DotCraft.app/Contents/MacOS/DotCraft
+          hdiutil verify "$dmg"
+          echo "DMG=$dmg" >> "$GITHUB_ENV"
+          echo "ZIP=$zip" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: |
+            ${{ env.DMG }}
+            ${{ env.ZIP }}
+
+      - name: Upload to the release
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$DMG" "$ZIP" --clobber
+
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - arch: arm64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.sha }}
+
+      - name: Install Rust
+        run: |
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+            $arch = if ('${{ matrix.arch }}' -eq 'arm64') { 'aarch64' } else { 'x86_64' }
+            Invoke-WebRequest "https://static.rust-lang.org/rustup/dist/$arch-pc-windows-msvc/rustup-init.exe" -OutFile rustup-init.exe
+            ./rustup-init.exe -y --profile minimal --default-toolchain none
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+            $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+          }
+          rustup toolchain install stable --profile minimal --component llvm-tools
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-${{ matrix.arch }}
+
+      - name: Build
+        run: cargo build --locked --release -p rc-app --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
+          New-Item -ItemType Directory DotCraft | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/dotcraft.exe DotCraft/DotCraft.exe
+          Copy-Item LICENSE-MIT, LICENSE-APACHE DotCraft/
+          $archive = "DotCraft-$version-windows-${{ matrix.arch }}.zip"
+          Compress-Archive -Path DotCraft -DestinationPath $archive
+          "ARCHIVE=$archive" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          # The exe must only need system DLLs (the C runtime is linked statically).
+          $objdump = Get-ChildItem "$(rustc --print sysroot)/lib/rustlib" -Recurse -Filter llvm-objdump.exe | Select-Object -First 1
+          $dlls = & $objdump.FullName -p DotCraft/DotCraft.exe | Select-String 'DLL Name: (.+)' | ForEach-Object { $_.Matches.Groups[1].Value.Trim() }
+          $dlls -join ', '
+          $bad = $dlls | Where-Object { $_ -match '^(vcruntime|msvcp|libgcc|libstdc|libwinpthread)' }
+          if ($bad) { throw "Non-system DLLs: $($bad -join ', ')" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: ${{ env.ARCHIVE }}
+
+      - name: Upload to the release
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$env:TAG" "$env:ARCHIVE" --clobber

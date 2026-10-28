@@ -1,6 +1,6 @@
-# Linux builds for the releases. The macOS dmg and the Windows zips are built on a Mac and
-# uploaded with `gh release create`; publishing that release starts this workflow, which builds
-# DotCraft on Ubuntu (x64 and ARM64) and uploads DotCraft-<version>-linux-<arch>.tar.gz to it.
+# Linux builds for the releases. Publishing a release starts this workflow (and release.yml, which
+# builds the macOS and Windows files), which builds DotCraft on Ubuntu (x64 and ARM64) and uploads
+# DotCraft-<version>-linux-<arch>.tar.gz to it.
 # A pull request that touches this file builds without uploading, and "Run workflow" rebuilds
 # the archives of an existing release.
 name: Linux release build
