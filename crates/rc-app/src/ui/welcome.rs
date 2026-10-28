@@ -94,18 +94,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         // A folder, solution or project dropped on the window opens as the workspace; other
         // files open in the editor.
         let dropped: Vec<std::path::PathBuf> = ui.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
-        open_dropped(app, dropped);
+        app.open_paths(dropped);
         ui.allocate_rect(rect, Sense::hover());
     });
-}
-
-pub(crate) fn open_dropped(app: &mut DotCraftApp, dropped: Vec<std::path::PathBuf>) {
-    use rc_core::workspace::{is_project, is_solution};
-    let (workspaces, files): (Vec<_>, Vec<_>) = dropped.into_iter().partition(|p| p.is_dir() || is_solution(p) || is_project(p));
-    if let Some(ws) = workspaces.first() {
-        app.open_workspace(ws);
-    }
-    for f in files {
-        app.open_path(&f);
-    }
 }

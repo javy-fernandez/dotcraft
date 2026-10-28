@@ -922,10 +922,29 @@ impl DotCraftApp {
         }
     }
 
+    /// Open…: a folder, solution or project opens as the workspace, any other file in the
+    /// editor (macOS lets one panel pick both; elsewhere it picks a folder).
     pub fn pick_and_open(&mut self) {
-        let dialog = rfd::FileDialog::new().set_title(tr("Open Folder, Solution or Project"));
-        if let Some(path) = dialog.pick_folder() {
-            self.open_workspace(&path);
+        let dialog = rfd::FileDialog::new().set_title(tr("Open"));
+        #[cfg(target_os = "macos")]
+        let picked = dialog.pick_files_or_folders();
+        #[cfg(not(target_os = "macos"))]
+        let picked = dialog.set_title(tr("Open Folder, Solution or Project")).pick_folder().map(|p| vec![p]);
+        if let Some(paths) = picked {
+            self.open_paths(paths);
+        }
+    }
+
+    /// Opens the first folder, solution or project among `paths` as the workspace and the other
+    /// files in the editor (dropped files, Open…).
+    pub fn open_paths(&mut self, paths: Vec<PathBuf>) {
+        use rc_core::workspace::{is_project, is_solution};
+        let (workspaces, files): (Vec<_>, Vec<_>) = paths.into_iter().partition(|p| p.is_dir() || is_solution(p) || is_project(p));
+        if let Some(ws) = workspaces.first() {
+            self.open_workspace(ws);
+        }
+        for f in files {
+            self.open_path(&f);
         }
     }
 
