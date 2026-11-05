@@ -214,7 +214,11 @@
     "netcoredbg debugger": "Depurador netcoredbg",
     "not found": "não encontrado",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} caracteres)",
-    "{n} spaces": "{n} espaços"
+    "{n} spaces": "{n} espaços",
+    "Reload from Disk": "Recarregar do disco",
+    "Open Recent": "Abrir recente",
+    "Clear Recent": "Limpar recentes",
+    "No Recent Items": "Nenhum item recente"
   },
   "terminal": {
     "Local": "Local",

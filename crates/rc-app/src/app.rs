@@ -80,6 +80,10 @@ pub struct DotCraftApp {
     pub waker: Waker,
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
+    /// Open documents outside the workspace: their folders are watched too.
+    doc_inbox: Inbox<FsEvent>,
+    doc_watcher: Option<FileWatcher>,
+    doc_watch_dirs: Vec<PathBuf>,
     /// Actions waiting for the UI pass (from the native menu or global shortcuts).
     pub pending: Vec<Action>,
     /// Give the editor keyboard focus on the next frame.
@@ -154,6 +158,9 @@ impl DotCraftApp {
             test_markers: Vec::new(),
             native_menu,
             fs_inbox: Inbox::new(waker.clone()),
+            doc_inbox: Inbox::new(waker.clone()),
+            doc_watcher: None,
+            doc_watch_dirs: Vec::new(),
             waker,
             _watcher: None,
             pending: Vec::new(),
@@ -547,11 +554,48 @@ impl DotCraftApp {
     pub fn open_file(&mut self, path: &Path) {
         self.push_nav();
         match self.docs.open(path) {
-            Ok(_) => {
+            Ok(i) => {
                 self.focus_editor = true;
                 self.session_dirty = true;
+                self.remember_file(i);
             }
             Err(e) => self.notify(e, true),
+        }
+    }
+
+    /// Adds a document to File › Open Recent.
+    fn remember_file(&mut self, i: usize) {
+        let path = self.docs.list[i].path.clone();
+        if self.settings.add_recent_file(path) {
+            let _ = self.settings.save();
+        }
+    }
+
+    /// File › Reload from Disk for the active document.
+    pub fn reload_active_from_disk(&mut self) {
+        if let Some(i) = self.docs.active
+            && let Err(e) = self.docs.reload_from_disk(i)
+        {
+            self.notify(e, true);
+        }
+    }
+
+    /// Watches the folders of open documents outside the workspace (a Markdown file opened on its
+    /// own, a file from another folder), so they reload when another app changes them.
+    fn sync_doc_watcher(&mut self) {
+        let root = self.workspace.as_ref().map(|w| w.ws.root.clone());
+        let mut dirs: Vec<PathBuf> = self
+            .docs
+            .list
+            .iter()
+            .filter(|d| root.as_ref().is_none_or(|r| !d.path.starts_with(r)))
+            .filter_map(|d| d.path.parent().map(Path::to_path_buf))
+            .collect();
+        dirs.sort();
+        dirs.dedup();
+        if dirs != self.doc_watch_dirs {
+            self.doc_watcher = if dirs.is_empty() { None } else { FileWatcher::dirs(&dirs, self.doc_inbox.sender()).ok() };
+            self.doc_watch_dirs = dirs;
         }
     }
 
@@ -1073,6 +1117,12 @@ impl DotCraftApp {
                 w.solution = Some(s);
             }
         }
+        self.sync_doc_watcher();
+        let mut outside: Vec<PathBuf> = self.doc_inbox.drain().into_iter().map(|e| e.path().to_path_buf()).collect();
+        outside.dedup();
+        for p in outside {
+            self.docs.on_disk_change(&p);
+        }
         self.docs.poll_parses();
     }
 
@@ -1180,6 +1230,17 @@ impl eframe::App for DotCraftApp {
                         }
                     }
                     MenuCommand::CloseProject => self.close_project(),
+                    MenuCommand::ReloadFromDisk => self.reload_active_from_disk(),
+                    MenuCommand::OpenRecent(n) => {
+                        if let Some(p) = self.native_menu.as_ref().and_then(|m| m.recent_path(n)) {
+                            self.open_path(&p);
+                        }
+                    }
+                    MenuCommand::ClearRecent => {
+                        self.settings.recent_workspaces.clear();
+                        self.settings.recent_files.clear();
+                        let _ = self.settings.save();
+                    }
                     MenuCommand::ThemeLight | MenuCommand::ThemeDark => {
                         let mut s = self.settings.clone();
                         s.theme = if cmd == MenuCommand::ThemeDark { ThemeChoice::Dark } else { ThemeChoice::Light };
@@ -1198,6 +1259,7 @@ impl eframe::App for DotCraftApp {
         }
         if let Some(m) = &self.native_menu {
             m.sync(dark);
+            m.set_recent(&self.settings.recent_workspaces, &self.settings.recent_files);
         }
         if self.applied_zoom != Some(self.settings.ui_zoom) {
             ctx.set_zoom_factor(self.settings.ui_zoom);
@@ -1208,6 +1270,10 @@ impl eframe::App for DotCraftApp {
         if self.had_focus && !focused && self.settings.autosave {
             self.save_all_docs();
             self.save_session();
+        }
+        // Back in the window: files another app changed reload (the watcher may have missed them).
+        if !self.had_focus && focused {
+            self.docs.check_disk_changes();
         }
         self.had_focus = focused;
     }

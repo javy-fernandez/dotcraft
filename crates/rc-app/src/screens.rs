@@ -5,6 +5,7 @@
 use crate::app::DotCraftApp;
 use egui::vec2;
 use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
 use rc_core::{Settings, Waker};
 use std::path::{Path, PathBuf};
 
@@ -346,6 +347,41 @@ fn run_frames(h: &mut Harness<'static, DotCraftApp>, what: &str, mut done: impl 
         std::thread::sleep(std::time::Duration::from_millis(30));
     }
     panic!("timed out waiting for {what}");
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes recent-files captures to target/snapshots"]
+fn screens_recent_and_reload() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let notes = tempfile::Builder::new().prefix("dotcraft-notes").tempdir().unwrap();
+    let md = notes.path().canonicalize().unwrap().join("notes.md");
+    std::fs::write(&md, "# Notes\n\nFirst version.\n").unwrap();
+    // A solution, and a Markdown file from another folder (outside the watched workspace).
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    app.open_file(&fixtures().join("Shop/src/Shop.Core/Order.cs"));
+    app.open_path(&md);
+    assert_eq!(app.settings.recent_files.first(), Some(&md));
+    assert_eq!(app.settings.recent_files.get(1), Some(&fixtures().join("Shop/src/Shop.Core/Order.cs")));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    // Another app changes the file: it reloads without closing it.
+    std::fs::write(&md, "# Notes\n\nChanged by another app.\n").unwrap();
+    let i = h.state().docs.index_of(&md).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !h.state().docs.list[i].editor.buffer.rope().to_string().contains("another app") && std::time::Instant::now() < deadline {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert!(h.state().docs.list[i].editor.buffer.rope().to_string().contains("another app"));
+    // The project menu lists the recent files (Windows and Linux have no native File menu).
+    h.state_mut().docs.close(0);
+    h.run_steps(2);
+    h.get_all_by_label("Shop").next().unwrap().click();
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("recent-files-dark.png")).unwrap();
 }
 
 #[test]

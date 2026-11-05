@@ -223,6 +223,32 @@ impl Docs {
         doc.editor.request_parse(&self.pool);
     }
 
+    /// Checks every open document against the disk (the window got the focus back: catches
+    /// changes the watcher could not see).
+    pub fn check_disk_changes(&mut self) {
+        let paths: Vec<PathBuf> = self.list.iter().map(|d| d.path.clone()).collect();
+        for p in paths {
+            self.on_disk_change(&p);
+        }
+    }
+
+    /// File › Reload from Disk: an unmodified document loads the file again; one with unsaved
+    /// edits shows the conflict banner so the user picks which version to keep.
+    pub fn reload_from_disk(&mut self, i: usize) -> Result<(), String> {
+        let doc = &mut self.list[i];
+        let (text, bom, mtime) = read_text(&doc.path)?;
+        if doc.is_modified() {
+            doc.conflict = true;
+            return Ok(());
+        }
+        doc.editor.reload(&text);
+        doc.bom = bom;
+        doc.mtime = mtime;
+        doc.conflict = false;
+        doc.editor.request_parse(&self.pool);
+        Ok(())
+    }
+
     /// Takes finished background parses; returns whether any arrived (repaint).
     pub fn poll_parses(&mut self) -> bool {
         let results = self.pool.poll();
@@ -305,5 +331,30 @@ mod tests {
         docs.move_tab(2, 0);
         assert_eq!(docs.list.iter().map(|d| d.name()).collect::<Vec<_>>(), ["d.cs", "a.cs", "c.cs"]);
         assert_eq!(docs.active_doc().unwrap().name(), "d.cs");
+    }
+
+    #[test]
+    fn reload_from_disk_and_focus_check_pick_up_outside_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let md = dir.path().join("notes.md");
+        std::fs::write(&md, "# One\n").unwrap();
+        let mut docs = Docs::new(ParserPool::new(Arc::new(|| {})));
+        docs.open(&md).unwrap();
+        // Another app rewrites the file (with a different modification time).
+        std::fs::write(&md, "# Two\n").unwrap();
+        let later = SystemTime::now() + std::time::Duration::from_secs(5);
+        std::fs::File::options().write(true).open(&md).unwrap().set_modified(later).unwrap();
+        docs.check_disk_changes();
+        assert_eq!(docs.list[0].editor.buffer.rope().to_string(), "# Two\n");
+        // Explicit reload, even with the same modification time.
+        std::fs::write(&md, "# Three\n").unwrap();
+        docs.reload_from_disk(0).unwrap();
+        assert_eq!(docs.list[0].editor.buffer.rope().to_string(), "# Three\n");
+        assert!(!docs.list[0].is_modified());
+        // Unsaved edits are not thrown away: the conflict banner asks.
+        docs.list[0].editor.replace(0, 0, "x");
+        docs.reload_from_disk(0).unwrap();
+        assert!(docs.list[0].conflict);
+        assert_eq!(docs.list[0].editor.buffer.rope().to_string(), "x# Three\n");
     }
 }

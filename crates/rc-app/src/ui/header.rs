@@ -287,6 +287,18 @@ fn project_widget(app: &mut DotCraftApp, ui: &mut Ui) {
                 }
             }
         }
+        let files: Vec<std::path::PathBuf> = app.settings.recent_files.iter().filter(|f| app.docs.index_of(f).is_none()).take(10).cloned().collect();
+        if !files.is_empty() {
+            ui.separator();
+            ui.label(egui::RichText::new(tr("Recent Files")).color(p.muted).size(12.0));
+            for f in &files {
+                let label = f.file_name().map_or_else(|| f.display().to_string(), |s| s.to_string_lossy().into_owned());
+                if theme::menu_item(ui, Some(rc_kit::icons::for_file(&f.to_string_lossy())), &label, false).on_hover_text(f.display().to_string()).clicked() {
+                    app.open_path(f);
+                    ui.close();
+                }
+            }
+        }
     });
 }
 

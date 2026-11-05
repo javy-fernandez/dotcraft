@@ -214,7 +214,11 @@
     "netcoredbg debugger": "netcoredbg 调试器",
     "not found": "未找到",
     "{line}:{col} ({n} chars)": "{line}:{col}（{n} 个字符）",
-    "{n} spaces": "{n} 个空格"
+    "{n} spaces": "{n} 个空格",
+    "Reload from Disk": "从磁盘重新加载",
+    "Open Recent": "打开最近",
+    "Clear Recent": "清除最近项目",
+    "No Recent Items": "没有最近项目"
   },
   "terminal": {
     "Local": "本地",

@@ -16,8 +16,9 @@ use rc_editor::{Action, Keymap};
 use rc_kit::i18n::{tr, tr_ctx};
 use rc_kit::{Ico, ico};
 use muda::accelerator::{Accelerator, Code, Modifiers};
-use muda::{CheckMenuItem, IconMenuItem, Menu, MenuEvent, PredefinedMenuItem, Submenu};
+use muda::{CheckMenuItem, IconMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use std::cell::{Cell, RefCell};
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, channel};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,6 +33,10 @@ pub enum MenuCommand {
     EditRunConfig,
     AddUsings,
     CloseProject,
+    ReloadFromDisk,
+    /// An entry of File › Open Recent (index into [`NativeMenu::recent_path`]).
+    OpenRecent(usize),
+    ClearRecent,
     ThemeLight,
     ThemeDark,
     Undo,
@@ -55,6 +60,7 @@ impl MenuCommand {
             MenuCommand::NewFile => ico::NEW_FILE,
             MenuCommand::OpenProject | MenuCommand::OpenFile => ico::OPEN,
             MenuCommand::CloseProject => ico::CLOSE,
+            MenuCommand::ReloadFromDisk => ico::REFRESH,
             MenuCommand::EditRunConfig => ico::SETTINGS,
             MenuCommand::AddUsings => ico::NAMESPACE,
             MenuCommand::Undo => ico::UNDO,
@@ -98,6 +104,9 @@ pub struct NativeMenu {
     icons: Vec<(IconMenuItem, Ico)>,
     /// Appearance the icons were drawn for (the system's, which the menu bar follows).
     icons_dark: Cell<bool>,
+    /// File › Open Recent and the (projects, files) it lists.
+    recent: Submenu,
+    recent_lists: RefCell<(Vec<PathBuf>, Vec<PathBuf>)>,
 }
 
 enum Entry {
@@ -155,6 +164,8 @@ impl NativeMenu {
             synced: Cell::new(None),
             icons: built.icons,
             icons_dark: Cell::new(dark),
+            recent: built.recent,
+            recent_lists: RefCell::new((Vec::new(), vec![PathBuf::new()])),
         })
     }
 
@@ -163,6 +174,10 @@ impl NativeMenu {
         let mut out = Vec::new();
         for id in self.rx.try_iter() {
             self.synced.set(None);
+            if let Some(n) = id.strip_prefix("dotcraft.recent.").and_then(|n| n.parse().ok()) {
+                out.push(MenuCommand::OpenRecent(n));
+                continue;
+            }
             let Some(cmd) = self.commands.iter().copied().find(|c| c.id() == id) else { continue };
             if !forward_edit(&self.ctx, cmd) {
                 out.push(cmd);
@@ -191,6 +206,54 @@ impl NativeMenu {
         for l in &self.labels {
             l.apply();
         }
+        // The recent list rebuilds with the new language on the next `set_recent`.
+        self.recent_lists.borrow_mut().1 = vec![PathBuf::new()];
+    }
+
+    /// Fills File › Open Recent: recent projects, then recent files (rebuilt only when they change).
+    pub fn set_recent(&self, projects: &[PathBuf], files: &[PathBuf]) {
+        let mut lists = self.recent_lists.borrow_mut();
+        if lists.0 == projects && lists.1 == files {
+            return;
+        }
+        *lists = (projects.to_vec(), files.to_vec());
+        while self.recent.remove_at(0).is_some() {}
+        let entry = |n: usize, path: &Path, project: bool| {
+            let name = if project { path.file_stem() } else { path.file_name() }.map_or_else(|| path.display().to_string(), |s| s.to_string_lossy().into_owned());
+            let dir = path.parent().map(home_relative).unwrap_or_default();
+            MenuItem::with_id(format!("dotcraft.recent.{n}"), format!("{name} — {dir}"), true, None)
+        };
+        let empty = projects.is_empty() && files.is_empty();
+        for (n, p) in projects.iter().enumerate() {
+            let _ = self.recent.append(&entry(n, p, true));
+        }
+        if !projects.is_empty() && !files.is_empty() {
+            let _ = self.recent.append(&PredefinedMenuItem::separator());
+        }
+        for (n, p) in files.iter().enumerate() {
+            let _ = self.recent.append(&entry(projects.len() + n, p, false));
+        }
+        if empty {
+            let _ = self.recent.append(&MenuItem::new(tr("No Recent Items"), false, None));
+        } else {
+            let _ = self.recent.append(&PredefinedMenuItem::separator());
+            let _ = self.recent.append(&MenuItem::with_id(MenuCommand::ClearRecent.id(), tr("Clear Recent"), true, None));
+        }
+    }
+
+    /// The project or file of File › Open Recent entry `n`.
+    pub fn recent_path(&self, n: usize) -> Option<PathBuf> {
+        let lists = self.recent_lists.borrow();
+        lists.0.iter().chain(lists.1.iter()).nth(n).cloned()
+    }
+}
+
+/// `dir` with the home folder as `~` (the folder shown next to each recent entry).
+fn home_relative(dir: &Path) -> String {
+    match std::env::var_os("HOME").map(PathBuf::from).and_then(|h| dir.strip_prefix(h).ok().map(Path::to_path_buf)) {
+        Some(rel) if rel.as_os_str().is_empty() => "~".to_string(),
+        Some(rel) => format!("~/{}", rel.display()),
+        None => dir.display().to_string(),
     }
 }
 
@@ -320,6 +383,7 @@ struct Built {
     theme_dark: CheckMenuItem,
     labels: Vec<Labeled>,
     icons: Vec<(IconMenuItem, Ico)>,
+    recent: Submenu,
 }
 
 type Label = fn() -> &'static str;
@@ -370,6 +434,8 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &item(MenuCommand::Quit, || tr("Quit DotCraft"), acc(cmd, Code::KeyQ)),
         ],
     )?;
+    let recent = submenu(|| tr("Open Recent"), &[])?;
+    commands.borrow_mut().push(MenuCommand::ClearRecent);
     let file_menu = submenu(
         || tr("File"),
         &[
@@ -377,9 +443,11 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &item(MenuCommand::NewFile, || tr("New File…"), None),
             &item(MenuCommand::OpenProject, || tr("Open…"), None),
             &item(MenuCommand::OpenFile, || tr("Open File…"), None),
+            &recent,
             &item(MenuCommand::CloseProject, || tr("Close Project"), None),
             &sep(),
             &act(Action::SaveAll, || tr("Save All")),
+            &item(MenuCommand::ReloadFromDisk, || tr("Reload from Disk"), None),
             &act(Action::CloseTab, || tr("Close Tab")),
         ],
     )?;
@@ -525,7 +593,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         &window_menu,
         &help_menu,
     ])?;
-    Ok(Built { menu, commands: commands.into_inner(), theme_light, theme_dark, labels: labels.into_inner(), icons: icons.into_inner() })
+    Ok(Built { menu, commands: commands.into_inner(), theme_light, theme_dark, labels: labels.into_inner(), icons: icons.into_inner(), recent })
 }
 
 #[cfg(test)]

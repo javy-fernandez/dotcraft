@@ -55,6 +55,8 @@ pub struct Settings {
     pub netcoredbg_path: Option<PathBuf>,
     /// Most recent first.
     pub recent_workspaces: Vec<PathBuf>,
+    /// Files opened in the editor, most recent first (File › Open Recent).
+    pub recent_files: Vec<PathBuf>,
     /// Reopen the project that was open when DotCraft quit (Rider's "Reopen projects on startup").
     pub reopen_last: bool,
     /// The project open when DotCraft quit; `None` after Close Project.
@@ -83,6 +85,7 @@ impl Default for Settings {
             roslyn_path: None,
             netcoredbg_path: None,
             recent_workspaces: Vec::new(),
+            recent_files: Vec::new(),
             reopen_last: true,
             last_workspace: None,
         }
@@ -118,6 +121,17 @@ impl Settings {
         self.recent_workspaces.retain(|p| p != &path);
         self.recent_workspaces.insert(0, path);
         self.recent_workspaces.truncate(15);
+    }
+
+    /// Moves `path` to the top of the recent files (max 15); returns whether the list changed.
+    pub fn add_recent_file(&mut self, path: PathBuf) -> bool {
+        if self.recent_files.first() == Some(&path) {
+            return false;
+        }
+        self.recent_files.retain(|p| p != &path);
+        self.recent_files.insert(0, path);
+        self.recent_files.truncate(15);
+        true
     }
 }
 

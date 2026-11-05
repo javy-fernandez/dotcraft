@@ -1,0 +1,6 @@
+# Reload from disk and File › Open Recent. Import: python3 scripts/i18n_tsv.py app scripts/i18n/recent.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Reload from Disk	Recargar desde disco	Recharger depuis le disque	Recarregar do disco	Vom Datenträger neu laden	Wczytaj ponownie z dysku	从磁盘重新加载	ディスクから再読み込み
+Open Recent	Abrir reciente	Ouvrir récent	Abrir recente	Zuletzt geöffnet	Otwórz ostatnie	打开最近	最近使用した項目を開く
+Clear Recent	Borrar recientes	Effacer les éléments récents	Limpar recentes	Liste löschen	Wyczyść ostatnie	清除最近项目	履歴を消去
+No Recent Items	No hay elementos recientes	Aucun élément récent	Nenhum item recente	Keine zuletzt geöffneten Objekte	Brak ostatnich elementów	没有最近项目	最近使用した項目はありません
