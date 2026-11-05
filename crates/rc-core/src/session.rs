@@ -94,7 +94,7 @@ pub struct Session {
 impl Session {
     /// File of the session of `workspace` (keyed by a hash of its canonical path).
     pub fn file_for(workspace: &Path) -> PathBuf {
-        let canon = workspace.canonicalize().unwrap_or_else(|_| workspace.to_path_buf());
+        let canon = dunce::canonicalize(workspace).unwrap_or_else(|_| workspace.to_path_buf());
         let name = canon.file_name().and_then(|n| n.to_str()).unwrap_or("workspace");
         paths::sessions_dir().join(format!("{name}-{:016x}.json", fnv(canon.to_string_lossy().as_bytes())))
     }

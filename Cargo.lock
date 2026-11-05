@@ -3511,10 +3511,11 @@ dependencies = [
 
 [[package]]
 name = "rc-app"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "dirs",
+ "dunce",
  "eframe",
  "egui",
  "egui-wgpu",
@@ -3546,11 +3547,12 @@ dependencies = [
 
 [[package]]
 name = "rc-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
  "dirs",
+ "dunce",
  "notify",
  "parking_lot",
  "serde",
@@ -3561,9 +3563,10 @@ dependencies = [
 
 [[package]]
 name = "rc-dap"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
+ "dunce",
  "flate2",
  "libc",
  "parking_lot",
@@ -3580,9 +3583,10 @@ dependencies = [
 
 [[package]]
 name = "rc-dotnet"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
+ "dunce",
  "libc",
  "rc-core",
  "reqwest",
@@ -3595,7 +3599,7 @@ dependencies = [
 
 [[package]]
 name = "rc-editor"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "criterion",
  "egui",
@@ -3609,7 +3613,7 @@ dependencies = [
 
 [[package]]
 name = "rc-kit"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "eframe",
  "egui",
@@ -3625,7 +3629,7 @@ dependencies = [
 
 [[package]]
 name = "rc-lsp"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "lsp-types",
@@ -3644,10 +3648,11 @@ dependencies = [
 
 [[package]]
 name = "rc-search"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "criterion",
  "crossbeam-channel",
+ "dunce",
  "globset",
  "grep-matcher",
  "grep-searcher",
@@ -3662,7 +3667,7 @@ dependencies = [
 
 [[package]]
 name = "rc-syntax"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "criterion",
  "crossbeam-channel",
@@ -3678,7 +3683,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -3693,7 +3698,7 @@ dependencies = [
 
 [[package]]
 name = "rc-text"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "proptest",
  "ropey",
@@ -3703,9 +3708,10 @@ dependencies = [
 
 [[package]]
 name = "rc-vcs"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "criterion",
+ "dunce",
  "proptest",
  "rc-core",
  "tempfile",

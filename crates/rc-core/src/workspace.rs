@@ -23,7 +23,7 @@ impl Workspace {
     /// Opens `path`: a folder (using the single solution inside it, if there is exactly one),
     /// or a solution / project file.
     pub fn open(path: &Path) -> std::io::Result<Workspace> {
-        let path = path.canonicalize()?;
+        let path = dunce::canonicalize(path)?;
         if path.is_dir() {
             let solutions: Vec<PathBuf> = std::fs::read_dir(&path)?
                 .flatten()

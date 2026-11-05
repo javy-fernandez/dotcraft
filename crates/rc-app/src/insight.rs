@@ -206,7 +206,7 @@ impl Insight {
         match roslyn::locate(self.configured.as_deref(), &self.dotnet) {
             None => self.status = InsightStatus::NotInstalled,
             Some(cmd) => {
-                let dotnet_root = self.dotnet.canonicalize().ok().and_then(|p| p.parent().map(Path::to_path_buf));
+                let dotnet_root = dunce::canonicalize(&self.dotnet).ok().and_then(|p| p.parent().map(Path::to_path_buf));
                 match LanguageSession::start(&cmd, &root, self.solution.as_deref(), self.projects.clone(), dotnet_root.as_deref(), self.waker.clone()) {
                     Ok(s) => {
                         self.session = Some(s);

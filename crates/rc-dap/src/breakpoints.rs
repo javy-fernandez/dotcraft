@@ -235,7 +235,7 @@ pub fn same_file(a: &Path, b: &Path) -> bool {
     if a == b {
         return true;
     }
-    if let (Ok(ca), Ok(cb)) = (a.canonicalize(), b.canonicalize()) {
+    if let (Ok(ca), Ok(cb)) = (dunce::canonicalize(a), dunce::canonicalize(b)) {
         return ca == cb;
     }
     if cfg!(any(windows, target_os = "macos")) { a.to_string_lossy().eq_ignore_ascii_case(&b.to_string_lossy()) } else { false }

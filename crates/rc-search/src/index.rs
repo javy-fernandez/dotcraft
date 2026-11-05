@@ -126,7 +126,7 @@ pub(crate) fn relative_to(root: &Path, path: &Path) -> Option<String> {
     let rel = match path.strip_prefix(root) {
         Ok(r) => r.to_path_buf(),
         Err(_) => {
-            let canon = root.canonicalize().ok()?;
+            let canon = dunce::canonicalize(root).ok()?;
             path.strip_prefix(&canon).ok()?.to_path_buf()
         }
     };

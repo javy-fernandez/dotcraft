@@ -81,8 +81,8 @@ impl Repository {
             Ok(rel) => rel.to_path_buf(),
             Err(_) => {
                 // The caller's path may not have symlinks resolved (/var vs /private/var).
-                let canon = abs.canonicalize().ok()?;
-                let root = self.root.canonicalize().ok()?;
+                let canon = dunce::canonicalize(abs).ok()?;
+                let root = dunce::canonicalize(&self.root).ok()?;
                 canon.strip_prefix(&root).ok()?.to_path_buf()
             }
         };

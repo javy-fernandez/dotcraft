@@ -10,6 +10,7 @@ name = "dotcraft"
 path = "src/main.rs"
 
 [dependencies]
+dunce.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

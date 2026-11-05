@@ -94,7 +94,7 @@ impl Docs {
 
     /// Opens `path` (or switches to it) and makes it active.
     pub fn open(&mut self, path: &Path) -> Result<usize, String> {
-        let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
         if let Some(i) = self.index_of(&path) {
             self.activate(i);
             return Ok(i);
@@ -125,7 +125,7 @@ impl Docs {
 
     /// Single-click open: shows `path` in the preview tab, replacing the previous preview.
     pub fn open_preview(&mut self, path: &Path) -> Result<usize, String> {
-        let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let canon = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
         if let Some(i) = self.index_of(&canon) {
             self.activate(i);
             return Ok(i);

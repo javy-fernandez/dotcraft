@@ -43,7 +43,7 @@ impl Dotnet {
         candidates(explicit, env("DOTNET_ROOT"), std::env::var_os("PATH"), env("HOME").or_else(|| env("USERPROFILE")), env("ProgramFiles"))
             .into_iter()
             .find(|p| p.is_file())
-            .map(|p| Dotnet { path: p.canonicalize().unwrap_or(p) })
+            .map(|p| Dotnet { path: dunce::canonicalize(&p).unwrap_or(p) })
     }
 
     pub fn new(path: impl Into<PathBuf>) -> Dotnet {
