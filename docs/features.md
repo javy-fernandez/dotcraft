@@ -196,6 +196,19 @@ Reference: [Junie](https://www.jetbrains.com/help/ai-assistant/junie-agent.html)
 
 Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ and ReSharper plugins are reference ecosystems; compatibility requires a separate technical assessment.
 
+## Implementation progress
+
+Each pull request below has a separate implementation note with validation evidence. Open pull requests are awaiting review and are not merged into the default branch. Broad checklist items remain unchecked when additional scope is pending.
+
+| Slice | Delivery | Evidence |
+| --- | --- | --- |
+| Reachable tool buttons in short windows | [PR 7](https://github.com/RafaelMendes1407/dotcraft/pull/7) | [Tool window overflow](implementation/tool-window-overflow.md) |
+| Deleted-side Git conflict resolution | [PR 8](https://github.com/RafaelMendes1407/dotcraft/pull/8) | [Git deleted conflicts](implementation/git-deleted-conflicts.md) |
+| Native HTML, CSS, JavaScript, TypeScript, and TSX syntax | [PR 9](https://github.com/RafaelMendes1407/dotcraft/pull/9) | [Web syntax](implementation/web-syntax.md) |
+| Rejection of unsupported workspace resource edits | [PR 10](https://github.com/RafaelMendes1407/dotcraft/pull/10) | [Workspace edit safety](implementation/workspace-edit-safety.md) |
+| Git stash management UI | [PR 11](https://github.com/RafaelMendes1407/dotcraft/pull/11) | [Git stashes](implementation/git-stashes.md) |
+| Search destinations for existing settings pages | [PR 12](https://github.com/RafaelMendes1407/dotcraft/pull/12) | [Settings search](implementation/settings-search.md) |
+
 ## Completion criteria
 
 For each item, record the implemented scope, supported platforms and runtimes, required dependencies, user-facing documentation, and validation evidence. Split broad items into smaller implementation tasks as work starts. Existing partial implementations should be completed or validated before being marked done.

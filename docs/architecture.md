@@ -40,8 +40,9 @@ or on the shared tokio runtime and reports back through channels that wake the U
   against the real `dotnet` SDK (8.0 and 10.0 installed), Roslyn and netcoredbg, with the
   fixtures in `tests/fixtures/` (`Shop`: console, class library, ASP.NET API and xUnit /
   NUnit / MSTest projects; `TenProjects`: ten libraries in a `.slnx`).
-- **Commits.** One commit per finished task, short one-line Spanish messages, capitalized
-  (e.g. "Añade parser de TRX"), no attribution trailers.
+- **Commits.** Use English messages and independently reviewable feature commits. Include
+  `Co-authored-by: Codex <codex@openai.com>` in every commit created by Codex. Open a
+  separate pull request per completed feature or implementation slice.
 
 ## Packaging
 
