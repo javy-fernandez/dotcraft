@@ -1,6 +1,6 @@
 # Features to implement
 
-This backlog tracks Rider-inspired capabilities to implement or complete in DotCraft. The reference is the JetBrains Rider 2026.2 documentation reviewed on November 6, 2026. It covers feature families rather than every individual inspection, command, or third-party plugin.
+This high-level backlog tracks Rider-inspired capabilities to implement or complete in DotCraft. The detailed status record is [FEATURES.md](../FEATURES.md). The reference is the JetBrains Rider 2026.2 documentation reviewed on November 6, 2026. It covers feature families rather than every individual inspection, command, or third-party plugin.
 
 Unchecked items require implementation or validation. They do not necessarily indicate missing functionality: DotCraft already declares support for several editor, Roslyn, build, test, debugger, NuGet, terminal, and Git capabilities in the [README](../README.md). Audit existing behavior before opening implementation tasks, and check an item only after its intended scope works and has appropriate validation.
 
@@ -83,11 +83,13 @@ References: [First steps with Rider](https://www.jetbrains.com/help/rider/First_
 
 ## Debugging
 
-- [ ] Launch applications under the debugger and attach to existing processes.
-- [ ] Manage line breakpoints and conditional breakpoints.
-- [ ] Step into, over, and out of code and run to the cursor.
-- [ ] Inspect variables, watches, threads, and stack frames.
-- [ ] Evaluate expressions while execution is paused.
+Checked debugger workflows have live evidence on .NET 8 Linux; broader runtime/platform support remains pending. See [debugger validation](implementation/attach-debugger.md).
+
+- [x] Launch applications under the debugger and attach to existing processes.
+- [x] Manage line breakpoints and conditional breakpoints.
+- [ ] Step into, over, and out of code and run to the cursor. Step Over and Run to Cursor have live evidence; Step Into and Step Out still need explicit validation.
+- [ ] Inspect variables, watches, threads, and stack frames. Variables, watches, and selected frames have live evidence; explicit thread-list validation remains pending.
+- [x] Evaluate expressions while execution is paused.
 - [ ] Navigate from runtime stack traces to source.
 - [ ] Define runtime and platform coverage for .NET, .NET Framework, and Mono workflows.
 
@@ -125,7 +127,7 @@ References: [Rider features](https://www.jetbrains.com/rider/features/), [existi
 - [ ] Integrate package manager workflows such as npm and Yarn.
 - [ ] Provide web language analysis, completion, navigation, and refactoring.
 - [ ] Run and debug supported frontend applications and tests.
-- [ ] Create, edit, and execute HTTP requests inside the editor.
+- [x] Create, edit, and execute HTTP requests inside the editor.
 
 References: [Rider features](https://www.jetbrains.com/rider/features/), [HTTP Client](https://www.jetbrains.com/help/rider/Http_client_in__product__code_editor.html).
 
@@ -208,6 +210,10 @@ Each pull request below has a separate implementation note with validation evide
 | Rejection of unsupported workspace resource edits | [PR 10](https://github.com/RafaelMendes1407/dotcraft/pull/10) | [Workspace edit safety](implementation/workspace-edit-safety.md) |
 | Git stash management UI | [PR 11](https://github.com/RafaelMendes1407/dotcraft/pull/11) | [Git stashes](implementation/git-stashes.md) |
 | Search destinations for existing settings pages | [PR 12](https://github.com/RafaelMendes1407/dotcraft/pull/12) | [Settings search](implementation/settings-search.md) |
+| Basic in-editor HTTP request execution | [PR 13](https://github.com/RafaelMendes1407/dotcraft/pull/13) | [HTTP Client](implementation/http-client.md) |
+| Attach to existing .NET processes | [PR 14](https://github.com/RafaelMendes1407/dotcraft/pull/14) | [Attach debugger](implementation/attach-debugger.md) |
+| Inline variables in HTTP request files | [PR 15](https://github.com/RafaelMendes1407/dotcraft/pull/15), based on PR 13 | [HTTP variables](implementation/http-variables.md) |
+| Responsive Settings layout and extended regression coverage | [PR 4](https://github.com/RafaelMendes1407/dotcraft/pull/4) | [Responsive Settings](implementation/responsive-settings.md) |
 
 ## Completion criteria
 
