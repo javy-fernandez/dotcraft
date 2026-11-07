@@ -258,6 +258,7 @@ pub mod ico {
         TW_NOTIFICATIONS = "toolwindows/notifications",
         TW_FIND = "toolwindows/find",
         TW_SERVICES = "toolwindows/services",
+        TW_MONITORING = "toolwindows/monitoring",
         TW_TODO = "toolwindows/todo",
         TW_BOOKMARKS = "toolwindows/bookmarks",
         TW_DEPENDENCIES = "toolwindows/dependencies",

@@ -31,6 +31,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Run => crate::ui::run_windows::run(app, ui),
         ToolWindow::Debug => crate::ui::debug_window::show(app, ui),
         ToolWindow::Nuget => crate::ui::nuget::window(app, ui),
+        ToolWindow::Monitoring => crate::ui::monitoring::show(app, ui),
         ToolWindow::Tests => crate::ui::run_windows::tests(app, ui),
         ToolWindow::Terminal => crate::ui::run_windows::terminal(app, ui),
         ToolWindow::Commit => crate::ui::git::commit_window(app, ui),
@@ -330,6 +331,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Find => (tr("No search results"), tr("Find in Files shows its results here.")),
         ToolWindow::Notifications => (tr("No notifications"), tr("Messages from builds, tools and updates show up here.")),
         ToolWindow::Nuget => ("NuGet", ""),
+        ToolWindow::Monitoring => ("", ""),
         ToolWindow::Explorer => ("", ""),
     }
 }

@@ -653,3 +653,67 @@ fn screens_update_notice() {
     h.run_steps(3);
     h.render().unwrap().save(out.join("about-dark.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/monitoring-*.png"]
+fn screens_monitoring() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    for (dark, width) in [(true, 1440.0), (false, 900.0)] {
+        let mut app = test_app(home.path(), dark);
+        app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+        app.dock.show(crate::toolwindow::ToolWindow::Monitoring);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Monitoring, 300.0);
+        // A minute and a half of a web app warming up, then allocating steadily.
+        app.monitor.name = "Shop.Api".into();
+        app.monitor.pid = Some(4242);
+        app.monitor.running = true;
+        for i in 0..90 {
+            let t = i as f64;
+            let rt = (i % 2 == 0).then(|| crate::monitor::Runtime {
+                gc_heap_mb: Some(12.0 + (t * 0.4) % 18.0),
+                gen0: Some((t / 3.0).floor()),
+                gen1: Some((t / 20.0).floor()),
+                gen2: Some((t / 60.0).floor()),
+                time_in_gc: Some(if i % 7 == 0 { 3.0 } else { 0.0 }),
+                alloc_rate: Some(2.4 * 1024.0 * 1024.0),
+                threadpool_threads: Some(6.0),
+                exceptions: Some(0.0),
+            });
+            app.monitor.samples.push_back(crate::monitor::Sample { t, cpu: if i < 10 { 60.0 - t * 4.0 } else { 8.0 + (t * 0.7).sin().abs() * 14.0 }, memory_mb: 60.0 + t.min(30.0) * 1.5 + (t * 0.4) % 18.0, runtime: rt });
+        }
+        let mut h = harness(app, vec2(width, 800.0));
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("monitoring-{}.png", if dark { "dark" } else { "light-narrow" }))).unwrap();
+    }
+}
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; runs Shop.Api and writes target/snapshots/monitoring-live-dark.png"]
+fn screens_monitoring_live() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    app.dock.show(crate::toolwindow::ToolWindow::Monitoring);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Monitoring, 320.0);
+    app.runner.selected = app.runner.configs.iter().position(|c| c.name.starts_with("Shop.Api")).unwrap();
+    let outs = app.runner.run_selected();
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    // The process, then the runtime's counters through its diagnostic port.
+    run_frames(&mut h, "runtime counters", |a| a.monitor.runtime().is_some_and(|r| r.gc_heap_mb.is_some()) && a.monitor.samples.len() >= 6);
+    // Running opened the Run window in the same place.
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Monitoring);
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("monitoring-live-dark.png")).unwrap();
+    let pid = h.state().monitor.app_pid.or(h.state().monitor.pid).unwrap();
+    assert!(crate::monitor::has_diagnostic_port(pid));
+    h.state_mut().runner.stop_all();
+    run_frames(&mut h, "exit", |a| !a.monitor.running);
+}

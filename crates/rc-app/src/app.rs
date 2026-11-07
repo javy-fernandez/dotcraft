@@ -53,6 +53,8 @@ pub struct DotCraftApp {
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
+    /// Monitoring: CPU and memory of the program in the selected Run tab.
+    pub monitor: crate::monitor::Monitor,
     /// The update check under way, and whether it was asked for (Check for Updates…).
     update_check: Option<(std::sync::mpsc::Receiver<Result<crate::update::Release, String>>, bool)>,
     /// A newer release, shown in the bottom-right notice until dismissed.
@@ -144,6 +146,7 @@ impl DotCraftApp {
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
+            monitor: crate::monitor::Monitor::new(waker.clone()),
             update_check: None,
             update: None,
             insight: Insight::new(waker.clone()),
@@ -1369,6 +1372,10 @@ impl eframe::App for DotCraftApp {
         self.handle_insight(outputs);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
+        // Monitoring follows the selected Run tab's process (or the last one started).
+        let target = self.runner.runs.get(self.runner.active_run).filter(|r| r.running()).or_else(|| self.runner.runs.iter().rev().find(|r| r.running()));
+        self.monitor.follow(target.and_then(|r| Some((r.name.clone(), r.handle.as_ref()?.pid()?))));
+        self.monitor.poll();
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
         for (_, ev) in self.terminals.poll() {
