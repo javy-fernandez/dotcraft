@@ -1527,7 +1527,7 @@ impl eframe::App for DotCraftApp {
     }
 
     fn on_exit(&mut self) {
-        self.runner.stop_all();
+        self.runner.kill_all_now();
         self.debugger.stop();
         self.insight.stop();
         self.save_all_docs();

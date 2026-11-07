@@ -370,6 +370,41 @@ impl Runner {
         }
     }
 
+    /// Quitting: kills every running program and what it started, right away. A graceful stop
+    /// is asynchronous and would never finish once the app is gone (`dotnet watch` and its app
+    /// were left running).
+    pub fn kill_all_now(&mut self) {
+        let pids: Vec<u32> = self.runs.iter().filter_map(|r| r.handle.as_ref().and_then(|h| h.pid())).collect();
+        self.stop_all();
+        if pids.is_empty() {
+            return;
+        }
+        use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+        let Ok(mut sys) = System::new() else {
+            for pid in pids {
+                rc_dotnet::process::kill_tree(pid);
+            }
+            return;
+        };
+        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
+        for root in pids {
+            // Children first (they may have left the process group), then the group.
+            let mut tree = vec![root];
+            let mut i = 0;
+            while i < tree.len() {
+                let parent = tree[i];
+                tree.extend(sys.processes().iter().filter(|(_, p)| p.parent().is_some_and(|pp| pp.as_u32() == parent)).map(|(pid, _)| pid.as_u32()));
+                i += 1;
+            }
+            for pid in tree.iter().skip(1).rev() {
+                if let Some(p) = sys.process(sysinfo::Pid::from_u32(*pid)) {
+                    p.kill();
+                }
+            }
+            rc_dotnet::process::kill_tree(root);
+        }
+    }
+
     pub fn close_run(&mut self, i: usize) {
         if i < self.runs.len() {
             let r = self.runs.remove(i);

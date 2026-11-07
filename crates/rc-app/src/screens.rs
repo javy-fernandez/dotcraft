@@ -714,7 +714,16 @@ fn screens_monitoring_live() {
     h.render().unwrap().save(out.join("monitoring-live-dark.png")).unwrap();
     let pid = h.state().monitor.app_pid.or(h.state().monitor.pid).unwrap();
     assert!(crate::monitor::has_diagnostic_port(pid));
-    h.state_mut().runner.stop_all();
+    let root = h.state().monitor.pid.unwrap();
+    // Quitting kills dotnet watch and the app at once (nothing is left running).
+    h.state_mut().runner.kill_all_now();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    #[cfg(unix)]
+    {
+        // SAFETY: signal 0 only checks that the process exists.
+        let alive = |p: u32| unsafe { libc::kill(p as i32, 0) == 0 };
+        assert!(!alive(pid) && !alive(root), "left running: app {} watch {}", alive(pid), alive(root));
+    }
     run_frames(&mut h, "exit", |a| !a.monitor.running);
 }
 
@@ -894,7 +903,7 @@ fn screens_http_client_and_endpoints() {
     h.state_mut().dock.show(crate::toolwindow::ToolWindow::Endpoints);
     h.run_steps(3);
     h.render().unwrap().save(out.join("endpoints-dark.png")).unwrap();
-    h.state_mut().runner.stop_all();
+    h.state_mut().runner.kill_all_now();
 }
 
 #[test]
@@ -979,5 +988,5 @@ fn screens_profiler() {
     assert!(snap.types.iter().any(|t| t.name.starts_with("Microsoft.AspNetCore")), "{:?}", snap.types.iter().take(20).map(|t| &t.name).collect::<Vec<_>>());
     assert!(!snap.types.iter().any(|t| t.name.starts_with("Microsoft.Build.")), "profiled MSBuild");
     h.render().unwrap().save(out.join("profiler-memory-dark.png")).unwrap();
-    h.state_mut().runner.stop_all();
+    h.state_mut().runner.kill_all_now();
 }
