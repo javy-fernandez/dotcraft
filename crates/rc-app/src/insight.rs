@@ -56,6 +56,10 @@ pub enum InsightOutput {
     /// Rename: the symbol's current name (from prepareRename), to ask for the new one.
     AskRename { doc: u64, pos: usize, name: String },
     Message(String),
+    /// ⌃⌥H / ⌃H: the items at the caret, the roots of a new hierarchy.
+    Hierarchy { kind: crate::hierarchy::HierarchyKind, items: Vec<Value> },
+    /// Children of a hierarchy node (generation, node, items).
+    HierarchyChildren { generation: u64, node: usize, items: Vec<Value> },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,6 +107,8 @@ pub struct Insight {
     hover: Option<(u64, usize, egui::Pos2, Pending<Option<lsp::Hover>>)>,
     signature: Option<(u64, usize, Pending<Option<lsp::SignatureHelp>>)>,
     nav: Option<(NavKind, NavOrigin, Pending<Value>)>,
+    hier_prepare: Option<(crate::hierarchy::HierarchyKind, Pending<Value>)>,
+    hier_children: Vec<(u64, usize, Pending<Value>)>,
     /// A navigation asked for while the projects were still loading: repeated once they are.
     nav_retry: Option<(NavKind, NavOrigin)>,
     rename_prepare: Option<(u64, usize, Pending<Value>)>,
@@ -160,6 +166,8 @@ impl Insight {
             hover: None,
             signature: None,
             nav: None,
+            hier_prepare: None,
+            hier_children: Vec::new(),
             nav_retry: None,
             rename_prepare: None,
             rename: None,
@@ -498,6 +506,7 @@ impl Insight {
         self.poll_completion(docs);
         self.poll_popups(docs);
         self.poll_navigation(docs, out);
+        self.poll_hierarchy(out);
     }
 
     fn poll_completion(&mut self, docs: &mut Docs) {
@@ -993,6 +1002,49 @@ impl Insight {
         let (line, start) = doc.editor.buffer.line_col(from);
         let origin = (doc.path.clone(), line, start, start + (to - from));
         self.nav = Some((kind, origin, session.client.request_raw(method, params)));
+    }
+
+    /// ⌃⌥H / ⌃H: prepares a call or type hierarchy at `pos`.
+    pub fn prepare_hierarchy(&mut self, doc: &Doc, pos: usize, kind: crate::hierarchy::HierarchyKind) {
+        let Some(session) = &self.session else { return };
+        let params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos) });
+        self.hier_prepare = Some((kind, session.client.request_raw(kind.prepare_method(), params)));
+    }
+
+    /// The callers / callees / base / derived types of a hierarchy node.
+    pub fn hierarchy_children(&mut self, kind: crate::hierarchy::HierarchyKind, dir: crate::hierarchy::Direction, generation: u64, node: usize, item: &Value) {
+        let Some(session) = &self.session else { return };
+        self.hier_children.push((generation, node, session.client.request_raw(kind.children_method(dir), json!({ "item": item }))));
+    }
+
+    fn poll_hierarchy(&mut self, out: &mut Vec<InsightOutput>) {
+        if let Some((kind, p)) = &mut self.hier_prepare
+            && let Some(r) = p.poll()
+        {
+            let kind = *kind;
+            self.hier_prepare = None;
+            match r {
+                Ok(Value::Array(items)) if !items.is_empty() => out.push(InsightOutput::Hierarchy { kind, items }),
+                Ok(_) => out.push(InsightOutput::Message(match kind {
+                    crate::hierarchy::HierarchyKind::Calls => tr("Place the caret on a method or property to see its calls").into(),
+                    crate::hierarchy::HierarchyKind::Types => tr("Place the caret on a type to see its hierarchy").into(),
+                })),
+                Err(e) => out.push(InsightOutput::Message(e.message)),
+            }
+        }
+        let mut i = 0;
+        while i < self.hier_children.len() {
+            if let Some(r) = self.hier_children[i].2.poll() {
+                let (generation, node, _) = self.hier_children.remove(i);
+                let items = match r {
+                    Ok(Value::Array(items)) => items,
+                    _ => Vec::new(),
+                };
+                out.push(InsightOutput::HierarchyChildren { generation, node, items });
+            } else {
+                i += 1;
+            }
+        }
     }
 
     /// Shift+F6: asks the server what can be renamed at the caret.

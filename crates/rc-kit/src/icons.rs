@@ -260,6 +260,7 @@ pub mod ico {
         TW_SERVICES = "toolwindows/services",
         TW_MONITORING = "toolwindows/monitoring",
         TW_TODO = "toolwindows/todo",
+        TW_HIERARCHY = "toolwindows/hierarchy",
         TW_BOOKMARKS = "toolwindows/bookmarks",
         TW_DEPENDENCIES = "toolwindows/dependencies",
         TW_MESSAGES = "toolwindows/messages",

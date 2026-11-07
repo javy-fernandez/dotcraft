@@ -528,6 +528,8 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::GotoTypeDeclaration, || tr("Go to Type Declaration")),
             &act(Action::FindUsages, || tr("Find Usages")),
             &act(Action::FileStructure, || tr("File Structure")),
+            &act(Action::CallHierarchy, || tr("Call Hierarchy")),
+            &act(Action::TypeHierarchy, || tr("Type Hierarchy")),
             &sep(),
             &act(Action::ToggleBookmark, || tr("Toggle Bookmark")),
             &act(Action::ToggleBookmarkMnemonic, || tr("Toggle Bookmark with Mnemonic")),

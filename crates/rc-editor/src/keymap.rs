@@ -81,6 +81,10 @@ pub enum Action {
     ToggleBookmark,
     /// ⌥F3: bookmark with a mnemonic (0-9, A-Z).
     ToggleBookmarkMnemonic,
+    /// ⌃⌥H: callers and callees of the method at the caret.
+    CallHierarchy,
+    /// ⌃H: base and derived types of the type at the caret.
+    TypeHierarchy,
     // --- IDE (reported to the app)
     SearchEverywhere,
     GotoFile,
@@ -152,6 +156,8 @@ impl Action {
                 | ToggleBreakpoint
                 | ToggleBookmark
                 | ToggleBookmarkMnemonic
+                | CallHierarchy
+                | TypeHierarchy
         ) && !self.is_ide()
     }
 
@@ -333,6 +339,7 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
     let ctrl = m(false, true, false, false);
     let ctrl_s = m(false, true, true, false);
     let ctrl_c = m(false, true, false, true);
+    let ctrl_a = m(true, true, false, false);
     let b = |key, mods, action| (Chord { key, mods }, action);
     let mut v = vec![
         b(Key::ArrowLeft, none, Left(false)),
@@ -423,6 +430,8 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::F3, none, ToggleBookmark),
         b(Key::F3, a, ToggleBookmarkMnemonic),
         b(Key::F3, c, ShowBookmarks),
+        b(Key::H, ctrl_a, CallHierarchy),
+        b(Key::H, ctrl, TypeHierarchy),
         b(Key::F3, s, FindPrevious),
         b(Key::F2, none, NextError),
         b(Key::F2, s, PreviousError),
@@ -561,7 +570,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         b(Key::F9, s, Evaluate),
     ];
     // Bookmarks: F11 and Shift+F11 step in and out, so Rider's F11 family moves to Ctrl.
-    v.extend([b(Key::F11, ca, ToggleBookmark), b(Key::F11, c, ToggleBookmarkMnemonic), b(Key::F11, cs, ShowBookmarks)]);
+    v.extend([b(Key::F11, ca, ToggleBookmark), b(Key::F11, c, ToggleBookmarkMnemonic), b(Key::F11, cs, ShowBookmarks), b(Key::H, ca, CallHierarchy), b(Key::H, c, TypeHierarchy)]);
     let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
     v.extend(digits.into_iter().enumerate().map(|(i, k)| b(k, c, GotoBookmark(i as u8 + 1))));
     if visual_studio {

@@ -263,7 +263,18 @@
     "Current File": "現在のファイル",
     "Scanning…": "スキャン中…",
     "{n} items": "{n} 件",
-    "Refresh": "更新"
+    "Refresh": "更新",
+    "Hierarchy": "階層",
+    "Call Hierarchy": "呼び出し階層",
+    "Type Hierarchy": "型階層",
+    "Callers": "呼び出し元",
+    "Callees": "呼び出し先",
+    "Base Types": "基本型",
+    "Derived Types": "派生型",
+    "No hierarchy": "階層はありません",
+    "Press ⌃⌥H on a method for its calls, or ⌃H on a type for its base and derived types.": "メソッドで ⌃⌥H を押すと呼び出し、型で ⌃H を押すと基本型と派生型を表示します。",
+    "Place the caret on a method or property to see its calls": "呼び出しを見るにはメソッドまたはプロパティにカーソルを置いてください",
+    "Place the caret on a type to see its hierarchy": "階層を見るには型にカーソルを置いてください"
   },
   "terminal": {
     "Local": "ローカル",

@@ -231,6 +231,8 @@ pub fn client_capabilities() -> Value {
             "synchronization": { "didSave": true, "willSave": false },
             "publishDiagnostics": { "relatedInformation": true, "tagSupport": { "valueSet": [1, 2] }, "versionSupport": true },
             "diagnostic": { "dynamicRegistration": true, "relatedDocumentSupport": false },
+            "callHierarchy": { "dynamicRegistration": false },
+            "typeHierarchy": { "dynamicRegistration": false },
             "completion": {
                 "completionItem": {
                     "snippetSupport": true,

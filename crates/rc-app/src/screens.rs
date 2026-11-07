@@ -753,3 +753,33 @@ fn screens_bookmarks() {
     h.run_steps(2);
     assert!(h.state().docs.all_bookmarks().iter().any(|b| b.path == order && b.mnemonic == Some('A')));
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/hierarchy-dark.png"]
+fn screens_hierarchy() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    let calc = fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs");
+    app.open_file(&calc);
+    let uri = |p: &str| rc_lsp::path_to_uri(&fixtures().join(p)).as_str().to_string();
+    let item = |name: &str, detail: &str, file: &str, line: u64| serde_json::json!({ "name": name, "detail": detail, "kind": 6, "uri": uri(file), "range": {}, "selectionRange": { "start": { "line": line, "character": 4 }, "end": { "line": line, "character": 8 } } });
+    let mut h = crate::hierarchy::Hierarchy::new(crate::hierarchy::HierarchyKind::Calls, vec![item("PriceCalculator.Calculate(Order)", "Shop.Core.PriceCalculator", "Shop/src/Shop.Core/PriceCalculator.cs", 16)], 1);
+    h.set_children(0, vec![
+        serde_json::json!({ "from": item("OrdersController.Post(QuoteRequest)", "Shop.Api.Controllers.OrdersController", "Shop/src/Shop.Api/Controllers/OrdersController.cs", 30) }),
+        serde_json::json!({ "from": item("Program.<Main>$(string[])", "Program", "Shop/src/Shop.Cli/Program.cs", 12) }),
+        serde_json::json!({ "from": item("PriceCalculatorTests.AppliesBulkDiscount()", "Shop.Core.XunitTests.PriceCalculatorTests", "Shop/tests/Shop.Core.XunitTests/PriceCalculatorTests.cs", 20) }),
+    ]);
+    h.nodes[0].expanded = true;
+    h.set_children(1, vec![]);
+    app.hierarchy = Some(h);
+    app.dock.show(crate::toolwindow::ToolWindow::Hierarchy);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Hierarchy, 520.0);
+    let mut hh = harness(app, vec2(1440.0, 800.0));
+    hh.run_steps(3);
+    hh.render().unwrap().save(out.join("hierarchy-dark.png")).unwrap();
+}

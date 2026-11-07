@@ -174,3 +174,40 @@ fn go_to_declaration_and_back() {
     assert!(d.path.ends_with("Console.cs") && d.editor.read_only && d.editor.buffer.rope().to_string().contains("class Console"), "{}", d.path.display());
     app.close_workspace();
 }
+
+/// ⌃⌥H on `Hello`: its caller in Program.cs; ⌃H on a derived class: its base type.
+#[test]
+fn call_and_type_hierarchy() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/test-home").canonicalize().expect("run the rc-lsp tests first");
+    // SAFETY: as above.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", &home) };
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let sln = demo_solution(&root);
+    write(&root.join("Lib/LoudGreeter.cs"), "namespace Lib;\n\npublic class LoudGreeter : Greeter\n{\n}\n");
+    let greeter = root.join("Lib/Greeter.cs");
+    let mut app = DotCraftApp::with_settings(Settings::default(), Waker::noop(), None);
+    app.open_workspace(&sln);
+    pump(&mut app, "projects", |a| a.insight.status == InsightStatus::Ready);
+    app.open_file(&greeter);
+    let i = app.docs.active.unwrap();
+    let pos = app.docs.list[i].editor.buffer.rope().to_string().find("Hello(").unwrap() + 1;
+    app.docs.list[i].editor.selection = rc_text::Selection::point(pos);
+    app.run_insight_action(rc_editor::Action::CallHierarchy, egui::Pos2::ZERO);
+    pump(&mut app, "callers", |a| a.hierarchy.as_ref().is_some_and(|h| h.nodes[0].children.as_ref().is_some_and(|c| !c.is_empty())));
+    let h = app.hierarchy.clone().unwrap();
+    assert!(h.nodes[0].name.starts_with("Greeter.Hello"), "{:?}", h.nodes[0].name);
+    let callers: Vec<_> = h.nodes[0].children.as_ref().unwrap().iter().map(|&c| h.nodes[c].clone()).collect();
+    assert!(callers.iter().any(|c| c.path.as_deref() == Some(root.join("App/Program.cs").as_path())), "{callers:?}");
+
+    // Type hierarchy of Greeter: LoudGreeter derives from it.
+    let pos = app.docs.list[i].editor.buffer.rope().to_string().find("class Greeter").unwrap() + 7;
+    app.docs.list[i].editor.selection = rc_text::Selection::point(pos);
+    app.run_insight_action(rc_editor::Action::TypeHierarchy, egui::Pos2::ZERO);
+    pump(&mut app, "derived types", |a| a.hierarchy.as_ref().is_some_and(|h| h.kind == crate::hierarchy::HierarchyKind::Types && h.nodes[0].children.as_ref().is_some_and(|c| !c.is_empty())));
+    let h = app.hierarchy.clone().unwrap();
+    let derived: Vec<String> = h.nodes[0].children.as_ref().unwrap().iter().map(|&c| h.nodes[c].name.clone()).collect();
+    assert!(derived.iter().any(|n| n.contains("LoudGreeter")), "{derived:?}");
+    app.close_workspace();
+}

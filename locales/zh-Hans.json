@@ -263,7 +263,18 @@
     "Current File": "当前文件",
     "Scanning…": "正在扫描…",
     "{n} items": "{n} 项",
-    "Refresh": "刷新"
+    "Refresh": "刷新",
+    "Hierarchy": "层次结构",
+    "Call Hierarchy": "调用层次结构",
+    "Type Hierarchy": "类型层次结构",
+    "Callers": "调用方",
+    "Callees": "被调用方",
+    "Base Types": "基类型",
+    "Derived Types": "派生类型",
+    "No hierarchy": "没有层次结构",
+    "Press ⌃⌥H on a method for its calls, or ⌃H on a type for its base and derived types.": "在方法上按 ⌃⌥H 查看调用，在类型上按 ⌃H 查看基类型和派生类型。",
+    "Place the caret on a method or property to see its calls": "将光标放在方法或属性上以查看其调用",
+    "Place the caret on a type to see its hierarchy": "将光标放在类型上以查看其层次结构"
   },
   "terminal": {
     "Local": "本地",

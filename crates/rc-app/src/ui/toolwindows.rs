@@ -33,6 +33,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Nuget => crate::ui::nuget::window(app, ui),
         ToolWindow::Monitoring => crate::ui::monitoring::show(app, ui),
         ToolWindow::Todo => todo_window(app, ui),
+        ToolWindow::Hierarchy => hierarchy_window(app, ui),
         ToolWindow::Bookmarks => {
             if header(ui, tw.title()) {
                 app.toggle_tool(tw);
@@ -96,6 +97,108 @@ fn list_row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, s
     }
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     resp
+}
+
+/// Call / Type Hierarchy: direction toggles in the header, a lazily loaded tree.
+fn hierarchy_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    use crate::hierarchy::{Direction, HierarchyKind};
+    let p = rc_kit::pal(ui);
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let title = match app.hierarchy.as_ref().map(|h| h.kind) {
+        Some(HierarchyKind::Calls) => tr("Call Hierarchy"),
+        Some(HierarchyKind::Types) => tr("Type Hierarchy"),
+        None => tr("Hierarchy"),
+    };
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, title, theme::bold(13.0), p.text);
+    let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0, r.center().y - 13.0), vec2(26.0, 26.0));
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+    if theme::icon_button(&mut child, rc_kit::ico::HIDE, true, tr("Hide")).clicked() {
+        app.toggle_tool(ToolWindow::Hierarchy);
+        return;
+    }
+    let Some(h) = &mut app.hierarchy else {
+        let (title, hint) = empty_text(ToolWindow::Hierarchy);
+        empty_state(ui, ToolWindow::Hierarchy.icon(), title, hint);
+        return;
+    };
+    let mut x = t.right() + 14.0;
+    let labels = match h.kind {
+        HierarchyKind::Calls => [(tr("Callers"), Direction::Up), (tr("Callees"), Direction::Down)],
+        HierarchyKind::Types => [(tr("Base Types"), Direction::Up), (tr("Derived Types"), Direction::Down)],
+    };
+    let mut new_dir = None;
+    for (label, dir) in labels {
+        let w = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(12.5), p.text).size().x + 32.0;
+        let br = Rect::from_min_size(pos2(x, r.center().y - 12.0), vec2(w, 24.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        let icon = if dir == Direction::Up { rc_kit::ico::UP } else { rc_kit::ico::DOWN };
+        if theme::tool_button(&mut child, icon, label, h.direction == dir).clicked() {
+            new_dir = Some(dir);
+        }
+        x += w + 6.0;
+    }
+    let mut load: Vec<(usize, serde_json::Value)> = Vec::new();
+    if let Some(dir) = new_dir
+        && dir != h.direction
+    {
+        h.set_direction(dir);
+        h.nodes[0].expanded = true;
+        load.push((0, h.nodes[0].item.clone()));
+    }
+    let mut open: Option<(std::path::PathBuf, usize, usize)> = None;
+    let rows = h.rows();
+    egui::ScrollArea::both().id_salt("hierarchy").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for id in rows {
+            let n = &h.nodes[id];
+            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(260.0), 24.0), Sense::click());
+            let selected = h.selected == Some(id);
+            if selected {
+                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.selection);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+            }
+            let x0 = rect.left() + 10.0 + n.depth as f32 * 18.0;
+            let leaf = n.children.as_ref().is_some_and(|c| c.is_empty());
+            if !leaf {
+                let chevron = if n.expanded { rc_kit::ico::CHEVRON_DOWN } else { rc_kit::ico::CHEVRON_RIGHT };
+                icons::paint(ui.painter(), Rect::from_center_size(pos2(x0 + 8.0, rect.center().y), vec2(16.0, 16.0)), chevron, &p, true);
+            }
+            let kind: rc_lsp::lsp_types::SymbolKind = serde_json::from_value(serde_json::json!(n.kind)).unwrap_or(rc_lsp::lsp_types::SymbolKind::METHOD);
+            icons::paint(ui.painter(), Rect::from_center_size(pos2(x0 + 26.0, rect.center().y), vec2(16.0, 16.0)), crate::convert::symbol_icon(kind), &p, true);
+            let g = ui.painter().layout_no_wrap(n.name.clone(), FontId::proportional(13.0), p.text);
+            let lx = x0 + 40.0;
+            ui.painter().galley(pos2(lx, (rect.center().y - g.size().y / 2.0).round()), g.clone(), p.text);
+            let file = n.path.as_ref().and_then(|p| p.file_name()).map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            let secondary = if n.detail.is_empty() { format!("{file}:{}", n.line + 1) } else { format!("{}  {file}:{}", n.detail, n.line + 1) };
+            ui.painter().text(pos2(lx + g.size().x + 8.0, rect.center().y), Align2::LEFT_CENTER, secondary, FontId::proportional(12.0), p.muted);
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &n.name));
+            let on_chevron = ui.input(|i| i.pointer.interact_pos()).is_some_and(|pt| pt.x < x0 + 18.0);
+            if resp.clicked() {
+                h.selected = Some(id);
+            }
+            if (resp.clicked() && on_chevron && !leaf) || (resp.double_clicked() && !leaf && n.children.is_none()) {
+                let n = &mut h.nodes[id];
+                n.expanded = !n.expanded;
+                if n.expanded && n.children.is_none() {
+                    load.push((id, n.item.clone()));
+                }
+            }
+            if resp.double_clicked()
+                && let Some(path) = &h.nodes[id].path
+            {
+                open = Some((path.clone(), h.nodes[id].line, h.nodes[id].col));
+            }
+        }
+    });
+    let (kind, dir, generation) = (h.kind, h.direction, h.generation);
+    for (id, item) in load {
+        app.insight.hierarchy_children(kind, dir, generation, id, &item);
+    }
+    if let Some((path, line, col)) = open {
+        app.open_at(&path, line, col);
+    }
 }
 
 /// TODO: Project / Current File tabs, a refresh button, the comments by file.
@@ -469,6 +572,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Notifications => (tr("No notifications"), tr("Messages from builds, tools and updates show up here.")),
         ToolWindow::Nuget => ("NuGet", ""),
         ToolWindow::Monitoring => ("", ""),
+        ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Press ⌃⌥H on a method for its calls, or ⌃H on a type for its base and derived types.")),
         ToolWindow::Todo => (tr("No TODO items"), tr("TODO and FIXME comments of the solution show up here.")),
         ToolWindow::Bookmarks => (tr("No bookmarks"), tr("Press F3 on a line to bookmark it, or ⌥F3 to give it a letter or digit.")),
         ToolWindow::Explorer => ("", ""),

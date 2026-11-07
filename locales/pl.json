@@ -263,7 +263,18 @@
     "Current File": "Bieżący plik",
     "Scanning…": "Skanowanie…",
     "{n} items": "{n} elementów",
-    "Refresh": "Odśwież"
+    "Refresh": "Odśwież",
+    "Hierarchy": "Hierarchia",
+    "Call Hierarchy": "Hierarchia wywołań",
+    "Type Hierarchy": "Hierarchia typów",
+    "Callers": "Wywołujący",
+    "Callees": "Wywoływane",
+    "Base Types": "Typy bazowe",
+    "Derived Types": "Typy pochodne",
+    "No hierarchy": "Brak hierarchii",
+    "Press ⌃⌥H on a method for its calls, or ⌃H on a type for its base and derived types.": "Naciśnij ⌃⌥H na metodzie, aby zobaczyć wywołania, lub ⌃H na typie, aby zobaczyć typy bazowe i pochodne.",
+    "Place the caret on a method or property to see its calls": "Umieść kursor na metodzie lub właściwości, aby zobaczyć wywołania",
+    "Place the caret on a type to see its hierarchy": "Umieść kursor na typie, aby zobaczyć jego hierarchię"
   },
   "terminal": {
     "Local": "Lokalny",

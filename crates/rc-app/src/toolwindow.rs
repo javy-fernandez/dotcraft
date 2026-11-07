@@ -23,6 +23,7 @@ pub enum ToolWindow {
     Monitoring,
     Bookmarks,
     Todo,
+    Hierarchy,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,7 +59,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 16] = [
+    pub const ALL: [ToolWindow; 17] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -73,6 +74,7 @@ impl ToolWindow {
         ToolWindow::Todo,
         ToolWindow::Terminal,
         ToolWindow::Git,
+        ToolWindow::Hierarchy,
         ToolWindow::Nuget,
         ToolWindow::Notifications,
     ];
@@ -95,6 +97,7 @@ impl ToolWindow {
             ToolWindow::Monitoring => "monitoring",
             ToolWindow::Bookmarks => "bookmarks",
             ToolWindow::Todo => "todo",
+            ToolWindow::Hierarchy => "hierarchy",
         }
     }
 
@@ -116,6 +119,7 @@ impl ToolWindow {
             ToolWindow::Monitoring => tr("Monitoring"),
             ToolWindow::Bookmarks => tr("Bookmarks"),
             ToolWindow::Todo => "TODO",
+            ToolWindow::Hierarchy => tr("Hierarchy"),
         }
     }
 
@@ -137,13 +141,14 @@ impl ToolWindow {
             ToolWindow::Monitoring => ico::TW_MONITORING,
             ToolWindow::Bookmarks => ico::TW_BOOKMARKS,
             ToolWindow::Todo => ico::TW_TODO,
+            ToolWindow::Hierarchy => ico::TW_HIERARCHY,
         }
     }
 
     pub fn side(self) -> Side {
         match self {
             ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit | ToolWindow::Bookmarks => Side::Left,
-            ToolWindow::Notifications => Side::Right,
+            ToolWindow::Notifications | ToolWindow::Hierarchy => Side::Right,
             _ => Side::Bottom,
         }
     }

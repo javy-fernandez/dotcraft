@@ -57,6 +57,8 @@ pub struct DotCraftApp {
     pub monitor: crate::monitor::Monitor,
     /// TODO tool window: the workspace's TODO and FIXME comments.
     pub todos: Option<crate::todo::Todos>,
+    /// Hierarchy tool window (Call / Type Hierarchy).
+    pub hierarchy: Option<crate::hierarchy::Hierarchy>,
     /// The update check under way, and whether it was asked for (Check for Updates…).
     update_check: Option<(std::sync::mpsc::Receiver<Result<crate::update::Release, String>>, bool)>,
     /// A newer release, shown in the bottom-right notice until dismissed.
@@ -150,6 +152,7 @@ impl DotCraftApp {
             notices: Vec::new(),
             monitor: crate::monitor::Monitor::new(waker.clone()),
             todos: None,
+            hierarchy: None,
             update_check: None,
             update: None,
             insight: Insight::new(waker.clone()),
@@ -545,6 +548,22 @@ impl DotCraftApp {
                 InsightOutput::Actions(list) => self.dialog = Some(Dialog::CodeActions { list, selected: 0 }),
                 InsightOutput::AskRename { doc, pos, name } => self.dialog = Some(Dialog::RenameSymbol { doc, pos, original: name.clone(), name, focus: true }),
                 InsightOutput::Message(m) => self.notify(m, false),
+                InsightOutput::Hierarchy { kind, items } => {
+                    let generation = self.hierarchy.as_ref().map_or(1, |h| h.generation + 1);
+                    let mut h = crate::hierarchy::Hierarchy::new(kind, items, generation);
+                    // The first level right away, like Rider.
+                    h.nodes[0].expanded = true;
+                    self.insight.hierarchy_children(kind, h.direction, generation, 0, &h.nodes[0].item.clone());
+                    self.hierarchy = Some(h);
+                    self.dock.show(ToolWindow::Hierarchy);
+                }
+                InsightOutput::HierarchyChildren { generation, node, items } => {
+                    if let Some(h) = &mut self.hierarchy
+                        && h.generation == generation
+                    {
+                        h.set_children(node, items);
+                    }
+                }
             }
         }
     }
@@ -594,6 +613,8 @@ impl DotCraftApp {
             Action::Rename => self.insight.prepare_rename(doc),
             Action::Reformat => self.insight.format(doc),
             Action::FileStructure => self.dialog = Some(Dialog::FileStructure { filter: String::new(), selected: 0 }),
+            Action::CallHierarchy => self.insight.prepare_hierarchy(doc, caret, crate::hierarchy::HierarchyKind::Calls),
+            Action::TypeHierarchy => self.insight.prepare_hierarchy(doc, caret, crate::hierarchy::HierarchyKind::Types),
             _ => {}
         }
     }

@@ -380,6 +380,10 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
         ui.separator();
         entry(ui, Some(ico::BREAKPOINT), tr("Toggle Line Breakpoint"), Action::ToggleBreakpoint);
         entry(ui, Some(ico::BOOKMARK), tr("Toggle Bookmark"), Action::ToggleBookmark);
+        if csharp {
+            entry(ui, Some(ico::TW_HIERARCHY), tr("Call Hierarchy"), Action::CallHierarchy);
+            entry(ui, None, tr("Type Hierarchy"), Action::TypeHierarchy);
+        }
         entry(ui, None, tr("Toggle Bookmark with Mnemonic"), Action::ToggleBookmarkMnemonic);
     });
     if let Some(cmd) = edit {
