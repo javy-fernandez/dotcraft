@@ -54,6 +54,8 @@ pub struct Docs {
     pub recent: Vec<PathBuf>,
     /// Bookmarks of the files that aren't open (open ones live in their editor).
     pub bookmarks: std::collections::BTreeMap<PathBuf, std::collections::BTreeMap<usize, Option<char>>>,
+    /// Record Local History on saves and outside changes (off in unit tests: no home folder).
+    pub history: bool,
 }
 
 /// A bookmark anywhere in the workspace.
@@ -87,7 +89,7 @@ pub fn read_text(path: &Path) -> Result<(String, bool, Option<SystemTime>), Stri
 
 impl Docs {
     pub fn new(pool: ParserPool) -> Self {
-        Docs { list: Vec::new(), active: None, next_id: 1, pool, recent: Vec::new(), bookmarks: Default::default() }
+        Docs { list: Vec::new(), active: None, next_id: 1, pool, recent: Vec::new(), bookmarks: Default::default(), history: false }
     }
 
     /// Every bookmark: open files' from their editors, the others' from the store; by file and line.
@@ -238,7 +240,14 @@ impl Docs {
     }
 
     pub fn save(&mut self, i: usize) -> Result<(), String> {
+        let history = self.history;
         let doc = &mut self.list[i];
+        // The first revision is the file as it was before DotCraft touched it.
+        if history && rc_core::local_history::revisions(&doc.path).is_empty()
+            && let Ok((old, _, _)) = read_text(&doc.path)
+        {
+            let _ = rc_core::local_history::record(&doc.path, &old, "Original");
+        }
         let mut bytes = Vec::new();
         if doc.bom {
             bytes.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
@@ -248,6 +257,9 @@ impl Docs {
         doc.editor.buffer.mark_saved();
         doc.mtime = std::fs::metadata(&doc.path).and_then(|m| m.modified()).ok();
         doc.conflict = false;
+        if history {
+            let _ = rc_core::local_history::record(&doc.path, &doc.editor.buffer.rope().to_string(), "Saved");
+        }
         Ok(())
     }
 
@@ -273,6 +285,9 @@ impl Docs {
         if doc.is_modified() {
             doc.conflict = true;
             return;
+        }
+        if self.history {
+            let _ = rc_core::local_history::record(path, &text.replace("\r\n", "\n"), "External change");
         }
         doc.editor.reload(&text);
         doc.bom = bom;

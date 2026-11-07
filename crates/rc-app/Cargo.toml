@@ -44,7 +44,11 @@ sysinfo = { version = "0.40.1", default-features = false, features = ["system"] 
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSURL", "NSString"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Time"] }
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "wgsl"] }
 
 # Linux: Vulkan (or OpenGL ES where there is none), on X11 and Wayland.

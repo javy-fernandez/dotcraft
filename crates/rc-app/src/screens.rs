@@ -783,3 +783,41 @@ fn screens_hierarchy() {
     hh.run_steps(3);
     hh.render().unwrap().save(out.join("hierarchy-dark.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/local-history-*.png"]
+fn screens_local_history() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::Builder::new().prefix("dotcraft-history").tempdir().unwrap();
+    let file = dunce::canonicalize(dir.path()).unwrap().join("Notes.cs");
+    std::fs::write(&file, "class Notes\n{\n    int a = 1;\n}\n").unwrap();
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(file.parent().unwrap());
+    app.open_file(&file);
+    // Two saves and a change by another app.
+    for text in ["class Notes\n{\n    int a = 2;\n}\n", "class Notes\n{\n    int a = 2;\n    int b = 3;\n}\n"] {
+        let d = app.docs.active_doc_mut().unwrap();
+        let len = d.editor.buffer.len_chars();
+        d.editor.replace(0, len, text);
+        app.docs.save(0).unwrap();
+    }
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(&file, "class Notes\n{\n    int a = 2;\n    int b = 3;\n    // edited elsewhere\n}\n").unwrap();
+    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+    std::fs::File::options().write(true).open(&file).unwrap().set_modified(later).unwrap();
+    app.docs.check_disk_changes();
+    let revs = rc_core::local_history::revisions(&file);
+    assert_eq!(revs.iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["External change", "Saved", "Saved", "Original"]);
+    app.show_local_history(None);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    // The original version against the current text.
+    let original = crate::ui::toolwindows::format_time(revs[3].time);
+    h.get_all_by_label(&original).last().unwrap().click();
+    h.run_steps(3);
+    assert!(h.state().vcs.diff.is_some());
+    h.render().unwrap().save(out.join("local-history-dark.png")).unwrap();
+}

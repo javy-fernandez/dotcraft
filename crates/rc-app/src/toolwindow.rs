@@ -24,6 +24,7 @@ pub enum ToolWindow {
     Bookmarks,
     Todo,
     Hierarchy,
+    LocalHistory,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,7 +60,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 17] = [
+    pub const ALL: [ToolWindow; 18] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -75,6 +76,7 @@ impl ToolWindow {
         ToolWindow::Terminal,
         ToolWindow::Git,
         ToolWindow::Hierarchy,
+        ToolWindow::LocalHistory,
         ToolWindow::Nuget,
         ToolWindow::Notifications,
     ];
@@ -98,6 +100,7 @@ impl ToolWindow {
             ToolWindow::Bookmarks => "bookmarks",
             ToolWindow::Todo => "todo",
             ToolWindow::Hierarchy => "hierarchy",
+            ToolWindow::LocalHistory => "local_history",
         }
     }
 
@@ -120,6 +123,7 @@ impl ToolWindow {
             ToolWindow::Bookmarks => tr("Bookmarks"),
             ToolWindow::Todo => "TODO",
             ToolWindow::Hierarchy => tr("Hierarchy"),
+            ToolWindow::LocalHistory => tr("Local History"),
         }
     }
 
@@ -142,6 +146,7 @@ impl ToolWindow {
             ToolWindow::Bookmarks => ico::TW_BOOKMARKS,
             ToolWindow::Todo => ico::TW_TODO,
             ToolWindow::Hierarchy => ico::TW_HIERARCHY,
+            ToolWindow::LocalHistory => ico::HISTORY,
         }
     }
 

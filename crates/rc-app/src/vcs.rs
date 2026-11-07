@@ -455,6 +455,11 @@ impl Vcs {
         !self.status.as_ref().is_some_and(|s| s.entries.iter().any(|e| e.path == rel))
     }
 
+    /// A side-by-side diff of two texts in the editor area (Local History uses it too).
+    pub fn show_diff(&mut self, title: String, path: PathBuf, left: &str, right: &str, dark: bool) {
+        self.diff = Some(self.make_diff(title, path, left, right, dark));
+    }
+
     fn make_diff(&mut self, title: String, path: PathBuf, left: &str, right: &str, dark: bool) -> DiffView {
         let sbs = rc_vcs::SideBySide::compute(left, right);
         let ll: Vec<&str> = left.split('\n').collect();

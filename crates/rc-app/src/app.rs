@@ -59,6 +59,9 @@ pub struct DotCraftApp {
     pub todos: Option<crate::todo::Todos>,
     /// Hierarchy tool window (Call / Type Hierarchy).
     pub hierarchy: Option<crate::hierarchy::Hierarchy>,
+    /// Local History window: the file shown and its selected revision.
+    pub history_file: Option<std::path::PathBuf>,
+    pub history_selected: Option<usize>,
     /// The update check under way, and whether it was asked for (Check for Updates…).
     update_check: Option<(std::sync::mpsc::Receiver<Result<crate::update::Release, String>>, bool)>,
     /// A newer release, shown in the bottom-right notice until dismissed.
@@ -145,7 +148,11 @@ impl DotCraftApp {
             keymap,
             editor_config,
             workspace: None,
-            docs: Docs::new(pool),
+            docs: {
+                let mut d = Docs::new(pool);
+                d.history = true;
+                d
+            },
             dock: Dock::default(),
             explorer: ExplorerState::default(),
             dialog: None,
@@ -153,6 +160,8 @@ impl DotCraftApp {
             monitor: crate::monitor::Monitor::new(waker.clone()),
             todos: None,
             hierarchy: None,
+            history_file: None,
+            history_selected: None,
             update_check: None,
             update: None,
             insight: Insight::new(waker.clone()),
@@ -681,6 +690,17 @@ impl DotCraftApp {
         if self.settings.add_recent_file(path) {
             let _ = self.settings.save();
         }
+    }
+
+    /// File › Local History › Show History: the window for `path` (or the active file).
+    pub fn show_local_history(&mut self, path: Option<std::path::PathBuf>) {
+        let path = path.or_else(|| self.docs.active_doc().map(|d| d.path.clone()));
+        if path.is_none() {
+            return;
+        }
+        self.history_file = path;
+        self.history_selected = None;
+        self.dock.show(ToolWindow::LocalHistory);
     }
 
     /// File › Reload from Disk for the active document.
@@ -1353,6 +1373,7 @@ impl eframe::App for DotCraftApp {
                     }
                     MenuCommand::CloseProject => self.close_project(),
                     MenuCommand::ReloadFromDisk => self.reload_active_from_disk(),
+                    MenuCommand::ShowHistory => self.show_local_history(None),
                     MenuCommand::OpenRecent(n) => {
                         if let Some(p) = self.native_menu.as_ref().and_then(|m| m.recent_path(n)) {
                             self.open_path(&p);

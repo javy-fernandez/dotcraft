@@ -34,6 +34,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Monitoring => crate::ui::monitoring::show(app, ui),
         ToolWindow::Todo => todo_window(app, ui),
         ToolWindow::Hierarchy => hierarchy_window(app, ui),
+        ToolWindow::LocalHistory => local_history_window(app, ui),
         ToolWindow::Bookmarks => {
             if header(ui, tw.title()) {
                 app.toggle_tool(tw);
@@ -97,6 +98,140 @@ fn list_row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, s
     }
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     resp
+}
+
+/// Local History of a file: its revisions, newest first; a click shows the diff with the
+/// current text, the context menu restores one.
+fn local_history_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let path = app.history_file.clone().or_else(|| app.docs.active_doc().map(|d| d.path.clone()));
+    let name = path.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let title = if name.is_empty() { tr("Local History").to_string() } else { format!("{} · {name}", tr("Local History")) };
+    if header(ui, &title) {
+        app.toggle_tool(ToolWindow::LocalHistory);
+        return;
+    }
+    let revisions = path.as_deref().map(rc_core::local_history::revisions).unwrap_or_default();
+    let Some(path) = path.filter(|_| !revisions.is_empty()) else {
+        let (title, hint) = empty_text(ToolWindow::LocalHistory);
+        empty_state(ui, ToolWindow::LocalHistory.icon(), title, hint);
+        return;
+    };
+    let current = match app.docs.index_of(&path) {
+        Some(i) => app.docs.list[i].editor.buffer.rope().to_string(),
+        None => std::fs::read_to_string(&path).unwrap_or_default().replace("\r\n", "\n"),
+    };
+    let mut show: Option<usize> = None;
+    let mut restore: Option<usize> = None;
+    egui::ScrollArea::vertical().id_salt("local_history").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (i, r) in revisions.iter().enumerate() {
+            let when = format_time(r.time);
+            let label = match r.label.as_str() {
+                "Saved" => tr("Saved"),
+                "Original" => tr("Original"),
+                "External change" => tr("External change"),
+                "Before restore" => tr("Before restore"),
+                other => other,
+            };
+            let resp = list_row(ui, 0, rc_kit::ico::HISTORY, &when, label, app.history_selected == Some(i));
+            if resp.clicked() {
+                show = Some(i);
+            }
+            resp.context_menu(|ui| {
+                if theme::menu_item(ui, Some(rc_kit::ico::DIFF), tr("Show Diff"), false).clicked() {
+                    show = Some(i);
+                    ui.close();
+                }
+                if theme::menu_item(ui, Some(rc_kit::ico::UNDO), tr("Revert to This Version"), false).clicked() {
+                    restore = Some(i);
+                    ui.close();
+                }
+            });
+        }
+    });
+    let _ = p;
+    let dark = app.dark(ui.ctx());
+    if let Some(i) = show
+        && let Ok(old) = revisions[i].read()
+    {
+        app.history_selected = Some(i);
+        let title = format!("{name}: {} ↔ {}", format_time(revisions[i].time), tr("Current"));
+        app.vcs.show_diff(title, path.clone(), &old, &current, dark);
+    }
+    if let Some(i) = restore
+        && let Ok(old) = revisions[i].read()
+    {
+        let _ = rc_core::local_history::record(&path, &current, "Before restore");
+        app.open_file(&path);
+        if let Some(d) = app.docs.active_doc_mut() {
+            let len = d.editor.buffer.len_chars();
+            // An edit, so ⌘Z brings the current text back.
+            d.editor.replace(0, len, &old);
+        }
+        app.vcs.diff = None;
+        app.notify(tr("Restored; ⌘Z undoes it"), false);
+    }
+}
+
+/// "Today 14:05:12", "Yesterday 09:30:00" or "2026-11-04 18:20".
+pub(crate) fn format_time(t: std::time::SystemTime) -> String {
+    let secs = t.duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()) as i64;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()) as i64;
+    let offset = local_offset_secs();
+    let (day, tod) = ((secs + offset).div_euclid(86400), (secs + offset).rem_euclid(86400));
+    let today = (now + offset).div_euclid(86400);
+    let hms = format!("{:02}:{:02}:{:02}", tod / 3600, tod / 60 % 60, tod % 60);
+    match today - day {
+        0 => format!("{} {hms}", tr("Today")),
+        1 => format!("{} {hms}", tr("Yesterday")),
+        _ => {
+            let (y, m, d) = civil_from_days(day);
+            format!("{y}-{m:02}-{d:02} {}", &hms[..5])
+        }
+    }
+}
+
+/// The local time zone's offset from UTC, in seconds.
+fn local_offset_secs() -> i64 {
+    #[cfg(unix)]
+    {
+        // SAFETY: localtime_r writes into the struct we own.
+        unsafe {
+            let now = libc::time(std::ptr::null_mut());
+            let mut tm: libc::tm = std::mem::zeroed();
+            libc::localtime_r(&now, &mut tm);
+            tm.tm_gmtoff as i64
+        }
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Time::{GetTimeZoneInformation, TIME_ZONE_INFORMATION};
+        // SAFETY: the function fills the struct we own; Bias is in minutes, UTC = local + bias.
+        unsafe {
+            let mut tz: TIME_ZONE_INFORMATION = std::mem::zeroed();
+            let mode = GetTimeZoneInformation(&mut tz);
+            let dst = if mode == 2 { tz.DaylightBias } else { tz.StandardBias };
+            -((tz.Bias + dst) as i64) * 60
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        0
+    }
+}
+
+/// Days since 1970-01-01 → (year, month, day) (Howard Hinnant's algorithm).
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z.rem_euclid(146097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (yoe + era * 400 + i64::from(m <= 2), m, d)
 }
 
 /// Call / Type Hierarchy: direction toggles in the header, a lazily loaded tree.
@@ -572,6 +707,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Notifications => (tr("No notifications"), tr("Messages from builds, tools and updates show up here.")),
         ToolWindow::Nuget => ("NuGet", ""),
         ToolWindow::Monitoring => ("", ""),
+        ToolWindow::LocalHistory => (tr("No local history"), tr("A copy of the file is kept each time it is saved or changed by another app.")),
         ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Press ⌃⌥H on a method for its calls, or ⌃H on a type for its base and derived types.")),
         ToolWindow::Todo => (tr("No TODO items"), tr("TODO and FIXME comments of the solution show up here.")),
         ToolWindow::Bookmarks => (tr("No bookmarks"), tr("Press F3 on a line to bookmark it, or ⌥F3 to give it a letter or digit.")),

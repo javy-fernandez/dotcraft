@@ -18,6 +18,7 @@ enum TabCommand {
     Pin(usize),
     CopyPath(usize),
     Reload(usize),
+    History(usize),
     Reveal(usize),
     Locate(usize),
     Blame(usize),
@@ -600,6 +601,10 @@ fn tab_menu(app: &mut DotCraftApp, resp: &egui::Response, i: usize, commands: &m
             commands.push(TabCommand::Reload(i));
             ui.close();
         }
+        if theme::menu_item(ui, Some(ico::HISTORY), tr("Local History"), false).clicked() {
+            commands.push(TabCommand::History(i));
+            ui.close();
+        }
         if theme::menu_item(ui, Some(ico::COPY), tr("Copy Path"), false).clicked() {
             commands.push(TabCommand::CopyPath(i));
             ui.close();
@@ -690,6 +695,10 @@ fn run_tab_commands(app: &mut DotCraftApp, ui: &Ui, commands: Vec<TabCommand>) {
                 if let Err(e) = app.docs.reload_from_disk(i) {
                     app.notify(e, true);
                 }
+            }
+            TabCommand::History(i) => {
+                let path = app.docs.list[i].path.clone();
+                app.show_local_history(Some(path));
             }
             TabCommand::Reveal(i) => crate::app::reveal_in_file_manager(&app.docs.list[i].path),
             TabCommand::Blame(i) => {

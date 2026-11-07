@@ -35,6 +35,7 @@ pub enum MenuCommand {
     AddUsings,
     CloseProject,
     ReloadFromDisk,
+    ShowHistory,
     /// An entry of File › Open Recent (index into [`NativeMenu::recent_path`]).
     OpenRecent(usize),
     ClearRecent,
@@ -62,6 +63,7 @@ impl MenuCommand {
             MenuCommand::OpenProject | MenuCommand::OpenFile => ico::OPEN,
             MenuCommand::CloseProject => ico::CLOSE,
             MenuCommand::ReloadFromDisk => ico::REFRESH,
+            MenuCommand::ShowHistory => ico::HISTORY,
             MenuCommand::EditRunConfig => ico::SETTINGS,
             MenuCommand::AddUsings => ico::NAMESPACE,
             MenuCommand::Undo => ico::UNDO,
@@ -450,6 +452,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &sep(),
             &act(Action::SaveAll, || tr("Save All")),
             &item(MenuCommand::ReloadFromDisk, || tr("Reload from Disk"), None),
+            &item(MenuCommand::ShowHistory, || tr("Local History"), None),
             &act(Action::CloseTab, || tr("Close Tab")),
         ],
     )?;

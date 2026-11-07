@@ -2,6 +2,7 @@
 //! settings and per-workspace sessions, the workspace's file tree and file watching.
 
 pub mod inbox;
+pub mod local_history;
 pub mod paths;
 pub mod runtime;
 pub mod session;
