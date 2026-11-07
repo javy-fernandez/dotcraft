@@ -200,6 +200,9 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 
 ## Implementation progress
 
+See [combined validation evidence](implementation/validation.md) for commands and tested scope.
+Use the [integration guide](implementation/integration.md) to test the assembled branch and review feature dependencies.
+
 Each pull request below has a separate implementation note with validation evidence. Open pull requests are awaiting review and are not merged into the default branch. Broad checklist items remain unchecked when additional scope is pending.
 
 | Slice | Delivery | Evidence |
@@ -214,6 +217,11 @@ Each pull request below has a separate implementation note with validation evide
 | Attach to existing .NET processes | [PR 14](https://github.com/RafaelMendes1407/dotcraft/pull/14) | [Attach debugger](implementation/attach-debugger.md) |
 | Inline variables in HTTP request files | [PR 15](https://github.com/RafaelMendes1407/dotcraft/pull/15), based on PR 13 | [HTTP variables](implementation/http-variables.md) |
 | Responsive Settings layout and extended regression coverage | [PR 4](https://github.com/RafaelMendes1407/dotcraft/pull/4) | [Responsive Settings](implementation/responsive-settings.md) |
+| Solution filters, source workspace lifecycle, and SDK build context | [PR 2](https://github.com/RafaelMendes1407/dotcraft/pull/2) | [Solution filters](implementation/solution-filters.md) |
+| EditorConfig indentation and compatibility fixes | [PR 3](https://github.com/RafaelMendes1407/dotcraft/pull/3) | [EditorConfig](implementation/editorconfig.md) |
+| Installed SDK selection through global.json | [PR 5](https://github.com/RafaelMendes1407/dotcraft/pull/5) | [SDK selection](implementation/sdk-selection.md) |
+| Read-only SQLite browser and SQL console | [PR 16](https://github.com/RafaelMendes1407/dotcraft/pull/16), based on PR 6 | [SQLite](implementation/sqlite-browser.md) |
+| Scrollable main menu and compact category navigation | [PR 17](https://github.com/RafaelMendes1407/dotcraft/pull/17), based on PR 14 | [Main menu](implementation/scrollable-menu.md) |
 
 ## Completion criteria
 

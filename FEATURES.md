@@ -22,11 +22,11 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 19 |
-| 🚧 In progress | 10 |
-| 🟢 Existing | 84 |
-| 🔁 Reuse candidate | 31 |
-| ⬜ Backlog | 229 |
+| ✅ Verified | 33 |
+| 🚧 In progress | 14 |
+| 🟢 Existing | 71 |
+| 🔁 Reuse candidate | 28 |
+| ⬜ Backlog | 227 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -69,17 +69,19 @@ consumers. Invalid JSON, missing fields, unknown projects, missing source soluti
 and nested filters return errors. No new graphical control is required: Open already
 accepts `.slnf`, and the existing explorer consumes the resulting solution tree.
 
-Verification: `cargo test -p rc-dotnet -p rc-core --lib`. The real `TenProjects`
-fixture is loaded through a filter and both selected project files are parsed.
-Parser regressions cover classic and XML parent solutions, Windows separators, filters
-in a subdirectory, empty selections, duplicate selections and invalid input.
-Remaining: real SDK build/test execution, graphical explorer verification, Roslyn behavior
-with filters, interactive editing, and dependency-loading behavior. B-14 remains 🚧.
-The existing workspace root stays the filter directory; filters stored outside the
-solution root need a separate watcher/search-root audit.
+Verification now includes parser and explorer regressions, actual `open_path` lifecycle,
+index/Git roots, both watcher locations, dirty-document preservation on retarget, and a real
+SDK build with a deliberately invalid policy beside the filter. The workspace uses the
+source solution root; the filter remains its session identity and command target.
+[Solution-filter evidence](docs/implementation/solution-filters.md) records commands and
+remaining filter-specific Roslyn, test-execution, dependency-closure, and platform checks.
+B-14 remains 🚧 for that broader scope.
 
 
 ## Current delivery evidence
+
+Combined build and test commands are recorded in [validation evidence](docs/implementation/validation.md).
+Live C# language-service, application, and build/run/test-framework checks are recorded in [live .NET evidence](docs/implementation/live-dotnet.md). These three Rust integration tests include 13 successful .NET fixture test cases.
 
 The detailed feature inventory above and below is retained from PR 1. Verified entries describe tested scope in open delivery branches, not merged default-branch functionality or full Rider parity. The high-level checklist and per-slice PR index are in [docs/features.md](docs/features.md).
 
@@ -90,6 +92,8 @@ The detailed feature inventory above and below is retained from PR 1. Verified e
 - PR 10 prevents partial application of resource-containing edits; atomic refactoring and global undo remain pending.
 - PRs 13 and 15 implement the basic HTTP Client and bounded inline variables. PR 15 depends on PR 13.
 - PR 14 verifies live attach/detach and the inherited CLI/API debugger on .NET SDK 8.0.427 and ASP.NET 8.0.33. Broader runtime and platform support is pending.
+- PR 16 adds the read-only native SQLite browser and SQL console; writes and other database engines remain pending.
+- PR 17 adapts CrabCraft's bounded main-menu design to compact in-popup navigation and existing DotCraft actions.
 - Existing PRs 2, 3 and 5 cover solution filters, EditorConfig and SDK selection; their implementation branches remain separate review items.
 
 ## A. Desktop interface and workflow
@@ -114,7 +118,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-14 | Status bar | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-15 | Notifications | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-16 | Responsive settings layout | ✅ | Existing PR 4 preserved; 5 responsive settings tests pass, including TenProjects, scrolling, long paths and Cancel. |
-| A-17 | Scrollable main menu | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| A-17 | Scrollable main menu | ✅ | PR 17 verifies compact category/command/tool scrolling, real TenProjects integration, clipboard actions and project-gated attachment. |
 | A-18 | Tab docking previews | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | A-19 | Background document saving | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | A-20 | Safe reload from disk | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
@@ -136,8 +140,8 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
 | B-01 | Open solutions and folders | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| B-02 | Classic .sln solutions | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| B-03 | XML .slnx solutions | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| B-02 | Classic .sln solutions | ✅ | Live Shop build/run and C# application flows load classic solutions; see live-dotnet.md. |
+| B-03 | XML .slnx solutions | ✅ | Live Roslyn and application flows load a real two-project XML solution; see live-dotnet.md. |
 | B-04 | Standalone .NET projects | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-05 | Solution folders and items | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-06 | Project templates | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -148,13 +152,13 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-11 | Launch settings profiles | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-12 | NuGet search | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-13 | NuGet installation and removal | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| B-14 | JSON .slnf solution filters | 🚧 | Parser implemented; verify SDK, UI and language-server behavior. |
+| B-14 | JSON .slnf solution filters | 🚧 | PR 2 verifies parser, explorer, external-filter lifecycle and SDK build context; filter-specific Roslyn and test execution remain pending. |
 | B-15 | Interactive filter creation and editing | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-16 | Unload and reload individual projects | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-17 | Project references editor | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-18 | Target frameworks editor | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-19 | Build configurations and platforms | ⬜ | Implement with integration and UI acceptance evidence. |
-| B-20 | global.json SDK management | ⬜ | Implement with integration and UI acceptance evidence. |
+| B-20 | global.json SDK management | 🚧 | PR 5 verifies real SDK 8.0.427/10.0.403 selection and builds; ancestor policy display, UI installation and language-service restart remain pending. |
 | B-21 | .NET workload management | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-22 | NuGet dependency graph | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-23 | Central package management | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -172,8 +176,8 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
 | C-01 | C# syntax highlighting | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| C-02 | Roslyn semantic highlighting | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| C-03 | Code completion | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-02 | Roslyn semantic highlighting | ✅ | Live C# application regression verifies Roslyn semantic color for a class; see live-dotnet.md. |
+| C-03 | Code completion | ✅ | Live Roslyn and application regressions verify C# completion; advanced completion variants remain separate inventory targets. |
 | C-04 | Signature help | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-05 | Quick documentation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-06 | Automatic brackets | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -184,11 +188,11 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-11 | Indentation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-12 | Undo and redo | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-13 | Code actions and quick fixes | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| C-14 | Rename symbol | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| C-15 | Diagnostics in editor | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-14 | Rename symbol | ✅ | Live C# application and Roslyn tests rename symbols across App and Lib projects; see live-dotnet.md. |
+| C-15 | Diagnostics in editor | ✅ | Live application verifies CS0103 ranges; Roslyn regression verifies diagnostics; see live-dotnet.md. |
 | C-16 | Large-file safeguards | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-17 | Complete statement | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| C-18 | EditorConfig integration | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| C-18 | EditorConfig integration | 🚧 | PR 3 verifies the indentation subset, embedded globstars and logical mixed editing; numeric-range/save-time/full-formatting scope remains pending. |
 | C-19 | Spelling assistance | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-20 | Web language editor improvements | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-21 | Smart and type-matching completion | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -253,7 +257,7 @@ Source / reuse boundary: `crates/rc-app/src/insight.rs; crates/rc-lsp`.
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| E-01 | Cross-file rename | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| E-01 | Cross-file rename | ✅ | Live C# rename updates App and Lib documents through the application; broader refactorings remain separate targets. |
 | E-02 | Language-server refactoring actions | 🚧 | PR 10 rejects unsupported resource edits before mutation; text-only refactorings still need transactional validation. |
 | E-03 | Refactor This chooser | ⬜ | Implement with integration and UI acceptance evidence. |
 | E-04 | Change signature | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -289,7 +293,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/build.rs; crates/rc-app/src/runne
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| F-01 | Build solution or project | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| F-01 | Build solution or project | ✅ | Live Shop solution build and inherited CLI/API debugger project builds pass; see live-dotnet.md. |
 | F-02 | Rebuild | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-03 | Clean | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-04 | Cancel build | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -364,13 +368,13 @@ Source / reuse boundary: `crates/rc-dotnet/src/test.rs; crates/rc-app/src/ui/run
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| H-01 | xUnit execution | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| H-02 | NUnit execution | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| H-03 | MSTest execution | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| H-01 | xUnit execution | ✅ | Live Shop runner executes 5 xUnit cases successfully; see live-dotnet.md. |
+| H-02 | NUnit execution | ✅ | Live Shop runner executes 4 NUnit cases successfully; see live-dotnet.md. |
+| H-03 | MSTest execution | ✅ | Live Shop runner executes 4 MSTest cases successfully; see live-dotnet.md. |
 | H-04 | Test discovery | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | H-05 | Test result tree | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | H-06 | Test gutter icons | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| H-07 | TRX results | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| H-07 | TRX results | ✅ | Live Shop runner parses real TRX outcomes for all 13 fixture cases; see live-dotnet.md. |
 | H-08 | Test output | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | H-09 | Named test sessions | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-10 | Test grouping and filtering | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -444,7 +448,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-04 | Markdown preview | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | J-05 | HTTP client | 🚧 | PRs 13 and 15 verify basic HTTP execution, cancellation and inline variables; advanced HTTP integrations remain pending. |
 | J-06 | HTTP environment variables | 🚧 | PR 15 verifies inline file variables only; environment files and generated variables remain pending. |
-| J-07 | Database connections and SQL console | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| J-07 | Database connections and SQL console | 🚧 | PR 16 verifies read-only SQLite connections and explicit bounded SQL; writes, persistent sessions and other engines remain pending. |
 | J-08 | SQL injection support | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | J-09 | ASP.NET endpoints explorer | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | J-10 | Container tools | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
@@ -465,7 +469,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-25 | gRPC client | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-26 | WebSocket client | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-27 | Entity Framework tooling | ⬜ | Implement with integration and UI acceptance evidence. |
-| J-28 | Database schema explorer | ⬜ | Implement with integration and UI acceptance evidence. |
+| J-28 | Database schema explorer | 🚧 | PR 16 verifies SQLite tables/views and CREATE previews; broader schema navigation and other engines remain pending. |
 | J-29 | Table data editor | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-30 | SQL completion and inspections | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-31 | Database migrations | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -485,7 +489,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-lsp; future framework adap
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| K-01 | C# language server integration | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| K-01 | C# language server integration | ✅ | Actual Roslyn server and native application C# flows pass; see live-dotnet.md. |
 | K-02 | F# language intelligence | ⬜ | Implement with integration and UI acceptance evidence. |
 | K-03 | VB.NET language intelligence | ⬜ | Implement with integration and UI acceptance evidence. |
 | K-04 | C++ language intelligence | ⬜ | Implement with integration and UI acceptance evidence. |
