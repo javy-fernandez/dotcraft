@@ -218,7 +218,8 @@
     "Reload from Disk": "Vom Datenträger neu laden",
     "Open Recent": "Zuletzt geöffnet",
     "Clear Recent": "Liste löschen",
-    "No Recent Items": "Keine zuletzt geöffneten Objekte"
+    "No Recent Items": "Keine zuletzt geöffneten Objekte",
+    "Show All Files": "Alle Dateien anzeigen"
   },
   "terminal": {
     "Local": "Lokal",

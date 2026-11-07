@@ -218,7 +218,8 @@
     "Reload from Disk": "从磁盘重新加载",
     "Open Recent": "打开最近",
     "Clear Recent": "清除最近项目",
-    "No Recent Items": "没有最近项目"
+    "No Recent Items": "没有最近项目",
+    "Show All Files": "显示所有文件"
   },
   "terminal": {
     "Local": "本地",

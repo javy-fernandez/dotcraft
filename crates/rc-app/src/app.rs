@@ -322,6 +322,7 @@ impl DotCraftApp {
         // A solution without a layout of its own starts with the last one used.
         self.dock = Dock::from_session(if s.tool_windows.is_empty() { &self.settings.tool_windows } else { &s.tool_windows });
         self.explorer.expanded = s.expanded.iter().cloned().collect();
+        self.explorer.set_show_all(s.show_all_files);
         if self.explorer.expanded.is_empty() {
             // First open: the solution and its top folders expanded, like Rider.
             self.explorer.expanded.insert("sln".into());
@@ -399,6 +400,7 @@ impl DotCraftApp {
                 v.sort();
                 v
             },
+            show_all_files: self.explorer.show_all,
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
@@ -1056,6 +1058,7 @@ impl DotCraftApp {
                     self.session_dirty = true;
                 }
                 ExplorerAction::LocateActive => self.locate_active(),
+                ExplorerAction::ToggleShowAll => self.explorer.set_show_all(!self.explorer.show_all),
                 ExplorerAction::NewItem(dir, kind) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind, error: None }),
                 ExplorerAction::Rename(path) => {
                     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());

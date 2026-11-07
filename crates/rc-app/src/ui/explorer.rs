@@ -2,7 +2,7 @@
 //! folders and files (read lazily from disk). Keyboard navigation like Rider: ↑/↓ move,
 //! →/← expand/collapse, Enter or double-click opens, F2 renames, ⌫ deletes.
 
-use rc_core::workspace::{FileNode, list_dir};
+use rc_core::workspace::{FileNode, is_hidden, list_dir_with};
 use rc_dotnet::{ProjectInfo, Solution, SolutionItem};
 use rc_kit::i18n::tr;
 use rc_kit::{Ico, ico, icons, theme};
@@ -52,6 +52,11 @@ pub struct ExplorerState {
     pub has_focus: bool,
     /// Open files with a single click (Settings › Editor).
     pub single_click: bool,
+    /// Show All Files (Rider): bin, obj and the files of the solution folder that belong to
+    /// no project, drawn dimmed.
+    pub show_all: bool,
+    /// Keys of the rows drawn dimmed (not part of the solution), rebuilt by `rows`.
+    dimmed: HashSet<String>,
 }
 
 /// What the user asked for in the explorer this frame.
@@ -72,6 +77,8 @@ pub enum ExplorerAction {
     AddProject(PathBuf),
     Collapse,
     LocateActive,
+    /// Show All Files on/off (kept in the session).
+    ToggleShowAll,
 }
 
 impl ExplorerState {
@@ -86,7 +93,19 @@ impl ExplorerState {
     }
 
     fn children_of_dir(&mut self, dir: &Path) -> Vec<FileNode> {
-        self.dir_cache.entry(dir.to_path_buf()).or_insert_with(|| list_dir(dir)).clone()
+        let all = self.show_all;
+        self.dir_cache.entry(dir.to_path_buf()).or_insert_with(|| list_dir_with(dir, all)).clone()
+    }
+
+    pub fn set_show_all(&mut self, on: bool) {
+        if self.show_all != on {
+            self.show_all = on;
+            self.dir_cache.clear();
+        }
+    }
+
+    pub fn is_dimmed(&self, key: &str) -> bool {
+        self.dimmed.contains(key)
     }
 
     fn project(&mut self, path: &Path) -> Option<ProjectInfo> {
@@ -157,6 +176,7 @@ impl ExplorerState {
     /// The visible rows: a depth-first walk of the expanded nodes.
     pub fn rows(&mut self, solution: Option<&Solution>, root: &Path, root_name: &str) -> Vec<Row> {
         let mut rows = Vec::new();
+        self.dimmed.clear();
         let root_row = Row {
             key: "sln".into(),
             kind: NodeKind::Solution,
@@ -177,10 +197,37 @@ impl ExplorerState {
             Some(sln) => {
                 let items = sln.items.clone();
                 self.push_items(&mut rows, &items, 1, "");
+                if self.show_all {
+                    self.push_unattached(&mut rows, sln);
+                }
             }
-            None => self.push_dir(&mut rows, root, 1),
+            None => self.push_dir(&mut rows, root, 1, false),
         }
         rows
+    }
+
+    /// Show All Files: what the solution folder holds besides the solution and its projects
+    /// (README, .gitignore, scripts…), like Rider's unattached files.
+    fn push_unattached(&mut self, rows: &mut Vec<Row>, sln: &Solution) {
+        let Some(dir) = sln.path.parent() else { return };
+        let project_dirs: Vec<PathBuf> = sln.projects().iter().filter_map(|p| p.path.parent().map(Path::to_path_buf)).collect();
+        fn files(items: &[SolutionItem], out: &mut Vec<PathBuf>) {
+            for i in items {
+                match i {
+                    SolutionItem::File(f) => out.push(f.clone()),
+                    SolutionItem::Folder { children, .. } => files(children, out),
+                    SolutionItem::Project(_) => {}
+                }
+            }
+        }
+        let mut listed = Vec::new();
+        files(&sln.items, &mut listed);
+        for c in self.children_of_dir(dir) {
+            let attached = if c.is_dir { project_dirs.iter().any(|d| d.starts_with(&c.path)) } else { c.path == sln.path || listed.contains(&c.path) };
+            if !attached {
+                self.push_node(rows, &c, 1, true);
+            }
+        }
     }
 
     fn push_items(&mut self, rows: &mut Vec<Row>, items: &[SolutionItem], depth: usize, trail: &str) {
@@ -290,17 +337,19 @@ impl ExplorerState {
             if c.path == path {
                 continue;
             }
-            self.push_node(rows, &c, depth + 1);
+            self.push_node(rows, &c, depth + 1, false);
         }
     }
 
-    fn push_dir(&mut self, rows: &mut Vec<Row>, dir: &Path, depth: usize) {
+    fn push_dir(&mut self, rows: &mut Vec<Row>, dir: &Path, depth: usize, dim: bool) {
         for c in self.children_of_dir(dir) {
-            self.push_node(rows, &c, depth);
+            self.push_node(rows, &c, depth, dim);
         }
     }
 
-    fn push_node(&mut self, rows: &mut Vec<Row>, node: &FileNode, depth: usize) {
+    /// `dim`: the parent is not part of the solution, so neither is this node.
+    fn push_node(&mut self, rows: &mut Vec<Row>, node: &FileNode, depth: usize, dim: bool) {
+        let dim = dim || is_hidden(&node.name, node.is_dir);
         if node.is_dir {
             let key = format!("dir:{}", node.path.display());
             let special = node.name == "Properties";
@@ -313,11 +362,18 @@ impl ExplorerState {
                 icon: if special { ico::FILE_CONFIG } else { ico::FOLDER },
                 expandable: true,
             });
+            if dim {
+                self.dimmed.insert(key.clone());
+            }
             if self.expanded.contains(&key) {
-                self.push_dir(rows, &node.path, depth + 1);
+                self.push_dir(rows, &node.path, depth + 1, dim);
             }
         } else {
-            rows.push(file_row(&node.path, depth));
+            let row = file_row(&node.path, depth);
+            if dim {
+                self.dimmed.insert(row.key.clone());
+            }
+            rows.push(row);
         }
     }
 }
@@ -349,12 +405,18 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
         (ico::HIDE, tr("Hide"), None),
         (ico::COLLAPSE_ALL, tr("Collapse All"), Some(ExplorerAction::Collapse)),
         (ico::LOCATE, tr("Select Opened File"), Some(ExplorerAction::LocateActive)),
+        (ico::SHOW, tr("Show All Files"), Some(ExplorerAction::ToggleShowAll)),
     ] {
         x -= 26.0;
         let r = Rect::from_min_size(pos2(x, header.center().y - 13.0), vec2(26.0, 26.0));
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(r));
         let enabled = !(action == Some(ExplorerAction::LocateActive) && active_file.is_none());
-        if rc_kit::theme::icon_button(&mut child, icon, enabled, tip).clicked() {
+        let clicked = if action == Some(ExplorerAction::ToggleShowAll) {
+            rc_kit::theme::icon_toggle(&mut child, icon, state.show_all, tip).clicked()
+        } else {
+            rc_kit::theme::icon_button(&mut child, icon, enabled, tip).clicked()
+        };
+        if clicked {
             match action {
                 Some(a) => actions.push(a),
                 None => ui.ctx().data_mut(|d| {
@@ -398,9 +460,10 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             }
             let ir = Rect::from_center_size(pos2(x0 + 26.0, cy), vec2(16.0, 16.0));
             icons::paint(ui.painter(), ir, row.icon, &p, true);
-            let label = ui.painter().layout_no_wrap(row.label.clone(), FontId::proportional(13.0), p.text);
+            let text_color = if state.is_dimmed(&row.key) { p.muted } else { p.text };
+            let label = ui.painter().layout_no_wrap(row.label.clone(), FontId::proportional(13.0), text_color);
             let lx = x0 + 40.0;
-            ui.painter().galley(pos2(lx, (cy - label.size().y / 2.0).round()), label.clone(), p.text);
+            ui.painter().galley(pos2(lx, (cy - label.size().y / 2.0).round()), label.clone(), text_color);
             if !row.secondary.is_empty() {
                 let sec = ui.painter().layout_no_wrap(row.secondary.clone(), FontId::proportional(12.0), p.muted);
                 ui.painter().galley(pos2(lx + label.size().x + 8.0, (cy - sec.size().y / 2.0).round()), sec, p.muted);
@@ -609,5 +672,41 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, actions: &mut V
     if theme::menu_item(ui, Some(ico::FILE_SHELL), tr("Open in Terminal"), false).clicked() {
         actions.push(ExplorerAction::OpenInTerminal(target_dir));
         ui.close();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn show_all_files_adds_bin_obj_and_unattached_files_dimmed() {
+        let dir = tempfile::Builder::new().prefix("dotcraft-explorer").tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let sln = root.join("App.sln");
+        std::fs::write(&sln, "Microsoft Visual Studio Solution File, Format Version 12.00\nProject(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"App\", \"App\\App.csproj\", \"{790D8657-5CBB-446D-930E-78AA39237123}\"\nEndProject\n").unwrap();
+        std::fs::create_dir_all(root.join("App/bin/Debug")).unwrap();
+        std::fs::create_dir_all(root.join("App/obj")).unwrap();
+        std::fs::write(root.join("App/App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>").unwrap();
+        std::fs::write(root.join("App/Program.cs"), "").unwrap();
+        std::fs::write(root.join("README.md"), "").unwrap();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        let solution = Solution::load(&sln).unwrap();
+        let mut state = ExplorerState::default();
+        state.expanded.extend(["sln".to_string(), format!("proj:{}", root.join("App/App.csproj").display())]);
+        let labels = |s: &mut ExplorerState| s.rows(Some(&solution), &root, "App").into_iter().map(|r| r.label).collect::<Vec<_>>();
+        let off = labels(&mut state);
+        assert!(off.contains(&"Program.cs".to_string()));
+        assert!(!off.iter().any(|l| l == "bin" || l == "obj" || l == "README.md"));
+
+        state.set_show_all(true);
+        let on = labels(&mut state);
+        for name in ["bin", "obj", "README.md", "Program.cs"] {
+            assert!(on.contains(&name.to_string()), "{name} missing in {on:?}");
+        }
+        assert!(!on.iter().any(|l| l == ".git" || l == "App.sln"));
+        assert!(state.is_dimmed(&format!("dir:{}", root.join("App/bin").display())));
+        assert!(state.is_dimmed(&format!("file:{}", root.join("README.md").display())));
+        assert!(!state.is_dimmed(&format!("file:{}", root.join("App/Program.cs").display())));
     }
 }

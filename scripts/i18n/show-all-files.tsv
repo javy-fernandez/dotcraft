@@ -1,0 +1,3 @@
+# Explorer › Show All Files. Import: python3 scripts/i18n_tsv.py app scripts/i18n/show-all-files.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Show All Files	Mostrar todos los archivos	Afficher tous les fichiers	Mostrar todos os arquivos	Alle Dateien anzeigen	Pokaż wszystkie pliki	显示所有文件	すべてのファイルを表示

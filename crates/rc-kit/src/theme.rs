@@ -535,6 +535,19 @@ pub fn icon_button(ui: &mut Ui, ico: Ico, enabled: bool, tooltip: &str) -> Respo
     icon_button_sized(ui, ico, enabled, tooltip, 26.0)
 }
 
+/// Toolbar toggle (ToggleAction): like [`icon_button`], with a pressed background while on.
+pub fn icon_toggle(ui: &mut Ui, ico: Ico, on: bool, tooltip: &str) -> Response {
+    let p = pal(ui);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(26.0), Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, on, tooltip));
+    if on || resp.hovered() || resp.is_pointer_button_down_on() {
+        let fill = if on || resp.is_pointer_button_down_on() { p.pressed } else { p.hover };
+        ui.painter().rect_filled(rect, 6.0, fill);
+    }
+    icons::paint(ui.painter(), Rect::from_center_size(rect.center(), Vec2::splat(16.0)), ico, &p, true);
+    resp.on_hover_text(tooltip)
+}
+
 pub fn icon_button_sized(ui: &mut Ui, ico: Ico, enabled: bool, tooltip: &str, size: f32) -> Response {
     let p = pal(ui);
     let sense = if enabled { Sense::click() } else { Sense::hover() };

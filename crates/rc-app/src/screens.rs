@@ -611,3 +611,24 @@ fn screens_readme() {
         h.state_mut().insight.stop();
     }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/show-all-files-dark.png"]
+fn screens_show_all_files() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let shop = fixtures().join("Shop");
+    std::fs::create_dir_all(shop.join("src/Shop.Core/bin/Debug")).unwrap();
+    std::fs::create_dir_all(shop.join("src/Shop.Core/obj")).unwrap();
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(&shop.join("Shop.sln"));
+    app.explorer.expanded.insert(format!("proj:{}", shop.join("src/Shop.Core/Shop.Core.csproj").display()));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(2);
+    h.get_by_label("Show All Files").click();
+    h.run_steps(3);
+    assert!(h.state().explorer.show_all);
+    h.render().unwrap().save(out.join("show-all-files-dark.png")).unwrap();
+}

@@ -218,7 +218,8 @@
     "Reload from Disk": "Recargar desde disco",
     "Open Recent": "Abrir reciente",
     "Clear Recent": "Borrar recientes",
-    "No Recent Items": "No hay elementos recientes"
+    "No Recent Items": "No hay elementos recientes",
+    "Show All Files": "Mostrar todos los archivos"
   },
   "terminal": {
     "Local": "Local",
