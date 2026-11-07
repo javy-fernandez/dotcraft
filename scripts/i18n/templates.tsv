@@ -1,0 +1,6 @@
+# Live templates and Surround With. Import: python3 scripts/i18n_tsv.py app scripts/i18n/templates.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Insert Live Template…	Insertar live template…	Insérer un modèle dynamique…	Inserir live template…	Live-Template einfügen…	Wstaw szablon…	插入实时模板…	ライブテンプレートを挿入…
+Surround With…	Rodear con…	Entourer avec…	Envolver com…	Umschließen mit…	Otocz…	包围方式…	囲む…
+Insert Live Template	Insertar live template	Insérer un modèle dynamique	Inserir live template	Live-Template einfügen	Wstaw szablon	插入实时模板	ライブテンプレートを挿入
+Surround With	Rodear con	Entourer avec	Envolver com	Umschließen mit	Otocz	包围方式	囲む

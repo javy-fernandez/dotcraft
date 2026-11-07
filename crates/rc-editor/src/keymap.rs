@@ -85,6 +85,10 @@ pub enum Action {
     CallHierarchy,
     /// ⌃H: base and derived types of the type at the caret.
     TypeHierarchy,
+    /// ⌘J: the live templates list.
+    InsertLiveTemplate,
+    /// ⌥⌘T: surround the selection with a template.
+    SurroundWith,
     // --- IDE (reported to the app)
     SearchEverywhere,
     GotoFile,
@@ -158,6 +162,8 @@ impl Action {
                 | ToggleBookmarkMnemonic
                 | CallHierarchy
                 | TypeHierarchy
+                | InsertLiveTemplate
+                | SurroundWith
         ) && !self.is_ide()
     }
 
@@ -432,6 +438,8 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::F3, c, ShowBookmarks),
         b(Key::H, ctrl_a, CallHierarchy),
         b(Key::H, ctrl, TypeHierarchy),
+        b(Key::J, c, InsertLiveTemplate),
+        b(Key::T, ca, SurroundWith),
         b(Key::F3, s, FindPrevious),
         b(Key::F2, none, NextError),
         b(Key::F2, s, PreviousError),
@@ -570,7 +578,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         b(Key::F9, s, Evaluate),
     ];
     // Bookmarks: F11 and Shift+F11 step in and out, so Rider's F11 family moves to Ctrl.
-    v.extend([b(Key::F11, ca, ToggleBookmark), b(Key::F11, c, ToggleBookmarkMnemonic), b(Key::F11, cs, ShowBookmarks), b(Key::H, ca, CallHierarchy), b(Key::H, cas, TypeHierarchy)]);
+    v.extend([b(Key::F11, ca, ToggleBookmark), b(Key::F11, c, ToggleBookmarkMnemonic), b(Key::F11, cs, ShowBookmarks), b(Key::H, ca, CallHierarchy), b(Key::H, cas, TypeHierarchy), b(Key::J, c, InsertLiveTemplate), b(Key::T, ca, SurroundWith)]);
     let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
     v.extend(digits.into_iter().enumerate().map(|(i, k)| b(k, c, GotoBookmark(i as u8 + 1))));
     if visual_studio {

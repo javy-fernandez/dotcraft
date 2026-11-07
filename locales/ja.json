@@ -287,7 +287,11 @@
     "Current": "現在",
     "Restored; ⌘Z undoes it": "復元しました。⌘Z で元に戻せます",
     "Today": "今日",
-    "Yesterday": "昨日"
+    "Yesterday": "昨日",
+    "Insert Live Template…": "ライブテンプレートを挿入…",
+    "Surround With…": "囲む…",
+    "Insert Live Template": "ライブテンプレートを挿入",
+    "Surround With": "囲む"
   },
   "terminal": {
     "Local": "ローカル",

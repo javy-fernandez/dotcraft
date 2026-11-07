@@ -287,7 +287,11 @@
     "Current": "当前",
     "Restored; ⌘Z undoes it": "已恢复；⌘Z 可撤销",
     "Today": "今天",
-    "Yesterday": "昨天"
+    "Yesterday": "昨天",
+    "Insert Live Template…": "插入实时模板…",
+    "Surround With…": "包围方式…",
+    "Insert Live Template": "插入实时模板",
+    "Surround With": "包围方式"
   },
   "terminal": {
     "Local": "本地",

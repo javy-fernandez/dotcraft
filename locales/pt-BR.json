@@ -287,7 +287,11 @@
     "Current": "Atual",
     "Restored; ⌘Z undoes it": "Restaurado; ⌘Z desfaz",
     "Today": "Hoje",
-    "Yesterday": "Ontem"
+    "Yesterday": "Ontem",
+    "Insert Live Template…": "Inserir live template…",
+    "Surround With…": "Envolver com…",
+    "Insert Live Template": "Inserir live template",
+    "Surround With": "Envolver com"
   },
   "terminal": {
     "Local": "Local",

@@ -546,6 +546,8 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         || tr("Code"),
         &[
             &act(Action::Complete, || tr("Code Completion")),
+            &act(Action::InsertLiveTemplate, || tr("Insert Live Template…")),
+            &act(Action::SurroundWith, || tr("Surround With…")),
             &act(Action::ParameterInfo, || tr("Parameter Info")),
             &act(Action::QuickDoc, || tr("Quick Documentation")),
             &act(Action::ShowIntentions, || tr("Show Context Actions")),

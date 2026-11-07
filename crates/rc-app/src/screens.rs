@@ -821,3 +821,33 @@ fn screens_local_history() {
     assert!(h.state().vcs.diff.is_some());
     h.render().unwrap().save(out.join("local-history-dark.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/templates-dark.png"]
+fn screens_templates() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    let dir = tempfile::Builder::new().prefix("dotcraft-templates").tempdir().unwrap();
+    let file = dunce::canonicalize(dir.path()).unwrap().join("Cart.cs");
+    std::fs::write(&file, "public class Cart\n{\n    public void Checkout()\n    {\n        Pay();\n        Ship();\n    }\n}\n").unwrap();
+    app.open_workspace(file.parent().unwrap());
+    app.open_file(&file);
+    // ⌥⌘T on the two calls: "try" puts them in a try/catch.
+    let d = app.docs.active_doc_mut().unwrap();
+    let text = d.editor.buffer.rope().to_string();
+    let (a, b) = (text.find("        Pay").unwrap(), text.find("    }\n}").unwrap());
+    d.editor.selection = rc_text::Selection::single(rc_text::Range::new(a, b));
+    app.dialog = Some(crate::ui::dialogs::Dialog::Templates { surround: true, filter: String::new(), selected: 0 });
+    let mut h = harness(app, vec2(1280.0, 720.0));
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("templates-surround-dark.png")).unwrap();
+    h.get_by_label("try").click();
+    h.run_steps(3);
+    let text = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(text.contains("        try\n        {\n            Pay();\n            Ship();\n        }\n        catch (Exception e)\n"), "{text}");
+    h.render().unwrap().save(out.join("templates-dark.png")).unwrap();
+}

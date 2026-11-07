@@ -1372,6 +1372,9 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
                 state.apply(e, EditKind::Other);
             }
         }
+        Indent if !ro && state.snippet_jump(false) => {}
+        Unindent if !ro && state.snippet_jump(true) => {}
+        Indent if !ro && expand_template(state) => {}
         Indent if !ro => {
             let multi_line = sel.ranges().iter().any(|r| rope.char_to_line(r.start()) != rope.char_to_line(r.end()));
             let e = if multi_line { commands::indent_lines(&rope, &sel, &indent, false) } else { commands::insert_tab(&rope, &sel, &indent) };
@@ -1448,6 +1451,8 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         Escape => {
             if state.popups.any() {
                 state.popups.close_all();
+            } else if state.snippet.take().is_some() {
+                state.selection = Selection::point(state.caret());
             } else if sel.len() > 1 {
                 state.selection = sel.clone().into_primary();
             } else if !sel.primary().is_empty() {
@@ -1529,4 +1534,36 @@ fn toggle_block_comment(rope: &rc_text::Rope, sel: &Selection, open: &str, close
     let cs = rc_text::ChangeSet::new(changes);
     let selection = sel.map(&cs);
     commands::Edited { changes: cs, selection }
+}
+
+/// Tab after a live template's abbreviation (C#): expands it. Only at the start of a statement
+/// or member (after whitespace, `{`, `;` or `}`), not after `.` or inside an identifier.
+fn expand_template(state: &mut EditorState) -> bool {
+    if state.lang() != rc_syntax::Lang::CSharp || state.selection.len() != 1 || !state.selection.primary().is_empty() {
+        return false;
+    }
+    let rope = state.buffer.rope();
+    let caret = state.caret();
+    let mut start = caret;
+    while start > 0 && {
+        let c = rope.char(start - 1);
+        c.is_ascii_alphanumeric() || c == '_'
+    } {
+        start -= 1;
+    }
+    if start == caret || (start > 0 && !matches!(rope.char(start - 1), ' ' | '\t' | '\n' | '{' | ';' | '}')) {
+        return false;
+    }
+    if caret < rope.len_chars() && {
+        let c = rope.char(caret);
+        c.is_alphanumeric() || c == '_'
+    } {
+        return false;
+    }
+    let key: String = rope.slice(start..caret).to_string();
+    let Some(t) = crate::templates::find(&key) else { return false };
+    let stem = state.path.as_ref().and_then(|p| p.file_stem()).map_or_else(|| "Name".to_string(), |s| s.to_string_lossy().into_owned());
+    let body = crate::templates::fill(t.body, &stem);
+    state.insert_snippet(start, caret, &body);
+    true
 }

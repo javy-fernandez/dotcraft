@@ -21,6 +21,8 @@ pub enum Dialog {
     Settings { draft: Box<Settings>, page: SettingsPage },
     About,
     GotoLine { text: String, focus: bool },
+    /// ⌘J / ⌥⌘T: live templates at the caret, or to surround the selection.
+    Templates { surround: bool, filter: String, selected: usize },
     /// ⌥F3: pick the bookmark's digit or letter.
     BookmarkMnemonic { path: PathBuf, line: usize },
     NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, error: Option<String> },
@@ -66,6 +68,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::About => about(app, ctx),
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
         Dialog::BookmarkMnemonic { path, line } => bookmark_mnemonic(app, ctx, path, *line),
+        Dialog::Templates { surround, filter, selected } => templates(app, ctx, *surround, filter, selected),
         Dialog::NewFile { dir, name, kind, error } => new_file(app, ctx, dir, name, *kind, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
@@ -803,6 +806,85 @@ fn recent_files(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize, filt
 }
 
 /// The list of context actions, under the caret like IntelliJ's bulb popup.
+/// The live template list at the caret: typing filters, Enter or a click inserts.
+fn templates(app: &mut DotCraftApp, ctx: &Context, surround: bool, filter: &mut String, selected: &mut usize) -> Outcome {
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let pos = app.caret_screen.unwrap_or(egui::pos2(200.0, 200.0));
+    let all = if surround { rc_editor::templates::SURROUND } else { rc_editor::templates::CSHARP };
+    for ev in ctx.input(|i| i.events.clone()) {
+        match ev {
+            egui::Event::Text(t) => {
+                filter.push_str(&t);
+                *selected = 0;
+            }
+            egui::Event::Key { key: Key::Backspace, pressed: true, .. } => {
+                filter.pop();
+                *selected = 0;
+            }
+            _ => {}
+        }
+    }
+    let f = filter.to_lowercase();
+    let list: Vec<&rc_editor::templates::Template> = all.iter().filter(|t| t.key.contains(&f) || t.description.to_lowercase().contains(&f)).collect();
+    let n = list.len();
+    let mut chosen = None;
+    let mut close = false;
+    if ctx.input(|i| i.key_pressed(Key::ArrowDown)) {
+        *selected = (*selected + 1) % n.max(1);
+    }
+    if ctx.input(|i| i.key_pressed(Key::ArrowUp)) {
+        *selected = (*selected + n.max(1) - 1) % n.max(1);
+    }
+    if ctx.input(|i| i.key_pressed(Key::Enter) || i.key_pressed(Key::Tab)) && n > 0 {
+        chosen = Some(*selected);
+    }
+    if ctx.input(|i| i.key_pressed(Key::Escape)) {
+        close = true;
+    }
+    let title = if surround { tr("Surround With") } else { tr("Insert Live Template") };
+    let area = egui::Area::new(Id::new("templates")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+        egui::Frame::NONE.fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(8).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
+            ui.set_min_width(340.0);
+            let head = if filter.is_empty() { title.to_string() } else { format!("{title}: {filter}") };
+            ui.label(egui::RichText::new(head).size(12.0).color(p.muted));
+            egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                for (i, t) in list.iter().enumerate() {
+                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(340.0), 24.0), egui::Sense::click());
+                    if i == *selected {
+                        ui.painter().rect_filled(r, 4.0, p.selection);
+                    } else if resp.hovered() {
+                        ui.painter().rect_filled(r, 4.0, p.row_hover);
+                    }
+                    let k = ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, t.key, FontId::monospace(12.5), p.text);
+                    ui.painter().text(egui::pos2(k.right().max(r.left() + 90.0) + 8.0, r.center().y), Align2::LEFT_CENTER, t.description, FontId::proportional(12.5), p.muted);
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, t.key));
+                    if resp.clicked() {
+                        chosen = Some(i);
+                    }
+                }
+            });
+        });
+    });
+    // A press outside the list closes it (the rows themselves take the clicks).
+    let outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !area.response.rect.contains(p)));
+    if outside && chosen.is_none() {
+        close = true;
+    }
+    if let Some(i) = chosen
+        && let Some(t) = list.get(i).copied()
+        && let Some(doc) = app.docs.active_doc_mut()
+    {
+        if surround {
+            rc_editor::templates::surround(&mut doc.editor, t);
+        } else {
+            rc_editor::templates::insert(&mut doc.editor, t);
+        }
+        app.focus_editor = true;
+        return Outcome::Close;
+    }
+    if close { Outcome::Close } else { Outcome::Keep }
+}
+
 fn code_actions(app: &mut DotCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: &mut usize) -> Outcome {
     use rc_lsp::lsp_types::CodeActionOrCommand as A;
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
