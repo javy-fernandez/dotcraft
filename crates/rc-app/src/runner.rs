@@ -215,7 +215,7 @@ impl Runner {
         self.build.as_ref().is_some_and(|b| b.handle.is_some()) || self.tests.as_ref().is_some_and(|t| t.running) || self.runs.iter().any(|r| r.running())
     }
 
-    fn dotnet(&mut self) -> Result<Dotnet, String> {
+    pub fn dotnet(&mut self) -> Result<Dotnet, String> {
         self.dotnet.clone().ok_or_else(|| tr("The .NET SDK was not found. Install it or set its path in Settings › Tools.").to_string())
     }
 
@@ -425,7 +425,13 @@ impl Runner {
     /// Runs every test of the workspace: the "All Tests" configuration, or `dotnet test` on the
     /// solution or folder when no test project was recognised (it still finds them).
     pub fn run_all_tests(&mut self, workspace: &Path) -> Vec<RunnerOutput> {
-        let target = self
+        let target = self.all_tests_target(workspace);
+        self.run_tests(&target, None)
+    }
+
+    /// What `dotnet test` runs for "all tests": the solution, the only test project, or the folder.
+    pub fn all_tests_target(&self, workspace: &Path) -> PathBuf {
+        self
             .configs
             .iter()
             .find_map(|c| match &c.kind {
@@ -437,8 +443,7 @@ impl Runner {
                 let tests: Vec<&PathBuf> = self.configs.iter().filter_map(|c| if let ConfigKind::Tests { target } = &c.kind { Some(target) } else { None }).collect();
                 (tests.len() == 1).then(|| tests[0].clone())
             })
-            .unwrap_or_else(|| workspace.to_path_buf());
-        self.run_tests(&target, None)
+            .unwrap_or_else(|| workspace.to_path_buf())
     }
 
     /// Runs the tests that failed in the last run.

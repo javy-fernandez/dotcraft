@@ -305,7 +305,16 @@
     "Sending…": "正在发送…",
     "Body": "正文",
     "Headers": "标头",
-    "No request at this line": "此行没有请求"
+    "No request at this line": "此行没有请求",
+    "Coverage": "覆盖率",
+    "Run All Tests with Coverage": "运行所有测试并收集覆盖率",
+    "No coverage yet": "尚无覆盖率",
+    "Run the tests with coverage to see which lines they reach.": "运行带覆盖率的测试，查看它们覆盖了哪些行。",
+    "Show Coverage in Editor": "在编辑器中显示覆盖率",
+    "{pc}% of lines ({covered}/{total})": "{pc}% 的行（{covered}/{total}）",
+    "Running {project}…": "正在运行 {project}…",
+    "Building…": "正在生成…",
+    "The build failed with {n} errors": "生成失败，有 {n} 个错误"
   },
   "terminal": {
     "Local": "本地",
@@ -506,7 +515,6 @@
     "Add a watch (Enter)": "添加监视（回车）",
     "Add to Watches": "添加到监视",
     "Breakpoint at {file}:{line}": "断点位于 {file}:{line}",
-    "Building…": "正在生成…",
     "Cannot evaluate while running": "运行时无法求值",
     "Choose an application run configuration to debug": "请选择要调试的应用程序运行配置",
     "Condition": "条件",

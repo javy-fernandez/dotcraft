@@ -37,6 +37,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::LocalHistory => local_history_window(app, ui),
         ToolWindow::HttpClient => http_client_window(app, ui),
         ToolWindow::Endpoints => endpoints_window(app, ui),
+        ToolWindow::Coverage => coverage_window(app, ui),
         ToolWindow::Bookmarks => {
             if header(ui, tw.title()) {
                 app.toggle_tool(tw);
@@ -100,6 +101,138 @@ fn list_row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, s
     }
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     resp
+}
+
+/// A coverage bar: the covered part green, the rest red.
+fn coverage_bar(ui: &Ui, rect: Rect, percent: f64) {
+    let p = rc_kit::pal(ui);
+    ui.painter().rect_filled(rect, 2.0, egui::Color32::from_rgb(0xE5, 0x53, 0x53).gamma_multiply(0.75));
+    let w = rect.width() * (percent / 100.0).clamp(0.0, 1.0) as f32;
+    ui.painter().rect_filled(Rect::from_min_size(rect.min, vec2(w, rect.height())), 2.0, egui::Color32::from_rgb(0x5F, 0xB8, 0x65));
+    let _ = p;
+}
+
+/// Coverage: total, then assemblies and their classes with a bar each; double click opens.
+fn coverage_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, tr("Coverage"), theme::bold(13.0), p.text);
+    let mut x = t.right() + 14.0;
+    if let Some(rep) = &app.coverage.report
+        && let Some(pc) = rep.total.percent()
+    {
+        let s = ui.painter().text(pos2(x, r.center().y), Align2::LEFT_CENTER, rc_kit::i18n::trf("{pc}% of lines ({covered}/{total})", &[("pc", &format!("{pc:.0}")), ("covered", &rep.total.covered), ("total", &rep.total.total)]), FontId::proportional(12.0), p.muted);
+        x = s.right() + 12.0;
+    }
+    if app.coverage.running {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
+        ui.painter().text(pos2(x, r.center().y), Align2::LEFT_CENTER, &app.coverage.status, FontId::proportional(12.0), p.muted);
+    }
+    let mut clicked = None;
+    let running = app.coverage.running;
+    let has = app.coverage.report.is_some();
+    let actions = [
+        (rc_kit::ico::HIDE, tr("Hide"), true),
+        (if running { rc_kit::ico::STOP } else { rc_kit::ico::RUN_COVERAGE }, if running { tr("Stop") } else { tr("Run All Tests with Coverage") }, app.workspace.is_some()),
+        (rc_kit::ico::SHOW, tr("Show Coverage in Editor"), has),
+    ];
+    for (i, (icon, tip, enabled)) in actions.into_iter().enumerate() {
+        let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0 * (i + 1) as f32, r.center().y - 13.0), vec2(26.0, 26.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        let resp = if i == 2 { theme::icon_toggle(&mut child, icon, app.coverage.show_in_editor && has, tip) } else { theme::icon_button(&mut child, icon, enabled, tip) };
+        if resp.clicked() && enabled {
+            clicked = Some(i);
+        }
+    }
+    match clicked {
+        Some(0) => {
+            app.toggle_tool(ToolWindow::Coverage);
+            return;
+        }
+        Some(1) if running => app.coverage.stop(),
+        Some(1) => app.run_coverage(),
+        Some(2) => app.coverage.show_in_editor = !app.coverage.show_in_editor,
+        _ => {}
+    }
+    for w in app.coverage.warnings.clone() {
+        ui.horizontal(|ui| {
+            ui.add_space(12.0);
+            rc_kit::icons::image(ui, rc_kit::ico::WARNING, 14.0);
+            ui.label(egui::RichText::new(w).size(12.0).color(p.muted));
+        });
+    }
+    if let Some(e) = app.coverage.error.clone() {
+        ui.horizontal(|ui| {
+            ui.add_space(12.0);
+            rc_kit::icons::image(ui, rc_kit::ico::ERROR, 14.0);
+            ui.label(egui::RichText::new(e).size(12.5).color(p.error));
+        });
+    }
+    let Some(rep) = &app.coverage.report else {
+        if !running && app.coverage.error.is_none() {
+            let (title, hint) = empty_text(ToolWindow::Coverage);
+            if empty_state_with(ui, ToolWindow::Coverage.icon(), title, hint, app.workspace.is_some().then_some(tr("Run All Tests with Coverage"))) {
+                app.run_coverage();
+            }
+        }
+        return;
+    };
+    let mut toggle: Option<String> = None;
+    let mut open: Option<(std::path::PathBuf, usize)> = None;
+    egui::ScrollArea::vertical().id_salt("coverage").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for a in &rep.assemblies {
+            let expanded = app.coverage.expanded.contains(&a.name);
+            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(420.0), 24.0), Sense::click());
+            if resp.hovered() {
+                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+            }
+            icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.left() + 18.0, rect.center().y), vec2(16.0, 16.0)), if expanded { rc_kit::ico::CHEVRON_DOWN } else { rc_kit::ico::CHEVRON_RIGHT }, &p, true);
+            icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.left() + 36.0, rect.center().y), vec2(16.0, 16.0)), rc_kit::ico::PROJECT, &p, true);
+            ui.painter().text(pos2(rect.left() + 50.0, rect.center().y), Align2::LEFT_CENTER, &a.name, theme::bold(13.0), p.text);
+            coverage_row_stats(ui, rect, a.ratio.percent(), a.ratio.covered, a.ratio.total);
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &a.name));
+            if resp.clicked() {
+                toggle = Some(a.name.clone());
+            }
+            if !expanded {
+                continue;
+            }
+            for c in rep.classes.iter().filter(|c| c.assembly == a.name) {
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(420.0), 24.0), Sense::click());
+                if resp.hovered() {
+                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+                }
+                icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.left() + 54.0, rect.center().y), vec2(16.0, 16.0)), rc_kit::ico::CLASS, &p, true);
+                let name = c.name.rsplit('.').next().unwrap_or(&c.name);
+                ui.painter().text(pos2(rect.left() + 68.0, rect.center().y), Align2::LEFT_CENTER, name, FontId::proportional(13.0), p.text);
+                coverage_row_stats(ui, rect, c.ratio.percent(), c.ratio.covered, c.ratio.total);
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name));
+                if resp.double_clicked() {
+                    open = Some((c.file.clone(), c.lines.iter().next().copied().unwrap_or(0)));
+                }
+            }
+        }
+    });
+    if let Some(n) = toggle
+        && !app.coverage.expanded.remove(&n)
+    {
+        app.coverage.expanded.insert(n);
+    }
+    if let Some((path, line)) = open {
+        app.open_at(&path, line, 0);
+    }
+}
+
+/// Right side of a coverage row: the percentage, its bar and "covered/total".
+fn coverage_row_stats(ui: &Ui, rect: Rect, percent: Option<f64>, covered: u32, total: u32) {
+    let p = rc_kit::pal(ui);
+    let x = (rect.right() - 300.0).max(rect.left() + 260.0);
+    let pc = percent.unwrap_or(0.0);
+    ui.painter().text(pos2(x, rect.center().y), Align2::RIGHT_CENTER, format!("{pc:.0}%"), FontId::monospace(12.0), p.text);
+    coverage_bar(ui, Rect::from_min_size(pos2(x + 10.0, rect.center().y - 4.0), vec2(140.0, 8.0)), pc);
+    ui.painter().text(pos2(x + 160.0, rect.center().y), Align2::LEFT_CENTER, format!("{covered}/{total}"), FontId::proportional(12.0), p.muted);
 }
 
 /// A coloured HTTP method badge ("GET" green, "POST" blue…); returns its right edge.
@@ -900,6 +1033,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Nuget => ("NuGet", ""),
         ToolWindow::Monitoring => ("", ""),
         ToolWindow::HttpClient => (tr("No requests sent"), tr("Open a .http file and click ▶ next to a request, or generate one from the Endpoints window.")),
+        ToolWindow::Coverage => (tr("No coverage yet"), tr("Run the tests with coverage to see which lines they reach.")),
         ToolWindow::Endpoints => (tr("No endpoints"), tr("Controllers and minimal APIs of the solution show up here.")),
         ToolWindow::LocalHistory => (tr("No local history"), tr("A copy of the file is kept each time it is saved or changed by another app.")),
         ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Press ⌃⌥H on a method for its calls, or ⌃H on a type for its base and derived types.")),

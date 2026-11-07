@@ -672,6 +672,17 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
             icons::paint(&painter, r, ic, pal, true);
         }
+        // Coverage bar (the VCS bar wins on changed lines).
+        if let Some(mark) = state.coverage.get(&l)
+            && !state.line_changes.contains_key(&l)
+        {
+            let color = match mark {
+                crate::state::CoverageMark::Covered => egui::Color32::from_rgb(0x5F, 0xB8, 0x65),
+                crate::state::CoverageMark::Partial => egui::Color32::from_rgb(0xE0, 0xB0, 0x40),
+                crate::state::CoverageMark::NotCovered => egui::Color32::from_rgb(0xE5, 0x53, 0x53),
+            };
+            painter.rect_filled(Rect::from_min_size(pos2(m.vcs_x, y), vec2(4.0, m.row_h)), 0.0, color);
+        }
         // VCS change bar.
         if let Some(change) = state.line_changes.get(&l) {
             let (color, r) = match change {

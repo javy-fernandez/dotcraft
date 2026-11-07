@@ -305,7 +305,16 @@
     "Sending…": "Wird gesendet…",
     "Body": "Body",
     "Headers": "Header",
-    "No request at this line": "Keine Anfrage in dieser Zeile"
+    "No request at this line": "Keine Anfrage in dieser Zeile",
+    "Coverage": "Abdeckung",
+    "Run All Tests with Coverage": "Alle Tests mit Abdeckung ausführen",
+    "No coverage yet": "Noch keine Abdeckung",
+    "Run the tests with coverage to see which lines they reach.": "Führen Sie die Tests mit Abdeckung aus, um zu sehen, welche Zeilen sie erreichen.",
+    "Show Coverage in Editor": "Abdeckung im Editor anzeigen",
+    "{pc}% of lines ({covered}/{total})": "{pc} % der Zeilen ({covered}/{total})",
+    "Running {project}…": "{project} wird ausgeführt…",
+    "Building…": "Wird erstellt…",
+    "The build failed with {n} errors": "Der Build ist mit {n} Fehlern fehlgeschlagen"
   },
   "terminal": {
     "Local": "Lokal",
@@ -506,7 +515,6 @@
     "Add a watch (Enter)": "Überwachung hinzufügen (Eingabe)",
     "Add to Watches": "Zu Überwachungen hinzufügen",
     "Breakpoint at {file}:{line}": "Haltepunkt bei {file}:{line}",
-    "Building…": "Wird erstellt…",
     "Cannot evaluate while running": "Während der Ausführung nicht auswertbar",
     "Choose an application run configuration to debug": "Wählen Sie eine Anwendungs-Ausführungskonfiguration zum Debuggen",
     "Condition": "Bedingung",

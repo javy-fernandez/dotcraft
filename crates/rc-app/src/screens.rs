@@ -896,3 +896,28 @@ fn screens_http_client_and_endpoints() {
     h.render().unwrap().save(out.join("endpoints-dark.png")).unwrap();
     h.state_mut().runner.stop_all();
 }
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; runs Shop's tests with coverage and writes target/snapshots/coverage-dark.png"]
+fn screens_coverage() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    let calc = fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs");
+    app.open_file(&calc);
+    app.run_coverage();
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "coverage", |a| !a.coverage.running && (a.coverage.report.is_some() || a.coverage.error.is_some()));
+    assert!(h.state().coverage.error.is_none(), "{:?}", h.state().coverage.error);
+    let d = h.state().docs.active_doc().unwrap();
+    let line = d.editor.buffer.rope().to_string().lines().position(|l| l.contains("subtotal += line.Subtotal")).unwrap();
+    assert_eq!(d.editor.coverage.get(&line), Some(&rc_editor::CoverageMark::Covered));
+    h.state_mut().coverage.expanded.insert("Shop.Core".into());
+    h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Coverage, 320.0);
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("coverage-dark.png")).unwrap();
+}

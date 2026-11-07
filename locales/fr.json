@@ -305,7 +305,16 @@
     "Sending…": "Envoi…",
     "Body": "Corps",
     "Headers": "En-têtes",
-    "No request at this line": "Aucune requête à cette ligne"
+    "No request at this line": "Aucune requête à cette ligne",
+    "Coverage": "Couverture",
+    "Run All Tests with Coverage": "Exécuter tous les tests avec couverture",
+    "No coverage yet": "Pas encore de couverture",
+    "Run the tests with coverage to see which lines they reach.": "Exécutez les tests avec couverture pour voir quelles lignes ils atteignent.",
+    "Show Coverage in Editor": "Afficher la couverture dans l'éditeur",
+    "{pc}% of lines ({covered}/{total})": "{pc} % des lignes ({covered}/{total})",
+    "Running {project}…": "Exécution de {project}…",
+    "Building…": "Compilation…",
+    "The build failed with {n} errors": "La compilation a échoué avec {n} erreurs"
   },
   "terminal": {
     "Local": "Local",
@@ -506,7 +515,6 @@
     "Add a watch (Enter)": "Ajouter un espion (Entrée)",
     "Add to Watches": "Ajouter aux espions",
     "Breakpoint at {file}:{line}": "Point d'arrêt à {file}:{line}",
-    "Building…": "Compilation…",
     "Cannot evaluate while running": "Impossible d'évaluer pendant l'exécution",
     "Choose an application run configuration to debug": "Choisissez une configuration d'exécution d'application à déboguer",
     "Condition": "Condition",

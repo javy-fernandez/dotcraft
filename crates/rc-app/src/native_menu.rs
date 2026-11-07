@@ -36,6 +36,7 @@ pub enum MenuCommand {
     CloseProject,
     ReloadFromDisk,
     ShowHistory,
+    RunCoverage,
     /// An entry of File › Open Recent (index into [`NativeMenu::recent_path`]).
     OpenRecent(usize),
     ClearRecent,
@@ -64,6 +65,7 @@ impl MenuCommand {
             MenuCommand::CloseProject => ico::CLOSE,
             MenuCommand::ReloadFromDisk => ico::REFRESH,
             MenuCommand::ShowHistory => ico::HISTORY,
+            MenuCommand::RunCoverage => ico::RUN_COVERAGE,
             MenuCommand::EditRunConfig => ico::SETTINGS,
             MenuCommand::AddUsings => ico::NAMESPACE,
             MenuCommand::Undo => ico::UNDO,
@@ -565,6 +567,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::Debug, || tr("Debug")),
             &act(Action::StopRun, || tr("Stop")),
             &act(Action::RunTests, || tr("Run Tests")),
+            &item(MenuCommand::RunCoverage, || tr("Run All Tests with Coverage"), None),
             &item(MenuCommand::EditRunConfig, || tr("Edit Run Configuration…"), None),
             &sep(),
             &act(Action::StepOver, || tr("Step Over")),

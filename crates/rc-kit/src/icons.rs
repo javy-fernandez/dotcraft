@@ -262,6 +262,7 @@ pub mod ico {
         TW_TODO = "toolwindows/todo",
         TW_HIERARCHY = "toolwindows/hierarchy",
         TW_HTTP = "toolwindows/httpClient",
+        RUN_COVERAGE = "run/runWithCoverage",
         TW_ENDPOINTS = "runConfigurations/webApp",
         TW_BOOKMARKS = "toolwindows/bookmarks",
         TW_DEPENDENCIES = "toolwindows/dependencies",

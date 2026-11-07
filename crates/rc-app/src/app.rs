@@ -65,6 +65,8 @@ pub struct DotCraftApp {
     pub http: crate::web::HttpClient,
     /// Endpoints window.
     pub endpoints: crate::web::Endpoints,
+    /// Test coverage run and report.
+    pub coverage: crate::coverage::Coverage,
     pub history_selected: Option<usize>,
     /// The update check under way, and whether it was asked for (Check for Updates…).
     update_check: Option<(std::sync::mpsc::Receiver<Result<crate::update::Release, String>>, bool)>,
@@ -167,6 +169,7 @@ impl DotCraftApp {
             history_file: None,
             http: crate::web::HttpClient::new(waker.clone()),
             endpoints: crate::web::Endpoints::new(),
+            coverage: crate::coverage::Coverage::new(waker.clone()),
             history_selected: None,
             update_check: None,
             update: None,
@@ -330,6 +333,20 @@ impl DotCraftApp {
         self.workspace = Some(WorkspaceState { ws, solution });
         self.refresh_endpoints();
         self.restore_session(session);
+    }
+
+    /// Runs every test collecting coverage (coverlet), then shows the Coverage window.
+    pub fn run_coverage(&mut self) {
+        let Some(ws) = self.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) else { return };
+        self.save_all_docs();
+        match self.runner.dotnet() {
+            Ok(dotnet) => {
+                let target = self.runner.all_tests_target(&ws);
+                self.coverage.start(&dotnet, &target);
+                self.dock.show(ToolWindow::Coverage);
+            }
+            Err(e) => self.notify(e, true),
+        }
     }
 
     /// Scans the projects' controllers and minimal APIs for the Endpoints window.
@@ -1410,6 +1427,7 @@ impl eframe::App for DotCraftApp {
                     MenuCommand::CloseProject => self.close_project(),
                     MenuCommand::ReloadFromDisk => self.reload_active_from_disk(),
                     MenuCommand::ShowHistory => self.show_local_history(None),
+                    MenuCommand::RunCoverage => self.run_coverage(),
                     MenuCommand::OpenRecent(n) => {
                         if let Some(p) = self.native_menu.as_ref().and_then(|m| m.recent_path(n)) {
                             self.open_path(&p);
@@ -1490,6 +1508,10 @@ impl eframe::App for DotCraftApp {
         self.update_http_markers();
         self.http.poll();
         self.endpoints.poll();
+        if self.coverage.poll() {
+            self.dock.show(ToolWindow::Coverage);
+        }
+        self.coverage.mark(&mut self.docs);
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);

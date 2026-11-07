@@ -248,6 +248,7 @@ pub fn tests(app: &mut DotCraftApp, ui: &mut Ui) {
         (ico::RESTART_FAILED, tr("Rerun Failed Tests"), has && !running),
         (ico::STOP, tr("Stop"), running),
         (if show_passed { ico::SHOW_PASSED } else { ico::SHOW_IGNORED }, tr("Show Passed"), has),
+        (ico::RUN_COVERAGE, tr("Run All Tests with Coverage"), ws && !running && !app.coverage.running),
     ];
     let mut clicked = header(ui, tr("Tests"), &actions);
     if app.runner.tests.is_none() {
@@ -281,6 +282,7 @@ pub fn tests(app: &mut DotCraftApp, ui: &mut Ui) {
                 t.show_passed = !t.show_passed;
             }
         }
+        Some(5) => app.run_coverage(),
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Tests),
         _ => {}
     }

@@ -27,6 +27,7 @@ pub enum ToolWindow {
     LocalHistory,
     HttpClient,
     Endpoints,
+    Coverage,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,7 +63,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 20] = [
+    pub const ALL: [ToolWindow; 21] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -70,6 +71,7 @@ impl ToolWindow {
         ToolWindow::Run,
         ToolWindow::Debug,
         ToolWindow::Tests,
+        ToolWindow::Coverage,
         ToolWindow::Build,
         ToolWindow::Monitoring,
         ToolWindow::Endpoints,
@@ -107,6 +109,7 @@ impl ToolWindow {
             ToolWindow::LocalHistory => "local_history",
             ToolWindow::HttpClient => "http_client",
             ToolWindow::Endpoints => "endpoints",
+            ToolWindow::Coverage => "coverage",
         }
     }
 
@@ -132,6 +135,7 @@ impl ToolWindow {
             ToolWindow::LocalHistory => tr("Local History"),
             ToolWindow::HttpClient => tr("HTTP Client"),
             ToolWindow::Endpoints => tr("Endpoints"),
+            ToolWindow::Coverage => tr("Coverage"),
         }
     }
 
@@ -157,6 +161,7 @@ impl ToolWindow {
             ToolWindow::LocalHistory => ico::HISTORY,
             ToolWindow::HttpClient => ico::TW_HTTP,
             ToolWindow::Endpoints => ico::TW_ENDPOINTS,
+            ToolWindow::Coverage => ico::RUN_COVERAGE,
         }
     }
 

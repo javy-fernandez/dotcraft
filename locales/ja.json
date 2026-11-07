@@ -305,7 +305,16 @@
     "Sending…": "送信中…",
     "Body": "ボディ",
     "Headers": "ヘッダー",
-    "No request at this line": "この行にリクエストはありません"
+    "No request at this line": "この行にリクエストはありません",
+    "Coverage": "カバレッジ",
+    "Run All Tests with Coverage": "すべてのテストをカバレッジ付きで実行",
+    "No coverage yet": "カバレッジはまだありません",
+    "Run the tests with coverage to see which lines they reach.": "カバレッジ付きでテストを実行すると、どの行に到達するかがわかります。",
+    "Show Coverage in Editor": "エディターにカバレッジを表示",
+    "{pc}% of lines ({covered}/{total})": "行の {pc}%（{covered}/{total}）",
+    "Running {project}…": "{project} を実行中…",
+    "Building…": "ビルド中…",
+    "The build failed with {n} errors": "ビルドは {n} 件のエラーで失敗しました"
   },
   "terminal": {
     "Local": "ローカル",
@@ -506,7 +515,6 @@
     "Add a watch (Enter)": "ウォッチを追加 (Enter)",
     "Add to Watches": "ウォッチに追加",
     "Breakpoint at {file}:{line}": "{file}:{line} のブレークポイント",
-    "Building…": "ビルド中…",
     "Cannot evaluate while running": "実行中は評価できません",
     "Choose an application run configuration to debug": "デバッグするアプリケーションの実行構成を選択してください",
     "Condition": "条件",
