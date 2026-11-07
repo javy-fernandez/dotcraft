@@ -72,13 +72,15 @@ impl HttpClient {
     }
 }
 
+/// A project's name, file and endpoints.
+pub type ProjectEndpoints = (String, PathBuf, Vec<Endpoint>);
+
 /// Endpoints of the solution's projects, scanned in the background.
 pub struct Endpoints {
-    /// (project name, project file, its endpoints).
-    pub projects: Vec<(String, PathBuf, Vec<Endpoint>)>,
+    pub projects: Vec<ProjectEndpoints>,
     pub scanning: bool,
     pub filter: String,
-    pending: Option<Receiver<Vec<(String, PathBuf, Vec<Endpoint>)>>>,
+    pending: Option<Receiver<Vec<ProjectEndpoints>>>,
 }
 
 impl Endpoints {
@@ -89,7 +91,7 @@ impl Endpoints {
     pub fn refresh(&mut self, projects: Vec<(String, PathBuf)>, waker: Waker) {
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let found: Vec<(String, PathBuf, Vec<Endpoint>)> = projects
+            let found: Vec<ProjectEndpoints> = projects
                 .into_iter()
                 .filter_map(|(name, path)| {
                     let dir = path.parent()?.to_path_buf();
