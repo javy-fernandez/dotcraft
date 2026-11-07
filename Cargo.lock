@@ -1230,6 +1230,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fallible-iterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1721,6 +1733,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "foldhash",
+]
+
+[[package]]
+name = "hashlink"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a596f1b20ed2cc5ecac41a164aaebc7258057060f06c0cf7a2ba3991ee7990fb"
+dependencies = [
+ "hashbrown 0.17.1",
 ]
 
 [[package]]
@@ -2259,6 +2280,17 @@ dependencies = [
  "libc",
  "plain",
  "redox_syscall 0.9.5",
+]
+
+[[package]]
+name = "libsqlite3-sys"
+version = "0.38.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1d20bef17f513b9b3004532233187769cd072d790971f4e4da0e346eb6401e8"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
 ]
 
 [[package]]
@@ -3523,6 +3555,7 @@ dependencies = [
  "egui_extras",
  "egui_kittest",
  "embed-resource",
+ "fallible-iterator",
  "image",
  "muda",
  "objc2 0.6.5",
@@ -3538,10 +3571,13 @@ dependencies = [
  "rc-term",
  "rc-text",
  "rc-vcs",
+ "reqwest",
  "rfd",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
  "wgpu",
 ]
 
@@ -3553,8 +3589,11 @@ dependencies = [
  "crossbeam-channel",
  "dirs",
  "dunce",
+ "globset",
+ "libc",
  "notify",
  "parking_lot",
+ "regex",
  "serde",
  "serde_json",
  "tempfile",
@@ -3675,9 +3714,13 @@ dependencies = [
  "streaming-iterator",
  "tree-sitter",
  "tree-sitter-c-sharp",
+ "tree-sitter-css",
+ "tree-sitter-html",
+ "tree-sitter-javascript",
  "tree-sitter-json",
  "tree-sitter-md",
  "tree-sitter-razor-modern",
+ "tree-sitter-typescript",
  "tree-sitter-xml",
 ]
 
@@ -3933,6 +3976,31 @@ name = "roxmltree"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
+
+[[package]]
+name = "rsqlite-vfs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c51c9ae4df8a7fba42103df5c621fa3c37eccf3a3c650879e90fc48b11cc192c"
+dependencies = [
+ "hashbrown 0.16.1",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "rusqlite"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11438310b19e3109b6446c33d1ed5e889428cf2e278407bc7896bc4aaea43323"
+dependencies = [
+ "bitflags 2.13.2",
+ "fallible-iterator",
+ "fallible-streaming-iterator",
+ "hashlink",
+ "libsqlite3-sys",
+ "smallvec",
+ "sqlite-wasm-rs",
+]
 
 [[package]]
 name = "rustc-hash"
@@ -4431,6 +4499,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlite-wasm-rs"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc3efc0da82635d7e1ced0053bbbfa8c7ab9645d0bf36ceb4f7127bb85315d75"
+dependencies = [
+ "cc",
+ "js-sys",
+ "rsqlite-vfs",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4887,6 +4967,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-css"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5cbc5e18f29a2c6d6435891f42569525cf95435a3e01c2f1947abcde178686f"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-html"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "261b708e5d92061ede329babaaa427b819329a9d427a1d710abb0f67bbef63ee"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-javascript"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68204f2abc0627a90bdf06e605f5c470aa26fdcb2081ea553a04bdad756693f5"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-json"
 version = "0.24.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4917,6 +5027,16 @@ name = "tree-sitter-razor-modern"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fa817a6896a2c7e2f1f49c532de3000a1aadbd666b6a3e1770011b12e51bae8"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-typescript"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c5f76ed8d947a75cc446d5fccd8b602ebf0cde64ccf2ffa434d873d7a575eff"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -5049,6 +5169,12 @@ checksum = "4a0e2d11620c50695fe12bbbfde96b3477fe606e7284c22d505c12ce51214514"
 dependencies = [
  "serde_core",
 ]
+
+[[package]]
+name = "vcpkg"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vello_common"

@@ -697,9 +697,9 @@ pub fn detect_indent(buffer: &Buffer) -> Indent {
         }
     }
     if tabs > spaces2 + spaces4 {
-        Indent { unit: "\t".into(), tab_width: 4 }
+        Indent { unit: "\t".into(), tab_width: 4, prefer_tabs: true }
     } else if spaces2 > spaces4 * 2 {
-        Indent { unit: "  ".into(), tab_width: 4 }
+        Indent { unit: "  ".into(), tab_width: 4, prefer_tabs: false }
     } else {
         Indent::default()
     }

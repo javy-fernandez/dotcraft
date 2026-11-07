@@ -10,6 +10,8 @@ name = "dotcraft"
 path = "src/main.rs"
 
 [dependencies]
+rusqlite = { version = "=0.40.1", features = ["bundled", "hooks", "limits", "extra_check"] }
+fallible-iterator = "0.3"
 dunce.workspace = true
 anyhow.workspace = true
 serde.workspace = true
@@ -29,6 +31,8 @@ rc-term.workspace = true
 rc-search.workspace = true
 rc-vcs.workspace = true
 rc-dap.workspace = true
+tokio.workspace = true
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2"] }
 rfd = "0.17"
 dirs = "6"
 muda = { version = "0.21", default-features = false }

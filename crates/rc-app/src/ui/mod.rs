@@ -2,10 +2,14 @@
 //! sides, tool windows and the editor as rounded islands, status bar at the bottom.
 
 pub mod debug_window;
+pub mod database_window;
 pub mod dialogs;
+pub mod sdk_selection;
 pub mod editor_area;
 pub mod explorer;
 pub mod git;
+pub mod http_window;
+pub mod main_menu;
 pub mod markdown;
 pub mod new_project;
 pub mod nuget;

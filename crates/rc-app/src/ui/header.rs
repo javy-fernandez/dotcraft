@@ -79,11 +79,17 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     }
     let fullscreen = ui.input(|i| i.viewport().fullscreen.unwrap_or(false));
     ui.horizontal_centered(|ui| {
+        // Reserve the menu before measuring the toolbar's right-hand controls. In compact
+        // windows those controls can consume the entire split row's left-hand clip rect.
+        ui.spacing_mut().item_spacing.x = 4.0;
+        let zoom = ui.ctx().zoom_factor().max(0.1);
+        ui.add_space(rc_kit::window_chrome::leading_space(cfg!(target_os = "macos"), fullscreen, zoom));
+        let menu = theme::icon_button_sized(ui, ico::MENU, true, tr("Main Menu"), 30.0);
+        if menu.clicked() { crate::ui::main_menu::reset(ui.ctx()); }
+        egui::Popup::menu(&menu).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| crate::ui::main_menu::show(app, ui));
         theme::split_row(ui, |ui, side| match side {
             theme::Side::Left => {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                let zoom = ui.ctx().zoom_factor().max(0.1);
-                ui.add_space(rc_kit::window_chrome::leading_space(cfg!(target_os = "macos"), fullscreen, zoom));
                 project_widget(app, ui);
                 if app.workspace.is_some() {
                     // VCS widget: the current branch and the branches popup.
@@ -141,7 +147,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                             ui.close();
                         }
                     });
-                    if (app.runner.busy() || app.debugger.active()) && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked() {
+                    if (app.runner.busy() || app.debugger.active() || app.debugger.downloading.is_some()) && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked() {
                         app.pending.push(Action::StopRun);
                     }
                     if theme::icon_button_sized(ui, ico::DEBUG, true, &format!("{}{}", tr("Debug"), shortcut(Action::Debug)), 30.0).clicked() {
@@ -181,6 +187,11 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                                 app.edit_run_config(Some(name));
                                 ui.close();
                             }
+                        }
+                        ui.separator();
+                        if theme::menu_item(ui, Some(ico::DEBUG), tr("Attach to Process…"), false).clicked() {
+                            app.pending.push(Action::AttachProcess);
+                            ui.close();
                         }
                         // Compound configurations: several applications at once.
                         if app.runner.app_names().len() > 1 {

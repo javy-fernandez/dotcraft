@@ -164,6 +164,20 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
         empty_state(ui, ico::TW_VCS, tr("No Git repository"), tr("The workspace is not inside a Git repository."));
         return;
     }
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut app.vcs.show_stashes, false, tr("Log"));
+        ui.selectable_value(&mut app.vcs.show_stashes, true, tr("Stashes"));
+        if ui.add_enabled(app.vcs.busy.is_none(), egui::Button::new(tr("Refresh"))).clicked() {
+            app.vcs.refresh();
+        }
+        if app.vcs.busy.is_some() {
+            ui.spinner();
+        }
+    });
+    if app.vcs.show_stashes {
+        stashes_view(app, ui);
+        return;
+    }
     let p = rc_kit::pal(ui);
     let avail = ui.available_rect_before_wrap();
     let left = Rect::from_min_size(avail.min, vec2((avail.width() * 0.62).max(300.0), avail.height()));
@@ -253,6 +267,81 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
         ru.vertical_centered(|ui| ui.label(egui::RichText::new(tr("Select a commit to see its changes")).color(p.muted)));
     }
     ui.advance_cursor_after_rect(avail);
+}
+
+/// Stash operations run on the shared runtime. Destructive actions require an explicit
+/// confirmation tied to the selected stash hash rather than its displayed index.
+fn stashes_view(app: &mut DotCraftApp, ui: &mut Ui) {
+    let busy = app.vcs.busy.is_some();
+    ui.add_enabled_ui(!busy, |ui| {
+        ui.add(egui::TextEdit::singleline(&mut app.vcs.stash_message).hint_text(tr("Stash Message")));
+        ui.horizontal_wrapped(|ui| {
+            ui.checkbox(&mut app.vcs.stash_include_untracked, tr("Include untracked files"));
+            ui.checkbox(&mut app.vcs.stash_keep_index, tr("Keep staged changes"));
+            if ui.button(tr("Stash Changes")).clicked() {
+                if save_before_stash(app) {
+                    app.vcs.stash_push();
+                }
+            }
+        });
+        ui.checkbox(&mut app.vcs.stash_restore_index, tr("Restore staged changes"));
+    });
+    if let Some(error) = &app.vcs.error {
+        ui.colored_label(rc_kit::pal(ui).error, error);
+    }
+    ui.separator();
+    if let Some((stash, drop)) = app.vcs.stash_confirmation.clone() {
+        ui.group(|ui| {
+            ui.label(if drop { tr("Delete this stash permanently?") } else { tr("Apply and remove this stash?") });
+            ui.label(&stash.message);
+            ui.horizontal(|ui| {
+                if ui.add_enabled(!busy, egui::Button::new(if drop { tr("Confirm Drop") } else { tr("Confirm Pop") })).clicked() {
+                    app.vcs.stash_confirmation = None;
+                    if drop {
+                        app.vcs.stash_drop(&stash);
+                    } else {
+                        if save_before_stash(app) {
+                            app.vcs.stash_apply(&stash, true);
+                        }
+                    }
+                }
+                if ui.button(tr("Cancel")).clicked() {
+                    app.vcs.stash_confirmation = None;
+                }
+            });
+        });
+    }
+    let stashes = app.vcs.stashes.clone();
+    egui::ScrollArea::vertical().id_salt("git_stashes").show(ui, |ui| {
+        if stashes.is_empty() {
+            ui.label(tr("No stashes"));
+        }
+        for stash in stashes {
+            ui.group(|ui| {
+                ui.label(format!("stash@{{{}}}: {}", stash.index, stash.message));
+                ui.add_enabled_ui(app.vcs.busy.is_none() && app.vcs.stash_confirmation.is_none(), |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.button(tr("Apply")).clicked() {
+                            if save_before_stash(app) {
+                                app.vcs.stash_apply(&stash, false);
+                            }
+                        }
+                        if ui.button(tr("Pop")).clicked() {
+                            app.vcs.stash_confirmation = Some((stash.clone(), false));
+                        }
+                        if ui.button(tr("Drop")).clicked() {
+                            app.vcs.stash_confirmation = Some((stash.clone(), true));
+                        }
+                    });
+                });
+            });
+        }
+    });
+}
+
+fn save_before_stash(app: &mut DotCraftApp) -> bool {
+    app.save_all_docs();
+    !app.docs.list.iter().any(|doc| doc.is_modified())
 }
 
 /// The branches popup of the toolbar's VCS widget.

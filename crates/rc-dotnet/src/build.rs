@@ -132,10 +132,16 @@ pub fn start_build(dotnet: &Dotnet, req: BuildRequest, outbox: Outbox<BuildEvent
 /// Runs a build to its end, reporting events (except the final one) to `on_event`.
 pub async fn build(dotnet: &Dotnet, req: &BuildRequest, cancel: &CancelToken, on_event: &mut (dyn FnMut(BuildEvent) + Send)) -> anyhow::Result<BuildResult> {
     let started = Instant::now();
-    let args = req.args();
+    let mut request = req.clone();
+    if request.target.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("slnf")) {
+        // The CLI host resolves global.json from its working directory. Keep the filter
+        // as an absolute target while using the underlying solution's SDK policy.
+        request.target = std::fs::canonicalize(&request.target)?;
+    }
+    let args = request.args();
     let mut cmd = dotnet.command();
     cmd.args(&args);
-    if let Some(dir) = working_dir(&req.target) {
+    if let Some(dir) = working_dir(&request.target)? {
         cmd.current_dir(dir);
     }
     let command = format!("dotnet {}", args.join(" "));
@@ -170,13 +176,33 @@ pub async fn build(dotnet: &Dotnet, req: &BuildRequest, cancel: &CancelToken, on
     })
 }
 
-fn working_dir(target: &Path) -> Option<&Path> {
-    if target.is_dir() { Some(target) } else { target.parent().filter(|p| !p.as_os_str().is_empty()) }
+fn working_dir(target: &Path) -> anyhow::Result<Option<PathBuf>> {
+    if target.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("slnf")) {
+        return Ok(crate::Solution::load(target)?.source_path.parent().map(Path::to_path_buf));
+    }
+    Ok(if target.is_dir() { Some(target.to_path_buf()) } else { target.parent().filter(|p| !p.as_os_str().is_empty()).map(Path::to_path_buf) })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn solution_filters_use_the_source_solution_working_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        let filters = dir.path().join("filters");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::create_dir_all(&filters).unwrap();
+        std::fs::write(source.join("App.slnx"), "<Solution/>").unwrap();
+        let filter = filters.join("Subset.slnf");
+        std::fs::write(&filter, r#"{"solution":{"path":"../source/App.slnx","projects":[]}}"#).unwrap();
+        assert_eq!(working_dir(&filter).unwrap(), Some(source.clone()));
+        assert_eq!(working_dir(&source).unwrap(), Some(source.clone()));
+        assert_eq!(working_dir(&source.join("App.csproj")).unwrap(), Some(source));
+        std::fs::write(&filter, "invalid filter JSON").unwrap();
+        assert!(working_dir(&filter).is_err());
+    }
 
     #[test]
     fn builds_the_command_lines() {

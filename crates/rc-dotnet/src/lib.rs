@@ -9,6 +9,7 @@
 
 pub mod build;
 pub mod diagnostics;
+pub mod global_json;
 pub mod launch;
 pub mod msbuild;
 pub mod new_project;

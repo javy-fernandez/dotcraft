@@ -511,3 +511,25 @@ fn watch_reloads_a_web_app_after_a_change() {
     assert!(log.contains("dotnet watch") || log.contains("watch"), "{log}");
     handle.stop();
 }
+
+#[test]
+fn global_json_selection_controls_the_real_sdk_and_preserves_policies() {
+    let d = dotnet();
+    let sdks = d.list_sdks().unwrap();
+    let sdk8 = &sdks.iter().find(|s| s.major() == 8).expect(".NET 8 SDK").version;
+    let sdk10 = &sdks.iter().find(|s| s.major() == 10).expect(".NET 10 SDK").version;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::copy(shop().join("src/Shop.Core/Shop.Core.csproj"), root.join("Core.csproj")).unwrap();
+    std::fs::write(root.join("global.json"), r#"{"sdk":{"rollForward":"disable","allowPrerelease":false},"test":{"runner":"VSTest"}}"#).unwrap();
+    for version in [sdk8, sdk10] {
+        rc_dotnet::global_json::GlobalJson::load(root).unwrap().save_version(version).unwrap();
+        assert_eq!(&d.version(Some(root)).unwrap(), version);
+        let out = d.std_command().args(["build", "Core.csproj", "--nologo", "-v:q"]).current_dir(root).output().unwrap();
+        assert!(out.status.success(), "{}\n{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        let json: serde_json::Value = serde_json::from_slice(&std::fs::read(root.join("global.json")).unwrap()).unwrap();
+        assert_eq!(json["sdk"]["rollForward"], "disable");
+        assert_eq!(json["sdk"]["allowPrerelease"], false);
+        assert_eq!(json["test"]["runner"], "VSTest");
+    }
+}

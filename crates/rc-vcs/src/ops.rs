@@ -202,10 +202,35 @@ impl Repository {
     }
 
     /// Resolves conflicts by taking one side for whole files (`checkout --ours/--theirs`),
-    /// then marks them resolved.
+    /// then marks them resolved. Selecting a deleted side removes the file.
+    /// Every path must be an exact conflicted path; invalid selections fail before changes.
     pub async fn resolve_with(&self, paths: &[String], theirs: bool) -> Result<()> {
-        self.cmd().arg("checkout").arg(if theirs { "--theirs" } else { "--ours" }).arg("--").args(paths).output().await?;
-        self.mark_resolved(paths).await
+        if paths.is_empty() {
+            return Ok(());
+        }
+        let out = self.cmd().args(["ls-files", "--unmerged", "-z"]).output().await?;
+        let mut stages = std::collections::HashMap::<String, Vec<u8>>::new();
+        for record in out.stdout.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+            let tab = record.iter().position(|b| *b == b'\t').ok_or_else(|| GitError::Parse("unmerged index entry has no path".into()))?;
+            let stage = record[..tab].last().copied().filter(|s| matches!(s, b'1'..=b'3'))
+                .ok_or_else(|| GitError::Parse("unmerged index entry has an invalid stage".into()))?;
+            stages.entry(String::from_utf8_lossy(&record[tab + 1..]).into_owned()).or_default().push(stage);
+        }
+        for path in paths {
+            if !stages.contains_key(path) {
+                return Err(GitError::NotFound(format!("conflicted path {path}")));
+            }
+        }
+        let side = if theirs { b'3' } else { b'2' };
+        let (keep, remove): (Vec<String>, Vec<String>) = paths.iter().cloned().partition(|p| stages[p].contains(&side));
+        if !keep.is_empty() {
+            self.cmd().arg("--literal-pathspecs").arg("checkout").arg(if theirs { "--theirs" } else { "--ours" }).arg("--").args(&keep).output().await?;
+            self.cmd().args(["--literal-pathspecs", "add", "-A", "--"]).args(&keep).output().await?;
+        }
+        if !remove.is_empty() {
+            self.cmd().args(["--literal-pathspecs", "rm", "-q", "--"]).args(&remove).output().await?;
+        }
+        Ok(())
     }
 
     /// Marks conflicted paths as resolved with their current work tree content.

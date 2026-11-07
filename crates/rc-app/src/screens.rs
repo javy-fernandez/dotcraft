@@ -611,3 +611,117 @@ fn screens_readme() {
         h.state_mut().insight.stop();
     }
 }
+
+#[test]
+fn solution_filter_explorer_shows_only_selected_real_projects() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let filter = home.path().join("Selected.slnf");
+    let root = fixtures().join("TenProjects");
+    let json = serde_json::json!({"solution": {
+        "path": root.join("TenProjects.slnx"),
+        "projects": ["src/Module01/Module01.csproj", "src/Module10/Module10.csproj"]
+    }});
+    std::fs::write(&filter, json.to_string()).unwrap();
+    let solution = rc_dotnet::Solution::load(&filter).unwrap();
+    let mut app = test_app(home.path(), true);
+    // Exercise the real explorer without starting SDK downloads or project processes.
+    app.explorer.expanded.extend(["sln".to_string(), "sf:/src".to_string()]);
+    app.workspace = Some(crate::app::WorkspaceState {
+        ws: rc_core::Workspace::open(&filter).unwrap(),
+        solution: Some(solution),
+    });
+    let mut h = harness(app, vec2(1000.0, 700.0));
+    h.run_steps(3);
+    assert!(h.query_by_label("Module01").is_some());
+    assert!(h.query_by_label("Module10").is_some());
+    assert!(h.query_by_label("Module02").is_none());
+    assert!(h.query_by_label("Module09").is_none());
+}
+
+#[test]
+fn solution_filter_open_route_uses_source_root_and_watches_both_locations() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let source = home.path().join("source");
+    let filters = home.path().join("filters");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&filters).unwrap();
+    assert!(std::process::Command::new("git").args(["init", "-q"]).arg(&source).status().unwrap().success());
+    for name in ["Selected", "Other"] {
+        let directory = source.join(name);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(directory.join(format!("{name}.csproj")), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework><OutputType>Exe</OutputType></PropertyGroup></Project>").unwrap();
+        std::fs::write(directory.join("Program.cs"), "System.Console.WriteLine(42);\n").unwrap();
+    }
+    let solution = source.join("Demo.slnx");
+    std::fs::write(&solution, "<Solution><Project Path=\"Selected/Selected.csproj\"/><Project Path=\"Other/Other.csproj\"/></Solution>").unwrap();
+    let filter = filters.join("Subset.slnf");
+    let select = |name: &str| serde_json::json!({ "solution": { "path": "../source/Demo.slnx", "projects": [format!("{name}/{name}.csproj")] } }).to_string();
+    std::fs::write(&filter, select("Selected")).unwrap();
+    let mut app = test_app(home.path(), true);
+    // An existing non-executable dummy prevents fallback to a real installed server.
+    let dummy = home.path().join("no-language-server");
+    std::fs::write(&dummy, "not an executable").unwrap();
+    app.settings.roslyn_path = Some(dummy);
+    app.open_path(&filter);
+    let state = app.workspace.as_ref().unwrap();
+    assert_eq!(state.ws.root, source.canonicalize().unwrap());
+    assert_eq!(state.ws.key_path(), filter.canonicalize().unwrap());
+    assert_eq!(state.solution.as_ref().unwrap().source_path, solution);
+    assert_eq!(app.settings.last_workspace.as_deref(), Some(filter.as_path()));
+    assert_eq!(app.solution_projects(), vec![source.join("Selected/Selected.csproj")]);
+    assert!(app.runner.configs.iter().any(|config| config.name == "Selected"));
+    assert!(!app.runner.configs.iter().any(|config| config.name == "Other"));
+    app.explorer.expanded.insert("sln".into());
+    let mut harness = harness(app, vec2(1000.0, 700.0));
+    let wait = |harness: &mut Harness<'_, DotCraftApp>, done: &dyn Fn(&DotCraftApp) -> bool| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !done(harness.state()) {
+            harness.run_steps(1);
+            assert!(std::time::Instant::now() < deadline, "solution filter update timed out");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+    wait(&mut harness, &|app| app.files.index.as_ref().unwrap().snapshot().get("Selected/Program.cs").is_some());
+    wait(&mut harness, &|app| app.vcs.repo.as_ref().is_some_and(|repo| repo.root() == source));
+    // The source-root watcher patches the index even before a source file is opened.
+    let added = source.join("Selected/Added.cs");
+    std::fs::write(&added, "class Added {}\n").unwrap();
+    wait(&mut harness, &|app| app.files.index.as_ref().unwrap().snapshot().get("Selected/Added.cs").is_some());
+    let open = source.join("Selected/Program.cs");
+    harness.state_mut().open_file(&open);
+    harness.state_mut().docs.active_doc_mut().unwrap().editor.replace(0, 0, "// unsaved\n");
+    // The external filter watcher changes both explorer selection and run configurations.
+    std::fs::write(&filter, select("Other")).unwrap();
+    wait(&mut harness, &|app| app.solution_projects() == vec![source.join("Other/Other.csproj")] && app.runner.configs.iter().any(|config| config.name == "Other"));
+    assert!(!harness.state().runner.configs.iter().any(|config| config.name == "Selected"));
+    harness.run_steps(2);
+    assert!(harness.query_by_label("Other").is_some());
+    // The dirty editor's breadcrumbs may still name Selected; inspect explorer rows only.
+    {
+        let app = harness.state_mut();
+        let workspace = app.workspace.as_ref().unwrap();
+        let rows = app.explorer.rows(workspace.solution.as_ref(), &workspace.ws.root, &workspace.ws.name());
+        assert!(rows.iter().any(|row| row.label == "Other"));
+        assert!(!rows.iter().any(|row| row.label == "Selected"));
+    }
+    assert!(harness.state().docs.active_doc().unwrap().is_modified());
+    assert!(harness.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().starts_with("// unsaved\n"));
+    // The underlying solution file is observed too; adding a folder reloads its structure.
+    std::fs::write(&solution, "<Solution><Project Path=\"Selected/Selected.csproj\"/><Folder Name=\"/Changed/\"><Project Path=\"Other/Other.csproj\"/></Folder></Solution>").unwrap();
+    wait(&mut harness, &|app| matches!(app.workspace.as_ref().unwrap().solution.as_ref().unwrap().items.first(), Some(rc_dotnet::solution::SolutionItem::Folder { name, .. }) if name == "Changed"));
+    assert_eq!(harness.state().workspace.as_ref().unwrap().ws.key_path(), filter);
+    let alternate = home.path().join("alternate");
+    std::fs::create_dir_all(alternate.join("Moved")).unwrap();
+    std::fs::write(alternate.join("Moved/Moved.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>").unwrap();
+    std::fs::write(alternate.join("Moved/Program.cs"), "class Moved {}\n").unwrap();
+    std::fs::write(alternate.join("Demo.slnx"), "<Solution><Project Path=\"Moved/Moved.csproj\"/></Solution>").unwrap();
+    std::fs::write(&filter, serde_json::json!({ "solution": { "path": "../alternate/Demo.slnx", "projects": ["Moved/Moved.csproj"] } }).to_string()).unwrap();
+    wait(&mut harness, &|app| app.workspace.as_ref().unwrap().ws.root == alternate && app.files.index.as_ref().unwrap().snapshot().get("Moved/Program.cs").is_some());
+    assert!(harness.state().files.index.as_ref().unwrap().snapshot().get("Selected/Program.cs").is_none());
+    assert_eq!(harness.state().workspace.as_ref().unwrap().ws.key_path(), filter);
+    assert!(harness.state().docs.active_doc().unwrap().is_modified(), "changing source roots must preserve unsaved editors");
+    harness.state_mut().close_workspace();
+    assert!(harness.state().files.index.is_none());
+}

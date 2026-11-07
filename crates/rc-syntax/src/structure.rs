@@ -121,6 +121,14 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                 out.push(FoldRange { start_line: sr, end_line: er, kind: fold, start_col: char_col(rope, node), end_col: end_col(rope, node) });
             }
         }),
+        Lang::Html | Lang::Css | Lang::JavaScript | Lang::TypeScript | Lang::Tsx => walk(tree.root_node(), &mut |node| {
+            let kind = node.kind();
+            let (sr, er) = (node.start_position().row, node.end_position().row);
+            if er > sr && matches!(kind, "element" | "script_element" | "style_element" | "statement_block" | "class_body" | "interface_body" | "object_type" | "object" | "array" | "declaration_list" | "block" | "comment") {
+                let fold = if kind == "comment" { FoldKind::Comment } else { FoldKind::Block };
+                out.push(FoldRange { start_line: sr, end_line: er, kind: fold, start_col: char_col(rope, node), end_col: end_col(rope, node) });
+            }
+        }),
         Lang::Sln | Lang::Plain => {}
     }
     out.sort_by_key(|f| (f.start_line, std::cmp::Reverse(f.end_line)));

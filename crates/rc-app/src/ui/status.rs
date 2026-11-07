@@ -46,7 +46,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                     icons::image(ui, ico::INFO, 16.0).on_hover_text(tr("The file is read-only"));
                     ui.add_space(4.0);
                 }
-                let indent = if e.indent.unit == "\t" { tr("Tab").to_string() } else { trf("{n} spaces", &[("n", &e.indent.unit.len())]) };
+                let indent = if e.indent.uses_tabs() { tr("Tab").to_string() } else { trf("{n} spaces", &[("n", &e.indent.width())]) };
                 widget(ui, indent, tr("Indentation"));
                 widget(ui, if doc.bom { "UTF-8 BOM".into() } else { "UTF-8".into() }, tr("File encoding"));
                 widget(ui, e.buffer.line_ending().label().into(), tr("Line separator"));

@@ -14,7 +14,27 @@ fn fake(dir: &Path, mode: &str) -> (AdapterCommand, PathBuf) {
 }
 
 fn requests(log: &Path) -> Vec<Value> {
-    std::fs::read_to_string(log).unwrap_or_default().lines().map(|l| serde_json::from_str(l).unwrap()).collect()
+    // The adapter may still be appending the final record while this snapshot is read.
+    // A newline commits a record; malformed completed records must still fail the test.
+    std::fs::read_to_string(log).unwrap_or_default().split_inclusive('\n')
+        .filter(|line| line.ends_with('\n'))
+        .map(|line| serde_json::from_str(line).unwrap()).collect()
+}
+
+#[test]
+fn request_log_snapshots_wait_for_a_complete_record() {
+    use std::io::Write;
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("requests.jsonl");
+    std::fs::write(&log, "{\"command\":\"initialize\"}\n{\"command\":\"thr").unwrap();
+    assert_eq!(commands(&log), ["initialize"]);
+    let mut writer = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
+    writer.write_all(b"eads\"}").unwrap();
+    writer.flush().unwrap();
+    assert_eq!(commands(&log), ["initialize"]);
+    writer.write_all(b"\n").unwrap();
+    writer.flush().unwrap();
+    assert_eq!(commands(&log), ["initialize", "threads"]);
 }
 
 fn commands(log: &Path) -> Vec<String> {

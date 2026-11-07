@@ -14,6 +14,7 @@ enum VcsEvent {
     Repo(Option<Repository>),
     Status(Result<Status, String>),
     Branches(Vec<Branch>),
+    Stashes(Result<Vec<rc_vcs::Stash>, String>),
     Log(Vec<Commit>),
     Head(PathBuf, Option<String>),
     Blame(PathBuf, Result<Blame, String>),
@@ -44,6 +45,14 @@ pub struct Vcs {
     pub repo: Option<Repository>,
     pub status: Option<Status>,
     pub branches: Vec<Branch>,
+    pub stashes: Vec<rc_vcs::Stash>,
+    pub show_stashes: bool,
+    pub stash_message: String,
+    pub stash_include_untracked: bool,
+    pub stash_keep_index: bool,
+    pub stash_restore_index: bool,
+    /// The stash awaiting confirmation and whether the action is drop (otherwise pop).
+    pub stash_confirmation: Option<(rc_vcs::Stash, bool)>,
     pub log: Vec<Commit>,
     pub selected_commit: Option<String>,
     pub commit_files: Vec<rc_vcs::ChangedFile>,
@@ -70,6 +79,13 @@ impl Vcs {
             repo: None,
             status: None,
             branches: Vec::new(),
+            stashes: Vec::new(),
+            show_stashes: false,
+            stash_message: String::new(),
+            stash_include_untracked: false,
+            stash_keep_index: false,
+            stash_restore_index: false,
+            stash_confirmation: None,
             log: Vec::new(),
             selected_commit: None,
             commit_files: Vec::new(),
@@ -156,6 +172,7 @@ impl Vcs {
             if let Ok(b) = repo.branches().await {
                 out.send(VcsEvent::Branches(b));
             }
+            out.send(VcsEvent::Stashes(repo.stashes().await.map_err(|e| e.to_string())));
         });
     }
 
@@ -189,6 +206,9 @@ impl Vcs {
     where
         F: std::future::Future<Output = Result<(), rc_vcs::GitError>> + Send + 'static,
     {
+        if self.busy.is_some() {
+            return;
+        }
         self.busy = Some(what);
         self.error = None;
         let out = self.inbox.sender();
@@ -269,6 +289,40 @@ impl Vcs {
         self.op("rollback", async move { repo.rollback(&paths).await });
     }
 
+    pub fn stash_push(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        let opts = rc_vcs::StashOptions {
+            message: (!self.stash_message.trim().is_empty()).then(|| self.stash_message.trim().to_string()),
+            include_untracked: self.stash_include_untracked,
+            keep_index: self.stash_keep_index,
+            ..Default::default()
+        };
+        self.op("stash_push", async move { repo.stash_push(&opts).await });
+    }
+
+    /// Resolve the selected stash against a fresh list so a stale UI index cannot select
+    /// a different entry after an external stash operation.
+    pub fn stash_apply(&mut self, stash: &rc_vcs::Stash, pop: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        let hash = stash.hash.clone();
+        let restore_index = self.stash_restore_index;
+        self.op(if pop { "stash_pop" } else { "stash_apply" }, async move {
+            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash)
+                .ok_or_else(|| rc_vcs::GitError::NotFound(hash))?;
+            if pop { repo.stash_pop(entry.index, restore_index).await } else { repo.stash_apply(entry.index, restore_index).await }
+        });
+    }
+
+    pub fn stash_drop(&mut self, stash: &rc_vcs::Stash) {
+        let Some(repo) = self.repo.clone() else { return };
+        let hash = stash.hash.clone();
+        self.op("stash_drop", async move {
+            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash)
+                .ok_or_else(|| rc_vcs::GitError::NotFound(hash))?;
+            repo.stash_drop(entry.index).await
+        });
+    }
+
     // ------------------------------------------------------------------ diffs and blame
 
     /// Opens the diff of a working-tree file against HEAD.
@@ -337,6 +391,8 @@ impl Vcs {
                 }
                 VcsEvent::Status(Err(e)) => self.error = Some(e),
                 VcsEvent::Branches(b) => self.branches = b,
+                VcsEvent::Stashes(Ok(s)) => self.stashes = s,
+                VcsEvent::Stashes(Err(e)) => self.error = Some(e),
                 VcsEvent::Log(l) => self.log = l,
                 VcsEvent::Head(p, t) => {
                     self.head_pending.remove(&p);
@@ -368,8 +424,14 @@ impl Vcs {
                         Some(e) => {
                             self.error = Some(e.clone());
                             notices.push(e);
+                            if what.starts_with("stash_") {
+                                self.refresh();
+                            }
                         }
                         None => {
+                            if what == "stash_push" {
+                                self.stash_message.clear();
+                            }
                             if what == "commit" || what == "commit_push" {
                                 self.message.clear();
                                 self.amend = false;

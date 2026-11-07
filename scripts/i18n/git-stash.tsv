@@ -1,0 +1,19 @@
+# English source and fallback entries for Git stash management
+Stashes	Stashes	Stashes	Stashes	Stashes	Stashes	Stashes	Stashes
+Stash Message	Stash Message	Stash Message	Stash Message	Stash Message	Stash Message	Stash Message	Stash Message
+Include untracked files	Include untracked files	Include untracked files	Include untracked files	Include untracked files	Include untracked files	Include untracked files	Include untracked files
+Keep staged changes	Keep staged changes	Keep staged changes	Keep staged changes	Keep staged changes	Keep staged changes	Keep staged changes	Keep staged changes
+Stash Changes	Stash Changes	Stash Changes	Stash Changes	Stash Changes	Stash Changes	Stash Changes	Stash Changes
+Apply	Apply	Apply	Apply	Apply	Apply	Apply	Apply
+Pop	Pop	Pop	Pop	Pop	Pop	Pop	Pop
+Drop	Drop	Drop	Drop	Drop	Drop	Drop	Drop
+Restore staged changes	Restore staged changes	Restore staged changes	Restore staged changes	Restore staged changes	Restore staged changes	Restore staged changes	Restore staged changes
+No stashes	No stashes	No stashes	No stashes	No stashes	No stashes	No stashes	No stashes
+Confirm Drop	Confirm Drop	Confirm Drop	Confirm Drop	Confirm Drop	Confirm Drop	Confirm Drop	Confirm Drop
+Delete this stash permanently?	Delete this stash permanently?	Delete this stash permanently?	Delete this stash permanently?	Delete this stash permanently?	Delete this stash permanently?	Delete this stash permanently?	Delete this stash permanently?
+Confirm Pop	Confirm Pop	Confirm Pop	Confirm Pop	Confirm Pop	Confirm Pop	Confirm Pop	Confirm Pop
+Apply and remove this stash?	Apply and remove this stash?	Apply and remove this stash?	Apply and remove this stash?	Apply and remove this stash?	Apply and remove this stash?	Apply and remove this stash?	Apply and remove this stash?
+Stash no longer exists	Stash no longer exists	Stash no longer exists	Stash no longer exists	Stash no longer exists	Stash no longer exists	Stash no longer exists	Stash no longer exists
+Cancel	Cancel	Cancel	Cancel	Cancel	Cancel	Cancel	Cancel
+Refresh	Refresh	Refresh	Refresh	Refresh	Refresh	Refresh	Refresh
+Log	Log	Log	Log	Log	Log	Log	Log

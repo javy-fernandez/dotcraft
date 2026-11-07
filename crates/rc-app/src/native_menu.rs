@@ -550,6 +550,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         &[
             &act(Action::Run, || tr("Run")),
             &act(Action::Debug, || tr("Debug")),
+            &act(Action::AttachProcess, || tr("Attach to Process…")),
             &act(Action::StopRun, || tr("Stop")),
             &act(Action::RunTests, || tr("Run Tests")),
             &item(MenuCommand::EditRunConfig, || tr("Edit Run Configuration…"), None),

@@ -71,6 +71,7 @@ impl Hl {
             "property" => Hl::Property,
             "event" => Hl::Event,
             "constant.enum" => Hl::EnumMember,
+            "constant" => Hl::Constant,
             "variable.parameter" => Hl::Parameter,
             "operator" => Hl::Operator,
             "punctuation" | "punctuation.bracket" => Hl::Punct,
