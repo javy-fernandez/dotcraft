@@ -9,7 +9,13 @@
 
 pub mod build;
 pub mod counters;
+pub mod cpu_profile;
+mod eventpipe;
+pub mod gcdump;
+pub mod coverage;
 pub mod diagnostics;
+pub mod endpoints;
+pub mod http_file;
 pub mod launch;
 pub mod msbuild;
 pub mod new_project;
