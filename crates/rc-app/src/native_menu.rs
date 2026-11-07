@@ -25,6 +25,7 @@ use std::sync::mpsc::{Receiver, channel};
 pub enum MenuCommand {
     Act(Action),
     About,
+    CheckUpdates,
     Quit,
     OpenProject,
     OpenFile,
@@ -422,6 +423,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         true,
         &[
             &item(MenuCommand::About, || tr("About DotCraft"), None),
+            &item(MenuCommand::CheckUpdates, || tr("Check for Updates…"), None),
             &sep(),
             &act(Action::ShowSettings, || tr("Settings…")),
             &sep(),
@@ -576,7 +578,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
     )?;
     #[cfg(target_os = "macos")]
     window_menu.set_as_windows_menu_for_nsapp();
-    let help_menu = submenu(|| tr("Help"), &[&item(MenuCommand::About, || tr("About DotCraft"), None)])?;
+    let help_menu = submenu(|| tr("Help"), &[&item(MenuCommand::CheckUpdates, || tr("Check for Updates…"), None), &item(MenuCommand::About, || tr("About DotCraft"), None)])?;
     #[cfg(target_os = "macos")]
     help_menu.set_as_help_menu_for_nsapp();
 

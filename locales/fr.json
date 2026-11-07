@@ -219,7 +219,17 @@
     "Open Recent": "Ouvrir récent",
     "Clear Recent": "Effacer les éléments récents",
     "No Recent Items": "Aucun élément récent",
-    "Show All Files": "Afficher tous les fichiers"
+    "Show All Files": "Afficher tous les fichiers",
+    "Check for Updates…": "Rechercher des mises à jour…",
+    "Check for updates at startup": "Rechercher des mises à jour au démarrage",
+    "Checking for updates…": "Recherche de mises à jour…",
+    "Could not check for updates: {error}": "Impossible de rechercher des mises à jour : {error}",
+    "DotCraft {version} is available": "DotCraft {version} est disponible",
+    "DotCraft {version} is up to date": "DotCraft {version} est à jour",
+    "You have {version}. Download it from the release page.": "Vous avez la {version}. Téléchargez-la depuis la page de la version.",
+    "View Release": "Voir la version",
+    "Skip This Version": "Ignorer cette version",
+    "Later": "Plus tard"
   },
   "terminal": {
     "Local": "Local",

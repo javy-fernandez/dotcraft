@@ -632,3 +632,24 @@ fn screens_show_all_files() {
     assert!(h.state().explorer.show_all);
     h.render().unwrap().save(out.join("show-all-files-dark.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/update-notice-dark.png"]
+fn screens_update_notice() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.update = Some(crate::update::Release { version: "9.0.0".into(), url: "https://github.com/javy-fernandez/dotcraft/releases/tag/v9.0.0".into() });
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("update-notice-dark.png")).unwrap();
+    h.get_by_label("Skip This Version").click();
+    h.run_steps(2);
+    assert!(h.state().update.is_none());
+    assert_eq!(h.state().settings.skipped_version.as_deref(), Some("9.0.0"));
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::About);
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("about-dark.png")).unwrap();
+}

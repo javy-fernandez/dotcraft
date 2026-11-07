@@ -61,7 +61,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
     let Some(mut dialog) = app.dialog.take() else { return };
     let outcome = match &mut dialog {
         Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
-        Dialog::About => about(ctx),
+        Dialog::About => about(app, ctx),
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
         Dialog::NewFile { dir, name, kind, error } => new_file(app, ctx, dir, name, *kind, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
@@ -199,6 +199,9 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
                         ui.checkbox(&mut draft.reopen_last, tr("Reopen the last project on startup"));
                         ui.end_row();
                         ui.label("");
+                        ui.checkbox(&mut draft.check_updates, tr("Check for updates at startup"));
+                        ui.end_row();
+                        ui.label("");
                         ui.checkbox(&mut draft.tabs_multirow, tr("Show tabs in multiple rows"));
                         ui.end_row();
                         ui.label("");
@@ -265,7 +268,8 @@ fn lang_code(l: Lang) -> &'static str {
     }
 }
 
-fn about(ctx: &Context) -> Outcome {
+fn about(app: &mut DotCraftApp, ctx: &Context) -> Outcome {
+    let mut check = false;
     let (close, esc) = modal(ctx, "about", 380.0, |ui| {
         ui.vertical_centered(|ui| {
             let (r, _) = ui.allocate_exact_size(vec2(64.0, 64.0), egui::Sense::hover());
@@ -278,10 +282,22 @@ fn about(ctx: &Context) -> Outcome {
             ui.add_space(6.0);
             ui.label(egui::RichText::new(tr("Icons: IntelliJ Platform (Apache 2.0)")).size(11.5).color(rc_kit::pal(ui).muted));
             ui.add_space(12.0);
-            theme::primary_button(ui, tr("Close")).clicked()
+            ui.horizontal(|ui| {
+                // Centred pair of buttons.
+                let w = 72.0 * 2.0 + 8.0 + 90.0;
+                ui.add_space(((ui.available_width() - w) / 2.0).max(0.0));
+                ui.spacing_mut().item_spacing.x = 8.0;
+                check = theme::secondary_button(ui, tr("Check for Updates…")).clicked();
+                theme::primary_button(ui, tr("Close")).clicked()
+            })
+            .inner
         })
         .inner
     });
+    if check {
+        app.check_for_updates(ctx);
+        return Outcome::Close;
+    }
     if close || esc { Outcome::Close } else { Outcome::Keep }
 }
 

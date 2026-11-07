@@ -61,6 +61,10 @@ pub struct Settings {
     pub reopen_last: bool,
     /// The project open when DotCraft quit; `None` after Close Project.
     pub last_workspace: Option<PathBuf>,
+    /// Look for a newer release on GitHub at startup.
+    pub check_updates: bool,
+    /// The release the user chose to skip in the update notice.
+    pub skipped_version: Option<String>,
 }
 
 impl Default for Settings {
@@ -88,6 +92,8 @@ impl Default for Settings {
             recent_files: Vec::new(),
             reopen_last: true,
             last_workspace: None,
+            check_updates: true,
+            skipped_version: None,
         }
     }
 }

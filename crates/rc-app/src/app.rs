@@ -53,6 +53,10 @@ pub struct DotCraftApp {
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
+    /// The update check under way, and whether it was asked for (Check for Updates…).
+    update_check: Option<(std::sync::mpsc::Receiver<Result<crate::update::Release, String>>, bool)>,
+    /// A newer release, shown in the bottom-right notice until dismissed.
+    pub update: Option<crate::update::Release>,
     pub insight: Insight,
     pub runner: Runner,
     pub debugger: crate::debugger::Debugger,
@@ -112,6 +116,9 @@ impl DotCraftApp {
         let keymap = Keymap::new(keymap_kind(settings.keymap));
         let native_menu = NativeMenu::install(&cc.egui_ctx, &keymap);
         let mut app = Self::with_settings(settings, waker, native_menu);
+        if app.settings.check_updates {
+            app.update_check = Some((crate::update::check(cc.egui_ctx.clone(), std::time::Duration::from_secs(5)), false));
+        }
         crate::open_files::set_context(&cc.egui_ctx);
         // Files sent by Finder at launch arrive before the first frame: open them instead of
         // the last project.
@@ -137,6 +144,8 @@ impl DotCraftApp {
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
+            update_check: None,
+            update: None,
             insight: Insight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
@@ -183,6 +192,69 @@ impl DotCraftApp {
             ThemeChoice::Dark => true,
             ThemeChoice::Light => false,
             ThemeChoice::System => ctx.system_theme().is_none_or(|t| t == egui::Theme::Dark),
+        }
+    }
+
+    /// Check for Updates…: the result is shown even for a skipped version, and when up to date.
+    pub fn check_for_updates(&mut self, ctx: &Context) {
+        self.notify(tr("Checking for updates…"), false);
+        self.update_check = Some((crate::update::check(ctx.clone(), std::time::Duration::ZERO), true));
+    }
+
+    /// The update check's result, and the notice of a newer release in the bottom-right corner
+    /// (as in DataCraft). Nothing is downloaded: the notice links to the release page.
+    fn update_notice(&mut self, ctx: &Context) {
+        if let Some((rx, asked)) = &self.update_check
+            && let Ok(result) = rx.try_recv()
+        {
+            let asked = *asked;
+            self.update_check = None;
+            match result {
+                Ok(r) if crate::update::is_newer(&r.version) => {
+                    if asked || self.settings.skipped_version.as_deref() != Some(r.version.as_str()) {
+                        self.update = Some(r);
+                    }
+                }
+                Ok(_) if asked => self.notify(trf("DotCraft {version} is up to date", &[("version", &env!("CARGO_PKG_VERSION"))]), false),
+                Err(e) if asked => self.notify(trf("Could not check for updates: {error}", &[("error", &e)]), true),
+                _ => {}
+            }
+        }
+        // Not over a dialog: it comes back when the dialog closes.
+        let Some(release) = self.update.clone().filter(|_| self.dialog.is_none()) else { return };
+        let mut close = false;
+        egui::Area::new(egui::Id::new("update_notice")).anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -40.0)).order(egui::Order::Foreground).show(ctx, |ui| {
+            let p = rc_kit::pal(ui);
+            egui::Frame::popup(ui.style()).fill(p.popup_bg).corner_radius(10).inner_margin(egui::Margin::same(14)).stroke(egui::Stroke::new(1.0, p.popup_border)).show(ui, |ui| {
+                ui.set_width(300.0);
+                ui.horizontal(|ui| {
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::hover());
+                    rc_kit::branding::paint(ui, r);
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new(trf("DotCraft {version} is available", &[("version", &release.version)])).strong());
+                        ui.label(egui::RichText::new(trf("You have {version}. Download it from the release page.", &[("version", &env!("CARGO_PKG_VERSION"))])).size(12.0).color(p.muted));
+                    });
+                });
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    if rc_kit::theme::primary_button(ui, tr("View Release")).clicked() {
+                        crate::ui::run_windows::open_url(&release.url);
+                        close = true;
+                    }
+                    if rc_kit::theme::secondary_button(ui, tr("Skip This Version")).clicked() {
+                        self.settings.skipped_version = Some(release.version.clone());
+                        let _ = self.settings.save();
+                        close = true;
+                    }
+                    if rc_kit::theme::secondary_button(ui, tr("Later")).clicked() {
+                        close = true;
+                    }
+                });
+            });
+        });
+        if close {
+            self.update = None;
         }
     }
 
@@ -1221,6 +1293,7 @@ impl eframe::App for DotCraftApp {
                 match cmd {
                     MenuCommand::Act(a) => self.pending.push(a),
                     MenuCommand::About => self.dialog = Some(Dialog::About),
+                    MenuCommand::CheckUpdates => self.check_for_updates(ctx),
                     MenuCommand::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
                     MenuCommand::OpenProject => self.pick_and_open(),
                     MenuCommand::OpenFile => self.pick_file(),
@@ -1309,6 +1382,7 @@ impl eframe::App for DotCraftApp {
             self.notify(n, false);
         }
         crate::ui::frame(self, ui, editor_actions);
+        self.update_notice(&ctx);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);
         if self.session_dirty && now - self.last_session_save > 2.0 {

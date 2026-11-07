@@ -3,6 +3,7 @@ name = "rc-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "DotCraft: a lightweight native IDE for .NET"
 
 [[bin]]
@@ -11,6 +12,8 @@ path = "src/main.rs"
 
 [dependencies]
 dunce.workspace = true
+tokio.workspace = true
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "system-proxy"] }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

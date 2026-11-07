@@ -219,7 +219,17 @@
     "Open Recent": "打开最近",
     "Clear Recent": "清除最近项目",
     "No Recent Items": "没有最近项目",
-    "Show All Files": "显示所有文件"
+    "Show All Files": "显示所有文件",
+    "Check for Updates…": "检查更新…",
+    "Check for updates at startup": "启动时检查更新",
+    "Checking for updates…": "正在检查更新…",
+    "Could not check for updates: {error}": "无法检查更新：{error}",
+    "DotCraft {version} is available": "DotCraft {version} 已发布",
+    "DotCraft {version} is up to date": "DotCraft {version} 已是最新版本",
+    "You have {version}. Download it from the release page.": "当前版本为 {version}，请从发布页面下载。",
+    "View Release": "查看发布",
+    "Skip This Version": "跳过此版本",
+    "Later": "稍后"
   },
   "terminal": {
     "Local": "本地",
