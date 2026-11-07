@@ -291,7 +291,21 @@
     "Insert Live Template…": "Inserir live template…",
     "Surround With…": "Envolver com…",
     "Insert Live Template": "Inserir live template",
-    "Surround With": "Envolver com"
+    "Surround With": "Envolver com",
+    "HTTP Client": "Cliente HTTP",
+    "Endpoints": "Endpoints",
+    "No requests sent": "Nenhuma requisição enviada",
+    "Open a .http file and click ▶ next to a request, or generate one from the Endpoints window.": "Abra um arquivo .http e clique em ▶ ao lado de uma requisição, ou gere uma na janela Endpoints.",
+    "No endpoints": "Nenhum endpoint",
+    "Controllers and minimal APIs of the solution show up here.": "Os controllers e as minimal APIs da solução aparecem aqui.",
+    "Filter": "Filtrar",
+    "Generate Request in HTTP Client": "Gerar requisição no cliente HTTP",
+    "Go to Handler": "Ir para o handler",
+    "No environment": "Nenhum ambiente",
+    "Sending…": "Enviando…",
+    "Body": "Corpo",
+    "Headers": "Cabeçalhos",
+    "No request at this line": "Nenhuma requisição nesta linha"
   },
   "terminal": {
     "Local": "Local",

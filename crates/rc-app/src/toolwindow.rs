@@ -25,6 +25,8 @@ pub enum ToolWindow {
     Todo,
     Hierarchy,
     LocalHistory,
+    HttpClient,
+    Endpoints,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,7 +62,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 18] = [
+    pub const ALL: [ToolWindow; 20] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -70,6 +72,8 @@ impl ToolWindow {
         ToolWindow::Tests,
         ToolWindow::Build,
         ToolWindow::Monitoring,
+        ToolWindow::Endpoints,
+        ToolWindow::HttpClient,
         ToolWindow::Find,
         ToolWindow::Problems,
         ToolWindow::Todo,
@@ -101,6 +105,8 @@ impl ToolWindow {
             ToolWindow::Todo => "todo",
             ToolWindow::Hierarchy => "hierarchy",
             ToolWindow::LocalHistory => "local_history",
+            ToolWindow::HttpClient => "http_client",
+            ToolWindow::Endpoints => "endpoints",
         }
     }
 
@@ -124,6 +130,8 @@ impl ToolWindow {
             ToolWindow::Todo => "TODO",
             ToolWindow::Hierarchy => tr("Hierarchy"),
             ToolWindow::LocalHistory => tr("Local History"),
+            ToolWindow::HttpClient => tr("HTTP Client"),
+            ToolWindow::Endpoints => tr("Endpoints"),
         }
     }
 
@@ -147,6 +155,8 @@ impl ToolWindow {
             ToolWindow::Todo => ico::TW_TODO,
             ToolWindow::Hierarchy => ico::TW_HIERARCHY,
             ToolWindow::LocalHistory => ico::HISTORY,
+            ToolWindow::HttpClient => ico::TW_HTTP,
+            ToolWindow::Endpoints => ico::TW_ENDPOINTS,
         }
     }
 

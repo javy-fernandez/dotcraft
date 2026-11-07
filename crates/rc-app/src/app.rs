@@ -61,6 +61,10 @@ pub struct DotCraftApp {
     pub hierarchy: Option<crate::hierarchy::Hierarchy>,
     /// Local History window: the file shown and its selected revision.
     pub history_file: Option<std::path::PathBuf>,
+    /// HTTP Client: `.http` requests and their responses.
+    pub http: crate::web::HttpClient,
+    /// Endpoints window.
+    pub endpoints: crate::web::Endpoints,
     pub history_selected: Option<usize>,
     /// The update check under way, and whether it was asked for (Check for Updates…).
     update_check: Option<(std::sync::mpsc::Receiver<Result<crate::update::Release, String>>, bool)>,
@@ -161,6 +165,8 @@ impl DotCraftApp {
             todos: None,
             hierarchy: None,
             history_file: None,
+            http: crate::web::HttpClient::new(waker.clone()),
+            endpoints: crate::web::Endpoints::new(),
             history_selected: None,
             update_check: None,
             update: None,
@@ -322,7 +328,37 @@ impl DotCraftApp {
         self.runner.options = session.run_options.clone();
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         self.workspace = Some(WorkspaceState { ws, solution });
+        self.refresh_endpoints();
         self.restore_session(session);
+    }
+
+    /// Scans the projects' controllers and minimal APIs for the Endpoints window.
+    pub fn refresh_endpoints(&mut self) {
+        let projects: Vec<(String, PathBuf)> = self.solution_projects().into_iter().map(|p| (p.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned()), p)).collect();
+        self.endpoints.refresh(projects, self.waker.clone());
+    }
+
+    /// ▶ next to a request of a `.http` file (or Run Request at the caret): sends it.
+    pub fn send_http_request(&mut self, i: usize, line: usize) {
+        let (path, text) = (self.docs.list[i].path.clone(), self.docs.list[i].editor.buffer.rope().to_string());
+        match self.http.send(&path, &text, line) {
+            Ok(()) => self.dock.show(ToolWindow::HttpClient),
+            Err(e) => self.notify(e, true),
+        }
+    }
+
+    /// ▶ markers on the requests of the active `.http` file.
+    fn update_http_markers(&mut self) {
+        let Some(i) = self.docs.active else { return };
+        let doc = &mut self.docs.list[i];
+        if !crate::web::is_http_file(&doc.path) {
+            return;
+        }
+        let file = rc_dotnet::http_file::parse(&doc.editor.buffer.rope().to_string());
+        doc.editor.gutter_icons.retain(|_, icon| *icon != rc_editor::GutterIcon::RunApp);
+        for r in &file.requests {
+            doc.editor.gutter_icons.insert(r.start_line, rc_editor::GutterIcon::RunApp);
+        }
     }
 
     /// Every project of the workspace (its solution's, or the ones found in the folder).
@@ -1451,6 +1487,9 @@ impl eframe::App for DotCraftApp {
             }
         }
         self.update_test_markers();
+        self.update_http_markers();
+        self.http.poll();
+        self.endpoints.poll();
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);

@@ -291,7 +291,21 @@
     "Insert Live Template…": "ライブテンプレートを挿入…",
     "Surround With…": "囲む…",
     "Insert Live Template": "ライブテンプレートを挿入",
-    "Surround With": "囲む"
+    "Surround With": "囲む",
+    "HTTP Client": "HTTP クライアント",
+    "Endpoints": "エンドポイント",
+    "No requests sent": "送信されたリクエストはありません",
+    "Open a .http file and click ▶ next to a request, or generate one from the Endpoints window.": ".http ファイルを開いてリクエスト横の ▶ をクリックするか、エンドポイントウィンドウから生成します。",
+    "No endpoints": "エンドポイントはありません",
+    "Controllers and minimal APIs of the solution show up here.": "ソリューションのコントローラーと Minimal API がここに表示されます。",
+    "Filter": "フィルター",
+    "Generate Request in HTTP Client": "HTTP クライアントでリクエストを生成",
+    "Go to Handler": "ハンドラーへ移動",
+    "No environment": "環境なし",
+    "Sending…": "送信中…",
+    "Body": "ボディ",
+    "Headers": "ヘッダー",
+    "No request at this line": "この行にリクエストはありません"
   },
   "terminal": {
     "Local": "ローカル",

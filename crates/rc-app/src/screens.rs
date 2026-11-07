@@ -851,3 +851,48 @@ fn screens_templates() {
     assert!(text.contains("        try\n        {\n            Pay();\n            Ship();\n        }\n        catch (Exception e)\n"), "{text}");
     h.render().unwrap().save(out.join("templates-dark.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; runs Shop.Api and writes target/snapshots/http-*.png"]
+fn screens_http_client_and_endpoints() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    app.runner.selected = app.runner.configs.iter().position(|c| c.name.starts_with("Shop.Api")).unwrap();
+    let outs = app.runner.run_selected();
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    let http = fixtures().join("Shop/src/Shop.Api/Shop.Api.http");
+    app.open_file(&http);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "the app to listen", |a| a.runner.runs.iter().any(|r| !r.urls.is_empty()));
+    // ▶ on the request: retried until the server answers (it may still be starting).
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    loop {
+        let i = h.state().docs.active.unwrap();
+        h.state_mut().send_http_request(i, 2);
+        run_frames(&mut h, "a response", |a| a.http.response.is_some());
+        if matches!(&h.state().http.response, Some(Ok(r)) if r.status == 200) || std::time::Instant::now() > deadline {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    let resp = h.state().http.response.clone().unwrap().unwrap();
+    assert_eq!(resp.status, 200);
+    assert!(resp.text.contains("temperatureC"), "{}", resp.text);
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.gutter_icons.get(&2), Some(&rc_editor::GutterIcon::RunApp));
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::HttpClient);
+    h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::HttpClient, 380.0);
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("http-client-dark.png")).unwrap();
+    // Endpoints of Shop.Api.
+    run_frames(&mut h, "endpoints", |a| !a.endpoints.scanning);
+    assert!(h.state().endpoints.projects.iter().any(|(n, _, eps)| n == "Shop.Api" && eps.iter().any(|e| e.route == "/WeatherForecast")));
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Endpoints);
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("endpoints-dark.png")).unwrap();
+    h.state_mut().runner.stop_all();
+}

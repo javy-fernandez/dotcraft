@@ -35,6 +35,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Todo => todo_window(app, ui),
         ToolWindow::Hierarchy => hierarchy_window(app, ui),
         ToolWindow::LocalHistory => local_history_window(app, ui),
+        ToolWindow::HttpClient => http_client_window(app, ui),
+        ToolWindow::Endpoints => endpoints_window(app, ui),
         ToolWindow::Bookmarks => {
             if header(ui, tw.title()) {
                 app.toggle_tool(tw);
@@ -98,6 +100,196 @@ fn list_row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, s
     }
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     resp
+}
+
+/// A coloured HTTP method badge ("GET" green, "POST" blue…); returns its right edge.
+fn method_badge(ui: &Ui, left_center: egui::Pos2, method: &str) -> f32 {
+    let color = match method {
+        "GET" => egui::Color32::from_rgb(0x5F, 0xB8, 0x65),
+        "POST" => egui::Color32::from_rgb(0x35, 0x74, 0xF0),
+        "PUT" | "PATCH" => egui::Color32::from_rgb(0xE0, 0x88, 0x55),
+        "DELETE" => egui::Color32::from_rgb(0xE5, 0x53, 0x53),
+        _ => rc_kit::pal(ui).muted,
+    };
+    let g = ui.painter().layout_no_wrap(method.to_string(), FontId::monospace(11.0), color);
+    let r = Rect::from_min_size(pos2(left_center.x, left_center.y - 9.0), vec2(g.size().x.max(30.0) + 10.0, 18.0));
+    ui.painter().rect(r, 4.0, color.gamma_multiply(0.15), egui::Stroke::NONE, egui::StrokeKind::Inside);
+    ui.painter().galley(pos2(r.center().x - g.size().x / 2.0, r.center().y - g.size().y / 2.0), g, color);
+    r.right()
+}
+
+/// Endpoints: routes by project; double click opens the handler, the context menu writes a
+/// request in the project's `.http` file.
+fn endpoints_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, tr("Endpoints"), theme::bold(13.0), p.text);
+    let status = if app.endpoints.scanning { tr("Scanning…").to_string() } else { rc_kit::i18n::trf("{n} items", &[("n", &app.endpoints.count())]) };
+    ui.painter().text(pos2(t.right() + 12.0, r.center().y), Align2::LEFT_CENTER, status, FontId::proportional(12.0), p.muted);
+    let fr = Rect::from_min_size(pos2(t.right() + 110.0, r.center().y - 12.0), vec2((r.width() - t.width() - 200.0).clamp(120.0, 320.0), 24.0));
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(fr));
+    child.add(egui::TextEdit::singleline(&mut app.endpoints.filter).hint_text(tr("Filter")).desired_width(fr.width()));
+    let mut hide = false;
+    let mut refresh = false;
+    for (i, (icon, tip)) in [(rc_kit::ico::HIDE, tr("Hide")), (rc_kit::ico::REFRESH, tr("Refresh"))].into_iter().enumerate() {
+        let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0 * (i + 1) as f32, r.center().y - 13.0), vec2(26.0, 26.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        if theme::icon_button(&mut child, icon, true, tip).clicked() {
+            if i == 0 { hide = true } else { refresh = true }
+        }
+    }
+    if hide {
+        app.toggle_tool(ToolWindow::Endpoints);
+        return;
+    }
+    if refresh {
+        app.refresh_endpoints();
+    }
+    if app.endpoints.projects.is_empty() && !app.endpoints.scanning {
+        let (title, hint) = empty_text(ToolWindow::Endpoints);
+        empty_state(ui, ToolWindow::Endpoints.icon(), title, hint);
+        return;
+    }
+    let f = app.endpoints.filter.to_lowercase();
+    let mut open: Option<(std::path::PathBuf, usize)> = None;
+    let mut generate: Option<(std::path::PathBuf, rc_dotnet::endpoints::Endpoint)> = None;
+    egui::ScrollArea::vertical().id_salt("endpoints").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (name, project, eps) in &app.endpoints.projects {
+            let shown: Vec<&rc_dotnet::endpoints::Endpoint> = eps.iter().filter(|e| f.is_empty() || e.route.to_lowercase().contains(&f) || e.handler.to_lowercase().contains(&f) || e.method.to_lowercase() == f).collect();
+            if shown.is_empty() {
+                continue;
+            }
+            list_row(ui, 0, rc_kit::ico::PROJECT, name, &rc_kit::i18n::trf("{n} items", &[("n", &shown.len())]), false);
+            for e in shown {
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(400.0), 24.0), Sense::click());
+                if resp.hovered() {
+                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+                }
+                let x = method_badge(ui, pos2(rect.left() + 30.0, rect.center().y), &e.method);
+                let g = ui.painter().layout_no_wrap(e.route.clone(), FontId::monospace(12.5), p.text);
+                ui.painter().galley(pos2(x + 10.0, rect.center().y - g.size().y / 2.0), g.clone(), p.text);
+                let file = e.file.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+                ui.painter().text(pos2(x + 24.0 + g.size().x, rect.center().y), Align2::LEFT_CENTER, format!("{}  {file}:{}", e.handler, e.line + 1), FontId::proportional(12.0), p.muted);
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} {}", e.method, e.route)));
+                if resp.double_clicked() {
+                    open = Some((e.file.clone(), e.line));
+                }
+                resp.context_menu(|ui| {
+                    if theme::menu_item(ui, Some(rc_kit::ico::TW_HTTP), tr("Generate Request in HTTP Client"), false).clicked() {
+                        generate = Some((project.clone(), e.clone()));
+                        ui.close();
+                    }
+                    if theme::menu_item(ui, Some(rc_kit::ico::OPEN), tr("Go to Handler"), false).clicked() {
+                        open = Some((e.file.clone(), e.line));
+                        ui.close();
+                    }
+                });
+            }
+        }
+    });
+    if let Some((path, line)) = open {
+        app.open_at(&path, line, 0);
+    }
+    if let Some((project, e)) = generate {
+        match crate::web::generate_request(&project, &e) {
+            Ok((file, line)) => app.open_at(&file, line, 0),
+            Err(err) => app.notify(err.to_string(), true),
+        }
+    }
+}
+
+/// HTTP Client: environment, the request sent, then status, time, size and the body (or the
+/// headers).
+fn http_client_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, tr("HTTP Client"), theme::bold(13.0), p.text);
+    // Environment of the active .http file.
+    let http_path = app.docs.active_doc().map(|d| d.path.clone()).filter(|p| crate::web::is_http_file(p));
+    let envs = http_path.as_deref().map(rc_dotnet::http_file::environments).unwrap_or_default();
+    if !envs.is_empty() {
+        let er = Rect::from_min_size(pos2(t.right() + 14.0, r.center().y - 12.0), vec2(170.0, 24.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(er));
+        let selected = app.http.env.clone().unwrap_or_else(|| tr("No environment").to_string());
+        egui::ComboBox::from_id_salt("http_env").selected_text(selected).width(160.0).show_ui(&mut child, |ui| {
+            if ui.selectable_label(app.http.env.is_none(), tr("No environment")).clicked() {
+                app.http.env = None;
+            }
+            for e in &envs {
+                if ui.selectable_label(app.http.env.as_deref() == Some(e), e).clicked() {
+                    app.http.env = Some(e.clone());
+                }
+            }
+        });
+    }
+    let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0, r.center().y - 13.0), vec2(26.0, 26.0));
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+    if theme::icon_button(&mut child, rc_kit::ico::HIDE, true, tr("Hide")).clicked() {
+        app.toggle_tool(ToolWindow::HttpClient);
+        return;
+    }
+    let Some(request) = app.http.request.clone() else {
+        let (title, hint) = empty_text(ToolWindow::HttpClient);
+        empty_state(ui, ToolWindow::HttpClient.icon(), title, hint);
+        return;
+    };
+    // Request line and status.
+    let line = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 28.0));
+    ui.allocate_rect(line, Sense::hover());
+    let (method, url) = request.split_once(' ').unwrap_or(("", &request));
+    let x = method_badge(ui, pos2(line.left() + 12.0, line.center().y), method);
+    let u = ui.painter().text(pos2(x + 10.0, line.center().y), Align2::LEFT_CENTER, url, FontId::monospace(12.5), p.text);
+    let mut sx = u.right() + 16.0;
+    match &app.http.response {
+        None if app.http.busy() => {
+            ui.painter().text(pos2(sx, line.center().y), Align2::LEFT_CENTER, tr("Sending…"), FontId::proportional(12.0), p.muted);
+        }
+        Some(Err(e)) => {
+            let g = ui.painter().layout(e.clone(), FontId::proportional(12.5), p.error, (line.width() - sx + line.left() - 12.0).max(200.0));
+            ui.painter().galley(pos2(sx, line.top() + 6.0), g, p.error);
+        }
+        Some(Ok(resp)) => {
+            let color = if resp.status < 300 { p.ok } else if resp.status < 400 { p.warn } else { p.error };
+            let s = ui.painter().text(pos2(sx, line.center().y), Align2::LEFT_CENTER, format!("{} {}", resp.status, resp.reason), theme::bold(12.5), color);
+            sx = s.right() + 14.0;
+            let size = if resp.body.len() >= 1024 { format!("{:.1} KB", resp.body.len() as f64 / 1024.0) } else { format!("{} B", resp.body.len()) };
+            ui.painter().text(pos2(sx, line.center().y), Align2::LEFT_CENTER, format!("{} ms · {size}", resp.elapsed.as_millis()), FontId::proportional(12.0), p.muted);
+            // Body / Headers.
+            let tabs = Rect::from_min_size(pos2(line.right() - 190.0, line.center().y - 12.0), vec2(180.0, 24.0));
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(tabs).layout(egui::Layout::left_to_right(egui::Align::Center)));
+            if theme::tool_button(&mut child, rc_kit::ico::FILE_TEXT, tr("Body"), !app.http.show_headers).clicked() {
+                app.http.show_headers = false;
+            }
+            if theme::tool_button(&mut child, rc_kit::ico::MENU, tr("Headers"), app.http.show_headers).clicked() {
+                app.http.show_headers = true;
+            }
+        }
+        None => {}
+    }
+    let Some(Ok(resp)) = &app.http.response else { return };
+    let body_rect = ui.available_rect_before_wrap();
+    ui.painter().hline(body_rect.x_range(), body_rect.top(), egui::Stroke::new(1.0, p.island_border));
+    if app.http.show_headers {
+        let headers = resp.headers.clone();
+        egui::ScrollArea::vertical().id_salt("http_headers").auto_shrink([false, false]).show(ui, |ui| {
+            for (k, v) in &headers {
+                ui.horizontal(|ui| {
+                    ui.add_space(12.0);
+                    ui.label(egui::RichText::new(format!("{k}:")).monospace().color(p.muted));
+                    ui.label(egui::RichText::new(v).monospace());
+                });
+            }
+        });
+    } else if let Some(body) = &mut app.http.body {
+        let config = app.editor_config.clone();
+        let mut eu = ui.new_child(egui::UiBuilder::new().max_rect(body_rect));
+        eu.set_clip_rect(body_rect.intersect(ui.clip_rect()));
+        rc_editor::EditorView::new(body, &config, &app.keymap).show(&mut eu);
+        ui.allocate_rect(body_rect, Sense::hover());
+    }
 }
 
 /// Local History of a file: its revisions, newest first; a click shows the diff with the
@@ -707,6 +899,8 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Notifications => (tr("No notifications"), tr("Messages from builds, tools and updates show up here.")),
         ToolWindow::Nuget => ("NuGet", ""),
         ToolWindow::Monitoring => ("", ""),
+        ToolWindow::HttpClient => (tr("No requests sent"), tr("Open a .http file and click ▶ next to a request, or generate one from the Endpoints window.")),
+        ToolWindow::Endpoints => (tr("No endpoints"), tr("Controllers and minimal APIs of the solution show up here.")),
         ToolWindow::LocalHistory => (tr("No local history"), tr("A copy of the file is kept each time it is saved or changed by another app.")),
         ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Press ⌃⌥H on a method for its calls, or ⌃H on a type for its base and derived types.")),
         ToolWindow::Todo => (tr("No TODO items"), tr("TODO and FIXME comments of the solution show up here.")),

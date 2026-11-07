@@ -225,6 +225,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         app.insight.completion_accepted(doc, data);
     }
     let mut run_test_line = None;
+    let mut http_line = None;
     // ⌘+click: the clicked spot goes into Back/Forward history.
     let navigated_from = out.events.iter().find_map(|e| matches!(e, EditorEvent::NavigateAt(_)).then(|| (doc.path.clone(), doc.editor.caret())));
     let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
@@ -252,6 +253,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
             EditorEvent::CaretMoved => app.session_dirty = true,
             // Editing a preview tab keeps it.
             EditorEvent::Changed => doc.preview = false,
+            EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunApp } if crate::web::is_http_file(&doc.path) => http_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
             _ => {}
         }
@@ -331,6 +333,11 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         }
     }
     insight_actions.extend(from_menu);
+    if let Some(line) = http_line
+        && let Some(i) = app.docs.active
+    {
+        app.send_http_request(i, line);
+    }
     if let Some(line) = run_test_line {
         app.run_test_at(line);
     }

@@ -291,7 +291,21 @@
     "Insert Live Template…": "Live-Template einfügen…",
     "Surround With…": "Umschließen mit…",
     "Insert Live Template": "Live-Template einfügen",
-    "Surround With": "Umschließen mit"
+    "Surround With": "Umschließen mit",
+    "HTTP Client": "HTTP-Client",
+    "Endpoints": "Endpunkte",
+    "No requests sent": "Keine Anfragen gesendet",
+    "Open a .http file and click ▶ next to a request, or generate one from the Endpoints window.": "Öffnen Sie eine .http-Datei und klicken Sie auf ▶ neben einer Anfrage, oder erzeugen Sie eine im Endpunkte-Fenster.",
+    "No endpoints": "Keine Endpunkte",
+    "Controllers and minimal APIs of the solution show up here.": "Controller und Minimal APIs der Projektmappe erscheinen hier.",
+    "Filter": "Filtern",
+    "Generate Request in HTTP Client": "Anfrage im HTTP-Client erzeugen",
+    "Go to Handler": "Zum Handler",
+    "No environment": "Keine Umgebung",
+    "Sending…": "Wird gesendet…",
+    "Body": "Body",
+    "Headers": "Header",
+    "No request at this line": "Keine Anfrage in dieser Zeile"
   },
   "terminal": {
     "Local": "Lokal",

@@ -291,7 +291,21 @@
     "Insert Live Template…": "Insérer un modèle dynamique…",
     "Surround With…": "Entourer avec…",
     "Insert Live Template": "Insérer un modèle dynamique",
-    "Surround With": "Entourer avec"
+    "Surround With": "Entourer avec",
+    "HTTP Client": "Client HTTP",
+    "Endpoints": "Points de terminaison",
+    "No requests sent": "Aucune requête envoyée",
+    "Open a .http file and click ▶ next to a request, or generate one from the Endpoints window.": "Ouvrez un fichier .http et cliquez sur ▶ à côté d'une requête, ou générez-en une depuis la fenêtre des points de terminaison.",
+    "No endpoints": "Aucun point de terminaison",
+    "Controllers and minimal APIs of the solution show up here.": "Les contrôleurs et API minimales de la solution apparaissent ici.",
+    "Filter": "Filtrer",
+    "Generate Request in HTTP Client": "Générer une requête dans le client HTTP",
+    "Go to Handler": "Aller au gestionnaire",
+    "No environment": "Aucun environnement",
+    "Sending…": "Envoi…",
+    "Body": "Corps",
+    "Headers": "En-têtes",
+    "No request at this line": "Aucune requête à cette ligne"
   },
   "terminal": {
     "Local": "Local",

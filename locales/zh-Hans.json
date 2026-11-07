@@ -291,7 +291,21 @@
     "Insert Live Template…": "插入实时模板…",
     "Surround With…": "包围方式…",
     "Insert Live Template": "插入实时模板",
-    "Surround With": "包围方式"
+    "Surround With": "包围方式",
+    "HTTP Client": "HTTP 客户端",
+    "Endpoints": "端点",
+    "No requests sent": "尚未发送请求",
+    "Open a .http file and click ▶ next to a request, or generate one from the Endpoints window.": "打开 .http 文件并点击请求旁的 ▶，或在端点窗口中生成请求。",
+    "No endpoints": "没有端点",
+    "Controllers and minimal APIs of the solution show up here.": "解决方案的控制器和最小 API 显示在这里。",
+    "Filter": "筛选",
+    "Generate Request in HTTP Client": "在 HTTP 客户端中生成请求",
+    "Go to Handler": "转到处理程序",
+    "No environment": "无环境",
+    "Sending…": "正在发送…",
+    "Body": "正文",
+    "Headers": "标头",
+    "No request at this line": "此行没有请求"
   },
   "terminal": {
     "Local": "本地",

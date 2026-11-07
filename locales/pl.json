@@ -291,7 +291,21 @@
     "Insert Live Template…": "Wstaw szablon…",
     "Surround With…": "Otocz…",
     "Insert Live Template": "Wstaw szablon",
-    "Surround With": "Otocz"
+    "Surround With": "Otocz",
+    "HTTP Client": "Klient HTTP",
+    "Endpoints": "Punkty końcowe",
+    "No requests sent": "Nie wysłano żądań",
+    "Open a .http file and click ▶ next to a request, or generate one from the Endpoints window.": "Otwórz plik .http i kliknij ▶ obok żądania lub wygeneruj je w oknie punktów końcowych.",
+    "No endpoints": "Brak punktów końcowych",
+    "Controllers and minimal APIs of the solution show up here.": "Tutaj pojawiają się kontrolery i minimal API rozwiązania.",
+    "Filter": "Filtruj",
+    "Generate Request in HTTP Client": "Wygeneruj żądanie w kliencie HTTP",
+    "Go to Handler": "Przejdź do obsługi",
+    "No environment": "Brak środowiska",
+    "Sending…": "Wysyłanie…",
+    "Body": "Treść",
+    "Headers": "Nagłówki",
+    "No request at this line": "Brak żądania w tym wierszu"
   },
   "terminal": {
     "Local": "Lokalny",
