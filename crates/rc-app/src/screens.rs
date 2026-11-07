@@ -921,3 +921,63 @@ fn screens_coverage() {
     h.run_steps(3);
     h.render().unwrap().save(out.join("coverage-dark.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; runs Shop.Api and writes target/snapshots/profiler-*.png"]
+fn screens_profiler() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    app.runner.selected = app.runner.configs.iter().position(|c| c.name.starts_with("Shop.Api")).unwrap();
+    let outs = app.runner.run_selected();
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "runtime counters", |a| a.monitor.runtime().is_some());
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Monitoring);
+    h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Monitoring, 420.0);
+    h.run_steps(3);
+    // CPU profile of a few seconds while requests come in.
+    h.get_by_label("Start CPU Profiling").click();
+    h.run_steps(2);
+    // Load: requests from a few threads for three seconds.
+    let load: Vec<_> = (0..4)
+        .map(|_| {
+            std::thread::spawn(|| {
+                let end = std::time::Instant::now() + std::time::Duration::from_secs(3);
+                while std::time::Instant::now() < end {
+                    let _ = std::process::Command::new("curl").args(["-s", "-o", "/dev/null", "http://localhost:5112/weatherforecast"]).status();
+                }
+            })
+        })
+        .collect();
+    while !load.iter().all(|t| t.is_finished()) {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    if h.state().monitor.profiling() {
+        h.get_by_label("Stop Profiling").click();
+    }
+    run_frames(&mut h, "the profile", |a| a.monitor.profile.is_some());
+    let prof = h.state().monitor.profile.clone().unwrap().expect("profile");
+    assert!(prof.samples > 0);
+    h.state_mut().monitor.show_tree = true;
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("profiler-cpu-dark.png")).unwrap();
+    h.state_mut().monitor.show_tree = false;
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("profiler-hotspots-dark.png")).unwrap();
+    // Memory snapshot.
+    h.get_by_label("Get Memory Snapshot").click();
+    run_frames(&mut h, "the snapshot", |a| a.monitor.snapshot.is_some());
+    let snap = h.state().monitor.snapshot.clone().unwrap().expect("snapshot");
+    assert!(snap.total_objects > 1000 && snap.types.iter().any(|t| t.name == "System.String"), "{} objects", snap.total_objects);
+    // The web app itself, not MSBuild or dotnet watch.
+    assert!(snap.types.iter().any(|t| t.name.starts_with("Microsoft.AspNetCore")), "{:?}", snap.types.iter().take(20).map(|t| &t.name).collect::<Vec<_>>());
+    assert!(!snap.types.iter().any(|t| t.name.starts_with("Microsoft.Build.")), "profiled MSBuild");
+    h.render().unwrap().save(out.join("profiler-memory-dark.png")).unwrap();
+    h.state_mut().runner.stop_all();
+}

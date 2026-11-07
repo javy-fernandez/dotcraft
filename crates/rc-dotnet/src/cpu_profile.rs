@@ -55,6 +55,9 @@ pub struct CallNode {
 pub struct CpuProfile {
     /// On-CPU samples counted (waits excluded); the runtime samples every ~1 ms.
     pub samples: u64,
+    /// Samples left out because their thread was waiting (blocked in a known wait, or with no
+    /// managed frame), not counted in `samples`.
+    pub idle_samples: u64,
     /// Up to [`TOP_METHODS`] methods, by `total_samples` descending.
     pub hot_methods: Vec<MethodStats>,
     /// `All threads` > `Thread <id>` > outermost frame > ... > leaf frame.
@@ -165,6 +168,10 @@ impl SampleCollector {
     fn into_profile(mut self) -> CpuProfile {
         self.methods.sort_by_key(|m| m.0);
         let methods = self.methods;
+        // Without any method name (no rundown received) every stack is `[native]`: keep them all
+        // rather than dropping everything as idle.
+        let names_known = !methods.is_empty();
+        let mut idle = 0;
         let mut names: HashMap<(u64, bool), String> = HashMap::new();
         let mut resolve = |ip: u64, leaf: bool| -> String {
             names
@@ -189,13 +196,17 @@ impl SampleCollector {
             while frames.last().is_some_and(|f| is_suspension_frame(f)) {
                 frames.pop();
             }
-            if !managed && is_idle(&frames) {
+            if !managed && names_known && is_idle(&frames) {
+                idle += n;
                 continue;
             }
             stacks.push((thread, frames, n));
         }
         stacks.sort();
-        build_profile(&stacks)
+        CpuProfile {
+            idle_samples: idle,
+            ..build_profile(&stacks)
+        }
     }
 }
 
@@ -222,19 +233,35 @@ const WAIT_METHODS: &[&str] = &[
     "Interop+Sys.Read",
     "Interop+Kernel32.GetQueuedCompletionStatus",
     "Interop+Kernel32.ReadFile",
+    "Interop+CoreFoundation.CFRunLoopRun",
+    // macOS FileSystemWatcher thread: only runs the CFRunLoop (P/Invoke inlined, no native frame).
+    "System.IO.FileSystemWatcher+RunningInstance+StaticWatcherRunLoopManager.WatchForFileSystemEventsThreadStart",
+];
+
+/// Managed loops that wait in native code through a P/Invoke whose stub has no name in the
+/// rundown: idle when the innermost managed frame is one of these with native frames above it.
+const WAIT_CALLERS: &[&str] = &[
+    "System.Net.Sockets.SocketAsyncEngine.EventLoop",
+    "System.Threading.PortableThreadPool+IOCompletionPoller.Poll",
+    "System.Threading.TimerQueue.TimerThread",
+    "System.ConsolePal.Read",
+    "System.IO.StdInReader.ReadKey",
 ];
 
 /// Whether a non-managed ("external") sample is a thread waiting rather than using the CPU:
-/// its innermost managed frame is a blocking method, or it has no managed frame at all (runtime
+/// its innermost managed frame is a blocking method (or a [`WAIT_CALLERS`] loop parked in native
+/// code), or it has no managed frame at all (runtime
 /// threads such as the finalizer waiting in native code).
 ///
 /// Needed because some runtimes (seen on .NET 10 / macOS arm64) report every sample as
 /// external, busy threads included.
 fn is_idle(frames: &[String]) -> bool {
-    match frames.iter().rev().find(|f| *f != NATIVE_FRAME) {
-        None => true,
-        Some(f) => WAIT_METHODS.iter().any(|w| f.starts_with(w)),
-    }
+    let Some(i) = frames.iter().rposition(|f| f != NATIVE_FRAME) else {
+        return true;
+    };
+    let f = &frames[i];
+    WAIT_METHODS.iter().any(|w| f.starts_with(w))
+        || (i + 1 < frames.len() && WAIT_CALLERS.iter().any(|w| f.starts_with(w)))
 }
 
 /// Root-first frame names of a leaf-first IP stack, consecutive `[native]` frames merged.
@@ -332,6 +359,7 @@ fn build_profile(stacks: &[(u64, Vec<String>, u64)]) -> CpuProfile {
     hot_methods.truncate(TOP_METHODS);
     CpuProfile {
         samples: total,
+        idle_samples: 0,
         hot_methods,
         call_tree: finish(&mut nodes, 0),
     }
@@ -486,7 +514,7 @@ mod tests {
             ("EventBlock", events),
             ("EventBlock", rundown),
         ]);
-        assert_eq!(p.samples, 6);
+        assert_eq!((p.samples, p.idle_samples), (6, 3));
         let hot: Vec<(&str, u64, u64)> = p
             .hot_methods
             .iter()
@@ -539,6 +567,38 @@ mod tests {
         assert!(p.hot_methods.is_empty());
         let t = &p.call_tree.children[0];
         assert_eq!((t.total_samples, t.self_samples), (2, 2));
+    }
+
+    #[test]
+    fn wait_loops_parked_in_native_code_are_idle() {
+        let f = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        let event_loop = "System.Net.Sockets.SocketAsyncEngine.EventLoop";
+        assert!(is_idle(&f(&["Start", event_loop, NATIVE_FRAME])));
+        // The loop itself running (dispatching events) is CPU.
+        assert!(!is_idle(&f(&["Start", event_loop])));
+        assert!(is_idle(&f(&["Main", "System.Threading.Thread.Sleep"])));
+        assert!(is_idle(&f(&[NATIVE_FRAME])));
+        assert!(is_idle(&[]));
+        assert!(!is_idle(&f(&["Main", "Work.BusyLoop", NATIVE_FRAME])));
+    }
+
+    #[test]
+    fn without_method_names_external_samples_are_kept() {
+        // No rundown: nothing resolves, so nothing can be told apart as idle.
+        let meta = compressed_blobs(&[(
+            0,
+            metadata_with_event_id(1, SAMPLE_PROVIDER, 0, "ThreadSample"),
+        )]);
+        let p = parse(&[
+            ("MetadataBlock", meta),
+            ("StackBlock", stack_block(1, &[&[0x9000, 0x8000]])),
+            (
+                "EventBlock",
+                compressed_events(&[sample(3, 1, 1), sample(3, 1, 1)]),
+            ),
+        ]);
+        assert_eq!((p.samples, p.idle_samples), (2, 0));
+        assert_eq!(p.hot_methods[0].name, NATIVE_FRAME);
     }
 
     #[test]

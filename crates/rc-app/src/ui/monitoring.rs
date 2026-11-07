@@ -2,7 +2,7 @@
 //! counters, like Rider's Monitoring.
 
 use crate::app::DotCraftApp;
-use crate::monitor::{Monitor, Sample};
+use crate::monitor::{Monitor, MonitorTab, Sample};
 use crate::toolwindow::ToolWindow;
 use crate::ui::toolwindows::{HEADER_H, empty_state};
 use egui::{Align2, Color32, FontId, Rect, Sense, Stroke, Ui, pos2, vec2};
@@ -22,21 +22,218 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
     ui.allocate_rect(r, Sense::hover());
     let title = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, ToolWindow::Monitoring.title(), theme::bold(13.0), p.text);
+    // Tabs: charts, memory snapshot, CPU profile.
+    let mut x = title.right() + 14.0;
+    let mut tab = m.tab;
+    for (label, t, icon) in [(tr("Charts"), MonitorTab::Charts, rc_kit::ico::TW_MONITORING), (tr("Memory"), MonitorTab::Memory, rc_kit::ico::PACKAGE), (tr("CPU"), MonitorTab::Cpu, rc_kit::ico::RUN)] {
+        let w = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(12.5), p.text).size().x + 32.0;
+        let br = Rect::from_min_size(pos2(x, r.center().y - 12.0), vec2(w, 24.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        if theme::tool_button(&mut child, icon, label, m.tab == t).clicked() {
+            tab = t;
+        }
+        x += w + 6.0;
+    }
     if let Some(pid) = m.app_pid.or(m.pid) {
         let state = if m.running { trf("{name} · PID {pid}", &[("name", &m.name), ("pid", &pid)]) } else { trf("{name} · exited", &[("name", &m.name)]) };
-        ui.painter().text(pos2(title.right() + 12.0, r.center().y), Align2::LEFT_CENTER, state, FontId::proportional(12.0), p.muted);
+        ui.painter().text(pos2(x + 8.0, r.center().y), Align2::LEFT_CENTER, state, FontId::proportional(12.0), p.muted);
     }
-    let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0, r.center().y - 13.0), vec2(26.0, 26.0));
-    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
-    if theme::icon_button(&mut child, rc_kit::ico::HIDE, true, tr("Hide")).clicked() {
-        app.toggle_tool(ToolWindow::Monitoring);
+    // Actions on the right: Hide, Start/Stop profiling, Get Snapshot.
+    let can = m.target_pid().is_some();
+    let mut action = None;
+    for (i, (icon, tip, enabled)) in [
+        (rc_kit::ico::HIDE, tr("Hide"), true),
+        (if m.profiling() { rc_kit::ico::STOP } else { rc_kit::ico::RUN }, if m.profiling() { tr("Stop Profiling") } else { tr("Start CPU Profiling") }, can || m.profiling()),
+        (rc_kit::ico::DOWNLOAD, tr("Get Memory Snapshot"), can && !m.snapshot_running()),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0 * (i + 1) as f32, r.center().y - 13.0), vec2(26.0, 26.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        if theme::icon_button(&mut child, icon, enabled, tip).clicked() && enabled {
+            action = Some(i);
+        }
+    }
+    let m = &mut app.monitor;
+    m.tab = tab;
+    match action {
+        Some(0) => {
+            app.toggle_tool(ToolWindow::Monitoring);
+            return;
+        }
+        Some(1) if m.profiling() => m.stop_profiling(),
+        Some(1) => m.start_profiling(),
+        Some(2) => m.take_snapshot(),
+        _ => {}
+    }
+    match m.tab {
+        MonitorTab::Charts if m.samples.is_empty() => empty_state(ui, ToolWindow::Monitoring.icon(), tr("Nothing to monitor"), tr("Run a project to see its CPU, memory and garbage collections here.")),
+        MonitorTab::Charts => charts(ui, m),
+        MonitorTab::Memory => memory_tab(ui, m),
+        MonitorTab::Cpu => cpu_tab(ui, m),
+    }
+}
+
+fn message(ui: &mut Ui, text: &str, error: bool) {
+    let p = rc_kit::pal(ui);
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        ui.add_space(12.0);
+        ui.label(egui::RichText::new(text).size(12.5).color(if error { p.error } else { p.muted }));
+    });
+}
+
+/// Memory snapshot: the heap's types by size (shallow), filterable.
+fn memory_tab(ui: &mut Ui, m: &mut Monitor) {
+    let p = rc_kit::pal(ui);
+    if m.snapshot_running() {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
+        message(ui, tr("Taking a memory snapshot (it runs a full garbage collection)…"), false);
         return;
     }
-    if m.samples.is_empty() {
-        empty_state(ui, ToolWindow::Monitoring.icon(), tr("Nothing to monitor"), tr("Run a project to see its CPU, memory and garbage collections here."));
+    let snap = match &m.snapshot {
+        None => {
+            empty_state(ui, rc_kit::ico::PACKAGE, tr("No memory snapshot"), tr("Get a snapshot of the running program to see which types use its memory."));
+            return;
+        }
+        Some(Err(e)) => {
+            message(ui, e, true);
+            return;
+        }
+        Some(Ok(s)) => s,
+    };
+    ui.horizontal(|ui| {
+        ui.add_space(12.0);
+        ui.label(egui::RichText::new(trf("{objects} objects · {size}", &[("objects", &snap.total_objects), ("size", &bytes(snap.total_bytes as f64))])).strong());
+        ui.add_space(16.0);
+        ui.add(egui::TextEdit::singleline(&mut m.filter).hint_text(tr("Filter")).desired_width(240.0));
+    });
+    let f = m.filter.to_lowercase();
+    let total = snap.total_bytes.max(1) as f64;
+    table_header(ui, &[tr("Type"), tr("Objects"), tr("Size"), "%"]);
+    egui::ScrollArea::vertical().id_salt("gcdump").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for t in snap.types.iter().filter(|t| f.is_empty() || t.name.to_lowercase().contains(&f)).take(1000) {
+            let pc = t.size_bytes as f64 * 100.0 / total;
+            table_row(ui, &t.name, &[t.count.to_string(), bytes(t.size_bytes as f64), format!("{pc:.1}")], pc, p.accent);
+        }
+    });
+}
+
+/// CPU profile: hot spots (methods by total time) or the call tree.
+fn cpu_tab(ui: &mut Ui, m: &mut Monitor) {
+    let p = rc_kit::pal(ui);
+    if m.profiling() {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
+        let secs = m.profile_started.map_or(0, |t| t.elapsed().as_secs());
+        message(ui, &trf("Profiling… {secs} s. Stop to see where the time goes.", &[("secs", &secs)]), false);
         return;
     }
-    charts(ui, m);
+    let prof = match &m.profile {
+        None => {
+            empty_state(ui, rc_kit::ico::RUN, tr("No CPU profile"), tr("Start profiling the running program, use it for a while and stop to see its hot methods."));
+            return;
+        }
+        Some(Err(e)) => {
+            message(ui, e, true);
+            return;
+        }
+        Some(Ok(pr)) => pr.clone(),
+    };
+    ui.horizontal(|ui| {
+        ui.add_space(12.0);
+        ui.label(egui::RichText::new(trf("{n} samples", &[("n", &prof.samples)])).strong());
+        ui.add_space(12.0);
+        if theme::tool_button(ui, rc_kit::ico::MENU, tr("Hot Spots"), !m.show_tree).clicked() {
+            m.show_tree = false;
+        }
+        if theme::tool_button(ui, rc_kit::ico::TW_HIERARCHY, tr("Call Tree"), m.show_tree).clicked() {
+            m.show_tree = true;
+        }
+    });
+    let total = prof.samples.max(1) as f64;
+    if !m.show_tree {
+        table_header(ui, &[tr("Method"), tr("Self"), tr("Total"), "%"]);
+        egui::ScrollArea::vertical().id_salt("hot_methods").auto_shrink([false, false]).show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            for h in &prof.hot_methods {
+                let pc = h.total_samples as f64 * 100.0 / total;
+                table_row(ui, &h.name, &[format!("{:.1}%", h.self_samples as f64 * 100.0 / total), format!("{pc:.1}%"), String::new()], pc, p.warn);
+            }
+        });
+        return;
+    }
+    let _ = p;
+    let mut toggle: Option<String> = None;
+    egui::ScrollArea::both().id_salt("call_tree").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        fn walk(ui: &mut Ui, n: &rc_dotnet::cpu_profile::CallNode, path: String, depth: usize, total: f64, expanded: &std::collections::HashSet<String>, toggle: &mut Option<String>) {
+            let p = rc_kit::pal(ui);
+            let open = depth == 0 || expanded.contains(&path);
+            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(500.0), 22.0), Sense::click());
+            if resp.hovered() {
+                ui.painter().rect_filled(rect, 3.0, p.row_hover);
+            }
+            let x0 = rect.left() + 10.0 + depth as f32 * 16.0;
+            if !n.children.is_empty() {
+                let ico = if open { rc_kit::ico::CHEVRON_DOWN } else { rc_kit::ico::CHEVRON_RIGHT };
+                rc_kit::icons::paint(ui.painter(), Rect::from_center_size(pos2(x0 + 7.0, rect.center().y), vec2(14.0, 14.0)), ico, &p, true);
+            }
+            let pc = n.total_samples as f64 * 100.0 / total;
+            let label = format!("{pc:.1}%  {}", n.name);
+            ui.painter().text(pos2(x0 + 18.0, rect.center().y), Align2::LEFT_CENTER, &label, FontId::proportional(12.5), p.text);
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &n.name));
+            if resp.clicked() && depth > 0 {
+                *toggle = Some(path.clone());
+            }
+            if open {
+                for c in &n.children {
+                    walk(ui, c, format!("{path}/{}", c.name), depth + 1, total, expanded, toggle);
+                }
+            }
+        }
+        walk(ui, &prof.call_tree, prof.call_tree.name.clone(), 0, total, &m.expanded, &mut toggle);
+    });
+    if let Some(t) = toggle
+        && !m.expanded.remove(&t)
+    {
+        m.expanded.insert(t);
+    }
+}
+
+fn table_header(ui: &mut Ui, cols: &[&str]) {
+    let p = rc_kit::pal(ui);
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
+    let xs = columns(rect);
+    for (i, c) in cols.iter().enumerate() {
+        let align = if i == 0 { Align2::LEFT_CENTER } else { Align2::RIGHT_CENTER };
+        ui.painter().text(pos2(xs[i], rect.center().y), align, *c, theme::bold(12.0), p.muted);
+    }
+    ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0, p.island_border));
+}
+
+/// Column positions: the name on the left, numbers right-aligned on the right.
+fn columns(rect: Rect) -> [f32; 4] {
+    let right = rect.right() - 12.0;
+    [rect.left() + 12.0, right - 300.0, right - 170.0, right - 40.0]
+}
+
+fn table_row(ui: &mut Ui, name: &str, cells: &[String], percent: f64, color: Color32) {
+    let p = rc_kit::pal(ui);
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, 3.0, p.row_hover);
+    }
+    let xs = columns(rect);
+    let name_rect = Rect::from_min_max(rect.min, pos2(xs[1] - 90.0, rect.bottom()));
+    ui.painter().with_clip_rect(name_rect).text(pos2(xs[0], rect.center().y), Align2::LEFT_CENTER, name, FontId::proportional(12.5), p.text);
+    for (i, c) in cells.iter().enumerate() {
+        ui.painter().text(pos2(xs[i + 1], rect.center().y), Align2::RIGHT_CENTER, c, FontId::monospace(12.0), p.text);
+    }
+    // A bar under the share.
+    let bar = Rect::from_min_size(pos2(xs[3] + 6.0, rect.center().y - 3.0), vec2(30.0 * (percent / 100.0).clamp(0.0, 1.0) as f32, 6.0));
+    ui.painter().rect_filled(bar, 1.0, color);
 }
 
 fn charts(ui: &mut Ui, m: &Monitor) {

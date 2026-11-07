@@ -104,6 +104,9 @@ struct HeapCollector<'a> {
     pointer_size: usize,
     /// `Count` of the full blocking GC that walks the heap.
     dump_gc: Option<u32>,
+    /// `Count` of every `GCEnd` seen: events of different threads are not ordered, so the end of
+    /// the dump GC can arrive before its start.
+    ended: Vec<u32>,
     /// The `GCEnd` of `dump_gc` arrived.
     complete: bool,
     /// Objects and bytes per type id (MethodTable address).
@@ -124,9 +127,17 @@ impl<'a> HeapCollector<'a> {
             end,
             pointer_size: 8,
             dump_gc: None,
+            ended: Vec::new(),
             complete: false,
             objects: HashMap::new(),
             types: HashMap::new(),
+        }
+    }
+
+    fn check_complete(&mut self) {
+        if !self.complete && self.dump_gc.is_some_and(|gc| self.ended.contains(&gc)) {
+            self.complete = true;
+            self.end.store(true, Ordering::Relaxed);
         }
     }
 
@@ -225,14 +236,14 @@ impl Sink for HeapCollector<'_> {
                 };
                 if depth == 2 && ty != GC_TYPE_BACKGROUND {
                     self.dump_gc = Some(count);
+                    self.check_complete();
                 }
             }
             // GCEnd_V1: Count, Depth, ...
             EVENT_GC_END => {
-                let count = Cursor::new(payload).u32().ok();
-                if count.is_some() && count == self.dump_gc {
-                    self.complete = true;
-                    self.end.store(true, Ordering::Relaxed);
+                if let Ok(count) = Cursor::new(payload).u32() {
+                    self.ended.push(count);
+                    self.check_complete();
                 }
             }
             EVENT_GC_BULK_NODE => self.bulk_node(payload)?,
@@ -358,6 +369,7 @@ mod tests {
         let events = compressed_blobs(&[
             (1, gc_start(6, 0, 0)), // a gen0 GC first: ignored
             (2, gc_end(6)),
+            (2, gc_end(7)), // the end of the dump GC may come first (another thread's buffer)
             (1, gc_start(7, 2, 0)),
             (
                 4,
@@ -372,7 +384,6 @@ mod tests {
                     (0xE, "System.Byte", 0, &[]),
                 ]),
             ),
-            (2, gc_end(7)),
         ]);
         let end = AtomicBool::new(false);
         let mut heap = HeapCollector::new(&end);
