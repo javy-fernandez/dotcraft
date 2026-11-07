@@ -55,6 +55,8 @@ pub struct DotCraftApp {
     pub notices: Vec<Notice>,
     /// Monitoring: CPU and memory of the program in the selected Run tab.
     pub monitor: crate::monitor::Monitor,
+    /// TODO tool window: the workspace's TODO and FIXME comments.
+    pub todos: Option<crate::todo::Todos>,
     /// The update check under way, and whether it was asked for (Check for Updates…).
     update_check: Option<(std::sync::mpsc::Receiver<Result<crate::update::Release, String>>, bool)>,
     /// A newer release, shown in the bottom-right notice until dismissed.
@@ -147,6 +149,7 @@ impl DotCraftApp {
             dialog: None,
             notices: Vec::new(),
             monitor: crate::monitor::Monitor::new(waker.clone()),
+            todos: None,
             update_check: None,
             update: None,
             insight: Insight::new(waker.clone()),
@@ -293,6 +296,7 @@ impl DotCraftApp {
         let _ = self.settings.save();
         self._watcher = FileWatcher::new(&ws.root, self.fs_inbox.sender()).ok();
         self.files.open(&ws.root, self.waker.clone());
+        self.todos = Some(crate::todo::Todos::new(&ws.root, self.waker.clone()));
         self.vcs.open(&ws.root);
         let session = Session::load(ws.key_path());
         let projects = match &ws.kind {
@@ -379,6 +383,7 @@ impl DotCraftApp {
         self.runner.stop_all();
         self.runner.clear();
         self.files.close();
+        self.todos = None;
         self.vcs.close();
         self.find_in_files = None;
         self.search_everywhere = None;
@@ -394,6 +399,8 @@ impl DotCraftApp {
     }
 
     fn restore_session(&mut self, s: Session) {
+        // Before the files open: each picks its own up.
+        self.docs.bookmarks = s.bookmarks.iter().map(|(p, b)| (p.clone(), b.iter().copied().collect())).collect();
         // A solution without a layout of its own starts with the last one used.
         self.dock = Dock::from_session(if s.tool_windows.is_empty() { &self.settings.tool_windows } else { &s.tool_windows });
         self.explorer.expanded = s.expanded.iter().cloned().collect();
@@ -476,6 +483,13 @@ impl DotCraftApp {
                 v
             },
             show_all_files: self.explorer.show_all,
+            bookmarks: {
+                let mut m: std::collections::BTreeMap<std::path::PathBuf, Vec<(usize, Option<char>)>> = Default::default();
+                for b in self.docs.all_bookmarks() {
+                    m.entry(b.path).or_default().push((b.line, b.mnemonic));
+                }
+                m
+            },
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
@@ -863,6 +877,14 @@ impl DotCraftApp {
             Action::ZoomIn => self.set_zoom(ctx, self.settings.ui_zoom + 0.1),
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
             Action::ZoomReset => self.set_zoom(ctx, 1.0),
+            Action::ShowBookmarks => self.dock.show(ToolWindow::Bookmarks),
+            Action::GotoBookmark(n) => {
+                let c = char::from(b'0' + n);
+                match self.docs.all_bookmarks().into_iter().find(|b| b.mnemonic == Some(c)) {
+                    Some(b) => self.open_at(&b.path, b.line, 0),
+                    None => self.notify(rc_kit::i18n::trf("No bookmark {n}", &[("n", &c)]), false),
+                }
+            }
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
             Action::RecentLocations => {
                 if !self.nav_back.is_empty() {
@@ -1376,6 +1398,9 @@ impl eframe::App for DotCraftApp {
         let target = self.runner.runs.get(self.runner.active_run).filter(|r| r.running()).or_else(|| self.runner.runs.iter().rev().find(|r| r.running()));
         self.monitor.follow(target.and_then(|r| Some((r.name.clone(), r.handle.as_ref()?.pid()?))));
         self.monitor.poll();
+        if let Some(t) = &mut self.todos {
+            t.poll();
+        }
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
         for (_, ev) in self.terminals.poll() {

@@ -46,6 +46,8 @@ pub(crate) struct Metrics {
     /// Y offset of the galley inside a row (centres the glyphs).
     pub text_dy: f32,
     pub gutter_w: f32,
+    /// Centre x of the bookmark column.
+    pub bookmark_x: f32,
     pub num_right: f32,
     pub icons_x: f32,
     pub vcs_x: f32,
@@ -194,13 +196,15 @@ pub(crate) fn metrics(ui: &Ui, state: &EditorState, config: &EditorConfig, rect:
         let longest = a.iter().map(|s| s.chars().count()).max().unwrap_or(0).min(40) as f32;
         (longest * char_w * 0.92 + 16.0).round()
     });
-    let left = rect.left() + ann_w;
+    // Bookmarks take a column of their own while the file has any.
+    let bm_w = if state.bookmarks.is_empty() { 0.0 } else { 16.0 };
+    let left = rect.left() + ann_w + bm_w;
     let num_right = snap(left + 10.0 + num_w);
     let icons_x = num_right + 8.0;
     let vcs_x = icons_x + 18.0;
     let fold_x = vcs_x + 5.0;
     let gutter_w = snap(fold_x + 14.0 - rect.left() + 2.0);
-    Metrics { row_h, char_w, text_dy, gutter_w, num_right, icons_x, vcs_x, fold_x }
+    Metrics { row_h, char_w, text_dy, gutter_w, bookmark_x: rect.left() + ann_w + 12.0, num_right, icons_x, vcs_x, fold_x }
 }
 
 fn display_row_count(state: &mut EditorState) -> usize {
@@ -637,6 +641,17 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
             let g = painter.layout_no_wrap(number, font.clone(), color);
             let gy = (center_y - g.size().y / 2.0).round();
             painter.galley(pos2(m.num_right - g.size().x, gy), g, color);
+        }
+        // Bookmark: the flag, or the mnemonic's letter in a box, left of the line number.
+        if let Some(mnemonic) = state.bookmarks.get(&l) {
+            let r = Rect::from_center_size(pos2(m.bookmark_x, center_y), Vec2::splat(14.0));
+            match mnemonic {
+                Some(c) => {
+                    painter.rect(r, 3.0, pal.badge_bg, egui::Stroke::new(1.0, pal.control_border), egui::StrokeKind::Inside);
+                    painter.text(r.center(), egui::Align2::CENTER_CENTER, c.to_string(), egui::FontId::monospace(10.5), pal.text);
+                }
+                None => icons::paint(&painter, Rect::from_center_size(r.center(), Vec2::splat(16.0)), ico::BOOKMARK, pal, true),
+            }
         }
         // Execution point arrow.
         if Some(l) == state.execution_line {

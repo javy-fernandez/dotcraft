@@ -133,6 +133,8 @@ pub struct EditorState {
     /// Semantic colours per line (from the language server), char columns.
     pub semantic: Vec<Vec<Span>>,
     pub breakpoints: BTreeMap<usize, BreakpointKind>,
+    /// Bookmarks (F3): line → mnemonic (0-9, A-Z) or none.
+    pub bookmarks: BTreeMap<usize, Option<char>>,
     pub gutter_icons: BTreeMap<usize, GutterIcon>,
     pub line_changes: BTreeMap<usize, LineChange>,
     pub search_matches: Vec<(usize, usize)>,
@@ -191,6 +193,7 @@ impl EditorState {
             inlays: Vec::new(),
             semantic: Vec::new(),
             breakpoints: BTreeMap::new(),
+            bookmarks: BTreeMap::new(),
             gutter_icons: BTreeMap::new(),
             line_changes: BTreeMap::new(),
             search_matches: Vec::new(),
@@ -388,6 +391,7 @@ impl EditorState {
             let added = e.new_end_point.row as isize - e.old_end_point.row as isize;
             let row = e.start_point.row;
             shift_lines(&mut self.breakpoints, row, added);
+            shift_lines(&mut self.bookmarks, row, added);
             shift_lines(&mut self.gutter_icons, row, added);
             shift_line_set(&mut self.folded, row, added);
             if added != 0 && row < self.semantic.len() {

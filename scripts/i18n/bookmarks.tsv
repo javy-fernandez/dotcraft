@@ -1,0 +1,12 @@
+# Bookmarks. Import: python3 scripts/i18n_tsv.py app scripts/i18n/bookmarks.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Bookmarks	Marcadores	Signets	Marcadores	Lesezeichen	Zakładki	书签	ブックマーク
+Toggle Bookmark	Alternar marcador	Basculer le signet	Alternar marcador	Lesezeichen umschalten	Przełącz zakładkę	切换书签	ブックマークの切り替え
+Toggle Bookmark with Mnemonic	Alternar marcador con mnemónico	Basculer le signet avec mnémonique	Alternar marcador com mnemônico	Lesezeichen mit Kürzel umschalten	Przełącz zakładkę z symbolem	切换带助记符的书签	ニーモニック付きブックマークの切り替え
+Bookmark Mnemonic	Mnemónico del marcador	Mnémonique du signet	Mnemônico do marcador	Lesezeichen-Kürzel	Symbol zakładki	书签助记符	ブックマークのニーモニック
+Type a digit or letter. Taken ones move here.	Escribe un dígito o una letra. Si ya está en uso, se mueve aquí.	Tapez un chiffre ou une lettre. S'il est déjà pris, il est déplacé ici.	Digite um dígito ou uma letra. Se já estiver em uso, ele é movido para cá.	Geben Sie eine Ziffer oder einen Buchstaben ein. Belegte werden hierher verschoben.	Wpisz cyfrę lub literę. Zajęte zostaną przeniesione tutaj.	输入数字或字母。已占用的会移到这里。	数字または文字を入力します。使用中のものはここに移動します。
+No bookmarks	No hay marcadores	Aucun signet	Nenhum marcador	Keine Lesezeichen	Brak zakładek	没有书签	ブックマークはありません
+Press F3 on a line to bookmark it, or ⌥F3 to give it a letter or digit.	Pulsa F3 en una línea para marcarla, o ⌥F3 para darle una letra o un dígito.	Appuyez sur F3 sur une ligne pour la marquer, ou ⌥F3 pour lui donner une lettre ou un chiffre.	Pressione F3 em uma linha para marcá-la, ou ⌥F3 para dar a ela uma letra ou um dígito.	Drücken Sie F3 in einer Zeile, um sie zu markieren, oder ⌥F3 für einen Buchstaben oder eine Ziffer.	Naciśnij F3 w wierszu, aby dodać zakładkę, lub ⌥F3, aby nadać jej literę lub cyfrę.	在某行按 F3 添加书签，或按 ⌥F3 为其指定字母或数字。	行で F3 を押すとブックマーク、⌥F3 で文字や数字を付けられます。
+Go to Bookmark	Ir al marcador	Aller au signet	Ir para o marcador	Zum Lesezeichen	Przejdź do zakładki	转到书签	ブックマークへ移動
+Remove Bookmark	Quitar marcador	Supprimer le signet	Remover marcador	Lesezeichen entfernen	Usuń zakładkę	删除书签	ブックマークを削除
+No bookmark {n}	No hay marcador {n}	Aucun signet {n}	Nenhum marcador {n}	Kein Lesezeichen {n}	Brak zakładki {n}	没有书签 {n}	ブックマーク {n} はありません

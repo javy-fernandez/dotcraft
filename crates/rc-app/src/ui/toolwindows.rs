@@ -32,6 +32,13 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Debug => crate::ui::debug_window::show(app, ui),
         ToolWindow::Nuget => crate::ui::nuget::window(app, ui),
         ToolWindow::Monitoring => crate::ui::monitoring::show(app, ui),
+        ToolWindow::Todo => todo_window(app, ui),
+        ToolWindow::Bookmarks => {
+            if header(ui, tw.title()) {
+                app.toggle_tool(tw);
+            }
+            bookmarks(app, ui);
+        }
         ToolWindow::Tests => crate::ui::run_windows::tests(app, ui),
         ToolWindow::Terminal => crate::ui::run_windows::terminal(app, ui),
         ToolWindow::Commit => crate::ui::git::commit_window(app, ui),
@@ -89,6 +96,136 @@ fn list_row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, s
     }
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     resp
+}
+
+/// TODO: Project / Current File tabs, a refresh button, the comments by file.
+fn todo_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let now = ui.input(|i| i.time);
+    let active = app.docs.active_doc().map(|d| d.path.clone());
+    let Some(todos) = &mut app.todos else {
+        if header(ui, "TODO") {
+            app.toggle_tool(ToolWindow::Todo);
+        }
+        let (title, hint) = empty_text(ToolWindow::Todo);
+        empty_state(ui, ToolWindow::Todo.icon(), title, hint);
+        return;
+    };
+    // Rescan when the window shows again after a while (files changed meanwhile).
+    if !todos.scanning && todos.scanned_at.is_none_or(|t| now - t > 30.0) {
+        todos.refresh(now);
+    }
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, "TODO", theme::bold(13.0), p.text);
+    let mut x = t.right() + 14.0;
+    let mut hide = false;
+    let mut refresh = false;
+    for (label, current) in [(tr("Project"), false), (tr("Current File"), true)] {
+        let w = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(12.5), p.text).size().x + 32.0;
+        let br = Rect::from_min_size(pos2(x, r.center().y - 12.0), vec2(w, 24.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        if theme::tool_button(&mut child, if current { rc_kit::ico::FILE_TEXT } else { rc_kit::ico::TW_PROJECT }, label, todos.current_file == current).clicked() {
+            todos.current_file = current;
+        }
+        x += w + 6.0;
+    }
+    if todos.scanning {
+        ui.painter().text(pos2(x + 6.0, r.center().y), Align2::LEFT_CENTER, tr("Scanning…"), FontId::proportional(12.0), p.muted);
+    } else {
+        ui.painter().text(pos2(x + 6.0, r.center().y), Align2::LEFT_CENTER, rc_kit::i18n::trf("{n} items", &[("n", &todos.count())]), FontId::proportional(12.0), p.muted);
+    }
+    for (i, (icon, tip)) in [(rc_kit::ico::HIDE, tr("Hide")), (rc_kit::ico::REFRESH, tr("Refresh"))].into_iter().enumerate() {
+        let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0 * (i + 1) as f32, r.center().y - 13.0), vec2(26.0, 26.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        if theme::icon_button(&mut child, icon, true, tip).clicked() {
+            if i == 0 { hide = true } else { refresh = true }
+        }
+    }
+    if refresh {
+        todos.refresh(now);
+    }
+    let files: Vec<crate::todo::TodoFile> = todos.files.iter().filter(|f| !todos.current_file || active.as_ref() == Some(&f.path)).cloned().collect();
+    let mut open: Option<(std::path::PathBuf, usize, usize)> = None;
+    if files.is_empty() && !todos.scanning {
+        let (title, hint) = empty_text(ToolWindow::Todo);
+        empty_state(ui, ToolWindow::Todo.icon(), title, hint);
+    } else {
+        egui::ScrollArea::vertical().id_salt("todo").auto_shrink([false, false]).show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            for f in &files {
+                let name = f.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                let dir = f.rel.rsplit_once('/').map_or("", |(d, _)| d);
+                list_row(ui, 0, rc_kit::icons::for_file(&name), &name, &format!("{dir}  {}", rc_kit::i18n::trf("{n} items", &[("n", &f.items.len())])), false);
+                for item in &f.items {
+                    let resp = list_row(ui, 1, rc_kit::ico::TW_TODO, &item.text, &format!(":{}", item.line + 1), false);
+                    if resp.double_clicked() || resp.clicked() {
+                        open = Some((f.path.clone(), item.line, item.col));
+                    }
+                }
+            }
+        });
+    }
+    if hide {
+        app.toggle_tool(ToolWindow::Todo);
+    }
+    if let Some((path, line, col)) = open {
+        app.open_at(&path, line, col);
+    }
+}
+
+/// Bookmarks by file: double click opens, the context menu removes.
+fn bookmarks(app: &mut DotCraftApp, ui: &mut Ui) {
+    let marks = app.docs.all_bookmarks();
+    if marks.is_empty() {
+        let (title, hint) = empty_text(ToolWindow::Bookmarks);
+        empty_state(ui, ToolWindow::Bookmarks.icon(), title, hint);
+        return;
+    }
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    let mut open: Option<(std::path::PathBuf, usize)> = None;
+    let mut remove: Option<(std::path::PathBuf, usize)> = None;
+    egui::ScrollArea::vertical().id_salt("bookmarks").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let mut last: Option<&std::path::Path> = None;
+        for b in &marks {
+            if last != Some(b.path.as_path()) {
+                let name = b.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                let dir = root.as_ref().and_then(|r| b.path.parent()?.strip_prefix(r).ok()).map(|d| d.display().to_string()).unwrap_or_default();
+                list_row(ui, 0, rc_kit::icons::for_file(&name), &name, &dir, false);
+                last = Some(b.path.as_path());
+            }
+            let text = match app.docs.index_of(&b.path) {
+                Some(i) => app.docs.list[i].editor.buffer.line_text(b.line),
+                None => std::fs::read_to_string(&b.path).ok().and_then(|t| t.lines().nth(b.line).map(str::to_string)).unwrap_or_default(),
+            };
+            let label = match b.mnemonic {
+                Some(c) => format!("{c}  {}", text.trim()),
+                None => text.trim().to_string(),
+            };
+            let resp = list_row(ui, 1, rc_kit::ico::BOOKMARK, &label, &format!(":{}", b.line + 1), false);
+            if resp.double_clicked() {
+                open = Some((b.path.clone(), b.line));
+            }
+            resp.context_menu(|ui| {
+                if theme::menu_item(ui, Some(rc_kit::ico::BOOKMARK), tr("Go to Bookmark"), false).clicked() {
+                    open = Some((b.path.clone(), b.line));
+                    ui.close();
+                }
+                if theme::menu_item(ui, Some(rc_kit::ico::DELETE), tr("Remove Bookmark"), false).clicked() {
+                    remove = Some((b.path.clone(), b.line));
+                    ui.close();
+                }
+            });
+        }
+    });
+    if let Some((path, line)) = open {
+        app.open_at(&path, line, 0);
+    }
+    if let Some((path, line)) = remove {
+        app.docs.set_bookmark(&path, line, None);
+        app.session_dirty = true;
+    }
 }
 
 fn problems(app: &mut DotCraftApp, ui: &mut Ui) {
@@ -332,6 +469,8 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Notifications => (tr("No notifications"), tr("Messages from builds, tools and updates show up here.")),
         ToolWindow::Nuget => ("NuGet", ""),
         ToolWindow::Monitoring => ("", ""),
+        ToolWindow::Todo => (tr("No TODO items"), tr("TODO and FIXME comments of the solution show up here.")),
+        ToolWindow::Bookmarks => (tr("No bookmarks"), tr("Press F3 on a line to bookmark it, or ⌥F3 to give it a letter or digit.")),
         ToolWindow::Explorer => ("", ""),
     }
 }

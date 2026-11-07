@@ -21,6 +21,8 @@ pub enum Dialog {
     Settings { draft: Box<Settings>, page: SettingsPage },
     About,
     GotoLine { text: String, focus: bool },
+    /// ⌥F3: pick the bookmark's digit or letter.
+    BookmarkMnemonic { path: PathBuf, line: usize },
     NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, error: Option<String> },
     Rename { path: PathBuf, name: String, error: Option<String> },
     ConfirmDelete { path: PathBuf },
@@ -63,6 +65,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
         Dialog::About => about(app, ctx),
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
+        Dialog::BookmarkMnemonic { path, line } => bookmark_mnemonic(app, ctx, path, *line),
         Dialog::NewFile { dir, name, kind, error } => new_file(app, ctx, dir, name, *kind, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
@@ -299,6 +302,53 @@ fn about(app: &mut DotCraftApp, ctx: &Context) -> Outcome {
         return Outcome::Close;
     }
     if close || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Rider's mnemonic picker: a grid of 1-9, 0 and A-Z; typing the key also picks it.
+fn bookmark_mnemonic(app: &mut DotCraftApp, ctx: &Context, path: &std::path::Path, line: usize) -> Outcome {
+    let current = app.docs.all_bookmarks().into_iter().find(|b| b.path == path && b.line == line).and_then(|b| b.mnemonic);
+    let used: Vec<char> = app.docs.all_bookmarks().into_iter().filter_map(|b| b.mnemonic).collect();
+    let keys: Vec<char> = "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
+    let typed = ctx.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::Text(t) => t.chars().next().map(|c| c.to_ascii_uppercase()).filter(|c| keys.contains(c)),
+            _ => None,
+        })
+    });
+    let ((picked, cancel), esc) = modal(ctx, "bookmark_mnemonic", 400.0, |ui| {
+        title(ui, tr("Bookmark Mnemonic"));
+        let mut picked = typed;
+        let p = rc_kit::pal(ui);
+        for row in keys.chunks(10) {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                for &c in row {
+                    let selected = current == Some(c);
+                    let (r, resp) = ui.allocate_exact_size(vec2(32.0, 28.0), egui::Sense::click());
+                    let fill = if selected { p.selection } else if resp.hovered() { p.hover } else { p.control_bg };
+                    ui.painter().rect(r, 4.0, fill, egui::Stroke::new(1.0, p.control_border), egui::StrokeKind::Inside);
+                    let color = if used.contains(&c) && !selected { p.muted } else { p.text };
+                    ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, c.to_string(), egui::FontId::monospace(13.0), color);
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, c.to_string()));
+                    if resp.clicked() {
+                        picked = Some(c);
+                    }
+                }
+            });
+            ui.add_space(4.0);
+        }
+        ui.label(egui::RichText::new(tr("Type a digit or letter. Taken ones move here.")).size(12.0).color(p.muted));
+        let (_, cancel) = buttons(ui, tr("OK"), false);
+        (picked, cancel)
+    });
+    if let Some(c) = picked {
+        // The same key again removes the mnemonic (the bookmark stays).
+        let mark = if current == Some(c) { None } else { Some(c) };
+        app.docs.set_bookmark(path, line, Some(mark));
+        app.session_dirty = true;
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
 fn goto_line(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus: &mut bool) -> Outcome {

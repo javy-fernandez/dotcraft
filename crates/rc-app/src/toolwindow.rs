@@ -21,6 +21,8 @@ pub enum ToolWindow {
     Notifications,
     Nuget,
     Monitoring,
+    Bookmarks,
+    Todo,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,10 +58,11 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 14] = [
+    pub const ALL: [ToolWindow; 16] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
+        ToolWindow::Bookmarks,
         ToolWindow::Run,
         ToolWindow::Debug,
         ToolWindow::Tests,
@@ -67,6 +70,7 @@ impl ToolWindow {
         ToolWindow::Monitoring,
         ToolWindow::Find,
         ToolWindow::Problems,
+        ToolWindow::Todo,
         ToolWindow::Terminal,
         ToolWindow::Git,
         ToolWindow::Nuget,
@@ -89,6 +93,8 @@ impl ToolWindow {
             ToolWindow::Notifications => "notifications",
             ToolWindow::Nuget => "nuget",
             ToolWindow::Monitoring => "monitoring",
+            ToolWindow::Bookmarks => "bookmarks",
+            ToolWindow::Todo => "todo",
         }
     }
 
@@ -108,6 +114,8 @@ impl ToolWindow {
             ToolWindow::Notifications => tr("Notifications"),
             ToolWindow::Nuget => "NuGet",
             ToolWindow::Monitoring => tr("Monitoring"),
+            ToolWindow::Bookmarks => tr("Bookmarks"),
+            ToolWindow::Todo => "TODO",
         }
     }
 
@@ -127,12 +135,14 @@ impl ToolWindow {
             ToolWindow::Notifications => ico::TW_NOTIFICATIONS,
             ToolWindow::Nuget => ico::PACKAGE,
             ToolWindow::Monitoring => ico::TW_MONITORING,
+            ToolWindow::Bookmarks => ico::TW_BOOKMARKS,
+            ToolWindow::Todo => ico::TW_TODO,
         }
     }
 
     pub fn side(self) -> Side {
         match self {
-            ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit => Side::Left,
+            ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit | ToolWindow::Bookmarks => Side::Left,
             ToolWindow::Notifications => Side::Right,
             _ => Side::Bottom,
         }

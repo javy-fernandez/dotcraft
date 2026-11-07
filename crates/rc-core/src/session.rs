@@ -82,6 +82,8 @@ pub struct Session {
     pub expanded: Vec<String>,
     /// Explorer › Show All Files (bin, obj and files outside the projects).
     pub show_all_files: bool,
+    /// Bookmarks: file → (0-based line, mnemonic).
+    pub bookmarks: BTreeMap<PathBuf, Vec<(usize, Option<char>)>>,
     pub run_configuration: Option<String>,
     /// Breakpoints: file → 0-based lines (with an optional condition).
     pub breakpoints: BTreeMap<PathBuf, Vec<(usize, Option<String>)>>,

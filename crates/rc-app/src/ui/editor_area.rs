@@ -277,6 +277,17 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
                 }
                 app.session_dirty = true;
             }
+            Action::ToggleBookmark => {
+                let line = doc.editor.caret_line_col().0;
+                if doc.editor.bookmarks.remove(&line).is_none() {
+                    doc.editor.bookmarks.insert(line, None);
+                }
+                app.session_dirty = true;
+            }
+            Action::ToggleBookmarkMnemonic => {
+                let line = doc.editor.caret_line_col().0;
+                app.dialog = Some(crate::ui::dialogs::Dialog::BookmarkMnemonic { path: doc.path.clone(), line });
+            }
             Action::NextError | Action::PreviousError => {
                 doc.editor.next_diagnostic(a == Action::NextError);
             }
@@ -368,6 +379,8 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
         }
         ui.separator();
         entry(ui, Some(ico::BREAKPOINT), tr("Toggle Line Breakpoint"), Action::ToggleBreakpoint);
+        entry(ui, Some(ico::BOOKMARK), tr("Toggle Bookmark"), Action::ToggleBookmark);
+        entry(ui, None, tr("Toggle Bookmark with Mnemonic"), Action::ToggleBookmarkMnemonic);
     });
     if let Some(cmd) = edit {
         forward_edit(&resp.ctx, cmd);

@@ -717,3 +717,39 @@ fn screens_monitoring_live() {
     h.state_mut().runner.stop_all();
     run_frames(&mut h, "exit", |a| !a.monitor.running);
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/bookmarks-*.png"]
+fn screens_bookmarks() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    let calc = fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs");
+    let order = fixtures().join("Shop/src/Shop.Core/Order.cs");
+    app.docs.set_bookmark(&order, 2, Some(Some('2')));
+    app.open_file(&calc);
+    app.docs.set_bookmark(&calc, 4, Some(None));
+    app.docs.set_bookmark(&calc, 8, Some(Some('1')));
+    app.dock.show(crate::toolwindow::ToolWindow::Bookmarks);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("bookmarks-dark.png")).unwrap();
+    // ⌃2 jumps to Order.cs.
+    {
+        let ctx = h.ctx.clone();
+        h.state_mut().run_ide_action(&ctx, rc_editor::Action::GotoBookmark(2));
+    }
+    h.run_steps(2);
+    assert_eq!(h.state().docs.active_doc().unwrap().path, order);
+    // ⌥F3 picker.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::BookmarkMnemonic { path: order.clone(), line: 2 });
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("bookmarks-mnemonic-dark.png")).unwrap();
+    h.get_by_label("A").click();
+    h.run_steps(2);
+    assert!(h.state().docs.all_bookmarks().iter().any(|b| b.path == order && b.mnemonic == Some('A')));
+}
