@@ -499,10 +499,12 @@ mod tests {
     #[test]
     fn editorconfig_save_policies_normalize_disk_and_keep_undo_and_bookmarks() {
         let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("App.cs");
+        // Documents open by canonical path (/private/var on macOS).
+        let root = dir.path().canonicalize().unwrap();
+        let file = root.join("App.cs");
         let source = "class App {  \n    int value;\t\n}  ";
         std::fs::write(&file, source).unwrap();
-        std::fs::write(dir.path().join(".editorconfig"), "root=true\n[*.cs]\ntrim_trailing_whitespace=true\ninsert_final_newline=true\nend_of_line=crlf\ncharset=utf-8-bom\n").unwrap();
+        std::fs::write(root.join(".editorconfig"), "root=true\n[*.cs]\ntrim_trailing_whitespace=true\ninsert_final_newline=true\nend_of_line=crlf\ncharset=utf-8-bom\n").unwrap();
         let (wake, frames) = std::sync::mpsc::channel();
         let mut docs = Docs::with_waker(ParserPool::new(Arc::new(|| {})), rc_core::Waker::new(move || { let _ = wake.send(()); }));
         docs.open(&file).unwrap();
@@ -525,9 +527,11 @@ mod tests {
     #[test]
     fn editorconfig_and_upstream_bookmarks_survive_reopen_together() {
         let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("App.cs");
+        // Documents open by canonical path (/private/var on macOS).
+        let root = dir.path().canonicalize().unwrap();
+        let file = root.join("App.cs");
         std::fs::write(&file, "class App {\n    int value;\n}\n").unwrap();
-        std::fs::write(dir.path().join(".editorconfig"), "root=true\n[*.cs]\nindent_size=2\nindent_style=space\n").unwrap();
+        std::fs::write(root.join(".editorconfig"), "root=true\n[*.cs]\nindent_size=2\nindent_style=space\n").unwrap();
         let (wake, frames) = std::sync::mpsc::channel();
         let mut docs = Docs::with_waker(ParserPool::new(Arc::new(|| {})), rc_core::Waker::new(move || { let _ = wake.send(()); }));
         let index = docs.open(&file).unwrap();
@@ -640,9 +644,11 @@ mod tests {
     #[test]
     fn editorconfig_survives_reload_and_renames_and_restores_the_new_disk_baseline() {
         let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("App.cs");
-        let renamed = dir.path().join("App.json");
-        let config = dir.path().join(".editorconfig");
+        // Documents open by canonical path (/private/var on macOS).
+        let root = dir.path().canonicalize().unwrap();
+        let file = root.join("App.cs");
+        let renamed = root.join("App.json");
+        let config = root.join(".editorconfig");
         std::fs::write(&file, "class App {\n    int value;\n}\n").unwrap();
         std::fs::write(&config, "root=true\n[*.cs]\nindent_style=space\nindent_size=2\n[*.json]\nindent_style=tab\ntab_width=3\n").unwrap();
         let (wake, frames) = std::sync::mpsc::channel();
