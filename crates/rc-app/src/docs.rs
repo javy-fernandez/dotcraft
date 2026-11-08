@@ -143,6 +143,7 @@ pub fn read_text(path: &Path) -> Result<(String, bool, Option<SystemTime>), Stri
 }
 
 impl Docs {
+    #[cfg(test)]
     pub fn new(pool: ParserPool) -> Self {
         Self::with_waker(pool, rc_core::Waker::noop())
     }

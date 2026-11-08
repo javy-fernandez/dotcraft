@@ -73,39 +73,39 @@ impl SdkSelection {
         // Save and Close remain outside the scroll area even with long paths or errors.
         let body_height = (ui.ctx().content_rect().height() - 172.0).clamp(36.0, 400.0);
         egui::ScrollArea::vertical().id_salt("sdk_selection_body").max_height(body_height).auto_shrink([false, true]).show(ui, |ui| {
+            let p = rc_kit::pal(ui);
             ui.label(tr("Writes global.json in the project root. Ancestor files are never changed."));
             let path = self.root.join("global.json").display().to_string();
-            ui.add(egui::Label::new(&path).truncate()).on_hover_text(&path);
-            if self.loading || self.saving {
-                ui.spinner();
-            }
+            ui.add(egui::Label::new(egui::RichText::new(&path).monospace().size(12.0).color(p.muted)).truncate()).on_hover_text(&path);
+            ui.add_space(10.0);
             if let Some(file) = &self.file {
                 ui.label(trf("Current SDK pin: {version}", &[("version", &file.version().unwrap_or(tr("None")))]));
+                ui.add_space(6.0);
             }
-            ui.add_enabled_ui(!self.loading && !self.saving, |ui| {
-                ui.label(tr("Installed SDK"));
-                egui::ComboBox::from_id_salt("workspace_sdk_version")
-                    .width(ui.available_width().min(320.0))
-                    .selected_text(if self.selected.is_empty() { tr("Select an SDK") } else { &self.selected })
-                    .show_ui(ui, |ui| {
-                        for sdk in &self.versions {
-                            ui.selectable_value(&mut self.selected, sdk.version.clone(), &sdk.version);
-                        }
-                    });
-                if !self.loading && self.versions.is_empty() {
-                    ui.label(tr("No installed SDKs were found."));
+            ui.label(egui::RichText::new(tr("Installed SDK")).size(12.0).color(p.muted));
+            ui.horizontal(|ui| {
+                let options: Vec<String> = self.versions.iter().map(|sdk| sdk.version.clone()).collect();
+                let selected = if self.selected.is_empty() { tr("Select an SDK").to_string() } else { self.selected.clone() };
+                if let Some(i) = crate::ui::kit::dropdown(ui, "workspace_sdk_version", &selected, &options, !self.loading && !self.saving) {
+                    self.selected = options[i].clone();
+                }
+                if self.loading || self.saving {
+                    ui.add(egui::Spinner::new().size(14.0));
                 }
             });
+            if !self.loading && self.versions.is_empty() {
+                ui.label(egui::RichText::new(tr("No installed SDKs were found.")).size(12.5).color(p.warn));
+            }
             if let Some(error) = &self.error {
-                ui.colored_label(rc_kit::pal(ui).error, trf("Could not update SDK selection: {error}", &[("error", error)]));
+                ui.label(egui::RichText::new(trf("Could not update SDK selection: {error}", &[("error", error)])).size(12.5).color(p.error));
             }
         });
-        ui.add_space(8.0);
+        ui.add_space(14.0);
         let can_save = !self.loading && !self.saving && self.versions.iter().any(|sdk| sdk.version == self.selected) && self.file.is_some();
         let (save, close) = ui
-            .horizontal_wrapped(|ui| {
-                let save = ui.add_enabled(can_save, egui::Button::new(tr("Save SDK selection"))).clicked();
-                let close = ui.add_enabled(!self.saving, egui::Button::new(tr("Close"))).clicked();
+            .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let save = ui.add_enabled_ui(can_save, |ui| rc_kit::theme::primary_button(ui, tr("Save SDK selection"))).inner.clicked();
+                let close = ui.add_enabled_ui(!self.saving, |ui| rc_kit::theme::secondary_button(ui, tr("Close"))).inner.clicked();
                 (save, close)
             })
             .inner;

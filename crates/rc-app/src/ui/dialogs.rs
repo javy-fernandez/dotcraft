@@ -154,18 +154,29 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
     let ((ok, cancel), esc) = modal(ctx, "settings", layout.width, |ui| {
         title(ui, tr("Settings"));
         if layout.compact {
+            // Narrow window: the pages in a drop-down instead of the list on the left.
             let selected = settings_pages().into_iter().find(|(pg, _)| pg == page).map_or("", |(_, label)| label);
-            egui::ComboBox::from_id_salt("settings_category").selected_text(selected).width(layout.width - 8.0).show_ui(ui, |ui| {
-                for (pg, label) in settings_pages() { ui.selectable_value(page, pg, label); }
-            }).response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, selected));
+            let labels: Vec<String> = settings_pages().iter().map(|(_, label)| label.to_string()).collect();
+            if let Some(i) = crate::ui::kit::dropdown(ui, "settings_category", selected, &labels, true) {
+                *page = settings_pages()[i].0;
+            }
             ui.add_space(8.0);
         }
         ui.horizontal_top(|ui| {
             if !layout.compact {
                 egui::ScrollArea::vertical().id_salt("settings_navigation").max_height(layout.height).min_scrolled_height(layout.height).auto_shrink([false, false]).max_width(layout.nav).show(ui, |ui| ui.vertical(|ui| {
                     ui.set_width(layout.nav);
+                    let p = rc_kit::pal(ui);
                     for (pg, label) in settings_pages() {
-                        if ui.add_sized(vec2(layout.nav, 28.0), egui::Button::selectable(*page == pg, label)).clicked() {
+                        let (r, resp) = ui.allocate_exact_size(vec2(layout.nav, 28.0), egui::Sense::click());
+                        if *page == pg {
+                            ui.painter().rect_filled(r, 6.0, p.selection);
+                        } else if resp.hovered() {
+                            ui.painter().rect_filled(r, 6.0, p.row_hover);
+                        }
+                        ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, label, FontId::proportional(13.0), p.text);
+                        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, *page == pg, label));
+                        if resp.clicked() {
                             *page = pg;
                         }
                     }
@@ -280,7 +291,7 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
 
 fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
     ui.label(tr(".NET SDK"));
-    if ui.add_enabled(app.workspace.is_some(), egui::Button::new(tr("Manage project SDK…"))).clicked()
+    if ui.add_enabled_ui(app.workspace.is_some(), |ui| theme::secondary_button(ui, tr("Manage project SDK…"))).inner.clicked()
         && let Some(workspace) = &app.workspace
     {
         app.dialog = Some(Dialog::SdkSelection {
@@ -299,14 +310,14 @@ fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
         (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),
     ] {
         let label_response = ui.label(label);
-        let browse_width = ui.fonts_mut(|fonts| fonts.layout_no_wrap(tr("Browse…").to_string(), FontId::proportional(13.0), rc_kit::pal(ui).text).size().x) + 24.0;
+        let browse_width = (ui.fonts_mut(|fonts| fonts.layout_no_wrap(tr("Browse…").to_string(), FontId::proportional(13.0), rc_kit::pal(ui).text).size().x) + 24.0).max(72.0);
         let field_width = (ui.available_width() - browse_width - ui.spacing().item_spacing.x).max(24.0);
         ui.horizontal(|ui| {
             let mut text = value.as_ref().map(|path| path.display().to_string()).unwrap_or_default();
             if ui.add(egui::TextEdit::singleline(&mut text).hint_text(tr("Detect automatically")).desired_width(field_width)).labelled_by(label_response.id).changed() {
                 *value = (!text.trim().is_empty()).then(|| PathBuf::from(text.trim()));
             }
-            if ui.button(tr("Browse…")).clicked()
+            if theme::secondary_button(ui, tr("Browse…")).clicked()
                 && let Some(path) = rfd::FileDialog::new().pick_file()
             {
                 *value = Some(path);
@@ -1220,7 +1231,7 @@ mod tests {
             harness.state_mut().dialog = Some(Dialog::Settings { draft: Box::new(harness.state().settings.clone()), page: SettingsPage::Appearance });
             harness.run_steps(3);
             if SettingsLayout::for_viewport(size).compact {
-                harness.get_by_value(tr("Appearance")).click();
+                harness.get_by_label(tr("Appearance")).click();
                 harness.run_steps(2);
             }
             harness.get_by_label(tr("Editor")).click();
@@ -1374,21 +1385,23 @@ fn attach_process(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus
     let available = app.workspace.is_some() && !app.debugger.active() && app.debugger.downloading.is_none();
     let mut enter = false;
     let ((attach, cancel), esc) = modal(ctx, "attach_process", 460.0, |ui| {
+        let p = rc_kit::pal(ui);
         title(ui, tr("Attach to Process…"));
         ui.label(tr("Attach to a running .NET process by its process ID."));
-        ui.label(tr("Stopping debugging detaches and leaves the process running."));
-        ui.add_space(8.0);
-        let response = ui.add(egui::TextEdit::singleline(text).hint_text(tr("Process ID")).desired_width(f32::INFINITY));
+        ui.add_space(10.0);
+        let response = ui.add(egui::TextEdit::singleline(text).hint_text(tr("Process ID")).desired_width(f32::INFINITY).margin(vec2(6.0, 4.0)));
         if std::mem::take(focus) {
             response.request_focus();
         }
         enter = (response.has_focus() || response.lost_focus()) && ui.input(|i| i.key_pressed(Key::Enter));
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new(tr("Stopping debugging detaches and leaves the process running.")).size(12.0).color(p.muted));
         if app.workspace.is_none() {
-            ui.label(tr("Open a project before attaching to a process"));
+            ui.label(egui::RichText::new(tr("Open a project before attaching to a process")).size(12.5).color(p.warn));
         } else if !available {
-            ui.label(tr("Stop the current debug session before attaching"));
+            ui.label(egui::RichText::new(tr("Stop the current debug session before attaching")).size(12.5).color(p.warn));
         } else if !text.is_empty() && pid.is_none() {
-            ui.colored_label(rc_kit::pal(ui).error, tr("Enter a positive process ID other than DotCraft's own process"));
+            ui.label(egui::RichText::new(tr("Enter a positive process ID other than DotCraft's own process")).size(12.5).color(p.error));
         }
         buttons(ui, tr("Attach"), pid.is_some() && available)
     });

@@ -477,6 +477,16 @@ fn watch_reloads_a_web_app_after_a_change() {
     req.env.push(("DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER".into(), "1".into()));
     let inbox = rc_core::Inbox::new(rc_core::Waker::noop());
     let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
+    // On a failed assertion the test process ends before the async stop: kill the tree here.
+    struct KillOnDrop<'a>(&'a rc_dotnet::run::RunHandle);
+    impl Drop for KillOnDrop<'_> {
+        fn drop(&mut self) {
+            if let Some(pid) = self.0.pid() {
+                rc_dotnet::kill_tree(pid);
+            }
+        }
+    }
+    let _guard = KillOnDrop(&handle);
     let get = || -> Option<String> {
         let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).ok()?;
         s.set_read_timeout(Some(std::time::Duration::from_secs(20))).ok()?;

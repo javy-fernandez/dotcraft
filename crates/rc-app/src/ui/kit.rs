@@ -1,6 +1,6 @@
 //! Building blocks for tool windows, so every window looks like the rest of DotCraft: a painted
 //! header (title, status, tabs, icon actions on the right), flat toolbar buttons, painted list
-//! rows and tables instead of egui's default buttons, combo boxes and collapsing headers.
+//! rows instead of egui's default buttons, combo boxes and collapsing headers.
 //! Every interactive piece reports its label to AccessKit, so kittest can find it by text.
 
 use crate::ui::toolwindows::HEADER_H;
@@ -168,53 +168,4 @@ pub fn row(ui: &mut Ui, depth: usize, icon: Option<Ico>, text: &str, secondary: 
     }
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     resp
-}
-
-/// A read-only grid: a header row and monospace cells, scrolling both ways inside
-/// `max_height`. Long cells are cut with an ellipsis; hovering shows the whole value.
-pub fn table(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, columns: &[String], rows: &[Vec<String>], max_height: f32) {
-    let p = rc_kit::pal(ui);
-    let font = FontId::monospace(12.0);
-    // Column widths from the header and the first rows, capped.
-    let mut widths: Vec<f32> = columns.iter().map(|c| ui.painter().layout_no_wrap(c.clone(), theme::bold(12.0), p.text).size().x + 20.0).collect();
-    for row in rows.iter().take(200) {
-        for (i, cell) in row.iter().enumerate().take(widths.len()) {
-            let w = ui.painter().layout_no_wrap(cell.chars().take(80).collect(), font.clone(), p.text).size().x + 20.0;
-            widths[i] = widths[i].max(w).min(360.0);
-        }
-    }
-    let total: f32 = widths.iter().sum::<f32>().max(ui.available_width());
-    let h = 24.0;
-    egui::ScrollArea::both().id_salt(id).max_height(max_height).auto_shrink([false, true]).show(ui, |ui| {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        let (hr, _) = ui.allocate_exact_size(vec2(total, h), Sense::hover());
-        ui.painter().rect_filled(hr, 0.0, p.header_bg);
-        let mut x = hr.left();
-        for (c, w) in columns.iter().zip(&widths) {
-            ui.painter().text(pos2(x + 10.0, hr.center().y), Align2::LEFT_CENTER, c, theme::bold(12.0), p.text);
-            x += w;
-        }
-        for (n, row) in rows.iter().enumerate() {
-            let (rr, resp) = ui.allocate_exact_size(vec2(total, h), Sense::hover());
-            if resp.hovered() {
-                ui.painter().rect_filled(rr, 0.0, p.row_hover);
-            } else if n % 2 == 1 {
-                ui.painter().rect_filled(rr, 0.0, p.row_hover.gamma_multiply(0.5));
-            }
-            let mut x = rr.left();
-            for (cell, w) in row.iter().zip(&widths) {
-                let mut job = egui::text::LayoutJob::simple_singleline(cell.clone(), font.clone(), p.text);
-                job.wrap.max_width = w - 16.0;
-                job.wrap.max_rows = 1;
-                job.wrap.break_anywhere = true;
-                job.wrap.overflow_character = Some('…');
-                let g = ui.painter().layout_job(job);
-                ui.painter().galley(pos2(x + 10.0, rr.center().y - g.size().y / 2.0), g, p.text);
-                x += w;
-            }
-            if resp.hovered() {
-                resp.on_hover_text(row.join("  │  "));
-            }
-        }
-    });
 }

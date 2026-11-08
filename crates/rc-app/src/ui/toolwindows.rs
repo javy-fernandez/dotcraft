@@ -3,7 +3,7 @@
 
 use crate::app::DotCraftApp;
 use crate::toolwindow::ToolWindow;
-use crate::ui::explorer;
+use crate::ui::{explorer, kit};
 use egui::{Align2, FontId, Id, Rect, Sense, Ui, pos2, vec2};
 use rc_kit::i18n::tr;
 use rc_kit::{Ico, icons, theme};
@@ -253,62 +253,165 @@ fn method_badge(ui: &Ui, left_center: egui::Pos2, method: &str) -> f32 {
 }
 
 /// Endpoints: routes by project; double click opens the handler, the context menu writes a
-/// request in the project's `.http` file.
+/// request in the project's `.http` file. The header filters by text and method, groups the
+/// routes by method and keeps only route conflicts; a section imports OpenAPI JSON.
 fn endpoints_window(app: &mut DotCraftApp, ui: &mut Ui) {
-    if header(ui, tr("Endpoints")) { app.toggle_tool(ToolWindow::Endpoints); return; }
+    let p = rc_kit::pal(ui);
     if let Some(result) = app.endpoints.import_result.take() {
-        match result { Ok((path, line)) => app.open_at(&path, line, 0), Err(error) => app.notify(error, true) }
+        match result {
+            Ok((path, line)) => app.open_at(&path, line, 0),
+            Err(error) => app.notify(error, true),
+        }
     }
-    ui.horizontal_wrapped(|ui| {
-        ui.add(egui::TextEdit::singleline(&mut app.endpoints.filter).hint_text(tr("Search routes, handlers and files")).desired_width(220.0));
-        egui::ComboBox::from_id_salt("endpoint_method").selected_text(if app.endpoints.method.is_empty() { tr("All methods") } else { &app.endpoints.method }).show_ui(ui, |ui| {
-            ui.selectable_value(&mut app.endpoints.method, String::new(), tr("All methods"));
-            for method in ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "ANY"] { ui.selectable_value(&mut app.endpoints.method, method.into(), method); }
-        });
-        ui.checkbox(&mut app.endpoints.group_by_method, tr("Group by method"));
-        if ui.button(tr("Refresh")).clicked() { app.refresh_endpoints(); }
-        if app.endpoints.scanning && ui.button(tr("Cancel scan")).clicked() { app.endpoints.cancel_scan(); }
-    });
-    ui.horizontal_wrapped(|ui| {
-        ui.checkbox(&mut app.endpoints.only_conflicts, tr("Route conflicts only"));
-        ui.label(rc_kit::i18n::trf("{n} route conflicts", &[("n", &app.endpoints.conflicts.len())]));
-    });
-    egui::CollapsingHeader::new(tr("Import OpenAPI JSON")).show(ui, |ui| {
-        ui.label(tr("OpenAPI JSON file")); ui.text_edit_singleline(&mut app.endpoints.import_path);
-        ui.label(tr("New HTTP output file")); ui.text_edit_singleline(&mut app.endpoints.output_path);
-        ui.label(tr("Imports OpenAPI 3.0/3.1 JSON with an explicit HTTP server. Existing files are never overwritten."));
-        if ui.add_enabled(!app.endpoints.importing && !app.endpoints.import_path.trim().is_empty() && !app.endpoints.output_path.trim().is_empty(), egui::Button::new(tr("Import requests"))).clicked() { app.endpoints.import_openapi(app.waker.clone()); }
-        if app.endpoints.importing && ui.button(tr("Cancel import")).clicked() { app.endpoints.cancel_import(); }
-    });
-    if app.endpoints.scanning { ui.label(tr("Scanning…")); }
-    let mut open = None; let mut generate = None;
-    egui::ScrollArea::both().id_salt("endpoints").auto_shrink([false, false]).show(ui, |ui| {
-        for (name, project, endpoints) in &app.endpoints.projects {
-            let mut shown: Vec<_> = endpoints.iter().filter(|endpoint| crate::web::endpoint_matches(endpoint, &app.endpoints.filter, &app.endpoints.method))
-                .filter(|endpoint| !app.endpoints.only_conflicts || app.endpoints.conflicts.iter().any(|(_, first, second)| first == *endpoint || second == *endpoint)).collect();
-            if shown.is_empty() { continue; }
-            if app.endpoints.group_by_method { shown.sort_by_key(|endpoint| (&endpoint.method, &endpoint.route)); }
-            egui::CollapsingHeader::new(name).id_salt(project).default_open(true).show(ui, |ui| {
-                let mut method = "";
-                for endpoint in shown {
-                    if app.endpoints.group_by_method && method != endpoint.method { method = &endpoint.method; ui.strong(method); }
-                    let label = format!("{} {}", endpoint.method, endpoint.route);
-                    let response = ui.selectable_label(false, &label).on_hover_text(format!("{} — {}:{}", endpoint.handler, endpoint.file.display(), endpoint.line + 1));
-                    if response.double_clicked() { open = Some((endpoint.file.clone(), endpoint.line)); }
-                    response.context_menu(|ui| {
-                        if ui.button(tr("Go to Handler")).clicked() { open = Some((endpoint.file.clone(), endpoint.line)); ui.close(); }
-                        if ui.add_enabled(!app.endpoints.importing, egui::Button::new(tr("Generate Request in HTTP Client"))).clicked() { generate = Some((project.clone(), endpoint.clone())); ui.close(); }
-                    });
-                    for (_, first, second) in app.endpoints.conflicts.iter().filter(|(_, first, _)| first == endpoint) {
-                        ui.label(egui::RichText::new(rc_kit::i18n::trf("Route may conflict with {handler} at {file}:{line}", &[("handler", &second.handler), ("file", &second.file.display()), ("line", &(second.line + 1))])).color(rc_kit::pal(ui).warn));
-                        let _ = first;
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, tr("Endpoints"), theme::bold(13.0), p.text);
+    let mut status = if app.endpoints.scanning {
+        tr("Scanning…").to_string()
+    } else {
+        let n: usize = app.endpoints.projects.iter().map(|(_, _, e)| e.len()).sum();
+        rc_kit::i18n::trf("{n} items", &[("n", &n)])
+    };
+    if !app.endpoints.conflicts.is_empty() {
+        status = format!("{status} · {}", rc_kit::i18n::trf("{n} route conflicts", &[("n", &app.endpoints.conflicts.len())]));
+    }
+    let actions_left = r.right() - 8.0 - 26.0 * 4.0;
+    let sr = Rect::from_min_max(pos2(t.right() + 12.0, r.top()), pos2(t.right() + 104.0, r.bottom()));
+    let mut job = egui::text::LayoutJob::simple_singleline(status, FontId::proportional(12.0), p.muted);
+    job.wrap.max_width = sr.width();
+    job.wrap.max_rows = 1;
+    job.wrap.break_anywhere = true;
+    job.wrap.overflow_character = Some('…');
+    let g = ui.painter().layout_job(job);
+    ui.painter().galley(pos2(sr.left(), r.center().y - g.size().y / 2.0), g, p.muted);
+    // Filter field and method drop-down.
+    let fr = Rect::from_min_size(pos2(t.right() + 110.0, r.center().y - 12.0), vec2((actions_left - t.right() - 110.0 - 140.0).clamp(120.0, 320.0), 24.0));
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(fr));
+    child.add(egui::TextEdit::singleline(&mut app.endpoints.filter).hint_text(tr("Search routes, handlers and files")).desired_width(fr.width()));
+    let dr = Rect::from_min_size(pos2(fr.right() + 6.0, r.center().y - 13.0), vec2(130.0, 26.0));
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(dr));
+    let methods: Vec<String> = std::iter::once(tr("All methods").to_string()).chain(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "ANY"].map(String::from)).collect();
+    let selected = if app.endpoints.method.is_empty() { tr("All methods").to_string() } else { app.endpoints.method.clone() };
+    if let Some(i) = kit::dropdown(&mut child, "endpoint_method", &selected, &methods, true) {
+        app.endpoints.method = if i == 0 { String::new() } else { methods[i].clone() };
+    }
+    // Actions from the right: Hide, Refresh (Cancel scan while scanning), the two toggles.
+    let slot = |ui: &mut Ui, i: usize| ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_size(pos2(r.right() - 8.0 - 26.0 * (i + 1) as f32, r.center().y - 13.0), vec2(26.0, 26.0))));
+    if theme::icon_button(&mut slot(ui, 0), rc_kit::ico::HIDE, true, tr("Hide")).clicked() {
+        app.toggle_tool(ToolWindow::Endpoints);
+        return;
+    }
+    if app.endpoints.scanning {
+        if theme::icon_button(&mut slot(ui, 1), rc_kit::ico::STOP, true, tr("Cancel scan")).clicked() {
+            app.endpoints.cancel_scan();
+        }
+    } else if theme::icon_button(&mut slot(ui, 1), rc_kit::ico::REFRESH, true, tr("Refresh")).clicked() {
+        app.refresh_endpoints();
+    }
+    if theme::icon_toggle(&mut slot(ui, 2), rc_kit::ico::FILTER, app.endpoints.only_conflicts, tr("Route conflicts only")).clicked() {
+        app.endpoints.only_conflicts = !app.endpoints.only_conflicts;
+    }
+    if theme::icon_toggle(&mut slot(ui, 3), rc_kit::ico::SORT, app.endpoints.group_by_method, tr("Group by method")).clicked() {
+        app.endpoints.group_by_method = !app.endpoints.group_by_method;
+    }
+    // OpenAPI import, folded by default.
+    let open_id = Id::new("endpoints_import_open");
+    let mut import_open = ui.data(|d| d.get_temp::<bool>(open_id)).unwrap_or(false);
+    if kit::section(ui, rc_kit::ico::IMPORT, tr("Import OpenAPI JSON"), "", &mut import_open) {
+        let importing = app.endpoints.importing;
+        kit::content(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 12.0;
+                kit::field(ui, tr("OpenAPI JSON file"), &mut app.endpoints.import_path, "", 280.0, !importing);
+                kit::field(ui, tr("New HTTP output file"), &mut app.endpoints.output_path, "", 280.0, !importing);
+            });
+            kit::note(ui, tr("Imports OpenAPI 3.0/3.1 JSON with an explicit HTTP server. Existing files are never overwritten."));
+            ui.horizontal(|ui| {
+                let can = !importing && !app.endpoints.import_path.trim().is_empty() && !app.endpoints.output_path.trim().is_empty();
+                if kit::button(ui, Some(rc_kit::ico::IMPORT), tr("Import requests"), can).clicked() && can {
+                    app.endpoints.import_openapi(app.waker.clone());
+                }
+                if importing {
+                    ui.add(egui::Spinner::new().size(14.0));
+                    if kit::button(ui, Some(rc_kit::ico::STOP), tr("Cancel import"), true).clicked() {
+                        app.endpoints.cancel_import();
                     }
                 }
             });
+        });
+    }
+    ui.data_mut(|d| d.insert_temp(open_id, import_open));
+    if app.endpoints.projects.is_empty() && !app.endpoints.scanning {
+        let (title, hint) = empty_text(ToolWindow::Endpoints);
+        empty_state(ui, ToolWindow::Endpoints.icon(), title, hint);
+        return;
+    }
+    let ep = &app.endpoints;
+    let mut open: Option<(std::path::PathBuf, usize)> = None;
+    let mut generate: Option<(std::path::PathBuf, rc_dotnet::endpoints::Endpoint)> = None;
+    egui::ScrollArea::vertical().id_salt("endpoints").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (name, project, eps) in &ep.projects {
+            let mut shown: Vec<&rc_dotnet::endpoints::Endpoint> = eps
+                .iter()
+                .filter(|e| crate::web::endpoint_matches(e, &ep.filter, &ep.method))
+                .filter(|e| !ep.only_conflicts || ep.conflicts.iter().any(|(_, a, b)| a == *e || b == *e))
+                .collect();
+            if shown.is_empty() {
+                continue;
+            }
+            if ep.group_by_method {
+                shown.sort_by_key(|e| (&e.method, &e.route));
+            }
+            list_row(ui, 0, rc_kit::ico::PROJECT, name, &rc_kit::i18n::trf("{n} items", &[("n", &shown.len())]), false);
+            let indent = if ep.group_by_method { 48.0 } else { 30.0 };
+            let mut group = "";
+            for e in shown {
+                if ep.group_by_method && group != e.method {
+                    group = &e.method;
+                    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(400.0), 24.0), Sense::hover());
+                    method_badge(ui, pos2(rect.left() + 30.0, rect.center().y), group);
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, group));
+                }
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(400.0), 24.0), Sense::click());
+                if resp.hovered() {
+                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+                }
+                let x = method_badge(ui, pos2(rect.left() + indent, rect.center().y), &e.method);
+                let g = ui.painter().layout_no_wrap(e.route.clone(), FontId::monospace(12.5), p.text);
+                ui.painter().galley(pos2(x + 10.0, rect.center().y - g.size().y / 2.0), g.clone(), p.text);
+                let file = e.file.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+                ui.painter().text(pos2(x + 24.0 + g.size().x, rect.center().y), Align2::LEFT_CENTER, format!("{}  {file}:{}", e.handler, e.line + 1), FontId::proportional(12.0), p.muted);
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} {}", e.method, e.route)));
+                if resp.double_clicked() {
+                    open = Some((e.file.clone(), e.line));
+                }
+                resp.context_menu(|ui| {
+                    if theme::menu_entry(ui, Some(rc_kit::ico::TW_HTTP), tr("Generate Request in HTTP Client"), None, false, !ep.importing).clicked() {
+                        generate = Some((project.clone(), e.clone()));
+                        ui.close();
+                    }
+                    if theme::menu_item(ui, Some(rc_kit::ico::OPEN), tr("Go to Handler"), false).clicked() {
+                        open = Some((e.file.clone(), e.line));
+                        ui.close();
+                    }
+                });
+                // Conflicts: a warning line under the route.
+                for (_, _, other) in ep.conflicts.iter().filter(|(_, first, _)| first == e) {
+                    let text = rc_kit::i18n::trf("Route may conflict with {handler} at {file}:{line}", &[("handler", &other.handler), ("file", &other.file.display()), ("line", &(other.line + 1))]);
+                    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width().max(400.0), 20.0), Sense::hover());
+                    icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.left() + indent + 8.0, rect.center().y), vec2(14.0, 14.0)), rc_kit::ico::DIALOG_WARNING, &p, true);
+                    ui.painter().text(pos2(rect.left() + indent + 22.0, rect.center().y), Align2::LEFT_CENTER, text, FontId::proportional(12.0), p.warn);
+                }
+            }
         }
     });
-    if let Some((path, line)) = open { app.open_at(&path, line, 0); }
-    if let Some((project, endpoint)) = generate { app.endpoints.generate(project, endpoint, app.waker.clone()); }
+    if let Some((path, line)) = open {
+        app.open_at(&path, line, 0);
+    }
+    if let Some((project, endpoint)) = generate {
+        app.endpoints.generate(project, endpoint, app.waker.clone());
+    }
 }
 
 /// HTTP Client: environment, the request sent, then status, time, size and the body (or the
@@ -317,25 +420,34 @@ fn http_client_window(app: &mut DotCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
     ui.allocate_rect(r, Sense::hover());
-    let _title = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, tr("HTTP Client"), theme::bold(13.0), p.text);
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, tr("HTTP Client"), theme::bold(13.0), p.text);
     let http_path = app.docs.active_doc().map(|d| d.path.clone()).filter(|p| crate::web::is_http_file(p));
     app.http.discover_environments(http_path.as_deref(), false);
-    let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0, r.center().y - 13.0), vec2(26.0, 26.0));
-    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
-    if theme::icon_button(&mut child, rc_kit::ico::HIDE, true, tr("Hide")).clicked() {
+    // Environment of the active .http file.
+    if http_path.is_some() || !app.http.environments.is_empty() {
+        let er = Rect::from_min_size(pos2(t.right() + 14.0, r.center().y - 13.0), vec2(220.0, 26.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(er).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        let options: Vec<String> = std::iter::once(tr("No environment").to_string()).chain(app.http.environments.iter().cloned()).collect();
+        let selected = app.http.env.clone().unwrap_or_else(|| tr("No environment").to_string());
+        if let Some(i) = kit::dropdown(&mut child, "http_env", &selected, &options, true) {
+            app.http.env = if i == 0 { None } else { Some(options[i].clone()) };
+        }
+        if app.http.environments_loading {
+            child.add(egui::Spinner::new().size(14.0));
+        }
+    }
+    // Actions from the right: Hide, Refresh environments, Cancel Request while sending.
+    let slot = |ui: &mut Ui, i: usize| ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_size(pos2(r.right() - 8.0 - 26.0 * (i + 1) as f32, r.center().y - 13.0), vec2(26.0, 26.0))));
+    if theme::icon_button(&mut slot(ui, 0), rc_kit::ico::HIDE, true, tr("Hide")).clicked() {
         app.toggle_tool(ToolWindow::HttpClient);
         return;
     }
-    ui.horizontal_wrapped(|ui| {
-        let selected = app.http.env.clone().unwrap_or_else(|| tr("No environment").into());
-        egui::ComboBox::from_id_salt("http_env").selected_text(selected).show_ui(ui, |ui| {
-            ui.selectable_value(&mut app.http.env, None, tr("No environment"));
-            for environment in &app.http.environments { ui.selectable_value(&mut app.http.env, Some(environment.clone()), environment); }
-        });
-        if ui.add_enabled(http_path.is_some(), egui::Button::new(tr("Refresh environments"))).clicked() { app.http.discover_environments(http_path.as_deref(), true); }
-        if app.http.environments_loading { ui.spinner(); }
-        if app.http.busy() && ui.button(tr("Cancel Request")).clicked() { app.http.cancel(); }
-    });
+    if theme::icon_button(&mut slot(ui, 1), rc_kit::ico::REFRESH, http_path.is_some(), tr("Refresh environments")).clicked() && http_path.is_some() {
+        app.http.discover_environments(http_path.as_deref(), true);
+    }
+    if app.http.busy() && theme::icon_button(&mut slot(ui, 2), rc_kit::ico::STOP, true, tr("Cancel Request")).clicked() {
+        app.http.cancel();
+    }
     let Some(request) = app.http.request.clone() else {
         let (title, hint) = empty_text(ToolWindow::HttpClient);
         empty_state(ui, ToolWindow::HttpClient.icon(), title, hint);
@@ -1075,7 +1187,7 @@ mod web_window_tests {
         }, app);
         harness.run_steps(2);
         pump(&mut harness, |app| app.http.environments == ["dev"]);
-        harness.get_by_value(tr("No environment")).click(); harness.run_steps(2);
+        harness.get_by_label(tr("No environment")).click(); harness.run_steps(2);
         harness.get_by_label("dev").click(); harness.run_steps(2);
         assert_eq!(harness.state().http.env.as_deref(), Some("dev"));
         std::fs::write(&environment, r#"{"prod":{"host":"http://localhost"}}"#).unwrap();
