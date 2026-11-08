@@ -239,12 +239,11 @@ Each pull request below has a separate implementation note with validation evide
 
 For each item, record the implemented scope, supported platforms and runtimes, required dependencies, user-facing documentation, and validation evidence. Split broad items into smaller implementation tasks as work starts. Existing partial implementations should be completed or validated before being marked done.
 
-## Independently rebased upstream slices
+## Historical upstream review slices
 
 These branches in [the fork](https://github.com/RafaelMendes1407/dotcraft/branches) are based directly
 on original `main` at `9e849cd`, with fresh validation recorded in their evidence notes:
 `upstream/git-deleted-conflicts`, `upstream/git-stash-management`,
 `upstream/workspace-resource-edit-safety`, `upstream/settings-search`,
 `upstream/web-language-syntax`, `upstream/attach-to-process`, and
-`upstream/tool-window-overflow`. Branches are review candidates; publishing a branch is
-separate from opening or merging its upstream PR. Combined delivery remains PR 108.
+`upstream/tool-window-overflow`. Their source changes are already included in [the single upstream PR 108](https://github.com/javy-fernandez/dotcraft/pull/108). Do not open additional upstream PRs for these branches as part of this batch. See [the consolidation audit](implementation/branch-consolidation.md).

@@ -9,6 +9,9 @@ require their own follow-up breakdowns. No Rider source code or proprietary asse
 ## Upstream integration audit (2026-11-08)
 
 Original repository delivery is tracked in [upstream PR 108](https://github.com/javy-fernandez/dotcraft/pull/108).
+This batch uses one consolidated upstream PR. All 24 source/review branches are included;
+their original PR links remain provenance rather than additional delivery steps.
+See [the branch consolidation audit](docs/implementation/branch-consolidation.md).
 The original `main` is now `9e849cd` (0.4.0). Historical verified counts below apply to the
 fork's documented feature snapshots; they are not fresh validation of the upstream merge.
 The new main already contains coverage, profiling, HTTP/Endpoints, local history,
