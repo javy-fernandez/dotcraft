@@ -1106,3 +1106,80 @@ fn screens_profiler() {
     h.render().unwrap().save(out.join("profiler-memory-dark.png")).unwrap();
     h.state_mut().runner.kill_all_now();
 }
+
+#[test]
+#[ignore = "Requires a GPU; captures the windows contributed in PRs 108/109 to target/snapshots"]
+fn screens_contributed_windows() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().canonicalize().unwrap().join("repo");
+    std::fs::create_dir_all(&root).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.email", "t@t"]);
+    git(&["config", "user.name", "T"]);
+    std::fs::write(root.join("index.html"), "<!doctype html>\n<html lang=\"en\">\n<head>\n  <link rel=\"stylesheet\" href=\"site.css\">\n  <title>Shop</title>\n</head>\n<body>\n  <h1 class=\"title\">Orders</h1>\n  <script src=\"app.js\"></script>\n</body>\n</html>\n").unwrap();
+    std::fs::write(root.join("App.tsx"), "import { useState } from \"react\";\n\ninterface Order { id: number; total: number }\n\nexport function Orders({ orders }: { orders: Order[] }) {\n  const [selected, setSelected] = useState<number | null>(null);\n  // Highlight the selected order.\n  return (\n    <ul className=\"orders\">\n      {orders.map(o => <li key={o.id} onClick={() => setSelected(o.id)}>{o.total.toFixed(2)}</li>)}\n    </ul>\n  );\n}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial"]);
+    std::fs::write(root.join("index.html"), "<!doctype html>\n<p>wip</p>\n").unwrap();
+    git(&["stash", "push", "-q", "-m", "WIP on the order page"]);
+    // SQLite sample.
+    let db = root.join("shop.db");
+    {
+        let c = rusqlite::Connection::open(&db).unwrap();
+        c.execute_batch("CREATE TABLE customers(id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE);
+            CREATE TABLE orders(id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), total REAL, created TEXT);
+            CREATE INDEX orders_customer ON orders(customer_id);
+            INSERT INTO customers(name, email) VALUES ('Ada', 'ada@example.com'), ('Linus', 'linus@example.com');
+            INSERT INTO orders(customer_id, total, created) VALUES (1, 64.85, '2026-11-01'), (2, 12.5, '2026-11-02'), (1, 99.0, '2026-11-03');").unwrap();
+    }
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.open_file(&root.join("index.html"));
+    app.open_file(&root.join("App.tsx"));
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    h.run_steps(6);
+    h.render().unwrap().save(out.join("contrib-tsx-dark.png")).unwrap();
+    let i = h.state().docs.index_of(&root.join("index.html")).unwrap();
+    h.state_mut().docs.activate(i);
+    h.run_steps(6);
+    h.render().unwrap().save(out.join("contrib-html-dark.png")).unwrap();
+    // Git: stashes and repository tools.
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Git);
+    h.state_mut().vcs.show_stashes = true;
+    run_frames(&mut h, "stashes", |a| !a.vcs.stashes.is_empty());
+    h.render().unwrap().save(out.join("contrib-stashes-dark.png")).unwrap();
+    h.state_mut().vcs.tools.visible = true;
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("contrib-repo-tools-dark.png")).unwrap();
+    // SQLite.
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Database);
+    h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Database, 480.0);
+    h.state_mut().database.path = db.display().to_string();
+    let r = root.clone();
+    h.state_mut().database.connect(Some(&r));
+    run_frames(&mut h, "the schema", |a| a.database.connected.is_some());
+    h.state_mut().database.sql = "SELECT c.name, COUNT(*) AS orders, SUM(o.total) AS total FROM orders o JOIN customers c ON c.id = o.customer_id GROUP BY c.name;".into();
+    let sql = h.state().database.sql.clone();
+    h.state_mut().database.execute(crate::database::Action::Query(sql));
+    run_frames(&mut h, "the query", |a| a.database.grid.is_some() || a.database.error.is_some());
+    assert!(h.state().database.error.is_none(), "{:?}", h.state().database.error);
+    assert_eq!(h.state().database.grid.as_ref().unwrap().rows.len(), 2);
+    h.render().unwrap().save(out.join("contrib-sqlite-dark.png")).unwrap();
+    h.state_mut().database.execute(crate::database::Action::Relations);
+    run_frames(&mut h, "relations", |a| a.database.relations.is_some() || a.database.error.is_some());
+    h.state_mut().database.view = crate::database::View::Relations;
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("contrib-sqlite-relations-dark.png")).unwrap();
+    // Attach to Process.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::AttachProcess { pid: String::new(), focus: true });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("contrib-attach-dark.png")).unwrap();
+    // The in-window main menu (Windows / Linux).
+    h.state_mut().dialog = None;
+    h.run_steps(2);
+}

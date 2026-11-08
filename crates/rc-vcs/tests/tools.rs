@@ -90,7 +90,8 @@ async fn worktrees_round_trip_and_refuse_removing_dirty_or_primary_worktrees() {
     let t = TempRepo::new().await;
     t.commit_files(&[("App.cs", "class App {}\n")], "base");
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("linked worktree");
+    // Git reports canonical paths (/private/var on macOS).
+    let path = dir.path().canonicalize().unwrap().join("linked worktree");
     t.repo.add_worktree(&path, "feature/tools").await.unwrap();
     let list = t.repo.worktrees().await.unwrap();
     assert_eq!(list.len(), 2);

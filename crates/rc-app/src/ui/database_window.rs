@@ -8,6 +8,11 @@ use rc_kit::i18n::{tr, trf};
 
 pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     if crate::ui::toolwindows::header(ui, tr("Database")) { app.toggle_tool(ToolWindow::Database); }
+    // The connection, schema, console and results are taller than a docked panel.
+    egui::ScrollArea::vertical().id_salt("database_window").auto_shrink([false, false]).show(ui, |ui| body(app, ui));
+}
+
+fn body(app: &mut DotCraftApp, ui: &mut Ui) {
     let root = app.workspace.as_ref().map(|workspace| workspace.ws.root.clone());
     let db = &mut app.database;
     ui.label(tr("SQLite connections are read-only. Queries run only when requested."));
