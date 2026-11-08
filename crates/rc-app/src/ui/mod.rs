@@ -14,6 +14,7 @@ pub mod monitoring;
 pub mod new_project;
 pub mod nuget;
 pub mod header;
+pub mod kit;
 pub mod status;
 pub mod run_windows;
 pub mod search_popup;

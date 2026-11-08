@@ -158,7 +158,7 @@ impl ToolWindow {
             ToolWindow::Find => ico::TW_FIND,
             ToolWindow::Notifications => ico::TW_NOTIFICATIONS,
             ToolWindow::Nuget => ico::PACKAGE,
-            ToolWindow::Database => ico::PACKAGE,
+            ToolWindow::Database => ico::TW_DATABASE,
             ToolWindow::Monitoring => ico::TW_MONITORING,
             ToolWindow::Bookmarks => ico::TW_BOOKMARKS,
             ToolWindow::Todo => ico::TW_TODO,
