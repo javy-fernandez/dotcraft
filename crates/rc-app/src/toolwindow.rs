@@ -20,7 +20,6 @@ pub enum ToolWindow {
     Find,
     Notifications,
     Nuget,
-    Http,
     Database,
     Monitoring,
     Bookmarks,
@@ -65,7 +64,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 23] = [
+    pub const ALL: [ToolWindow; 22] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -86,7 +85,6 @@ impl ToolWindow {
         ToolWindow::Hierarchy,
         ToolWindow::LocalHistory,
         ToolWindow::Nuget,
-        ToolWindow::Http,
         ToolWindow::Database,
         ToolWindow::Notifications,
     ];
@@ -106,7 +104,6 @@ impl ToolWindow {
             ToolWindow::Find => "find",
             ToolWindow::Notifications => "notifications",
             ToolWindow::Nuget => "nuget",
-            ToolWindow::Http => "http",
             ToolWindow::Database => "database",
             ToolWindow::Monitoring => "monitoring",
             ToolWindow::Bookmarks => "bookmarks",
@@ -134,7 +131,6 @@ impl ToolWindow {
             ToolWindow::Find => tr("Find"),
             ToolWindow::Notifications => tr("Notifications"),
             ToolWindow::Nuget => "NuGet",
-            ToolWindow::Http => tr("HTTP Scratchpad"),
             ToolWindow::Database => tr("Database"),
             ToolWindow::Monitoring => tr("Monitoring"),
             ToolWindow::Bookmarks => tr("Bookmarks"),
@@ -162,7 +158,6 @@ impl ToolWindow {
             ToolWindow::Find => ico::TW_FIND,
             ToolWindow::Notifications => ico::TW_NOTIFICATIONS,
             ToolWindow::Nuget => ico::PACKAGE,
-            ToolWindow::Http => ico::TW_RUN,
             ToolWindow::Database => ico::PACKAGE,
             ToolWindow::Monitoring => ico::TW_MONITORING,
             ToolWindow::Bookmarks => ico::TW_BOOKMARKS,
@@ -322,8 +317,6 @@ mod tests {
             let restored = Dock::from_session(&dock.to_session());
             assert!(restored.is_open(tool), "tool lost after restoring its session: {tool:?}");
         }
-        assert_ne!(ToolWindow::Http.id(), ToolWindow::HttpClient.id());
-        assert_ne!(ToolWindow::Http.title(), ToolWindow::HttpClient.title());
     }
 
     #[test]

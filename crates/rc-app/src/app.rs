@@ -79,8 +79,6 @@ pub struct DotCraftApp {
     window_title: String,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
-    /// Explicit-send, bounded HTTP scratchpad; independent of the upstream gutter client.
-    pub http_scratchpad: crate::http_client::HttpClient,
     pub database: crate::database::Database,
     pub nuget: crate::ui::nuget::NugetManager,
     pub split: Option<Split>,
@@ -186,7 +184,6 @@ impl DotCraftApp {
             window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
-            http_scratchpad: crate::http_client::HttpClient::new(waker.clone()),
             database: crate::database::Database::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             split: None,
@@ -474,7 +471,6 @@ impl DotCraftApp {
         self.files.close();
         self.todos = None;
         self.vcs.close();
-        self.http_scratchpad = crate::http_client::HttpClient::new(self.waker.clone());
         self.http = crate::web::HttpClient::new(self.waker.clone());
         self.database.disconnect();
         self.find_in_files = None;
@@ -1578,7 +1574,6 @@ impl eframe::App for DotCraftApp {
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
         }
-        self.http_scratchpad.update();
         self.database.update();
         for doc in &mut self.docs.list { doc.editor.custom_templates = self.editor_workflows.templates.clone(); }
         crate::ui::frame(self, ui, editor_actions);

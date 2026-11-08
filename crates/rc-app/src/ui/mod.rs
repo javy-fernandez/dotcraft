@@ -8,7 +8,6 @@ pub mod sdk_selection;
 pub mod editor_area;
 pub mod explorer;
 pub mod git;
-pub mod http_window;
 pub mod main_menu;
 pub mod markdown;
 pub mod monitoring;
