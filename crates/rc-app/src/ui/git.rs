@@ -160,6 +160,13 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
     if header(ui, tr("Git")) {
         app.toggle_tool(ToolWindow::Git);
     }
+    if ui.selectable_label(app.vcs.tools.visible, tr("Repository Tools")).clicked() {
+        app.vcs.tools.visible = !app.vcs.tools.visible;
+    }
+    if app.vcs.tools.visible {
+        repository_tools(app, ui);
+        return;
+    }
     if app.vcs.repo.is_none() {
         empty_state(ui, ico::TW_VCS, tr("No Git repository"), tr("The workspace is not inside a Git repository."));
         return;
@@ -445,4 +452,253 @@ pub fn diff_view(app: &mut DotCraftApp, ui: &mut Ui) {
         rc_editor::EditorView::new(state, &config, &app.keymap).show(&mut eu);
     }
     let _ = trf;
+}
+
+/// Repository maintenance is explicit and shares the Git operation/cancellation lifecycle.
+fn repository_tools(app: &mut DotCraftApp, ui: &mut Ui) {
+    use crate::vcs::tools::ToolAction;
+    let busy = app.vcs.busy.is_some();
+    let has_repo = app.vcs.repo.is_some();
+    let mut action = None;
+    let mut open = None;
+    if busy {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            if ui.button(tr("Cancel")).clicked() {
+                app.vcs.cancel_operation();
+            }
+        });
+    }
+    egui::ScrollArea::vertical().id_salt("repository_tools").show(ui, |ui| {
+        ui.add_enabled_ui(!busy, |ui| {
+            let tools = &mut app.vcs.tools;
+            ui.heading(tr("Clone Repository"));
+            ui.label(tr("Repository URL or local path"));
+            ui.text_edit_singleline(&mut tools.source);
+            ui.label(tr("New absolute destination"));
+            ui.text_edit_singleline(&mut tools.destination);
+            if ui.button(tr("Clone Repository")).clicked() {
+                action = Some(ToolAction::Clone { source: tools.source.clone(), destination: tools.destination.clone().into() });
+            }
+            if let Some(path) = &tools.cloned {
+                if ui.button(tr("Open cloned repository")).clicked() {
+                    open = Some(path.clone());
+                }
+            }
+            ui.separator();
+            ui.add_enabled_ui(has_repo, |ui| {
+                ui.heading(tr("Cherry-pick"));
+                ui.label(tr("Commit hash or revision"));
+                ui.text_edit_singleline(&mut tools.revision);
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(tr("Cherry-pick commit")).clicked() {
+                        action = Some(ToolAction::CherryPick(tools.revision.clone()));
+                    }
+                    if ui.button(tr("Continue cherry-pick")).clicked() {
+                        action = Some(ToolAction::ContinueCherryPick);
+                    }
+                    if ui.button(tr("Abort cherry-pick")).clicked() {
+                        tools.confirmation = Some(ToolAction::AbortCherryPick);
+                    }
+                });
+                ui.separator();
+                ui.heading(tr("Worktrees"));
+                ui.label(tr("New branch name"));
+                ui.text_edit_singleline(&mut tools.branch);
+                ui.label(tr("Worktree absolute path"));
+                ui.text_edit_singleline(&mut tools.worktree_path);
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(tr("List worktrees")).clicked() {
+                        action = Some(ToolAction::ListWorktrees);
+                    }
+                    if ui.button(tr("Add worktree")).clicked() {
+                        action = Some(ToolAction::AddWorktree { destination: tools.worktree_path.clone().into(), branch: tools.branch.clone() });
+                    }
+                    if ui.button(tr("Remove worktree")).clicked() {
+                        tools.confirmation = Some(ToolAction::RemoveWorktree(tools.worktree_path.clone().into()));
+                    }
+                });
+                ui.separator();
+                ui.heading(tr("Submodules"));
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(tr("Submodule status")).clicked() {
+                        action = Some(ToolAction::SubmoduleStatus);
+                    }
+                    if ui.button(tr("Initialize and update submodules")).clicked() {
+                        action = Some(ToolAction::UpdateSubmodules);
+                    }
+                });
+                ui.separator();
+                ui.heading(tr("Git LFS"));
+                ui.label(tr("Requires git-lfs installed on PATH"));
+                ui.label(tr("LFS file pattern"));
+                ui.text_edit_singleline(&mut tools.pattern);
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(tr("LFS status")).clicked() {
+                        action = Some(ToolAction::LfsStatus);
+                    }
+                    if ui.button(tr("Track LFS pattern")).clicked() {
+                        action = Some(ToolAction::LfsTrack(tools.pattern.clone()));
+                    }
+                    if ui.button(tr("Download LFS files")).clicked() {
+                        action = Some(ToolAction::LfsPull);
+                    }
+                });
+            });
+            if let Some(confirmation) = tools.confirmation.clone() {
+                ui.separator();
+                ui.label(tr("Confirm repository operation"));
+                match &confirmation {
+                    ToolAction::AbortCherryPick => {
+                        ui.label(tr("Abort the current cherry-pick and restore its starting state?"));
+                    }
+                    ToolAction::RemoveWorktree(path) => {
+                        ui.label(trf("Remove linked worktree {path} and its ignored files? Git will refuse other unsaved changes or locked worktrees.", &[("path", &path.display())]));
+                    }
+                    _ => {}
+                }
+                ui.horizontal(|ui| {
+                    if ui.button(tr("Confirm")).clicked() {
+                        action = tools.confirmation.take();
+                    }
+                    if ui.button(tr("Cancel")).clicked() {
+                        tools.confirmation = None;
+                    }
+                });
+            }
+        });
+        if let Some(error) = &app.vcs.error {
+            ui.colored_label(rc_kit::pal(ui).error, error);
+        }
+        ui.separator();
+        ui.label(tr("Repository tool output"));
+        ui.add(egui::TextEdit::multiline(&mut app.vcs.tools.report).interactive(false).desired_width(f32::INFINITY).desired_rows(8));
+    });
+    if let Some(action) = action {
+        // Refuse to change a worktree while editor buffers have unsaved changes.
+        if action.changes_worktree() && app.docs.list.iter().any(|doc| doc.is_modified()) {
+            app.vcs.error = Some(tr("Save or close modified documents before changing the repository").into());
+        } else {
+            app.vcs.repository_tool(action);
+        }
+    }
+    if let Some(path) = open {
+        app.open_path(&path);
+    }
+}
+
+#[cfg(test)]
+mod repository_tools_tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+    use std::time::{Duration, Instant};
+
+    fn git(path: &std::path::Path, args: &[&str]) {
+        let output = std::process::Command::new("git").current_dir(path).args(args).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    #[test]
+    fn repository_tools_preserve_unsaved_editor_documents() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let file = home.path().join("App.cs");
+        std::fs::write(&file, "saved\n").unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        let index = app.docs.open(&file).unwrap();
+        app.docs.list[index].editor.replace(0, 0, "unsaved ");
+        app.vcs.tools.visible = true;
+        app.vcs.tools.confirmation = Some(crate::vcs::tools::ToolAction::AbortCherryPick);
+        let mut first = true;
+        let mut h = Harness::builder().with_size(egui::vec2(900.0, 1100.0)).build_ui_state(
+            move |ui, app: &mut DotCraftApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                git_window(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Confirm")).click();
+        h.run_steps(2);
+        assert!(h.state().vcs.busy.is_none());
+        assert_eq!(h.state().vcs.error.as_deref(), Some(tr("Save or close modified documents before changing the repository")));
+        assert!(h.state().docs.list[index].is_modified());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "saved\n");
+    }
+
+    #[test]
+    fn repository_tools_clone_only_after_click_and_open_the_result() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let source = home.path().join("source");
+        std::fs::create_dir(&source).unwrap();
+        git(&source, &["init", "-q"]);
+        git(&source, &["config", "user.name", "Test"]);
+        git(&source, &["config", "user.email", "test@example.com"]);
+        git(&source, &["config", "commit.gpgsign", "false"]);
+        std::fs::write(source.join("README.txt"), "cloned content").unwrap();
+        git(&source, &["add", "."]);
+        git(&source, &["commit", "-qm", "initial"]);
+        let target = home.path().join("result");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.vcs.tools.visible = true;
+        app.vcs.tools.source = source.display().to_string();
+        app.vcs.tools.destination = target.display().to_string();
+        let mut first = true;
+        let mut h = Harness::builder().with_size(egui::vec2(900.0, 1000.0)).build_ui_state(
+            move |ui, app: &mut DotCraftApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                app.vcs.update(&mut app.docs, true);
+                git_window(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        assert!(!target.exists());
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Clone Repository")).click();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while h.state().vcs.tools.cloned.is_none() && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(h.state().vcs.tools.cloned.as_deref(), Some(target.as_path()));
+        assert_eq!(std::fs::read_to_string(target.join("README.txt")).unwrap(), "cloned content");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Open cloned repository")).click();
+        h.run_steps(3);
+        assert_eq!(h.state().workspace.as_ref().unwrap().ws.root, target);
+        h.state_mut().close_workspace();
+    }
+
+    #[test]
+    fn repository_tools_destructive_confirmation_can_be_cancelled() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.vcs.tools.visible = true;
+        app.vcs.tools.confirmation = Some(crate::vcs::tools::ToolAction::RemoveWorktree(home.path().to_path_buf()));
+        let mut first = true;
+        let mut h = Harness::builder().with_size(egui::vec2(900.0, 1100.0)).build_ui_state(
+            move |ui, app: &mut DotCraftApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                git_window(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        assert!(h.state().vcs.busy.is_none());
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Cancel")).click();
+        h.run_steps(2);
+        assert!(h.state().vcs.tools.confirmation.is_none());
+        assert!(h.state().vcs.busy.is_none());
+        assert!(home.path().exists());
+    }
 }

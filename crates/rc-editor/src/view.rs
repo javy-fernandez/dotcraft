@@ -1414,7 +1414,7 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         }
         Indent if !ro && state.snippet_jump(false) => {}
         Unindent if !ro && state.snippet_jump(true) => {}
-        Indent if !ro && expand_template(state) => {}
+        Indent if !ro && (crate::templates::expand_postfix(state) || expand_template(state)) => {}
         Indent if !ro => {
             let multi_line = sel.ranges().iter().any(|r| rope.char_to_line(r.start()) != rope.char_to_line(r.end()));
             let e = if multi_line { commands::indent_lines(&rope, &sel, &indent, false) } else { commands::insert_tab(&rope, &sel, &indent) };
@@ -1601,9 +1601,12 @@ fn expand_template(state: &mut EditorState) -> bool {
         return false;
     }
     let key: String = rope.slice(start..caret).to_string();
-    let Some(t) = crate::templates::find(&key) else { return false };
+    let body = match state.custom_templates.get(&key) {
+        Some(body) => body.as_str(),
+        None => match crate::templates::find(&key) { Some(t) => t.body, None => return false },
+    };
     let stem = state.path.as_ref().and_then(|p| p.file_stem()).map_or_else(|| "Name".to_string(), |s| s.to_string_lossy().into_owned());
-    let body = crate::templates::fill(t.body, &stem);
+    let body = crate::templates::fill(body, &stem);
     state.insert_snippet(start, caret, &body);
     true
 }

@@ -1,6 +1,8 @@
 //! Native read-only SQLite connection, schema and explicit query controls.
 
 use crate::{app::DotCraftApp, database::{Action, Error, MAX_SQL}, toolwindow::ToolWindow};
+mod insight;
+
 use egui::Ui;
 use rc_kit::i18n::{tr, trf};
 
@@ -50,11 +52,39 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         });
     }
     ui.separator();
+    if let Some(panel_action) = insight::panels(db, root.as_deref(), ui) { action = Some(panel_action); }
+    if db.view != crate::database::View::Query {
+        if let Some(action) = action { db.execute(action); }
+        return;
+    }
     ui.label(tr("SQL Console"));
-    ui.add(egui::TextEdit::multiline(&mut db.sql).code_editor().desired_rows(3).desired_width(f32::INFINITY).char_limit(MAX_SQL));
+    let mut editor = egui::TextEdit::multiline(&mut db.sql).id_salt("sqlite_sql_editor").code_editor().desired_rows(3).desired_width(f32::INFINITY).char_limit(MAX_SQL).show(ui);
+    if let Some(range) = editor.cursor_range { db.cursor = range.primary.index.into(); }
+    ui.horizontal_wrapped(|ui| {
+        if ui.button(tr("SQL Suggestions")).clicked() { db.show_suggestions = !db.show_suggestions; }
+        if ui.add_enabled(!db.busy() && !db.sql.trim().is_empty(), egui::Button::new(tr("Explain Query Plan"))).clicked() { action = Some(Action::Explain(db.sql.clone())); }
+    });
+    if db.show_suggestions {
+        let choices = crate::database::completions(&db.sql, db.cursor, &db.tables, db.details.as_ref());
+        if choices.is_empty() { ui.label(tr("No local suggestions at the caret.")); }
+        egui::ScrollArea::vertical().id_salt("sqlite_suggestions").max_height(120.0).show(ui, |ui| { ui.horizontal_wrapped(|ui| {
+            for choice in choices {
+                if ui.button(&choice.label).clicked()
+                    && let Some(cursor) = crate::database::apply_completion(&mut db.sql, &choice) {
+                    db.cursor = cursor;
+                    editor.state.cursor.set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(cursor))));
+                    editor.state.clone().store(ui.ctx(), editor.response.id);
+                    editor.response.request_focus();
+                    db.show_suggestions = false;
+                }
+            }
+        }); });
+        ui.label(tr("Suggestions use loaded table names and inspected columns; they do not validate SQL."));
+    }
     if ui.add_enabled(!db.busy() && !db.sql.trim().is_empty() && db.sql.len() <= MAX_SQL, egui::Button::new(tr("Run SQL"))).clicked() { action = Some(Action::Query(db.sql.clone())); }
     if let Some(action) = action { db.execute(action); }
     if let Some(grid) = &db.grid {
+        if db.grid_is_plan { ui.strong(tr("SQLite Query Plan")); }
         ui.label(trf("{count} rows displayed", &[("count", &grid.rows.len())]));
         if grid.truncated { ui.label(tr("Results truncated at 500 rows or 2 MiB.")); }
         ui.label(tr("Cells are clipped to one line. Hover for up to 4096 text characters or a BLOB preview."));
@@ -121,6 +151,65 @@ mod tests {
             harness.run_steps(1);
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    #[test]
+    fn sqlite_insight_controls_inspect_compare_navigate_and_explain_explicitly() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ui-insight.sqlite");
+        rusqlite::Connection::open(&path).unwrap().execute_batch("CREATE TABLE authors(id INTEGER PRIMARY KEY); CREATE TABLE books(title TEXT, author INTEGER REFERENCES authors(id)); CREATE INDEX books_title ON books(title);").unwrap();
+        let other = dir.path().join("other.sqlite");
+        std::fs::copy(&path,&other).unwrap();
+        rusqlite::Connection::open(&other).unwrap().execute_batch("CREATE TABLE editions(id INTEGER);").unwrap();
+        let original = (std::fs::read(&path).unwrap(),std::fs::read(&other).unwrap());
+        let mut app = DotCraftApp::with_settings(Settings { language: Some("en".into()), ..Settings::default() }, Waker::noop(), None);
+        app.database.path = path.display().to_string();
+        let mut first = true;
+        let mut harness = Harness::builder().with_size(egui::vec2(1000.0,900.0)).build_ui_state(move |ui,app:&mut DotCraftApp| {
+            if std::mem::take(&mut first) { rc_kit::theme::install_fonts(ui.ctx()); return; }
+            app.database.update(); show(app,ui);
+        },app);
+        harness.run_steps(2);
+        harness.get_by_label("Connect").click();
+        pump(&mut harness,|app|app.database.connected.is_some());
+        assert!(harness.state().database.details.is_none());
+        harness.state_mut().database.selected=1;
+        harness.get_by_label("Schema Details").click(); harness.run_steps(2);
+        assert!(harness.state().database.details.is_none(), "switching panels must not start queries");
+        harness.get_by_label("Inspect Table").click();
+        pump(&mut harness,|app|app.database.details.is_some());
+        assert_eq!(harness.state().database.details.as_ref().unwrap().table,"books");
+        harness.get_by_label("Columns").click(); harness.run_steps(2);
+        harness.get_by_label("title");
+        harness.get_by_label("Relationships").click(); harness.run_steps(2);
+        assert!(harness.state().database.relations.is_none());
+        harness.get_by_label("Load Relationships").click();
+        pump(&mut harness,|app|app.database.relations.is_some());
+        assert_eq!(harness.state().database.relations.as_ref().unwrap().edges.len(),1);
+        harness.get_by_role_and_label(egui::accesskit::Role::Button,"authors").click();
+        pump(&mut harness,|app|app.database.details.as_ref().is_some_and(|details|details.table=="authors"));
+        assert_eq!(harness.state().database.view,crate::database::View::Details);
+        harness.get_by_label("Schema Comparison").click(); harness.run_steps(2);
+        harness.state_mut().database.compare_path=other.display().to_string(); harness.run_steps(2);
+        assert!(harness.state().database.comparison.is_none());
+        harness.get_by_label("Compare Schemas").click();
+        pump(&mut harness,|app|app.database.comparison.is_some());
+        assert_eq!(harness.state().database.comparison.as_ref().unwrap().changes[0].name,"editions");
+        harness.get_by_label("SQL Console").click(); harness.run_steps(2);
+        harness.state_mut().database.sql="SELECT * FROM books WHERE title='test'".into(); harness.run_steps(2);
+        harness.get_by_label("Explain Query Plan").click();
+        pump(&mut harness,|app|app.database.grid_is_plan);
+        harness.get_by_label("SQLite Query Plan");
+        assert!(harness.state().database.grid.as_ref().unwrap().rows.iter().flatten().any(|cell|matches!(cell,crate::database::Cell::Text(value) if value.contains("books_title"))));
+        harness.state_mut().database.sql="SEL".into(); harness.run_steps(2);
+        harness.get_by_label("SQL Suggestions").click(); harness.run_steps(2);
+        harness.get_by_role_and_label(egui::accesskit::Role::Button,"SELECT").click(); harness.run_steps(2);
+        assert_eq!(harness.state().database.sql,"SELECT");
+        assert!(!harness.state().database.busy());
+        harness.get_by_label("Disconnect").click(); harness.run_steps(2);
+        assert!(harness.state().database.details.is_none() && harness.state().database.relations.is_none() && harness.state().database.comparison.is_none());
+        assert_eq!(original,(std::fs::read(&path).unwrap(),std::fs::read(&other).unwrap()));
     }
 
     #[test]

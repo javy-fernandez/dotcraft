@@ -43,20 +43,56 @@ pub struct Endpoint {
 /// Scans every `.cs` file under `project_dir` (skipping `bin`, `obj`, hidden folders,
 /// `node_modules` and nested projects). Results are sorted by file and line.
 pub fn scan_project(project_dir: &Path) -> Vec<Endpoint> {
+    scan_project_cancellable(project_dir, &std::sync::atomic::AtomicBool::new(false))
+}
+
+/// A bounded scan that stops between directory entries and files when cancelled.
+pub fn scan_project_cancellable(project_dir: &Path, cancel: &std::sync::atomic::AtomicBool) -> Vec<Endpoint> {
     let mut files = Vec::new();
-    collect_cs_files(project_dir, true, &mut files);
+    collect_cs_files(project_dir, true, &mut files, cancel, 0, &mut 0);
     files.sort();
-    let mut classes = Vec::new();
-    let mut out = Vec::new();
-    for f in &files {
-        let Ok(text) = std::fs::read_to_string(f) else { continue };
+    let mut classes = Vec::new(); let mut out = Vec::new(); let mut total_bytes = 0;
+    for file in &files {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) { return Vec::new(); }
+        let Ok(bytes) = crate::http_file::read_bounded_file(file, 1024 * 1024) else { continue };
+        total_bytes += bytes.len(); if total_bytes > 32 * 1024 * 1024 { break; }
+        let Ok(text) = String::from_utf8(bytes) else { continue };
         let toks = lex(&text);
-        classes.extend(parse_classes(&toks, f));
-        out.extend(scan_minimal(&toks, f));
+        classes.extend(parse_classes(&toks, file)); out.extend(scan_minimal(&toks, file));
     }
-    out.extend(resolve_controllers(&classes));
-    sort_endpoints(&mut out);
-    out
+    out.extend(resolve_controllers(&classes)); sort_endpoints(&mut out); out.truncate(5000); out
+}
+
+/// Ambiguities with the same normalized route shape and compatible HTTP methods.
+/// Parameter names are ignored; constraints are retained. This is a source-level hint,
+/// not ASP.NET's full route precedence/constraint engine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RouteIssue { pub route: String, pub first: usize, pub second: usize }
+
+pub fn route_issues(endpoints: &[Endpoint]) -> Vec<RouteIssue> {
+    let mut groups: std::collections::BTreeMap<String, Vec<usize>> = Default::default();
+    let mut issues = Vec::new();
+    for (index, endpoint) in endpoints.iter().enumerate() {
+        let mut route = String::new(); let mut chars = endpoint.route.chars();
+        while let Some(c) = chars.next() {
+            if c == '{' {
+                let mut parameter = String::new();
+                for c in chars.by_ref() { if c == '}' { break; } parameter.push(c); }
+                let constraint = parameter.find(':').map(|i| &parameter[i..]).unwrap_or("");
+                let catchall = if parameter.starts_with('*') { "*" } else { "" };
+                route.push_str(&format!("{{{catchall}{constraint}{}}}", if parameter.ends_with('?') && constraint.is_empty() { "?" } else { "" }));
+            } else { route.extend(c.to_lowercase()); }
+        }
+        let previous = groups.entry(route).or_default();
+        for &other in previous.iter() {
+            if endpoint.method == "ANY" || endpoints[other].method == "ANY" || endpoint.method.eq_ignore_ascii_case(&endpoints[other].method) {
+                issues.push(RouteIssue { route: endpoint.route.clone(), first: other, second: index });
+                if issues.len() >= 1000 { return issues; }
+            }
+        }
+        previous.push(index);
+    }
+    issues
 }
 
 /// Scans a single C# source. Controller base classes are only resolved within this text.
@@ -76,9 +112,15 @@ fn sort_endpoints(v: &mut Vec<Endpoint>) {
     v.dedup();
 }
 
-fn collect_cs_files(dir: &Path, root: bool, out: &mut Vec<PathBuf>) {
+fn collect_cs_files(dir: &Path, root: bool, out: &mut Vec<PathBuf>, cancel: &std::sync::atomic::AtomicBool, depth: usize, visited: &mut usize) {
+    if depth > 64 || out.len() >= 10000 || *visited >= 100000 || cancel.load(std::sync::atomic::Ordering::Relaxed) { return; }
     let Ok(rd) = std::fs::read_dir(dir) else { return };
-    let entries: Vec<_> = rd.flatten().map(|e| e.path()).collect();
+    let mut entries = Vec::new();
+    for entry in rd.take(10000).flatten() {
+        if *visited >= 100000 || cancel.load(std::sync::atomic::Ordering::Relaxed) { break; }
+        *visited += 1;
+        entries.push(entry.path());
+    }
     if !root
         && entries
             .iter()
@@ -87,13 +129,15 @@ fn collect_cs_files(dir: &Path, root: bool, out: &mut Vec<PathBuf>) {
         return; // nested project: it gets its own scan
     }
     for p in entries {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) || out.len() >= 10000 { return; }
+        if p.is_symlink() { continue; }
         let name = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
         if p.is_dir() {
             let lower = name.to_ascii_lowercase();
             if name.starts_with('.') || matches!(lower.as_str(), "bin" | "obj" | "node_modules") {
                 continue;
             }
-            collect_cs_files(&p, false, out);
+            collect_cs_files(&p, false, out, cancel, depth + 1, visited);
         } else if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("cs")) {
             out.push(p);
         }
@@ -1143,6 +1187,34 @@ fn scan_minimal(t: &[Token], file: &Path) -> Vec<Endpoint> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn route_conflicts_compare_method_shape_and_constraints() {
+        let endpoints = scan_source(Path::new("Program.cs"), r#"
+            app.MapGet("/items/{id:int}", GetItem);
+            app.MapGet("/ITEMS/{key:int}", GetSameItem);
+            app.MapGet("/items/{slug:alpha}", GetBySlug);
+            app.MapPost("/items/{id:int}", CreateItem);
+            app.Map("/items/{value:int}", AnyItem);
+        "#);
+        let issues = route_issues(&endpoints);
+        assert_eq!(issues.len(), 4, "{issues:?}: {endpoints:?}");
+        assert!(issues.iter().all(|issue| !endpoints[issue.first].route.contains("alpha") && !endpoints[issue.second].route.contains("alpha")));
+        assert!(issues.iter().any(|issue| endpoints[issue.first].method == "GET" && endpoints[issue.second].method == "GET"));
+        assert_eq!(route_issues(&vec![endpoints[0].clone(); 100]).len(), 1000);
+    }
+
+    #[test]
+    fn endpoint_scan_stops_when_cancelled_and_skips_oversized_source() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Program.cs"), "app.MapGet(\"/ready\", Ready);").unwrap();
+        std::fs::write(dir.path().join("Generated.cs"), format!("{}app.MapGet(\"/too-large\", Large);", " ".repeat(1024 * 1024))).unwrap();
+        let cancel = std::sync::atomic::AtomicBool::new(true);
+        assert!(scan_project_cancellable(dir.path(), &cancel).is_empty());
+        cancel.store(false, std::sync::atomic::Ordering::Relaxed);
+        let endpoints = scan_project_cancellable(dir.path(), &cancel);
+        assert_eq!(endpoints.len(), 1); assert_eq!(endpoints[0].route, "/ready");
+    }
 
     fn scan(src: &str) -> Vec<(String, String, String, usize)> {
         scan_source(Path::new("X.cs"), src)

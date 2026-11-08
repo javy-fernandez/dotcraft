@@ -7,6 +7,12 @@ use rc_core::{Inbox, Waker};
 use rusqlite::{Connection, OpenFlags, config::DbConfig, hooks::{AuthAction, Authorization}, limits::Limit, types::ValueRef};
 use std::{path::{Path, PathBuf}, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::{Duration, Instant}};
 
+mod insight;
+pub use insight::{Details, Relations, Comparison, ChangeKind, completions, apply_completion};
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum View { #[default] Query, Details, Relations, Comparison }
+
 pub const MAX_ROWS: usize = 500;
 pub const MAX_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_SQL: usize = 64 * 1024;
@@ -70,12 +76,20 @@ pub enum Action {
     Schema,
     Browse(String),
     Query(String),
+    Inspect(String),
+    Relations,
+    Compare(PathBuf),
+    Explain(String),
 }
 
 #[derive(Debug)]
 pub enum Reply {
     Schema { path: PathBuf, tables: Vec<Table>, truncated: bool },
     Grid(Grid),
+    Details(Details),
+    Relations(Relations),
+    Comparison(Comparison),
+    Plan(Grid),
 }
 
 fn check(cancel: &AtomicBool, deadline: Instant) -> Result<(), Error> {
@@ -110,6 +124,7 @@ fn open(path: &Path, cancel: Arc<AtomicBool>, deadline: Instant) -> Result<Conne
     ] { connection.set_limit(limit, value)?; }
     connection.progress_handler(1000, Some(move || cancel.load(Ordering::Relaxed) || Instant::now() >= deadline))?;
     connection.authorizer(Some(|context: rusqlite::hooks::AuthContext<'_>| match context.action {
+        AuthAction::Pragma { pragma_name, .. } if ["table_xinfo", "index_list", "index_info", "foreign_key_list"].iter().any(|name| pragma_name.eq_ignore_ascii_case(name)) => Authorization::Allow,
         AuthAction::Select | AuthAction::Read { .. } | AuthAction::Recursive => Authorization::Allow,
         AuthAction::Function { function_name } if !function_name.eq_ignore_ascii_case("load_extension") => Authorization::Allow,
         _ => Authorization::Deny,
@@ -178,6 +193,10 @@ fn run_until(path: &Path, action: Action, cancel: Arc<AtomicBool>, deadline: Ins
                 Ok(Reply::Grid(query(&connection, &format!("SELECT * FROM {}", ident(&name)?), &cancel, deadline)?))
             }
             Action::Query(sql) => Ok(Reply::Grid(query(&connection, &sql, &cancel, deadline)?)),
+            Action::Inspect(name) => Ok(Reply::Details(insight::details(&connection, name, &cancel, deadline)?)),
+            Action::Relations => Ok(Reply::Relations(insight::relations(&connection, &cancel, deadline)?)),
+            Action::Compare(other) => Ok(Reply::Comparison(insight::compare(&connection, other, cancel.clone(), deadline)?)),
+            Action::Explain(sql) => Ok(Reply::Plan(insight::explain(&connection, sql, &cancel, deadline)?)),
         }
     })();
     match result {
@@ -201,6 +220,14 @@ pub struct Database {
     pub sql: String,
     pub grid: Option<Grid>,
     pub error: Option<Error>,
+    pub details: Option<Details>,
+    pub relations: Option<Relations>,
+    pub comparison: Option<Comparison>,
+    pub compare_path: String,
+    pub view: View,
+    pub show_suggestions: bool,
+    pub cursor: usize,
+    pub grid_is_plan: bool,
     work: Option<Work>,
     waker: Waker,
 }
@@ -208,7 +235,8 @@ pub struct Database {
 impl Database {
     pub fn new(waker: Waker) -> Self {
         Self { path: String::new(), connected: None, tables: Vec::new(), schema_truncated: false, selected: 0,
-            sql: "SELECT sqlite_version();".into(), grid: None, error: None, work: None, waker }
+            sql: "SELECT sqlite_version();".into(), grid: None, error: None, work: None, waker,
+            details: None, relations: None, comparison: None, compare_path: String::new(), view: View::Query, show_suggestions: false, cursor: 0, grid_is_plan: false }
     }
 
     pub fn busy(&self) -> bool { self.work.is_some() }
@@ -228,7 +256,13 @@ impl Database {
 
     fn start(&mut self, path: PathBuf, action: Action) {
         self.error = None;
-        self.grid = None;
+        match &action {
+            Action::Schema => { self.details = None; self.relations = None; self.comparison = None; }
+            Action::Inspect(_) => self.details = None,
+            Action::Relations => self.relations = None,
+            Action::Compare(_) => self.comparison = None,
+            _ => { self.grid = None; self.grid_is_plan = false; self.view = View::Query; }
+        }
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();
         let inbox = Inbox::new(self.waker.clone());
@@ -250,7 +284,11 @@ impl Database {
                     self.selected = 0;
                     self.schema_truncated = truncated;
                 }
-                Ok(Reply::Grid(grid)) => self.grid = Some(grid),
+                Ok(Reply::Grid(grid)) => { self.grid = Some(grid); self.grid_is_plan = false; }
+                Ok(Reply::Plan(grid)) => { self.grid = Some(grid); self.grid_is_plan = true; }
+                Ok(Reply::Details(details)) => self.details = Some(details),
+                Ok(Reply::Relations(relations)) => self.relations = Some(relations),
+                Ok(Reply::Comparison(comparison)) => self.comparison = Some(comparison),
                 Err(error) => self.error = Some(error),
             }
         }
@@ -269,6 +307,12 @@ impl Database {
         self.grid = None;
         self.error = None;
         self.schema_truncated = false;
+        self.details = None;
+        self.relations = None;
+        self.comparison = None;
+        self.show_suggestions = false;
+        self.grid_is_plan = false;
+        self.view = View::Query;
     }
 }
 

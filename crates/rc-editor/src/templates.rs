@@ -182,6 +182,18 @@ mod editor_tests {
     }
 
     #[test]
+    fn workspace_templates_expand_with_tab_and_support_undo() {
+        let mut state = EditorState::new(7, Some("Sample.cs".into()), "greet");
+        std::sync::Arc::make_mut(&mut state.custom_templates).insert("greet".into(), "Console.WriteLine(${1:name});$0".into());
+        state.selection = Selection::point(5);
+        run(&mut state, Action::Indent);
+        assert_eq!(state.buffer.rope().to_string(), "Console.WriteLine(name);");
+        assert_eq!(state.selected_text(), "name");
+        state.undo();
+        assert_eq!(state.buffer.rope().to_string(), "greet");
+    }
+
+    #[test]
     fn tab_expands_moves_through_fields_and_mirrors() {
         let mut s = EditorState::new(1, Some("/tmp/Order.cs".into()), "class Order\n{\n    void M()\n    {\n        for\n    }\n}\n");
         let at = s.buffer.rope().to_string().find("for\n").unwrap() + 3;
@@ -211,5 +223,93 @@ mod editor_tests {
         s.selection = Selection::point(5);
         run(&mut s, Action::Indent);
         assert!(!s.buffer.rope().to_string().contains("var i"));
+    }
+}
+
+/// Explicit C# postfix transformations for identifier/member expressions on their own line.
+/// No type inference is attempted; calls, literals, comments, and multi-caret edits are excluded.
+pub fn expand_postfix(state: &mut crate::EditorState) -> bool {
+    if state.read_only || state.lang() != rc_syntax::Lang::CSharp || state.selection.len() != 1 || !state.selection.primary().is_empty() { return false; }
+    // An edited but not yet reparsed tree cannot prove we are outside a multiline string/comment.
+    if !state.syntax.is_current() { return false; }
+    let rope = state.buffer.rope();
+    let caret = state.caret();
+    let byte = rope.char_to_byte(caret.saturating_sub(1));
+    let mut node = state.syntax.tree().and_then(|tree| tree.root_node().descendant_for_byte_range(byte, byte));
+    while let Some(current) = node {
+        if current.kind().contains("comment") || current.kind().contains("string") || current.kind() == "character_literal" { return false; }
+        node = current.parent();
+    }
+    let line = rope.char_to_line(caret);
+    let start = rope.line_to_char(line);
+    if caret - start > 4096 { return false; }
+    let prefix = rope.slice(start..caret).to_string();
+    let suffix = rope.slice(caret..(start + rope.line(line).len_chars())).to_string();
+    if !suffix.trim().is_empty() { return false; }
+    let trimmed = prefix.trim_start_matches([' ', '\t']);
+    let Some((expression, key)) = trimmed.rsplit_once('.') else { return false };
+    if !expression.split('.').all(|part| {
+        let mut chars = part.chars();
+        chars.next().is_some_and(|c| c == '_' || c.is_alphabetic()) && chars.all(|c| c == '_' || c.is_alphanumeric())
+    }) { return false; }
+    let value = escape(expression);
+    let body = match key {
+        "if" => format!("if ({value})\n{{\n\t$0\n}}"),
+        "not" => format!("!({value})$0"),
+        "null" => format!("if ({value} is null)\n{{\n\t$0\n}}"),
+        "notnull" => format!("if ({value} is not null)\n{{\n\t$0\n}}"),
+        "return" => format!("return {value};$0"),
+        "await" => format!("await {value};$0"),
+        _ => return false,
+    };
+    let indent = prefix.chars().count() - trimmed.chars().count();
+    state.insert_snippet(start + indent, caret, &body);
+    true
+}
+
+#[cfg(test)]
+mod postfix_tests {
+    use super::*;
+    #[test]
+    fn postfix_expands_unicode_members_and_undoes_without_touching_other_lines() {
+        let source = "void M()\n{\n    usuário.Ready.if\n}\n";
+        let mut state = crate::EditorState::new(5, Some("App.cs".into()), source);
+        let caret = source[..source.find(".if").unwrap()+3].chars().count();
+        state.selection = rc_text::Selection::point(caret);
+        state.parse_blocking();
+        assert!(expand_postfix(&mut state));
+        assert!(state.buffer.rope().to_string().contains("if (usuário.Ready)\n    {"));
+        state.undo();
+        assert_eq!(state.buffer.rope().to_string(), source);
+        for source in ["// value.if", "\"value.if", "Call().if", "left + right.if", "value.if;", "a.for"] {
+            let mut state = crate::EditorState::new(6, Some("App.cs".into()), source);
+            state.selection = rc_text::Selection::point(source.chars().count());
+            state.parse_blocking();
+            assert!(!expand_postfix(&mut state), "{source}");
+            assert_eq!(state.buffer.rope().to_string(), source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod postfix_context_tests {
+    #[test]
+    fn postfix_requires_current_code_and_handles_all_supported_expansions() {
+        for (key, expected) in [("if", "if (value)"), ("not", "!(value)"), ("null", "if (value is null)"), ("notnull", "if (value is not null)"), ("return", "return value;"), ("await", "await value;")] {
+            let source = format!("value.{key}");
+            let mut state = crate::EditorState::new(9, Some("App.cs".into()), &source);
+            state.selection = rc_text::Selection::point(source.chars().count());
+            assert!(!super::expand_postfix(&mut state));
+            state.parse_blocking();
+            assert!(super::expand_postfix(&mut state), "{key}");
+            assert!(state.buffer.rope().to_string().starts_with(expected), "{key}");
+        }
+        for source in ["/*\nvalue.if\n*/", "var text = @\"\nvalue.if\n\";", "var text = \"\"\"\nvalue.if\n\"\"\";"] {
+            let mut state = crate::EditorState::new(10, Some("App.cs".into()), source);
+            state.selection = rc_text::Selection::point(source[..source.find(".if").unwrap()+3].chars().count());
+            state.parse_blocking();
+            assert!(!super::expand_postfix(&mut state), "{source}");
+            assert_eq!(state.buffer.rope().to_string(), source);
+        }
     }
 }

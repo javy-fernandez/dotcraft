@@ -1152,6 +1152,13 @@ impl Insight {
         Some(s.client.request_raw("workspace/symbol", json!({ "query": query })))
     }
 
+    /// Flushes editor changes, including save-time cleanup, before notifying the server.
+    pub fn did_save_synced(&mut self, docs: &mut Docs, path: &Path) {
+        if !self.ready() { return; }
+        self.sync_documents(docs);
+        self.did_save(path);
+    }
+
     pub fn did_save(&mut self, path: &Path) {
         if let Some(s) = &mut self.session {
             s.did_save(path);
@@ -1494,6 +1501,108 @@ fn insert_usings(d: &mut Doc, namespaces: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn save_sync_sends_cleanup_before_save_and_preserves_the_server_text() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("save-observer.py");
+        // This peer applies incremental UTF-16 edits and records the text at didSave.
+        // A snapshot request is an ordered barrier after all preceding notifications.
+        std::fs::write(&script, r#"import sys, json
+documents, messages, saved = {}, [], []
+def read():
+    length = 0
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line: sys.exit(0)
+        line = line.decode().strip()
+        if not line: break
+        if line.startswith('Content-Length:'): length = int(line.split(':')[1])
+    return json.loads(sys.stdin.buffer.read(length))
+def send(message):
+    body = json.dumps(message).encode()
+    sys.stdout.buffer.write(b'Content-Length: %d\r\n\r\n' % len(body) + body)
+    sys.stdout.buffer.flush()
+def offset(text, position):
+    lines = text.splitlines(keepends=True)
+    line = position['line']
+    prefix = ''.join(lines[:line])
+    content = lines[line] if line < len(lines) else ''
+    column = len(content.encode('utf-16-le')[:position['character'] * 2].decode('utf-16-le'))
+    return len(prefix) + column
+while True:
+    message = read()
+    method, params = message['method'], message.get('params', {})
+    if method.startswith('textDocument/'):
+        messages.append(message)
+        document = params['textDocument']
+        uri = document['uri']
+        if method == 'textDocument/didOpen': documents[uri] = document['text']
+        elif method == 'textDocument/didChange':
+            for change in params['contentChanges']:
+                text = documents[uri]
+                start = offset(text, change['range']['start'])
+                end = offset(text, change['range']['end'])
+                documents[uri] = text[:start] + change['text'] + text[end:]
+        elif method == 'textDocument/didSave': saved.append(documents[uri])
+    if 'id' in message:
+        result = {'capabilities': {'textDocumentSync': 2}} if method == 'initialize' else {'messages': messages, 'saved': saved}
+        send({'jsonrpc': '2.0', 'id': message['id'], 'result': result})
+"#).unwrap();
+        let mut app = crate::screens::test_app(dir.path(), true);
+        let path = dir.path().join("Clean.cs");
+        let original = "class Café {} // 🦀  ";
+        std::fs::write(&path, original).unwrap();
+        let index = app.docs.open(&path).unwrap();
+        let command = roslyn::ServerCommand { program: "python3".into(), prefix: vec!["-u".into(), script.display().to_string()], origin: roslyn::Origin::Settings };
+        let session = LanguageSession::start(&command, dir.path(), None, Vec::new(), None, Waker::noop()).unwrap();
+        app.insight.session = Some(session);
+        app.insight.did_save_synced(&mut app.docs, &path);
+        assert!(!app.insight.session.as_ref().unwrap().docs.is_open(&path));
+        let mut session = app.insight.session.take().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !session.is_initialized() {
+            assert!(Instant::now() < deadline, "test server initialization timed out");
+            session.pump();
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        app.insight.session = Some(session);
+        app.insight.sync_documents(&mut app.docs);
+        let length = original.chars().count();
+        app.docs.list[index].editor.apply_text_edits(vec![rc_text::Change::delete(length - 2, length), rc_text::Change::insert(length, "\n")]);
+        app.docs.save(index).unwrap();
+        assert!(!app.docs.list[index].is_modified());
+        app.insight.did_save_synced(&mut app.docs, &path);
+        let snapshot = |insight: &Insight| {
+            let pending = insight.session.as_ref().unwrap().client.request_raw::<Value>("test/snapshot", json!({}));
+            Runtime::block_on(async { tokio::time::timeout(Duration::from_secs(5), pending.wait()).await.unwrap().unwrap() })
+        };
+        let observed = snapshot(&app.insight);
+        let messages = observed["messages"].as_array().unwrap();
+        let methods: Vec<_> = messages.iter().map(|message| message["method"].as_str().unwrap()).collect();
+        assert_eq!(methods, ["textDocument/didOpen", "textDocument/didChange", "textDocument/didSave"]);
+        assert_eq!(messages[0]["params"]["textDocument"]["text"], original);
+        assert_eq!(messages[1]["params"]["textDocument"]["version"], 2);
+        assert_eq!(messages[1]["params"]["contentChanges"].as_array().unwrap().len(), 2);
+        assert_eq!(messages[2]["params"]["textDocument"]["uri"], path_to_uri(&path).as_str());
+        let expected = "class Café {} // 🦀\n";
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), expected);
+        assert_eq!(observed["saved"], json!([expected]));
+        assert!(app.docs.list[index].editor.take_edits().is_empty());
+        app.insight.did_save_synced(&mut app.docs, &path);
+        let repeated = snapshot(&app.insight);
+        assert_eq!(repeated["messages"].as_array().unwrap().len(), 4);
+        assert_eq!(repeated["messages"][3]["method"], "textDocument/didSave");
+        assert_eq!(repeated["saved"], json!([expected, expected]));
+        app.docs.list[index].editor.replace(0, 0, "// unsaved\n");
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap(); // Atomic replacement cannot overwrite a directory.
+        app.save_all_docs();
+        assert!(app.docs.list[index].is_modified());
+        assert_eq!(snapshot(&app.insight)["saved"], json!([expected, expected]));
+        app.insight.stop();
+    }
 
     #[test]
     fn workspace_resource_operations_reject_all_text_edits_before_mutation() {

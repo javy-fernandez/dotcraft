@@ -157,6 +157,7 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
     }
     if category == tr("Run") && command(ui, tr("Run All Tests with Coverage"), Some(ico::RUN_COVERAGE), app.workspace.is_some()) { app.run_coverage(); }
     if category == tr("Tools") {
+        if command(ui, tr("Editor Workflows"), Some(ico::SETTINGS), app.workspace.is_some()) { app.editor_workflows.visible = true; }
         if command(ui, tr(".NET CLI"), Some(ico::SETTINGS), true) {
             app.dialog = Some(Dialog::Settings { draft: Box::new(app.settings.clone()), page: SettingsPage::Tools });
             app.focus_editor = false;

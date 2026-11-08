@@ -145,6 +145,8 @@ pub struct EditorState {
     pub bookmarks: BTreeMap<usize, Option<char>>,
     /// The snippet whose fields Tab moves through (live templates, completion snippets).
     pub snippet: Option<crate::snippet::Session>,
+    /// Workspace C# templates, overriding built-in abbreviations when explicitly saved.
+    pub custom_templates: std::sync::Arc<std::collections::BTreeMap<String, String>>,
     /// Test coverage per line: covered, partly covered (branches), not covered.
     pub coverage: BTreeMap<usize, CoverageMark>,
     pub gutter_icons: BTreeMap<usize, GutterIcon>,
@@ -207,6 +209,7 @@ impl EditorState {
             breakpoints: BTreeMap::new(),
             bookmarks: BTreeMap::new(),
             snippet: None,
+            custom_templates: Default::default(),
             coverage: BTreeMap::new(),
             gutter_icons: BTreeMap::new(),
             line_changes: BTreeMap::new(),

@@ -10,7 +10,11 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+#[path = "git_tools.rs"]
+pub mod tools;
+
 enum VcsEvent {
+    ToolReport(String, Option<PathBuf>),
     Repo(Option<Repository>),
     Status(Result<Status, String>),
     Branches(Vec<Branch>),
@@ -42,6 +46,7 @@ pub struct DiffView {
 }
 
 pub struct Vcs {
+    pub tools: tools::RepositoryTools,
     pub repo: Option<Repository>,
     pub status: Option<Status>,
     pub branches: Vec<Branch>,
@@ -77,6 +82,7 @@ pub struct Vcs {
 impl Vcs {
     pub fn new(waker: Waker) -> Self {
         Vcs {
+            tools: Default::default(),
             repo: None,
             status: None,
             branches: Vec::new(),
@@ -147,11 +153,10 @@ impl Vcs {
             return;
         }
         let s = path.to_string_lossy();
-        if s.contains("/.git/")
-            && (s.ends_with("HEAD") || s.contains("/refs/") || s.ends_with("index")) {
-                self.heads.clear();
-                self.marks_version.clear();
-            }
+        if s.contains("/.git/") && (s.ends_with("HEAD") || s.contains("/refs/") || s.ends_with("index")) {
+            self.heads.clear();
+            self.marks_version.clear();
+        }
         self.status_dirty = true;
     }
 
@@ -222,11 +227,36 @@ impl Vcs {
                 Err(error) if error.is_cancelled() => Err(rc_vcs::GitError::Cancelled),
                 Err(error) => Err(rc_vcs::GitError::Parse(error.to_string())),
             };
-            out.send(VcsEvent::Done(what, r.err().map(|e| {
-                let (tpl, args) = e.user_message();
-                let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
-                trf(tpl, &args)
-            })));
+            out.send(VcsEvent::Done(
+                what,
+                r.err().map(|e| {
+                    let (tpl, args) = e.user_message();
+                    let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
+                    trf(tpl, &args)
+                }),
+            ));
+        });
+    }
+
+    pub fn repository_tool(&mut self, action: tools::ToolAction) {
+        if self.busy.is_some() {
+            return;
+        }
+        self.tools.report.clear();
+        self.tools.cloned = None;
+        let repo = self.repo.clone();
+        let out = self.inbox.sender();
+        self.op("repository_tool", async move {
+            match action.run(repo).await {
+                Ok((report, cloned)) => {
+                    out.send(VcsEvent::ToolReport(report, cloned));
+                    Ok(())
+                }
+                Err(error) => {
+                    out.send(VcsEvent::ToolReport(error.details().unwrap_or_else(|| error.to_string()).chars().take(65_536).collect(), None));
+                    Err(error)
+                }
+            }
         });
     }
 
@@ -323,8 +353,7 @@ impl Vcs {
         let hash = stash.hash.clone();
         let restore_index = self.stash_restore_index;
         self.op(if pop { "stash_pop" } else { "stash_apply" }, async move {
-            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash)
-                .ok_or_else(|| rc_vcs::GitError::NotFound(hash))?;
+            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash).ok_or_else(|| rc_vcs::GitError::NotFound(hash))?;
             if pop { repo.stash_pop(entry.index, restore_index).await } else { repo.stash_apply(entry.index, restore_index).await }
         });
     }
@@ -333,8 +362,7 @@ impl Vcs {
         let Some(repo) = self.repo.clone() else { return };
         let hash = stash.hash.clone();
         self.op("stash_drop", async move {
-            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash)
-                .ok_or_else(|| rc_vcs::GitError::NotFound(hash))?;
+            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash).ok_or_else(|| rc_vcs::GitError::NotFound(hash))?;
             repo.stash_drop(entry.index).await
         });
     }
@@ -410,6 +438,10 @@ impl Vcs {
                 VcsEvent::Stashes(Ok(s)) => self.stashes = s,
                 VcsEvent::Stashes(Err(e)) => self.error = Some(e),
                 VcsEvent::Log(l) => self.log = l,
+                VcsEvent::ToolReport(report, cloned) => {
+                    self.tools.report = report;
+                    self.tools.cloned = cloned;
+                }
                 VcsEvent::Head(p, t) => {
                     self.head_pending.remove(&p);
                     self.heads.insert(p, t);

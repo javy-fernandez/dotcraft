@@ -1,0 +1,50 @@
+# English fallback strings for the five SQLite insight scopes
+Added in other file	Added in other file	Added in other file	Added in other file	Added in other file	Added in other file	Added in other file	Added in other file
+Arrows point from foreign-key tables to referenced tables. Click a table to inspect it.	Arrows point from foreign-key tables to referenced tables. Click a table to inspect it.	Arrows point from foreign-key tables to referenced tables. Click a table to inspect it.	Arrows point from foreign-key tables to referenced tables. Click a table to inspect it.	Arrows point from foreign-key tables to referenced tables. Click a table to inspect it.	Arrows point from foreign-key tables to referenced tables. Click a table to inspect it.	Arrows point from foreign-key tables to referenced tables. Click a table to inspect it.	Arrows point from foreign-key tables to referenced tables. Click a table to inspect it.
+Column ID	Column ID	Column ID	Column ID	Column ID	Column ID	Column ID	Column ID
+Column Name	Column Name	Column Name	Column Name	Column Name	Column Name	Column Name	Column Name
+Columns	Columns	Columns	Columns	Columns	Columns	Columns	Columns
+Compare Schemas	Compare Schemas	Compare Schemas	Compare Schemas	Compare Schemas	Compare Schemas	Compare Schemas	Compare Schemas
+Compare the current schema with another SQLite file. Differences describe the other file; neither database is changed.	Compare the current schema with another SQLite file. Differences describe the other file; neither database is changed.	Compare the current schema with another SQLite file. Differences describe the other file; neither database is changed.	Compare the current schema with another SQLite file. Differences describe the other file; neither database is changed.	Compare the current schema with another SQLite file. Differences describe the other file; neither database is changed.	Compare the current schema with another SQLite file. Differences describe the other file; neither database is changed.	Compare the current schema with another SQLite file. Differences describe the other file; neither database is changed.	Compare the current schema with another SQLite file. Differences describe the other file; neither database is changed.
+Current Definition	Current Definition	Current Definition	Current Definition	Current Definition	Current Definition	Current Definition	Current Definition
+Default Value	Default Value	Default Value	Default Value	Default Value	Default Value	Default Value	Default Value
+Definition changed	Definition changed	Definition changed	Definition changed	Definition changed	Definition changed	Definition changed	Definition changed
+Definition preview limited to 8192 characters.	Definition preview limited to 8192 characters.	Definition preview limited to 8192 characters.	Definition preview limited to 8192 characters.	Definition preview limited to 8192 characters.	Definition preview limited to 8192 characters.	Definition preview limited to 8192 characters.	Definition preview limited to 8192 characters.
+Explain Query Plan	Explain Query Plan	Explain Query Plan	Explain Query Plan	Explain Query Plan	Explain Query Plan	Explain Query Plan	Explain Query Plan
+Foreign Keys	Foreign Keys	Foreign Keys	Foreign Keys	Foreign Keys	Foreign Keys	Foreign Keys	Foreign Keys
+Foreign-key Links	Foreign-key Links	Foreign-key Links	Foreign-key Links	Foreign-key Links	Foreign-key Links	Foreign-key Links	Foreign-key Links
+Hidden Column Flag	Hidden Column Flag	Hidden Column Flag	Hidden Column Flag	Hidden Column Flag	Hidden Column Flag	Hidden Column Flag	Hidden Column Flag
+Index Origin	Index Origin	Index Origin	Index Origin	Index Origin	Index Origin	Index Origin	Index Origin
+Indexes	Indexes	Indexes	Indexes	Indexes	Indexes	Indexes	Indexes
+Inspect Table	Inspect Table	Inspect Table	Inspect Table	Inspect Table	Inspect Table	Inspect Table	Inspect Table
+Inspect the selected table to load its columns, indexes, and foreign keys.	Inspect the selected table to load its columns, indexes, and foreign keys.	Inspect the selected table to load its columns, indexes, and foreign keys.	Inspect the selected table to load its columns, indexes, and foreign keys.	Inspect the selected table to load its columns, indexes, and foreign keys.	Inspect the selected table to load its columns, indexes, and foreign keys.	Inspect the selected table to load its columns, indexes, and foreign keys.	Inspect the selected table to load its columns, indexes, and foreign keys.
+Key ID	Key ID	Key ID	Key ID	Key ID	Key ID	Key ID	Key ID
+Load Relationships	Load Relationships	Load Relationships	Load Relationships	Load Relationships	Load Relationships	Load Relationships	Load Relationships
+Metadata results are truncated.	Metadata results are truncated.	Metadata results are truncated.	Metadata results are truncated.	Metadata results are truncated.	Metadata results are truncated.	Metadata results are truncated.	Metadata results are truncated.
+Missing in other file	Missing in other file	Missing in other file	Missing in other file	Missing in other file	Missing in other file	Missing in other file	Missing in other file
+No declared foreign keys.	No declared foreign keys.	No declared foreign keys.	No declared foreign keys.	No declared foreign keys.	No declared foreign keys.	No declared foreign keys.	No declared foreign keys.
+No local suggestions at the caret.	No local suggestions at the caret.	No local suggestions at the caret.	No local suggestions at the caret.	No local suggestions at the caret.	No local suggestions at the caret.	No local suggestions at the caret.	No local suggestions at the caret.
+No metadata entries.	No metadata entries.	No metadata entries.	No metadata entries.	No metadata entries.	No metadata entries.	No metadata entries.	No metadata entries.
+No user tables found.	No user tables found.	No user tables found.	No user tables found.	No user tables found.	No user tables found.	No user tables found.	No user tables found.
+On Delete	On Delete	On Delete	On Delete	On Delete	On Delete	On Delete	On Delete
+On Update	On Update	On Update	On Update	On Update	On Update	On Update	On Update
+Other Definition	Other Definition	Other Definition	Other Definition	Other Definition	Other Definition	Other Definition	Other Definition
+Partial Index	Partial Index	Partial Index	Partial Index	Partial Index	Partial Index	Partial Index	Partial Index
+Primary Key Position	Primary Key Position	Primary Key Position	Primary Key Position	Primary Key Position	Primary Key Position	Primary Key Position	Primary Key Position
+Relationship diagram limited to 200 tables, 500 column links, or 2 MiB.	Relationship diagram limited to 200 tables, 500 column links, or 2 MiB.	Relationship diagram limited to 200 tables, 500 column links, or 2 MiB.	Relationship diagram limited to 200 tables, 500 column links, or 2 MiB.	Relationship diagram limited to 200 tables, 500 column links, or 2 MiB.	Relationship diagram limited to 200 tables, 500 column links, or 2 MiB.	Relationship diagram limited to 200 tables, 500 column links, or 2 MiB.	Relationship diagram limited to 200 tables, 500 column links, or 2 MiB.
+Relationships	Relationships	Relationships	Relationships	Relationships	Relationships	Relationships	Relationships
+Required	Required	Required	Required	Required	Required	Required	Required
+SQL Suggestions	SQL Suggestions	SQL Suggestions	SQL Suggestions	SQL Suggestions	SQL Suggestions	SQL Suggestions	SQL Suggestions
+SQLite Query Plan	SQLite Query Plan	SQLite Query Plan	SQLite Query Plan	SQLite Query Plan	SQLite Query Plan	SQLite Query Plan	SQLite Query Plan
+SQLite file to compare	SQLite file to compare	SQLite file to compare	SQLite file to compare	SQLite file to compare	SQLite file to compare	SQLite file to compare	SQLite file to compare
+Schema Comparison	Schema Comparison	Schema Comparison	Schema Comparison	Schema Comparison	Schema Comparison	Schema Comparison	Schema Comparison
+Schema Details	Schema Details	Schema Details	Schema Details	Schema Details	Schema Details	Schema Details	Schema Details
+Schemas match.	Schemas match.	Schemas match.	Schemas match.	Schemas match.	Schemas match.	Schemas match.	Schemas match.
+Sequence	Sequence	Sequence	Sequence	Sequence	Sequence	Sequence	Sequence
+Source Column	Source Column	Source Column	Source Column	Source Column	Source Column	Source Column	Source Column
+Suggestions use loaded table names and inspected columns; they do not validate SQL.	Suggestions use loaded table names and inspected columns; they do not validate SQL.	Suggestions use loaded table names and inspected columns; they do not validate SQL.	Suggestions use loaded table names and inspected columns; they do not validate SQL.	Suggestions use loaded table names and inspected columns; they do not validate SQL.	Suggestions use loaded table names and inspected columns; they do not validate SQL.	Suggestions use loaded table names and inspected columns; they do not validate SQL.	Suggestions use loaded table names and inspected columns; they do not validate SQL.
+Target Column	Target Column	Target Column	Target Column	Target Column	Target Column	Target Column	Target Column
+Target Table	Target Table	Target Table	Target Table	Target Table	Target Table	Target Table	Target Table
+Unique Index	Unique Index	Unique Index	Unique Index	Unique Index	Unique Index	Unique Index	Unique Index
+primary key	primary key	primary key	primary key	primary key	primary key	primary key	primary key
+{count} unchanged schema objects	{count} unchanged schema objects	{count} unchanged schema objects	{count} unchanged schema objects	{count} unchanged schema objects	{count} unchanged schema objects	{count} unchanged schema objects	{count} unchanged schema objects

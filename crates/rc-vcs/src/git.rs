@@ -153,6 +153,24 @@ pub struct GitCommand<'a> {
     ok_codes: Vec<i32>,
 }
 
+/// Owns the process group until output collection completes. Dropping a cancelled
+/// future must stop helpers (SSH, submodule Git, LFS), not only the parent Git.
+#[cfg(unix)]
+struct ProcessGroup(Option<u32>);
+
+#[cfg(unix)]
+impl Drop for ProcessGroup {
+    fn drop(&mut self) {
+        if let Some(pid) = self.0 {
+            // SAFETY: the positive child PID is the dedicated process-group ID
+            // created below. A negative PID addresses only that group.
+            unsafe {
+                libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+            }
+        }
+    }
+}
+
 impl GitCommand<'_> {
     pub fn arg(mut self, arg: impl AsRef<OsStr>) -> Self {
         self.args.push(arg.as_ref().to_owned());
@@ -196,6 +214,8 @@ impl GitCommand<'_> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        #[cfg(unix)]
+        cmd.process_group(0);
         #[cfg(windows)]
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         cmd
@@ -206,11 +226,7 @@ impl GitCommand<'_> {
     }
 
     fn finish(&self, out: Output) -> Result<Output> {
-        if out.code.is_some_and(|c| self.ok_codes.contains(&c)) {
-            Ok(out)
-        } else {
-            Err(GitError::classify(&self.arg_strings(), out.code, &String::from_utf8_lossy(&out.stdout), &out.stderr))
-        }
+        if out.code.is_some_and(|c| self.ok_codes.contains(&c)) { Ok(out) } else { Err(GitError::classify(&self.arg_strings(), out.code, &String::from_utf8_lossy(&out.stdout), &out.stderr)) }
     }
 
     /// Runs git to completion; non-accepted exit codes become classified errors.
@@ -229,6 +245,8 @@ impl GitCommand<'_> {
             return Err(GitError::Cancelled);
         }
         let mut child = self.build().spawn().map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { GitError::GitNotFound } else { GitError::Io(e) })?;
+        #[cfg(unix)]
+        let mut group = ProcessGroup(child.id());
         let stdin = child.stdin.take();
         let mut stdout = child.stdout.take().expect("piped stdout");
         let mut stderr = child.stderr.take().expect("piped stderr");
@@ -282,11 +300,15 @@ impl GitCommand<'_> {
         let out = match &self.cancel {
             Some(token) => tokio::select! {
                 out = work => out?,
-                // Dropping `work` drops the child, which kills it (`kill_on_drop`).
+                // Dropping the child and group guard also stops spawned helpers.
                 () = token.cancelled() => return Err(GitError::Cancelled),
             },
             None => work.await?,
         };
+        #[cfg(unix)]
+        {
+            group.0 = None;
+        }
         self.finish(out)
     }
 }

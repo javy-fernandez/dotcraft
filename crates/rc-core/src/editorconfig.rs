@@ -1,4 +1,4 @@
-//! Per-file indentation from EditorConfig. Reads belong on a background worker.
+//! Per-file indentation and UTF-8 save policies from EditorConfig. Reads belong on a background worker.
 //! Glob normalization and bounded file reads adapted from CrabCraft's code_style.rs
 //! (MIT OR Apache-2.0). No Rust-specific formatting settings are imported.
 
@@ -10,6 +10,12 @@ const MAX_FILE: u64 = 256 * 1024;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Indentation {
+    pub trim_trailing_whitespace: Option<bool>,
+    pub insert_final_newline: Option<bool>,
+    /// Supported save encodings are UTF-8 with or without BOM.
+    pub utf8_bom: Option<bool>,
+    /// True for CRLF, false for LF.
+    pub crlf: Option<bool>,
     pub tabs: Option<bool>,
     pub size: Option<usize>,
     pub tab_width: Option<usize>,
@@ -60,7 +66,12 @@ pub fn for_file(file: &Path, cancelled: &AtomicBool) -> Option<Indentation> {
     } else {
         number(get("indent_size"))
     };
+    let boolean = |key| match get(key) { Some("true") => Some(true), Some("false") => Some(false), _ => None };
     Some(Indentation {
+        trim_trailing_whitespace: boolean("trim_trailing_whitespace"),
+        insert_final_newline: boolean("insert_final_newline"),
+        utf8_bom: match get("charset") { Some("utf-8") => Some(false), Some("utf-8-bom") => Some(true), _ => None },
+        crlf: match get("end_of_line") { Some("lf") => Some(false), Some("crlf") => Some(true), _ => None },
         tabs,
         size,
         tab_width: width.or(size),
@@ -120,6 +131,9 @@ fn parse(text: &str, dir: &Path, file: &Path) -> (BTreeMap<String, String>, bool
             }
         } else if matching {
             let valid = match key.as_str() {
+                "trim_trailing_whitespace" | "insert_final_newline" => matches!(value.as_str(), "true" | "false" | "unset"),
+                "charset" => matches!(value.as_str(), "utf-8" | "utf-8-bom" | "unset"),
+                "end_of_line" => matches!(value.as_str(), "lf" | "crlf" | "unset"),
                 "indent_style" => matches!(value.as_str(), "tab" | "space" | "unset"),
                 "indent_size" => matches!(value.as_str(), "tab" | "unset") || valid_size(&value),
                 "tab_width" => value == "unset" || valid_size(&value),
@@ -249,6 +263,7 @@ mod tests {
                 size: Some(2),
                 tab_width: Some(2),
                 size_uses_tab_width: false,
+                ..Default::default()
             }
         );
         assert_eq!(
@@ -258,6 +273,7 @@ mod tests {
                 size: Some(3),
                 tab_width: Some(3),
                 size_uses_tab_width: true,
+                ..Default::default()
             }
         );
         assert_eq!(resolve(root, "README.md").size, Some(8));
@@ -283,6 +299,7 @@ mod tests {
                 size: Some(3),
                 tab_width: Some(3),
                 size_uses_tab_width: false,
+                ..Default::default()
             }
         );
         assert!(for_file(&root.join("src/App.cs"), &AtomicBool::new(true)).is_none());

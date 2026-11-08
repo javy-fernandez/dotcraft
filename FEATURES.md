@@ -19,6 +19,13 @@ bookmarks, hierarchies, and templates. Located upstream implementations are mark
 or partial below; no new runtime/platform parity is inferred from their presence.
 See [upstream integration evidence](docs/implementation/upstream-integration.md) for current checks.
 
+## Workflow batch 2 (2026-11-08)
+
+Twenty additional scoped improvements build on PR 108 and are delivered as one new
+upstream proposal. See [the batch inventory and validation](docs/implementation/batch2.md).
+All twenty broader feature families remain partial: tested slices do not establish full
+Rider parity. This batch does not replace the existing PR 108 source branch.
+
 ## Status rules
 
 | Status | Meaning |
@@ -36,10 +43,10 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 33 |
-| 🚧 In progress | 15 |
-| 🟢 Existing | 83 |
-| 🔁 Reuse candidate | 25 |
-| ⬜ Backlog | 217 |
+| 🚧 In progress | 30 |
+| 🟢 Existing | 82 |
+| 🔁 Reuse candidate | 24 |
+| ⬜ Backlog | 204 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -205,13 +212,13 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-15 | Diagnostics in editor | ✅ | Live application verifies CS0103 ranges; Roslyn regression verifies diagnostics; see live-dotnet.md. |
 | C-16 | Large-file safeguards | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-17 | Complete statement | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| C-18 | EditorConfig integration | 🚧 | PR 3 verifies the indentation subset, embedded globstars and logical mixed editing; numeric-range/save-time/full-formatting scope remains pending. |
+| C-18 | EditorConfig integration | 🚧 | Save-time whitespace, final newline, UTF-8 BOM and LF/CRLF policies now have disk/undo/explicit-Save coverage; full formatting, other encodings and numeric-range globs remain pending. [Batch 2](docs/implementation/batch2-editor.md). |
 | C-19 | Spelling assistance | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-20 | Web language editor improvements | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-21 | Smart and type-matching completion | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-22 | Import completion | ⬜ | Implement with integration and UI acceptance evidence. |
-| C-23 | Live templates editor | ⬜ | Implement with integration and UI acceptance evidence. |
-| C-24 | Postfix templates | ⬜ | Implement with integration and UI acceptance evidence. |
+| C-23 | Live templates editor | 🚧 | Workspace C# template editing, preview, insertion, Tab expansion and session persistence are tested; semantic contexts and import/export remain pending. [Batch 2](docs/implementation/batch2-editor.md). |
+| C-24 | Postfix templates | 🚧 | Six explicit C# postfix transforms for identifier/member paths have syntax-context and undo coverage; arbitrary expressions and type-aware applicability remain pending. [Batch 2](docs/implementation/batch2-editor.md). |
 | C-25 | Surround with templates | 🟢 | Upstream 0.4.0 includes built-in Surround With templates; revalidate on a real .NET fixture. |
 | C-26 | Generate constructors and members | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-27 | Override and implement members | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -251,8 +258,8 @@ Source / reuse boundary: `crates/rc-app/src/search.rs; crates/rc-search; crates/
 | D-13 | Scope-aware search | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | D-14 | Stack trace navigation | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | D-15 | Navigate to base and derived symbols | ⬜ | Implement with integration and UI acceptance evidence. |
-| D-16 | Related files navigation | ⬜ | Implement with integration and UI acceptance evidence. |
-| D-17 | Bookmarks and favorites | 🚧 | Upstream bookmarks and mnemonic navigation exist; favorites and broader acceptance remain pending. |
+| D-16 | Related files navigation | 🚧 | Cancellable indexed filename-family navigation with clickable results is tested; semantic related-file discovery remains pending. [Batch 2](docs/implementation/batch2-editor.md). |
+| D-17 | Bookmarks and favorites | 🚧 | Workspace favorite-file toggle/open/remove and persistence are tested alongside existing bookmarks; groups and symbol favorites remain pending. [Batch 2](docs/implementation/batch2-editor.md). |
 | D-18 | File nesting | ⬜ | Implement with integration and UI acceptance evidence. |
 | D-19 | Assembly explorer | ⬜ | Implement with integration and UI acceptance evidence. |
 | D-20 | Library decompilation | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -422,7 +429,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-06 | Side-by-side diff | ✅ | Verified by real-Git backend and app VCS tests; scope is local Git workflows on Linux. |
 | I-07 | Gutter change markers | ✅ | Verified by real-Git backend and app VCS tests; scope is local Git workflows on Linux. |
 | I-08 | Git blame | ✅ | Verified by real-Git backend and app VCS tests; scope is local Git workflows on Linux. |
-| I-09 | Clone repositories | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| I-09 | Clone repositories | 🚧 | Explicit local clone and open workflow has real-Git and headless coverage; network credentials, recursive options and welcome-screen entry remain pending. [Batch 2](docs/implementation/batch2-git.md). |
 | I-10 | Git read safety | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-11 | Shelves | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-12 | History editing | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
@@ -430,14 +437,14 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-14 | Git log and graph | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-15 | Fetch pull and push workflow audit | 🚧 | Real-Git fetch/pull/push backend tests pass; a complete hosting/UI workflow audit remains pending. |
 | I-16 | Interactive rebase | ⬜ | Implement with integration and UI acceptance evidence. |
-| I-17 | Cherry-pick | ⬜ | Implement with integration and UI acceptance evidence. |
+| I-17 | Cherry-pick | 🚧 | Single-commit cherry-pick, conflict continuation and confirmed abort are tested; merge mainline selection, ranges and skip remain pending. [Batch 2](docs/implementation/batch2-git.md). |
 | I-18 | Three-way merge editor | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-19 | Conflict resolution | 🚧 | PR 8 verifies deleted-side backend resolutions; visual merge tooling remains pending. |
 | I-20 | Changelists | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-21 | Partial commit | ⬜ | Implement with integration and UI acceptance evidence. |
-| I-22 | Git worktrees | ⬜ | Implement with integration and UI acceptance evidence. |
-| I-23 | Submodules | ⬜ | Implement with integration and UI acceptance evidence. |
-| I-24 | Git LFS | ⬜ | Implement with integration and UI acceptance evidence. |
+| I-22 | Git worktrees | 🚧 | List, create a new-branch worktree and confirmed non-force removal are tested on Git 2.53; requires Git 2.36+, other worktree management remains pending. [Batch 2](docs/implementation/batch2-git.md). |
+| I-23 | Submodules | 🚧 | Recursive status and recorded-commit update have local submodule evidence; remote credentials and add/remove flows remain pending. [Batch 2](docs/implementation/batch2-git.md). |
+| I-24 | Git LFS | 🚧 | Optional LFS status/track/pull controls have real Git LFS 3.8.1 tracking and local file-transfer evidence; hosted authentication/transfers remain pending. [Batch 2](docs/implementation/batch2-git.md). |
 | I-25 | GitHub pull requests | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-26 | GitLab merge requests | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-27 | Review comments | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -459,14 +466,14 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-02 | XML syntax parsing | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | J-03 | JSON syntax parsing | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | J-04 | Markdown preview | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| J-05 | HTTP client | 🚧 | PRs 13 and 15 verify basic HTTP execution, cancellation and inline variables; advanced HTTP integrations remain pending. |
-| J-06 | HTTP environment variables | 🚧 | The bounded scratchpad inline variables have historical fork validation. Upstream HTTP Client also implements environment files and dynamic variables; revalidate those separately on this merged base. |
+| J-05 | HTTP client | 🚧 | Upstream HTTP Client adds explicit cancellation and workspace/drop cleanup with localhost coverage; advanced HTTP integrations remain pending. [Batch 2](docs/implementation/batch2-web.md). |
+| J-06 | HTTP environment variables | 🚧 | Asynchronous environment discovery, selection, refresh and cancellation are tested; broader dynamic variable and external environment compatibility remain pending. [Batch 2](docs/implementation/batch2-web.md). |
 | J-07 | Database connections and SQL console | 🚧 | PR 16 verifies read-only SQLite connections and explicit bounded SQL; writes, persistent sessions and other engines remain pending. |
 | J-08 | SQL injection support | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| J-09 | ASP.NET endpoints explorer | 🟢 | Upstream ASP.NET endpoint scanning and HTTP generation exist; fixture validation remains pending. |
+| J-09 | ASP.NET endpoints explorer | 🚧 | Endpoint search/method filtering and project/method grouping extend upstream discovery; fixture/headless coverage is recorded, broader framework coverage remains pending. [Batch 2](docs/implementation/batch2-web.md). |
 | J-10 | Container tools | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | J-11 | ASP.NET MVC navigation | ⬜ | Implement with integration and UI acceptance evidence. |
-| J-12 | ASP.NET route analysis | ⬜ | Implement with integration and UI acceptance evidence. |
+| J-12 | ASP.NET route analysis | 🚧 | Method-aware canonical route conflict warnings are implemented and tested; runtime precedence and constrained-route semantics remain pending. [Batch 2](docs/implementation/batch2-web.md). |
 | J-13 | Blazor component assistance | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-14 | JavaScript and TypeScript intelligence | 🚧 | PR 9 verifies JS/TS/TSX syntax, highlighting and folding; semantic language intelligence remains pending. |
 | J-15 | HTML and CSS intelligence | 🚧 | PR 9 verifies native HTML/CSS syntax and HTML typing assists; semantic intelligence and preprocessors remain pending. |
@@ -478,17 +485,17 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-21 | Browser debugging | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-22 | Web test runners | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-23 | REST request generation | 🟢 | Upstream Endpoints generates HTTP request files from ASP.NET routes; merged fixture/runtime validation remains pending. |
-| J-24 | OpenAPI support | ⬜ | Implement with integration and UI acceptance evidence. |
+| J-24 | OpenAPI support | 🚧 | Bounded OpenAPI 3 JSON import generates HTTP requests without overwriting existing files; YAML, remote references and schema-driven code generation remain pending. [Batch 2](docs/implementation/batch2-web.md). |
 | J-25 | gRPC client | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-26 | WebSocket client | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-27 | Entity Framework tooling | ⬜ | Implement with integration and UI acceptance evidence. |
-| J-28 | Database schema explorer | 🚧 | PR 16 verifies SQLite tables/views and CREATE previews; broader schema navigation and other engines remain pending. |
+| J-28 | Database schema explorer | 🚧 | SQLite column/index/foreign-key inspection has backend and headless coverage; other engines and editing remain pending. [Batch 2](docs/implementation/batch2-database.md). |
 | J-29 | Table data editor | ⬜ | Implement with integration and UI acceptance evidence. |
-| J-30 | SQL completion and inspections | ⬜ | Implement with integration and UI acceptance evidence. |
+| J-30 | SQL completion and inspections | 🚧 | Local SQL keyword/table/inspected-column suggestions insert at Unicode caret positions; semantic inspections and alias inference remain pending. [Batch 2](docs/implementation/batch2-database.md). |
 | J-31 | Database migrations | ⬜ | Implement with integration and UI acceptance evidence. |
-| J-32 | Schema diff | ⬜ | Implement with integration and UI acceptance evidence. |
-| J-33 | Database diagrams | ⬜ | Implement with integration and UI acceptance evidence. |
-| J-34 | Query plans | ⬜ | Implement with integration and UI acceptance evidence. |
+| J-32 | Schema diff | 🚧 | Bounded read-only comparison of complete SQLite schema snapshots is tested; normalization, migrations and other engines remain pending. [Batch 2](docs/implementation/batch2-database.md). |
+| J-33 | Database diagrams | 🚧 | Native declared-FK graph with table navigation and bounds is tested; inferred relationships and editable diagrams remain pending. [Batch 2](docs/implementation/batch2-database.md). |
+| J-34 | Query plans | 🚧 | Read-only single-statement SQLite EXPLAIN QUERY PLAN with index evidence is tested; runtime metrics and other engines remain pending. [Batch 2](docs/implementation/batch2-database.md). |
 | J-35 | Docker Compose | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-36 | Kubernetes | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-37 | .NET Aspire | ⬜ | Implement with integration and UI acceptance evidence. |

@@ -1,0 +1,23 @@
+# Batch 2 HTTP Client and Endpoints. Import: python3 scripts/i18n_tsv.py app scripts/i18n/batch2-web.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+All methods	All methods	All methods	All methods	All methods	All methods	All methods	All methods
+Cancel Request	Cancel Request	Cancel Request	Cancel Request	Cancel Request	Cancel Request	Cancel Request	Cancel Request
+Cancel import	Cancel import	Cancel import	Cancel import	Cancel import	Cancel import	Cancel import	Cancel import
+Cancel scan	Cancel scan	Cancel scan	Cancel scan	Cancel scan	Cancel scan	Cancel scan	Cancel scan
+Cancelled	Cancelled	Cancelled	Cancelled	Cancelled	Cancelled	Cancelled	Cancelled
+Endpoint worker stopped	Endpoint worker stopped	Endpoint worker stopped	Endpoint worker stopped	Endpoint worker stopped	Endpoint worker stopped	Endpoint worker stopped	Endpoint worker stopped
+Group by method	Group by method	Group by method	Group by method	Group by method	Group by method	Group by method	Group by method
+HTTP input exceeds 1 MiB	HTTP input exceeds 1 MiB	HTTP input exceeds 1 MiB	HTTP input exceeds 1 MiB	HTTP input exceeds 1 MiB	HTTP input exceeds 1 MiB	HTTP input exceeds 1 MiB	HTTP input exceeds 1 MiB
+HTTP worker stopped	HTTP worker stopped	HTTP worker stopped	HTTP worker stopped	HTTP worker stopped	HTTP worker stopped	HTTP worker stopped	HTTP worker stopped
+Import OpenAPI JSON	Import OpenAPI JSON	Import OpenAPI JSON	Import OpenAPI JSON	Import OpenAPI JSON	Import OpenAPI JSON	Import OpenAPI JSON	Import OpenAPI JSON
+Import requests	Import requests	Import requests	Import requests	Import requests	Import requests	Import requests	Import requests
+Imports OpenAPI 3.0/3.1 JSON with an explicit HTTP server. Existing files are never overwritten.	Imports OpenAPI 3.0/3.1 JSON with an explicit HTTP server. Existing files are never overwritten.	Imports OpenAPI 3.0/3.1 JSON with an explicit HTTP server. Existing files are never overwritten.	Imports OpenAPI 3.0/3.1 JSON with an explicit HTTP server. Existing files are never overwritten.	Imports OpenAPI 3.0/3.1 JSON with an explicit HTTP server. Existing files are never overwritten.	Imports OpenAPI 3.0/3.1 JSON with an explicit HTTP server. Existing files are never overwritten.	Imports OpenAPI 3.0/3.1 JSON with an explicit HTTP server. Existing files are never overwritten.	Imports OpenAPI 3.0/3.1 JSON with an explicit HTTP server. Existing files are never overwritten.
+New HTTP output file	New HTTP output file	New HTTP output file	New HTTP output file	New HTTP output file	New HTTP output file	New HTTP output file	New HTTP output file
+OpenAPI JSON file	OpenAPI JSON file	OpenAPI JSON file	OpenAPI JSON file	OpenAPI JSON file	OpenAPI JSON file	OpenAPI JSON file	OpenAPI JSON file
+Output must use .http or .rest	Output must use .http or .rest	Output must use .http or .rest	Output must use .http or .rest	Output must use .http or .rest	Output must use .http or .rest	Output must use .http or .rest	Output must use .http or .rest
+Preparing request…	Preparing request…	Preparing request…	Preparing request…	Preparing request…	Preparing request…	Preparing request…	Preparing request…
+Refresh environments	Refresh environments	Refresh environments	Refresh environments	Refresh environments	Refresh environments	Refresh environments	Refresh environments
+Route conflicts only	Route conflicts only	Route conflicts only	Route conflicts only	Route conflicts only	Route conflicts only	Route conflicts only	Route conflicts only
+Route may conflict with {handler} at {file}:{line}	Route may conflict with {handler} at {file}:{line}	Route may conflict with {handler} at {file}:{line}	Route may conflict with {handler} at {file}:{line}	Route may conflict with {handler} at {file}:{line}	Route may conflict with {handler} at {file}:{line}	Route may conflict with {handler} at {file}:{line}	Route may conflict with {handler} at {file}:{line}
+Search routes, handlers and files	Search routes, handlers and files	Search routes, handlers and files	Search routes, handlers and files	Search routes, handlers and files	Search routes, handlers and files	Search routes, handlers and files	Search routes, handlers and files
+{n} route conflicts	{n} route conflicts	{n} route conflicts	{n} route conflicts	{n} route conflicts	{n} route conflicts	{n} route conflicts	{n} route conflicts

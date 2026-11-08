@@ -309,6 +309,23 @@ impl Docs {
         {
             let _ = rc_core::local_history::record(&doc.path, &old, "Original");
         }
+        // Policies were resolved by the background EditorConfig worker.
+        let policy = &doc.resolved_style;
+        let text = doc.editor.buffer.rope().to_string();
+        let mut changes = Vec::new();
+        if policy.trim_trailing_whitespace == Some(true) {
+            let mut offset = 0;
+            for line in text.split_inclusive('\n') {
+                let body = line.strip_suffix('\n').unwrap_or(line);
+                let trimmed = body.trim_end_matches([' ', '\t']);
+                if trimmed.len() != body.len() { changes.push(rc_text::Change::delete(offset + trimmed.chars().count(), offset + body.chars().count())); }
+                offset += line.chars().count();
+            }
+        }
+        if policy.insert_final_newline == Some(true) && !text.is_empty() && !text.ends_with('\n') { changes.push(rc_text::Change::insert(text.chars().count(), "\n")); }
+        if let Some(bom) = policy.utf8_bom { doc.bom = bom; }
+        if let Some(crlf) = policy.crlf { doc.editor.buffer.set_line_ending(if crlf { rc_text::LineEnding::CrLf } else { rc_text::LineEnding::Lf }); }
+        if !changes.is_empty() { doc.editor.apply_text_edits(changes); }
         let mut bytes = Vec::new();
         if doc.bom {
             bytes.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
@@ -454,6 +471,56 @@ impl Docs {
 mod tests {
     use super::*;
     use std::sync::Arc;
+
+    #[test]
+    fn explicit_save_applies_resolved_rules_to_a_clean_document() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let file = home.path().join("Clean.cs");
+        std::fs::write(&file, "class Clean {}  ").unwrap();
+        std::fs::write(home.path().join(".editorconfig"), "root=true\n[*.cs]\ntrim_trailing_whitespace=true\ninsert_final_newline=true\n").unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_file(&file);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while app.docs.active_doc().unwrap().resolved_style.insert_final_newline != Some(true) {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            app.docs.poll_parses();
+        }
+        assert!(!app.docs.active_doc().unwrap().is_modified());
+        app.run_ide_action(&egui::Context::default(), rc_editor::keymap::Action::Save);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "class Clean {}\n");
+        app.docs.active_doc_mut().unwrap().editor.read_only = true;
+        std::fs::write(&file, "external contents").unwrap();
+        app.run_ide_action(&egui::Context::default(), rc_editor::keymap::Action::Save);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "external contents");
+    }
+
+    #[test]
+    fn editorconfig_save_policies_normalize_disk_and_keep_undo_and_bookmarks() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("App.cs");
+        let source = "class App {  \n    int value;\t\n}  ";
+        std::fs::write(&file, source).unwrap();
+        std::fs::write(dir.path().join(".editorconfig"), "root=true\n[*.cs]\ntrim_trailing_whitespace=true\ninsert_final_newline=true\nend_of_line=crlf\ncharset=utf-8-bom\n").unwrap();
+        let (wake, frames) = std::sync::mpsc::channel();
+        let mut docs = Docs::with_waker(ParserPool::new(Arc::new(|| {})), rc_core::Waker::new(move || { let _ = wake.send(()); }));
+        docs.open(&file).unwrap();
+        frames.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        docs.poll_parses();
+        docs.set_bookmark(&file, 1, Some(Some('A')));
+        docs.list[0].editor.selection = rc_text::Selection::point(5);
+        docs.save(0).unwrap();
+        let bytes = std::fs::read(&file).unwrap();
+        assert_eq!(&bytes[..3], &[0xef,0xbb,0xbf]);
+        assert_eq!(std::str::from_utf8(&bytes[3..]).unwrap(), "class App {\r\n    int value;\r\n}\r\n");
+        assert_eq!(docs.list[0].editor.caret(), 5);
+        assert_eq!(docs.list[0].editor.bookmarks.get(&1), Some(&Some('A')));
+        assert!(!docs.list[0].is_modified());
+        docs.list[0].editor.undo();
+        assert_eq!(docs.list[0].editor.buffer.rope().to_string(), source);
+        assert!(docs.list[0].is_modified());
+    }
 
     #[test]
     fn editorconfig_and_upstream_bookmarks_survive_reopen_together() {

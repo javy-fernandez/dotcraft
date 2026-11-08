@@ -49,6 +49,7 @@ pub struct DotCraftApp {
     pub editor_config: EditorConfig,
     pub workspace: Option<WorkspaceState>,
     pub docs: Docs,
+    pub editor_workflows: crate::ui::editor_workflows::EditorWorkflows,
     pub dock: Dock,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
@@ -164,6 +165,7 @@ impl DotCraftApp {
                 d.history = true;
                 d
             },
+            editor_workflows: Default::default(),
             dock: Dock::default(),
             explorer: ExplorerState::default(),
             dialog: None,
@@ -461,6 +463,8 @@ impl DotCraftApp {
             self.save_session();
         }
         self.workspace = None;
+        self.editor_workflows = Default::default();
+        self.endpoints = crate::web::Endpoints::new();
         self._watcher = None;
         self._filter_watcher = None;
         self.insight.stop();
@@ -487,6 +491,8 @@ impl DotCraftApp {
     }
 
     fn restore_session(&mut self, s: Session) {
+        self.editor_workflows.favorites = s.favorites.clone();
+        self.editor_workflows.templates = std::sync::Arc::new(s.custom_templates.clone());
         // Before the files open: each picks its own up.
         self.docs.bookmarks = s.bookmarks.iter().map(|(p, b)| (p.clone(), b.iter().copied().collect())).collect();
         // A solution without a layout of its own starts with the last one used.
@@ -562,6 +568,8 @@ impl DotCraftApp {
             .map(|d| (d.path.clone(), d.editor.breakpoints.keys().map(|l| (*l, self.debugger.conditions.get(&(d.path.clone(), *l)).cloned())).collect()))
             .collect();
         Session {
+            favorites: self.editor_workflows.favorites.clone(),
+            custom_templates: (*self.editor_workflows.templates).clone(),
             files,
             active: self.docs.active,
             tool_windows: self.dock.to_session(),
@@ -612,7 +620,10 @@ impl DotCraftApp {
             self.notify(e, true);
         }
         for p in modified {
-            self.insight.did_save(&p);
+            // A failed save keeps the buffer dirty and must not send didSave.
+            if self.docs.index_of(&p).is_some_and(|i| !self.docs.list[i].is_modified()) {
+                self.insight.did_save_synced(&mut self.docs, &p);
+            }
         }
     }
 
@@ -865,7 +876,17 @@ impl DotCraftApp {
     /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
         match action {
-            Action::SaveAll | Action::Save => {
+            Action::Save => {
+                if let Some(i) = self.docs.active && !self.docs.list[i].editor.read_only {
+                    let path = self.docs.list[i].path.clone();
+                    match self.docs.save(i) {
+                        Ok(()) => self.insight.did_save_synced(&mut self.docs, &path),
+                        Err(error) => self.notify(error, true),
+                    }
+                }
+                self.save_session();
+            }
+            Action::SaveAll => {
                 self.save_all_docs();
                 self.save_session();
             }
@@ -1559,7 +1580,9 @@ impl eframe::App for DotCraftApp {
         }
         self.http_scratchpad.update();
         self.database.update();
+        for doc in &mut self.docs.list { doc.editor.custom_templates = self.editor_workflows.templates.clone(); }
         crate::ui::frame(self, ui, editor_actions);
+        crate::ui::editor_workflows::show(self, &ctx);
         self.update_notice(&ctx);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);

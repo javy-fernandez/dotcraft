@@ -131,3 +131,5 @@ fn remember_size(app: &mut DotCraftApp, tw: crate::toolwindow::ToolWindow, size:
         app.session_dirty = true;
     }
 }
+
+pub mod editor_workflows;

@@ -210,6 +210,21 @@ fork workflow has a separate **HTTP Scratchpad** window, with independent state 
 Both are reset when a workspace closes. The native main menu also exposes upstream bookmarks,
 hierarchies, templates, and coverage alongside the fork actions.
 
+## Workflow batch 2
+
+One new consolidated proposal targets original `main` from fork branch
+[`feat/workflow-batch-02`](https://github.com/RafaelMendes1407/dotcraft/tree/feat/workflow-batch-02).
+It depends on [PR 108](https://github.com/javy-fernandez/dotcraft/pull/108); until that PR
+merges, GitHub's comparison with `main` also includes its changes. See the
+[20-item inventory and validation](implementation/batch2.md) and
+[open-PR comparison](https://github.com/javy-fernandez/dotcraft/compare/main...RafaelMendes1407:dotcraft:feat/workflow-batch-02?expand=1).
+
+- [x] Implement scoped editor save policies, custom/postfix templates, related-file navigation, and favorites (C-18, C-23, C-24, D-16, D-17).
+- [x] Implement clone, single-commit cherry-pick, worktrees, submodule update, and optional LFS controls (I-09, I-17, I-22, I-23, I-24).
+- [x] Implement HTTP cancellation/environments, endpoint filtering, route conflicts, and OpenAPI JSON import (J-05, J-06, J-09, J-12, J-24).
+- [x] Implement SQLite metadata, local suggestions, schema comparison, relationship navigation, and query plans (J-28, J-30, J-32, J-33, J-34).
+- [ ] Complete broader feature-family acceptance, hosted Git LFS authentication/transfers, and Windows/macOS validation.
+
 ## Implementation progress
 
 See [combined validation evidence](implementation/validation.md) for commands and tested scope.
