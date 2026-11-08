@@ -291,8 +291,19 @@ fn is_root(dir: &Path) -> bool {
     })
 }
 
+/// Reads bounded input, rejecting non-regular files before opening them.
+pub fn read_bounded_file(path: &Path, max: usize) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let meta = std::fs::metadata(path)?;
+    if !meta.is_file() || meta.len() > max as u64 { return Err(std::io::Error::other("input must be a bounded regular file")); }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?.take(max as u64 + 1).read_to_end(&mut bytes)?;
+    if bytes.len() > max { return Err(std::io::Error::other("input file exceeds its size limit")); }
+    Ok(bytes)
+}
+
 fn read_env_json(path: &Path) -> Option<serde_json::Map<String, serde_json::Value>> {
-    let text = std::fs::read_to_string(path).ok()?;
+    let text = String::from_utf8(read_bounded_file(path, 1024 * 1024).ok()?).ok()?;
     match serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()? {
         serde_json::Value::Object(m) => Some(m),
         _ => None,
@@ -368,7 +379,7 @@ pub fn resolve(file: &HttpFile, index: usize, env: Option<&str>, http_path: &Pat
     for (k, v) in &file.variables {
         vars.insert(k.clone(), v.clone());
     }
-    let mut r = Resolver { vars: &vars, missing: Vec::new() };
+    let mut r = Resolver { vars: &vars, missing: Vec::new(), remaining: 16 * 1024 * 1024, exhausted: false };
 
     let url = r.substitute(&req.url, 0);
     let headers: Vec<(String, String)> = req.headers.iter().map(|(k, v)| (r.substitute(k, 0), r.substitute(v, 0))).collect();
@@ -379,7 +390,7 @@ pub fn resolve(file: &HttpFile, index: usize, env: Option<&str>, http_path: &Pat
             let rel = r.substitute(path, 0);
             let base = http_path.parent().unwrap_or(Path::new("."));
             let full = base.join(&rel);
-            let bytes = std::fs::read(&full).map_err(|e| anyhow::anyhow!("cannot read request body file {}: {e}", full.display()))?;
+            let bytes = read_bounded_file(&full, 16 * 1024 * 1024).map_err(|e| anyhow::anyhow!("cannot read request body file {}: {e}", full.display()))?;
             if *substitute {
                 Some(r.substitute(&String::from_utf8_lossy(&bytes), 0).into_bytes())
             } else {
@@ -388,6 +399,7 @@ pub fn resolve(file: &HttpFile, index: usize, env: Option<&str>, http_path: &Pat
         }
     };
 
+    if r.exhausted { anyhow::bail!("HTTP variable expansion exceeds 16 MiB"); }
     if !r.missing.is_empty() {
         return Err(UnresolvedVariables { names: r.missing, environment: env.map(str::to_string) }.into());
     }
@@ -401,10 +413,14 @@ pub fn resolve(file: &HttpFile, index: usize, env: Option<&str>, http_path: &Pat
 struct Resolver<'a> {
     vars: &'a HashMap<String, String>,
     missing: Vec<String>,
+    remaining: usize,
+    exhausted: bool,
 }
 
 impl Resolver<'_> {
     fn substitute(&mut self, text: &str, depth: usize) -> String {
+        if text.len() > self.remaining { self.exhausted = true; return String::new(); }
+        self.remaining -= text.len();
         let mut out = String::with_capacity(text.len());
         let mut rest = text;
         while let Some(start) = rest.find("{{") {
@@ -428,10 +444,15 @@ impl Resolver<'_> {
 
     fn lookup(&mut self, expr: &str, depth: usize) -> Option<String> {
         if expr.starts_with('$') {
-            return dynamic_variable(expr);
+            let value = dynamic_variable(expr)?;
+            if value.len() > self.remaining { self.exhausted = true; return Some(String::new()); }
+            self.remaining -= value.len();
+            return Some(value);
         }
         let value = self.vars.get(expr)?;
         if depth >= 16 {
+            if value.len() > self.remaining { self.exhausted = true; return Some(String::new()); }
+            self.remaining -= value.len();
             return Some(value.clone());
         }
         Some(self.substitute(value, depth + 1))
@@ -559,13 +580,17 @@ pub async fn send(req: &ResolvedRequest, timeout: Duration) -> anyhow::Result<Ht
     }
 
     let started = Instant::now();
-    let resp = rb.send().await.map_err(|e| anyhow::anyhow!("{}: {}", req.url, error_chain(&e)))?;
+    let mut resp = rb.send().await.map_err(|e| anyhow::anyhow!("{}: {}", req.url, error_chain(&e)))?;
     let status = resp.status();
     let version = format!("{:?}", resp.version());
     let headers: Vec<(String, String)> =
         resp.headers().iter().map(|(k, v)| (k.as_str().to_string(), String::from_utf8_lossy(v.as_bytes()).into_owned())).collect();
     let content_type = resp.headers().get(reqwest::header::CONTENT_TYPE).map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned());
-    let body = resp.bytes().await.map_err(|e| anyhow::anyhow!("{}: {}", req.url, error_chain(&e)))?.to_vec();
+    let mut body = Vec::new();
+    while let Some(chunk) = resp.chunk().await? {
+        if body.len().saturating_add(chunk.len()) > 8 * 1024 * 1024 { anyhow::bail!("HTTP response exceeds 8 MiB"); }
+        body.extend_from_slice(&chunk);
+    }
     let elapsed = started.elapsed();
     Ok(HttpResponse {
         status: status.as_u16(),
@@ -743,6 +768,20 @@ Content-Type: application/json
         assert_eq!(f.requests.len(), 1);
         assert_eq!((f.requests[0].method.as_str(), f.requests[0].url.as_str(), f.requests[0].start_line), ("GET", "https://example.com/", 0));
         assert!(parse("# just a comment\n\n").requests.is_empty());
+    }
+
+    #[test]
+    fn deep_and_dynamic_variable_expansions_obey_the_budget() {
+        let root = tempfile::tempdir().unwrap(); let path = root.path().join("bounded.http");
+        let mut source = String::new();
+        for index in 0..15 { source.push_str(&format!("@v{index} = {{{{v{}}}}}\n", index + 1)); }
+        source.push_str(&format!("@v15 = {}\n@payload = {}\nGET http://localhost/{{{{v0}}}}\n", "{{payload}}".repeat(100), "x".repeat(256 * 1024)));
+        assert!(source.len() < 1024 * 1024);
+        assert!(resolve(&parse(&source), 0, None, &path).unwrap_err().to_string().contains("16 MiB"));
+        // Small input references can expand into much larger dynamic values in a body file.
+        std::fs::write(root.path().join("body.txt"), "{{$guid}}".repeat(500_000)).unwrap();
+        let request = parse("POST http://localhost/\n\n<@ body.txt\n");
+        assert!(resolve(&request, 0, None, &path).unwrap_err().to_string().contains("16 MiB"));
     }
 
     fn write(dir: &Path, name: &str, text: &str) -> PathBuf {

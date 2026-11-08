@@ -613,6 +613,122 @@ fn screens_readme() {
 }
 
 #[test]
+fn solution_filter_explorer_shows_only_selected_real_projects() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let filter = home.path().join("Selected.slnf");
+    let root = fixtures().join("TenProjects");
+    let json = serde_json::json!({"solution": {
+        "path": root.join("TenProjects.slnx"),
+        "projects": ["src/Module01/Module01.csproj", "src/Module10/Module10.csproj"]
+    }});
+    std::fs::write(&filter, json.to_string()).unwrap();
+    let solution = rc_dotnet::Solution::load(&filter).unwrap();
+    let mut app = test_app(home.path(), true);
+    // Exercise the real explorer without starting SDK downloads or project processes.
+    app.explorer.expanded.extend(["sln".to_string(), "sf:/src".to_string()]);
+    app.workspace = Some(crate::app::WorkspaceState {
+        ws: rc_core::Workspace::open(&filter).unwrap(),
+        solution: Some(solution),
+    });
+    let mut h = harness(app, vec2(1000.0, 700.0));
+    h.run_steps(3);
+    assert!(h.query_by_label("Module01").is_some());
+    assert!(h.query_by_label("Module10").is_some());
+    assert!(h.query_by_label("Module02").is_none());
+    assert!(h.query_by_label("Module09").is_none());
+}
+
+#[test]
+fn solution_filter_open_route_uses_source_root_and_watches_both_locations() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // Canonical, as the app opens paths (/private/var on macOS).
+    let base = home.path().canonicalize().unwrap();
+    let source = base.join("source");
+    let filters = base.join("filters");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::create_dir_all(&filters).unwrap();
+    assert!(std::process::Command::new("git").args(["init", "-q"]).arg(&source).status().unwrap().success());
+    for name in ["Selected", "Other"] {
+        let directory = source.join(name);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(directory.join(format!("{name}.csproj")), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework><OutputType>Exe</OutputType></PropertyGroup></Project>").unwrap();
+        std::fs::write(directory.join("Program.cs"), "System.Console.WriteLine(42);\n").unwrap();
+    }
+    let solution = source.join("Demo.slnx");
+    std::fs::write(&solution, "<Solution><Project Path=\"Selected/Selected.csproj\"/><Project Path=\"Other/Other.csproj\"/></Solution>").unwrap();
+    let filter = filters.join("Subset.slnf");
+    let select = |name: &str| serde_json::json!({ "solution": { "path": "../source/Demo.slnx", "projects": [format!("{name}/{name}.csproj")] } }).to_string();
+    std::fs::write(&filter, select("Selected")).unwrap();
+    let mut app = test_app(home.path(), true);
+    // An existing non-executable dummy prevents fallback to a real installed server.
+    let dummy = home.path().join("no-language-server");
+    std::fs::write(&dummy, "not an executable").unwrap();
+    app.settings.roslyn_path = Some(dummy);
+    app.open_path(&filter);
+    let state = app.workspace.as_ref().unwrap();
+    assert_eq!(state.ws.root, source.canonicalize().unwrap());
+    assert_eq!(state.ws.key_path(), filter.canonicalize().unwrap());
+    assert_eq!(state.solution.as_ref().unwrap().source_path, solution);
+    assert_eq!(app.settings.last_workspace.as_deref(), Some(filter.as_path()));
+    assert_eq!(app.solution_projects(), vec![source.join("Selected/Selected.csproj")]);
+    assert!(app.runner.configs.iter().any(|config| config.name == "Selected"));
+    assert!(!app.runner.configs.iter().any(|config| config.name == "Other"));
+    app.explorer.expanded.insert("sln".into());
+    let mut harness = harness(app, vec2(1000.0, 700.0));
+    let wait = |harness: &mut Harness<'_, DotCraftApp>, done: &dyn Fn(&DotCraftApp) -> bool| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !done(harness.state()) {
+            harness.run_steps(1);
+            assert!(std::time::Instant::now() < deadline, "solution filter update timed out");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+    wait(&mut harness, &|app| app.files.index.as_ref().unwrap().snapshot().get("Selected/Program.cs").is_some());
+    wait(&mut harness, &|app| app.vcs.repo.as_ref().is_some_and(|repo| repo.root() == source));
+    // The source-root watcher patches the index even before a source file is opened.
+    let added = source.join("Selected/Added.cs");
+    std::fs::write(&added, "class Added {}\n").unwrap();
+    wait(&mut harness, &|app| app.files.index.as_ref().unwrap().snapshot().get("Selected/Added.cs").is_some());
+    let open = source.join("Selected/Program.cs");
+    harness.state_mut().open_file(&open);
+    harness.state_mut().docs.active_doc_mut().unwrap().editor.replace(0, 0, "// unsaved\n");
+    // The external filter watcher changes both explorer selection and run configurations.
+    std::fs::write(&filter, select("Other")).unwrap();
+    wait(&mut harness, &|app| app.solution_projects() == vec![source.join("Other/Other.csproj")] && app.runner.configs.iter().any(|config| config.name == "Other"));
+    assert!(!harness.state().runner.configs.iter().any(|config| config.name == "Selected"));
+    harness.run_steps(2);
+    assert!(harness.query_by_label("Other").is_some());
+    // The dirty editor's breadcrumbs may still name Selected; inspect explorer rows only.
+    {
+        let app = harness.state_mut();
+        let workspace = app.workspace.as_ref().unwrap();
+        let rows = app.explorer.rows(workspace.solution.as_ref(), &workspace.ws.root, &workspace.ws.name());
+        assert!(rows.iter().any(|row| row.label == "Other"));
+        assert!(!rows.iter().any(|row| row.label == "Selected"));
+    }
+    assert!(harness.state().docs.active_doc().unwrap().is_modified());
+    assert!(harness.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().starts_with("// unsaved\n"));
+    // The underlying solution file is observed too; adding a folder reloads its structure.
+    std::fs::write(&solution, "<Solution><Project Path=\"Selected/Selected.csproj\"/><Folder Name=\"/Changed/\"><Project Path=\"Other/Other.csproj\"/></Folder></Solution>").unwrap();
+    wait(&mut harness, &|app| matches!(app.workspace.as_ref().unwrap().solution.as_ref().unwrap().items.first(), Some(rc_dotnet::solution::SolutionItem::Folder { name, .. }) if name == "Changed"));
+    assert_eq!(harness.state().workspace.as_ref().unwrap().ws.key_path(), filter);
+    let alternate = base.join("alternate");
+    std::fs::create_dir_all(alternate.join("Moved")).unwrap();
+    std::fs::write(alternate.join("Moved/Moved.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>").unwrap();
+    std::fs::write(alternate.join("Moved/Program.cs"), "class Moved {}\n").unwrap();
+    std::fs::write(alternate.join("Demo.slnx"), "<Solution><Project Path=\"Moved/Moved.csproj\"/></Solution>").unwrap();
+    std::fs::write(&filter, serde_json::json!({ "solution": { "path": "../alternate/Demo.slnx", "projects": ["Moved/Moved.csproj"] } }).to_string()).unwrap();
+    wait(&mut harness, &|app| app.workspace.as_ref().unwrap().ws.root == alternate && app.files.index.as_ref().unwrap().snapshot().get("Moved/Program.cs").is_some());
+    assert!(harness.state().files.index.as_ref().unwrap().snapshot().get("Selected/Program.cs").is_none());
+    assert_eq!(harness.state().workspace.as_ref().unwrap().ws.key_path(), filter);
+    assert!(harness.state().docs.active_doc().unwrap().is_modified(), "changing source roots must preserve unsaved editors");
+    harness.state_mut().close_workspace();
+    assert!(harness.state().files.index.is_none());
+}
+
+#[test]
 #[ignore = "Requires a GPU; writes target/snapshots/show-all-files-dark.png"]
 fn screens_show_all_files() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -989,4 +1105,81 @@ fn screens_profiler() {
     assert!(!snap.types.iter().any(|t| t.name.starts_with("Microsoft.Build.")), "profiled MSBuild");
     h.render().unwrap().save(out.join("profiler-memory-dark.png")).unwrap();
     h.state_mut().runner.kill_all_now();
+}
+
+#[test]
+#[ignore = "Requires a GPU; captures the windows contributed in PRs 108/109 to target/snapshots"]
+fn screens_contributed_windows() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().canonicalize().unwrap().join("repo");
+    std::fs::create_dir_all(&root).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.email", "t@t"]);
+    git(&["config", "user.name", "T"]);
+    std::fs::write(root.join("index.html"), "<!doctype html>\n<html lang=\"en\">\n<head>\n  <link rel=\"stylesheet\" href=\"site.css\">\n  <title>Shop</title>\n</head>\n<body>\n  <h1 class=\"title\">Orders</h1>\n  <script src=\"app.js\"></script>\n</body>\n</html>\n").unwrap();
+    std::fs::write(root.join("App.tsx"), "import { useState } from \"react\";\n\ninterface Order { id: number; total: number }\n\nexport function Orders({ orders }: { orders: Order[] }) {\n  const [selected, setSelected] = useState<number | null>(null);\n  // Highlight the selected order.\n  return (\n    <ul className=\"orders\">\n      {orders.map(o => <li key={o.id} onClick={() => setSelected(o.id)}>{o.total.toFixed(2)}</li>)}\n    </ul>\n  );\n}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial"]);
+    std::fs::write(root.join("index.html"), "<!doctype html>\n<p>wip</p>\n").unwrap();
+    git(&["stash", "push", "-q", "-m", "WIP on the order page"]);
+    // SQLite sample.
+    let db = root.join("shop.db");
+    {
+        let c = rusqlite::Connection::open(&db).unwrap();
+        c.execute_batch("CREATE TABLE customers(id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE);
+            CREATE TABLE orders(id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), total REAL, created TEXT);
+            CREATE INDEX orders_customer ON orders(customer_id);
+            INSERT INTO customers(name, email) VALUES ('Ada', 'ada@example.com'), ('Linus', 'linus@example.com');
+            INSERT INTO orders(customer_id, total, created) VALUES (1, 64.85, '2026-11-01'), (2, 12.5, '2026-11-02'), (1, 99.0, '2026-11-03');").unwrap();
+    }
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.open_file(&root.join("index.html"));
+    app.open_file(&root.join("App.tsx"));
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    h.run_steps(6);
+    h.render().unwrap().save(out.join("contrib-tsx-dark.png")).unwrap();
+    let i = h.state().docs.index_of(&root.join("index.html")).unwrap();
+    h.state_mut().docs.activate(i);
+    h.run_steps(6);
+    h.render().unwrap().save(out.join("contrib-html-dark.png")).unwrap();
+    // Git: stashes and repository tools.
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Git);
+    h.state_mut().vcs.show_stashes = true;
+    run_frames(&mut h, "stashes", |a| !a.vcs.stashes.is_empty());
+    h.render().unwrap().save(out.join("contrib-stashes-dark.png")).unwrap();
+    h.state_mut().vcs.tools.visible = true;
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("contrib-repo-tools-dark.png")).unwrap();
+    // SQLite.
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Database);
+    h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Database, 480.0);
+    h.state_mut().database.path = db.display().to_string();
+    let r = root.clone();
+    h.state_mut().database.connect(Some(&r));
+    run_frames(&mut h, "the schema", |a| a.database.connected.is_some());
+    h.state_mut().database.sql = "SELECT c.name, COUNT(*) AS orders, SUM(o.total) AS total FROM orders o JOIN customers c ON c.id = o.customer_id GROUP BY c.name;".into();
+    let sql = h.state().database.sql.clone();
+    h.state_mut().database.execute(crate::database::Action::Query(sql));
+    run_frames(&mut h, "the query", |a| a.database.grid.is_some() || a.database.error.is_some());
+    assert!(h.state().database.error.is_none(), "{:?}", h.state().database.error);
+    assert_eq!(h.state().database.grid.as_ref().unwrap().rows.len(), 2);
+    h.render().unwrap().save(out.join("contrib-sqlite-dark.png")).unwrap();
+    h.state_mut().database.execute(crate::database::Action::Relations);
+    run_frames(&mut h, "relations", |a| a.database.relations.is_some() || a.database.error.is_some());
+    h.state_mut().database.view = crate::database::View::Relations;
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("contrib-sqlite-relations-dark.png")).unwrap();
+    // Attach to Process.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::AttachProcess { pid: String::new(), focus: true });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("contrib-attach-dark.png")).unwrap();
+    // The in-window main menu (Windows / Linux).
+    h.state_mut().dialog = None;
+    h.run_steps(2);
 }

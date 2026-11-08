@@ -1218,6 +1218,11 @@ impl DebugSession {
         &self.state
     }
 
+    /// Whether this session attaches to an existing process rather than launching a target.
+    pub fn is_attached(&self) -> bool {
+        self.attach_pid.is_some()
+    }
+
     pub fn capabilities(&self) -> &Capabilities {
         &self.capabilities
     }

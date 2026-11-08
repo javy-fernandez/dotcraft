@@ -414,6 +414,52 @@ async fn merge_conflicts_are_listed_and_resolved() {
 }
 
 #[tokio::test]
+async fn resolve_with_handles_deleted_sides_and_preserves_other_paths() {
+    // Exercise deletion on either branch and selecting either the deleted or modified side.
+    for deleted_by_us in [false, true] {
+        for select_deleted in [false, true] {
+            let t = TempRepo::new().await;
+            // A pathspec metacharacter must be treated as part of the exact file name.
+            let path = "conflict[1].txt";
+            t.commit_files(&[(path, "base\n"), ("unrelated.txt", "original\n")], "base");
+            t.git(&["checkout", "-q", "-b", "other"]);
+            if deleted_by_us {
+                t.commit_files(&[(path, "modified\n")], "modify");
+            } else {
+                t.git(&["--literal-pathspecs", "rm", "--", path]);
+                t.git(&["commit", "-q", "-m", "delete"]);
+            }
+            t.git(&["checkout", "-q", "main"]);
+            if deleted_by_us {
+                t.git(&["--literal-pathspecs", "rm", "--", path]);
+                t.git(&["commit", "-q", "-m", "delete"]);
+            } else {
+                t.commit_files(&[(path, "modified\n")], "modify");
+            }
+            assert!(t.repo.merge("other", false).await.is_err());
+            t.write("unrelated.txt", "local edits\n");
+            let theirs = deleted_by_us != select_deleted;
+            // Reject a mixed selection before touching either path.
+            assert!(matches!(t.repo.resolve_with(&s(&[path, "unrelated.txt"]), theirs).await, Err(GitError::NotFound(_))));
+            assert_eq!(t.repo.conflicted_paths().await.unwrap(), vec![path.to_string()]);
+            t.repo.resolve_with(&[], theirs).await.unwrap();
+            assert_eq!(t.repo.conflicted_paths().await.unwrap(), vec![path.to_string()]);
+
+            t.repo.resolve_with(&s(&[path]), theirs).await.unwrap();
+            assert!(t.repo.conflicted_paths().await.unwrap().is_empty());
+            assert_eq!(t.path(path).exists(), !select_deleted);
+            if !select_deleted {
+                assert_eq!(t.read(path), "modified\n");
+            }
+            assert_eq!(t.read("unrelated.txt"), "local edits\n");
+            assert!(t.repo.show_file(&Revision::Index, "unrelated.txt").await.unwrap().unwrap().text().contains("original"));
+            t.repo.commit(&CommitOptions { message: "resolve deletion conflict".into(), ..Default::default() }).await.unwrap();
+            assert_eq!(t.repo.state().await, RepoState::Clean);
+        }
+    }
+}
+
+#[tokio::test]
 async fn fetch_pull_push_with_progress() {
     let remote_dir = tempfile::tempdir().unwrap();
     git(remote_dir.path(), &["init", "-q", "--bare", "-b", "main"]);

@@ -10,10 +10,15 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+#[path = "git_tools.rs"]
+pub mod tools;
+
 enum VcsEvent {
+    ToolReport(String, Option<PathBuf>),
     Repo(Option<Repository>),
     Status(Result<Status, String>),
     Branches(Vec<Branch>),
+    Stashes(Result<Vec<rc_vcs::Stash>, String>),
     Log(Vec<Commit>),
     Head(PathBuf, Option<String>),
     Blame(PathBuf, Result<Blame, String>),
@@ -41,9 +46,18 @@ pub struct DiffView {
 }
 
 pub struct Vcs {
+    pub tools: tools::RepositoryTools,
     pub repo: Option<Repository>,
     pub status: Option<Status>,
     pub branches: Vec<Branch>,
+    pub stashes: Vec<rc_vcs::Stash>,
+    pub show_stashes: bool,
+    pub stash_message: String,
+    pub stash_include_untracked: bool,
+    pub stash_keep_index: bool,
+    pub stash_restore_index: bool,
+    /// The stash awaiting confirmation and whether the action is drop (otherwise pop).
+    pub stash_confirmation: Option<(rc_vcs::Stash, bool)>,
     pub log: Vec<Commit>,
     pub selected_commit: Option<String>,
     pub commit_files: Vec<rc_vcs::ChangedFile>,
@@ -51,6 +65,7 @@ pub struct Vcs {
     pub amend: bool,
     pub excluded: BTreeSet<String>,
     pub busy: Option<&'static str>,
+    operation: Option<tokio::task::AbortHandle>,
     pub error: Option<String>,
     inbox: Inbox<VcsEvent>,
     waker: Waker,
@@ -67,9 +82,17 @@ pub struct Vcs {
 impl Vcs {
     pub fn new(waker: Waker) -> Self {
         Vcs {
+            tools: Default::default(),
             repo: None,
             status: None,
             branches: Vec::new(),
+            stashes: Vec::new(),
+            show_stashes: false,
+            stash_message: String::new(),
+            stash_include_untracked: false,
+            stash_keep_index: false,
+            stash_restore_index: false,
+            stash_confirmation: None,
             log: Vec::new(),
             selected_commit: None,
             commit_files: Vec::new(),
@@ -77,6 +100,7 @@ impl Vcs {
             amend: false,
             excluded: BTreeSet::new(),
             busy: None,
+            operation: None,
             error: None,
             inbox: Inbox::new(waker.clone()),
             waker,
@@ -129,11 +153,10 @@ impl Vcs {
             return;
         }
         let s = path.to_string_lossy();
-        if s.contains("/.git/")
-            && (s.ends_with("HEAD") || s.contains("/refs/") || s.ends_with("index")) {
-                self.heads.clear();
-                self.marks_version.clear();
-            }
+        if s.contains("/.git/") && (s.ends_with("HEAD") || s.contains("/refs/") || s.ends_with("index")) {
+            self.heads.clear();
+            self.marks_version.clear();
+        }
         self.status_dirty = true;
     }
 
@@ -156,6 +179,7 @@ impl Vcs {
             if let Ok(b) = repo.branches().await {
                 out.send(VcsEvent::Branches(b));
             }
+            out.send(VcsEvent::Stashes(repo.stashes().await.map_err(|e| e.to_string())));
         });
     }
 
@@ -189,17 +213,59 @@ impl Vcs {
     where
         F: std::future::Future<Output = Result<(), rc_vcs::GitError>> + Send + 'static,
     {
+        if self.busy.is_some() {
+            return;
+        }
         self.busy = Some(what);
         self.error = None;
         let out = self.inbox.sender();
+        let task = Runtime::spawn(f);
+        self.operation = Some(task.abort_handle());
         Runtime::spawn(async move {
-            let r = f.await;
-            out.send(VcsEvent::Done(what, r.err().map(|e| {
-                let (tpl, args) = e.user_message();
-                let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
-                trf(tpl, &args)
-            })));
+            let r = match task.await {
+                Ok(result) => result,
+                Err(error) if error.is_cancelled() => Err(rc_vcs::GitError::Cancelled),
+                Err(error) => Err(rc_vcs::GitError::Parse(error.to_string())),
+            };
+            out.send(VcsEvent::Done(
+                what,
+                r.err().map(|e| {
+                    let (tpl, args) = e.user_message();
+                    let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
+                    trf(tpl, &args)
+                }),
+            ));
         });
+    }
+
+    pub fn repository_tool(&mut self, action: tools::ToolAction) {
+        if self.busy.is_some() {
+            return;
+        }
+        self.tools.report.clear();
+        self.tools.cloned = None;
+        let repo = self.repo.clone();
+        let out = self.inbox.sender();
+        self.op("repository_tool", async move {
+            match action.run(repo).await {
+                Ok((report, cloned)) => {
+                    out.send(VcsEvent::ToolReport(report, cloned));
+                    Ok(())
+                }
+                Err(error) => {
+                    out.send(VcsEvent::ToolReport(error.details().unwrap_or_else(|| error.to_string()).chars().take(65_536).collect(), None));
+                    Err(error)
+                }
+            }
+        });
+    }
+
+    /// Cancels the current operation. The completion event releases the busy state only
+    /// after its future has been dropped, which also kills its active Git process.
+    pub fn cancel_operation(&self) {
+        if let Some(operation) = &self.operation {
+            operation.abort();
+        }
     }
 
     /// Commits the included changes (and pushes when `push`).
@@ -267,6 +333,38 @@ impl Vcs {
     pub fn rollback(&mut self, paths: Vec<String>) {
         let Some(repo) = self.repo.clone() else { return };
         self.op("rollback", async move { repo.rollback(&paths).await });
+    }
+
+    pub fn stash_push(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        let opts = rc_vcs::StashOptions {
+            message: (!self.stash_message.trim().is_empty()).then(|| self.stash_message.trim().to_string()),
+            include_untracked: self.stash_include_untracked,
+            keep_index: self.stash_keep_index,
+            ..Default::default()
+        };
+        self.op("stash_push", async move { repo.stash_push(&opts).await });
+    }
+
+    /// Resolve the selected stash against a fresh list so a stale UI index cannot select
+    /// a different entry after an external stash operation.
+    pub fn stash_apply(&mut self, stash: &rc_vcs::Stash, pop: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        let hash = stash.hash.clone();
+        let restore_index = self.stash_restore_index;
+        self.op(if pop { "stash_pop" } else { "stash_apply" }, async move {
+            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash).ok_or_else(|| rc_vcs::GitError::NotFound(hash))?;
+            if pop { repo.stash_pop(entry.index, restore_index).await } else { repo.stash_apply(entry.index, restore_index).await }
+        });
+    }
+
+    pub fn stash_drop(&mut self, stash: &rc_vcs::Stash) {
+        let Some(repo) = self.repo.clone() else { return };
+        let hash = stash.hash.clone();
+        self.op("stash_drop", async move {
+            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash).ok_or_else(|| rc_vcs::GitError::NotFound(hash))?;
+            repo.stash_drop(entry.index).await
+        });
     }
 
     // ------------------------------------------------------------------ diffs and blame
@@ -337,7 +435,13 @@ impl Vcs {
                 }
                 VcsEvent::Status(Err(e)) => self.error = Some(e),
                 VcsEvent::Branches(b) => self.branches = b,
+                VcsEvent::Stashes(Ok(s)) => self.stashes = s,
+                VcsEvent::Stashes(Err(e)) => self.error = Some(e),
                 VcsEvent::Log(l) => self.log = l,
+                VcsEvent::ToolReport(report, cloned) => {
+                    self.tools.report = report;
+                    self.tools.cloned = cloned;
+                }
                 VcsEvent::Head(p, t) => {
                     self.head_pending.remove(&p);
                     self.heads.insert(p, t);
@@ -364,12 +468,19 @@ impl Vcs {
                 }
                 VcsEvent::Done(what, err) => {
                     self.busy = None;
+                    self.operation = None;
                     match err {
                         Some(e) => {
                             self.error = Some(e.clone());
                             notices.push(e);
+                            if what.starts_with("stash_") {
+                                self.refresh();
+                            }
                         }
                         None => {
+                            if what == "stash_push" {
+                                self.stash_message.clear();
+                            }
                             if what == "commit" || what == "commit_push" {
                                 self.message.clear();
                                 self.amend = false;
@@ -506,6 +617,12 @@ impl Vcs {
     }
 }
 
+impl Drop for Vcs {
+    fn drop(&mut self) {
+        self.cancel_operation();
+    }
+}
+
 fn short_author(a: &str) -> String {
     a.split_whitespace().next().unwrap_or(a).to_string()
 }
@@ -529,6 +646,48 @@ pub fn format_date(secs: i64) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cancelling_and_closing_stop_background_git_operations() {
+        use super::*;
+        use std::sync::{Arc, mpsc};
+
+        struct NotifyOnDrop(mpsc::Sender<()>);
+        impl Drop for NotifyOnDrop {
+            fn drop(&mut self) {
+                let _ = self.0.send(());
+            }
+        }
+
+        for close in [false, true] {
+            let mut vcs = Vcs::new(Waker::noop());
+            let (started, start) = mpsc::channel();
+            let (dropped, drop_event) = mpsc::channel();
+            vcs.op("stash_push", async move {
+                let _guard = NotifyOnDrop(dropped);
+                started.send(()).unwrap();
+                std::future::pending::<Result<(), rc_vcs::GitError>>().await
+            });
+            start.recv_timeout(Duration::from_secs(3)).unwrap();
+            if close {
+                vcs.close();
+                assert!(vcs.busy.is_none());
+            } else {
+                vcs.cancel_operation();
+            }
+            drop_event.recv_timeout(Duration::from_secs(3)).unwrap();
+            if !close {
+                let mut docs = Docs::new(rc_syntax::ParserPool::new(Arc::new(|| {})));
+                let deadline = Instant::now() + Duration::from_secs(3);
+                while vcs.busy.is_some() && Instant::now() < deadline {
+                    vcs.update(&mut docs, true);
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                assert!(vcs.busy.is_none());
+                assert!(vcs.error.is_some());
+            }
+        }
+    }
+
     #[test]
     fn dates() {
         assert_eq!(super::format_date(0), "1970-01-01");

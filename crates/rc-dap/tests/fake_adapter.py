@@ -11,6 +11,7 @@ seq = 0
 x = 1
 bp_ids = []
 stops = 0
+attach_pid = None
 
 
 def read():
@@ -87,7 +88,9 @@ while True:
                 {"filter": "user-unhandled", "label": "User-Unhandled", "default": True},
             ],
         })
-    elif cmd == "launch":
+    elif cmd in ("launch", "attach"):
+        if cmd == "attach":
+            attach_pid = a["processId"]
         if MODE == "early":
             event("initialized")
             respond(m)
@@ -104,7 +107,7 @@ while True:
         respond(m)
     elif cmd == "configurationDone":
         respond(m)
-        event("process", {"name": "app", "systemProcessId": 4242})
+        event("process", {"name": "app", "systemProcessId": attach_pid if attach_pid is not None else 4242})
         event("output", {"category": "stdout", "output": "hello\n"})
         event("output", {"category": "telemetry", "output": "ignored"})
         for i in bp_ids:

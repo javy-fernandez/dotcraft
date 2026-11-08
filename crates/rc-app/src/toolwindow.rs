@@ -20,6 +20,7 @@ pub enum ToolWindow {
     Find,
     Notifications,
     Nuget,
+    Database,
     Monitoring,
     Bookmarks,
     Todo,
@@ -63,7 +64,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 21] = [
+    pub const ALL: [ToolWindow; 22] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -84,6 +85,7 @@ impl ToolWindow {
         ToolWindow::Hierarchy,
         ToolWindow::LocalHistory,
         ToolWindow::Nuget,
+        ToolWindow::Database,
         ToolWindow::Notifications,
     ];
 
@@ -102,6 +104,7 @@ impl ToolWindow {
             ToolWindow::Find => "find",
             ToolWindow::Notifications => "notifications",
             ToolWindow::Nuget => "nuget",
+            ToolWindow::Database => "database",
             ToolWindow::Monitoring => "monitoring",
             ToolWindow::Bookmarks => "bookmarks",
             ToolWindow::Todo => "todo",
@@ -128,6 +131,7 @@ impl ToolWindow {
             ToolWindow::Find => tr("Find"),
             ToolWindow::Notifications => tr("Notifications"),
             ToolWindow::Nuget => "NuGet",
+            ToolWindow::Database => tr("Database"),
             ToolWindow::Monitoring => tr("Monitoring"),
             ToolWindow::Bookmarks => tr("Bookmarks"),
             ToolWindow::Todo => "TODO",
@@ -154,6 +158,7 @@ impl ToolWindow {
             ToolWindow::Find => ico::TW_FIND,
             ToolWindow::Notifications => ico::TW_NOTIFICATIONS,
             ToolWindow::Nuget => ico::PACKAGE,
+            ToolWindow::Database => ico::TW_DATABASE,
             ToolWindow::Monitoring => ico::TW_MONITORING,
             ToolWindow::Bookmarks => ico::TW_BOOKMARKS,
             ToolWindow::Todo => ico::TW_TODO,
@@ -301,6 +306,18 @@ impl Dock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merged_tools_keep_distinct_session_identities() {
+        let mut ids = std::collections::BTreeSet::new();
+        for tool in ToolWindow::ALL {
+            assert!(ids.insert(tool.id()), "duplicate persistent tool identity: {}", tool.id());
+            let mut dock = Dock::default();
+            dock.show(tool);
+            let restored = Dock::from_session(&dock.to_session());
+            assert!(restored.is_open(tool), "tool lost after restoring its session: {tool:?}");
+        }
+    }
 
     #[test]
     fn one_window_per_side_and_session_round_trip() {

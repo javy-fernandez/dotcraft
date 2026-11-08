@@ -3,6 +3,7 @@
 
 use crate::app::DotCraftApp;
 use crate::toolwindow::ToolWindow;
+use crate::ui::kit;
 use crate::ui::toolwindows::{empty_state, header};
 use egui::{Align2, Color32, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_kit::i18n::{tr, trf};
@@ -157,11 +158,44 @@ pub fn commit_window(app: &mut DotCraftApp, ui: &mut Ui) {
 }
 
 pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
-    if header(ui, tr("Git")) {
-        app.toggle_tool(ToolWindow::Git);
+    // Header: tabs Log / Stashes / Repository Tools; `tools.visible` and `show_stashes` are the selection.
+    let busy = app.vcs.busy;
+    let tools_tab = app.vcs.tools.visible;
+    let tabs = [
+        (ico::TW_VCS, tr("Log"), !tools_tab && !app.vcs.show_stashes),
+        (ico::SHELVE, tr("Stashes"), !tools_tab && app.vcs.show_stashes),
+        (ico::SETTINGS, tr("Repository Tools"), tools_tab),
+    ];
+    let mut actions = vec![(ico::HIDE, tr("Hide"), true), (ico::REFRESH, tr("Refresh"), busy.is_none() && app.vcs.repo.is_some())];
+    if busy.is_some() {
+        actions.push((ico::STOP, tr("Cancel"), true));
+    }
+    let click = kit::header(ui, tr("Git"), &tabs, busy.map(tr).unwrap_or(""), &actions);
+    match click.tab {
+        Some(0) => (app.vcs.tools.visible, app.vcs.show_stashes) = (false, false),
+        Some(1) => (app.vcs.tools.visible, app.vcs.show_stashes) = (false, true),
+        Some(2) => app.vcs.tools.visible = true,
+        _ => {}
+    }
+    match click.action {
+        Some(0) => {
+            app.toggle_tool(ToolWindow::Git);
+            return;
+        }
+        Some(1) => app.vcs.refresh(),
+        Some(2) => app.vcs.cancel_operation(),
+        _ => {}
+    }
+    if app.vcs.tools.visible {
+        repository_tools(app, ui);
+        return;
     }
     if app.vcs.repo.is_none() {
         empty_state(ui, ico::TW_VCS, tr("No Git repository"), tr("The workspace is not inside a Git repository."));
+        return;
+    }
+    if app.vcs.show_stashes {
+        stashes_view(app, ui);
         return;
     }
     let p = rc_kit::pal(ui);
@@ -253,6 +287,170 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
         ru.vertical_centered(|ui| ui.label(egui::RichText::new(tr("Select a commit to see its changes")).color(p.muted)));
     }
     ui.advance_cursor_after_rect(avail);
+}
+
+/// Stash operations run on the shared runtime. Destructive actions require an explicit
+/// confirmation tied to the selected stash hash rather than its displayed index.
+fn stashes_view(app: &mut DotCraftApp, ui: &mut Ui) {
+    let busy = app.vcs.busy.is_some();
+    // Toolbar: message, options, Stash Changes.
+    let mut push = false;
+    kit::toolbar(ui, |ui| {
+        ui.add_enabled_ui(!busy, |ui| {
+            kit::search(ui, &mut app.vcs.stash_message, tr("Stash Message"), 220.0);
+            ui.checkbox(&mut app.vcs.stash_include_untracked, tr("Include untracked files"));
+            ui.checkbox(&mut app.vcs.stash_keep_index, tr("Keep staged changes"));
+            ui.checkbox(&mut app.vcs.stash_restore_index, tr("Restore staged changes"));
+        });
+        push = kit::button(ui, Some(ico::SHELVE), tr("Stash Changes"), !busy).clicked();
+    });
+    if push && save_before_stash(app) {
+        app.vcs.stash_push();
+    }
+    if let Some(error) = app.vcs.error.clone() {
+        kit::content(ui, |ui| kit::message(ui, &error, true));
+    }
+    if let Some((stash, drop)) = app.vcs.stash_confirmation.clone() {
+        let question = if drop { tr("Delete this stash permanently?") } else { tr("Apply and remove this stash?") };
+        match confirm_box(ui, question, &stash.message, if drop { tr("Confirm Drop") } else { tr("Confirm Pop") }, !busy) {
+            Some(true) => {
+                app.vcs.stash_confirmation = None;
+                if drop {
+                    app.vcs.stash_drop(&stash);
+                } else if save_before_stash(app) {
+                    app.vcs.stash_apply(&stash, true);
+                }
+            }
+            Some(false) => app.vcs.stash_confirmation = None,
+            None => {}
+        }
+    }
+    let p = rc_kit::pal(ui);
+    let stashes = app.vcs.stashes.clone();
+    let enabled = !busy && app.vcs.stash_confirmation.is_none();
+    let pending = app.vcs.stash_confirmation.as_ref().map(|(s, _)| s.hash.clone());
+    let mut action = None;
+    egui::ScrollArea::vertical().id_salt("git_stashes").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        if stashes.is_empty() {
+            kit::content(ui, |ui| kit::note(ui, tr("No stashes")));
+        }
+        for stash in &stashes {
+            let label = format!("stash@{{{}}}", stash.index);
+            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(320.0), 26.0), Sense::click());
+            if pending.as_deref() == Some(stash.hash.as_str()) {
+                ui.painter().rect_filled(r.shrink2(vec2(6.0, 0.0)), 4.0, p.selection);
+            } else if resp.hovered() || ui.rect_contains_pointer(r) {
+                ui.painter().rect_filled(r.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+            }
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("{label}: {}", stash.message)));
+            // Apply / Pop / Drop on the right.
+            let mut bu = ui.new_child(egui::UiBuilder::new().max_rect(r.shrink2(vec2(10.0, 1.0))).layout(egui::Layout::right_to_left(egui::Align::Center)));
+            bu.spacing_mut().item_spacing.x = 2.0;
+            if kit::button(&mut bu, Some(ico::DELETE), tr("Drop"), enabled).clicked() {
+                action = Some((stash.clone(), 2));
+            }
+            if kit::button(&mut bu, None, tr("Pop"), enabled).clicked() {
+                action = Some((stash.clone(), 1));
+            }
+            if kit::button(&mut bu, None, tr("Apply"), enabled).clicked() {
+                action = Some((stash.clone(), 0));
+            }
+            let text_right = bu.min_rect().left() - 8.0;
+            icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 20.0, r.center().y), vec2(16.0, 16.0)), ico::SHELVE, &p, true);
+            let g = ui.painter().layout_no_wrap(label, FontId::proportional(13.0), p.text);
+            let x = r.left() + 36.0;
+            ui.painter().galley(pos2(x, (r.center().y - g.size().y / 2.0).round()), g.clone(), p.text);
+            let mx = x + g.size().x + 8.0;
+            if text_right - mx > 20.0 {
+                let mut job = egui::text::LayoutJob::simple_singleline(stash.message.clone(), FontId::proportional(12.0), p.muted);
+                job.wrap.max_width = text_right - mx;
+                job.wrap.max_rows = 1;
+                job.wrap.break_anywhere = true;
+                job.wrap.overflow_character = Some('…');
+                let mg = ui.painter().layout_job(job);
+                ui.painter().galley(pos2(mx, (r.center().y - mg.size().y / 2.0).round()), mg, p.muted);
+            }
+            if enabled {
+                resp.context_menu(|ui| {
+                    for (i, (icon, text)) in [(None, tr("Apply")), (None, tr("Pop")), (Some(ico::DELETE), tr("Drop"))].into_iter().enumerate() {
+                        if theme::menu_item(ui, icon, text, false).clicked() {
+                            action = Some((stash.clone(), i));
+                            ui.close();
+                        }
+                    }
+                });
+            }
+        }
+    });
+    match action {
+        Some((stash, 0)) => {
+            if save_before_stash(app) {
+                app.vcs.stash_apply(&stash, false);
+            }
+        }
+        Some((stash, 1)) => app.vcs.stash_confirmation = Some((stash, false)),
+        Some((stash, _)) => app.vcs.stash_confirmation = Some((stash, true)),
+        None => {}
+    }
+}
+
+/// An inline confirmation: question, detail and the primary / secondary buttons, padded and
+/// framed like DotCraft's dialogs. `Some(true)` confirms, `Some(false)` cancels.
+fn confirm_box(ui: &mut Ui, question: &str, detail: &str, confirm: &str, enabled: bool) -> Option<bool> {
+    let p = rc_kit::pal(ui);
+    let mut result = None;
+    egui::Frame::new()
+        .outer_margin(egui::Margin { left: 10, right: 10, top: 4, bottom: 6 })
+        .inner_margin(egui::Margin::same(12))
+        .fill(p.header_bg)
+        .stroke(egui::Stroke::new(1.0, p.island_border))
+        .corner_radius(6)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 6.0;
+            ui.horizontal(|ui| {
+                icons::image(ui, ico::DIALOG_WARNING, 16.0);
+                ui.label(egui::RichText::new(question).font(theme::bold(13.0)));
+            });
+            if !detail.is_empty() {
+                ui.label(egui::RichText::new(detail).size(12.5).color(p.muted));
+            }
+            ui.add_space(2.0);
+            ui.horizontal(|ui| {
+                if ui.add_enabled_ui(enabled, |ui| theme::primary_button(ui, confirm)).inner.clicked() {
+                    result = Some(true);
+                }
+                if theme::secondary_button(ui, tr("Cancel")).clicked() {
+                    result = Some(false);
+                }
+            });
+        });
+    result
+}
+
+/// A [`kit::section`] row whose title is exposed as a label: the Clone section shares its
+/// title with the Clone button, which tests find by role and label.
+fn tools_section(ui: &mut Ui, icon: rc_kit::Ico, title: &str, open: &mut bool) -> bool {
+    let p = rc_kit::pal(ui);
+    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(200.0), 26.0), Sense::click());
+    if resp.hovered() {
+        ui.painter().rect_filled(r.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+    }
+    let chevron = if *open { ico::CHEVRON_DOWN } else { ico::CHEVRON_RIGHT };
+    icons::paint_sized(ui.painter(), Rect::from_center_size(pos2(r.left() + 16.0, r.center().y), vec2(14.0, 14.0)), chevron, &p, true, 14.0);
+    icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 34.0, r.center().y), vec2(16.0, 16.0)), icon, &p, true);
+    ui.painter().text(pos2(r.left() + 48.0, r.center().y), Align2::LEFT_CENTER, title, theme::bold(12.5), p.text);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title));
+    if resp.clicked() {
+        *open = !*open;
+    }
+    *open
+}
+
+fn save_before_stash(app: &mut DotCraftApp) -> bool {
+    app.save_all_docs();
+    !app.docs.list.iter().any(|doc| doc.is_modified())
 }
 
 /// The branches popup of the toolbar's VCS widget.
@@ -353,4 +551,245 @@ pub fn diff_view(app: &mut DotCraftApp, ui: &mut Ui) {
         rc_editor::EditorView::new(state, &config, &app.keymap).show(&mut eu);
     }
     let _ = trf;
+}
+
+/// Repository maintenance is explicit and shares the Git operation/cancellation lifecycle.
+fn repository_tools(app: &mut DotCraftApp, ui: &mut Ui) {
+    use crate::vcs::tools::ToolAction;
+    let busy = app.vcs.busy.is_some();
+    let has_repo = app.vcs.repo.is_some();
+    let (on, repo_on) = (!busy, !busy && has_repo);
+    let mut action = None;
+    let mut open = None;
+    // The pending confirmation and the last error stay above the scrolling sections.
+    if let Some(confirmation) = app.vcs.tools.confirmation.clone() {
+        let detail = match &confirmation {
+            ToolAction::AbortCherryPick => tr("Abort the current cherry-pick and restore its starting state?").to_string(),
+            ToolAction::RemoveWorktree(path) => trf("Remove linked worktree {path} and its ignored files? Git will refuse other unsaved changes or locked worktrees.", &[("path", &path.display())]),
+            _ => String::new(),
+        };
+        match confirm_box(ui, tr("Confirm repository operation"), &detail, tr("Confirm"), on) {
+            Some(true) => action = app.vcs.tools.confirmation.take(),
+            Some(false) => app.vcs.tools.confirmation = None,
+            None => {}
+        }
+    }
+    if let Some(error) = app.vcs.error.clone() {
+        kit::content(ui, |ui| kit::message(ui, &error, true));
+    }
+    egui::ScrollArea::vertical().id_salt("repository_tools").auto_shrink([false, false]).show(ui, |ui| {
+        let tools = &mut app.vcs.tools;
+        let w = (ui.available_width() - 72.0).clamp(160.0, 520.0);
+        // Section open states live in egui memory, open by default.
+        let section = |ui: &mut Ui, key: &str, icon, title: &str, body: &mut dyn FnMut(&mut Ui)| {
+            let id = ui.id().with(("git_tools_section", key));
+            let mut open = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(true);
+            if tools_section(ui, icon, title, &mut open) {
+                egui::Frame::new().inner_margin(egui::Margin { left: 48, right: 12, top: 2, bottom: 10 }).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
+                    body(ui)
+                });
+            }
+            ui.data_mut(|d| d.insert_temp(id, open));
+        };
+        ui.add_space(4.0);
+        section(ui, "clone", ico::DOWNLOAD, tr("Clone Repository"), &mut |ui| {
+            kit::field(ui, tr("Repository URL or local path"), &mut tools.source, "", w, on);
+            kit::field(ui, tr("New absolute destination"), &mut tools.destination, "", w, on);
+            ui.horizontal_wrapped(|ui| {
+                if kit::button(ui, Some(ico::DOWNLOAD), tr("Clone Repository"), on).clicked() {
+                    action = Some(ToolAction::Clone { source: tools.source.clone(), destination: tools.destination.clone().into() });
+                }
+                if let Some(path) = &tools.cloned
+                    && kit::button(ui, Some(ico::OPEN), tr("Open cloned repository"), on).clicked()
+                {
+                    open = Some(path.clone());
+                }
+            });
+        });
+        section(ui, "cherry", ico::COMMIT, tr("Cherry-pick"), &mut |ui| {
+            kit::field(ui, tr("Commit hash or revision"), &mut tools.revision, "", w, repo_on);
+            ui.horizontal_wrapped(|ui| {
+                if kit::button(ui, Some(ico::COMMIT), tr("Cherry-pick commit"), repo_on).clicked() {
+                    action = Some(ToolAction::CherryPick(tools.revision.clone()));
+                }
+                if kit::button(ui, Some(ico::RESUME), tr("Continue cherry-pick"), repo_on).clicked() {
+                    action = Some(ToolAction::ContinueCherryPick);
+                }
+                if kit::button(ui, Some(ico::REVERT), tr("Abort cherry-pick"), repo_on).clicked() {
+                    tools.confirmation = Some(ToolAction::AbortCherryPick);
+                }
+            });
+        });
+        section(ui, "worktrees", ico::FOLDER, tr("Worktrees"), &mut |ui| {
+            kit::field(ui, tr("New branch name"), &mut tools.branch, "", w, repo_on);
+            kit::field(ui, tr("Worktree absolute path"), &mut tools.worktree_path, "", w, repo_on);
+            ui.horizontal_wrapped(|ui| {
+                if kit::button(ui, None, tr("List worktrees"), repo_on).clicked() {
+                    action = Some(ToolAction::ListWorktrees);
+                }
+                if kit::button(ui, Some(ico::ADD), tr("Add worktree"), repo_on).clicked() {
+                    action = Some(ToolAction::AddWorktree { destination: tools.worktree_path.clone().into(), branch: tools.branch.clone() });
+                }
+                if kit::button(ui, Some(ico::REMOVE), tr("Remove worktree"), repo_on).clicked() {
+                    tools.confirmation = Some(ToolAction::RemoveWorktree(tools.worktree_path.clone().into()));
+                }
+            });
+        });
+        section(ui, "submodules", ico::PROJECT, tr("Submodules"), &mut |ui| {
+            ui.horizontal_wrapped(|ui| {
+                if kit::button(ui, None, tr("Submodule status"), repo_on).clicked() {
+                    action = Some(ToolAction::SubmoduleStatus);
+                }
+                if kit::button(ui, Some(ico::UPDATE), tr("Initialize and update submodules"), repo_on).clicked() {
+                    action = Some(ToolAction::UpdateSubmodules);
+                }
+            });
+        });
+        section(ui, "lfs", ico::FILE_BINARY, tr("Git LFS"), &mut |ui| {
+            kit::note(ui, tr("Requires git-lfs installed on PATH"));
+            kit::field(ui, tr("LFS file pattern"), &mut tools.pattern, "", w, repo_on);
+            ui.horizontal_wrapped(|ui| {
+                if kit::button(ui, None, tr("LFS status"), repo_on).clicked() {
+                    action = Some(ToolAction::LfsStatus);
+                }
+                if kit::button(ui, Some(ico::ADD), tr("Track LFS pattern"), repo_on).clicked() {
+                    action = Some(ToolAction::LfsTrack(tools.pattern.clone()));
+                }
+                if kit::button(ui, Some(ico::FETCH), tr("Download LFS files"), repo_on).clicked() {
+                    action = Some(ToolAction::LfsPull);
+                }
+            });
+        });
+        section(ui, "output", ico::TW_MESSAGES, tr("Repository tool output"), &mut |ui| {
+            ui.add(egui::TextEdit::multiline(&mut tools.report).interactive(false).font(egui::TextStyle::Monospace).margin(vec2(8.0, 6.0)).desired_width(f32::INFINITY).desired_rows(8));
+        });
+    });
+    if let Some(action) = action {
+        // Refuse to change a worktree while editor buffers have unsaved changes.
+        if action.changes_worktree() && app.docs.list.iter().any(|doc| doc.is_modified()) {
+            app.vcs.error = Some(tr("Save or close modified documents before changing the repository").into());
+        } else {
+            app.vcs.repository_tool(action);
+        }
+    }
+    if let Some(path) = open {
+        app.open_path(&path);
+    }
+}
+
+#[cfg(test)]
+mod repository_tools_tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+    use std::time::{Duration, Instant};
+
+    fn git(path: &std::path::Path, args: &[&str]) {
+        let output = std::process::Command::new("git").current_dir(path).args(args).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    #[test]
+    fn repository_tools_preserve_unsaved_editor_documents() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let file = home.path().join("App.cs");
+        std::fs::write(&file, "saved\n").unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        let index = app.docs.open(&file).unwrap();
+        app.docs.list[index].editor.replace(0, 0, "unsaved ");
+        app.vcs.tools.visible = true;
+        app.vcs.tools.confirmation = Some(crate::vcs::tools::ToolAction::AbortCherryPick);
+        let mut first = true;
+        let mut h = Harness::builder().with_size(egui::vec2(900.0, 1100.0)).build_ui_state(
+            move |ui, app: &mut DotCraftApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                git_window(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Confirm")).click();
+        h.run_steps(2);
+        assert!(h.state().vcs.busy.is_none());
+        assert_eq!(h.state().vcs.error.as_deref(), Some(tr("Save or close modified documents before changing the repository")));
+        assert!(h.state().docs.list[index].is_modified());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "saved\n");
+    }
+
+    #[test]
+    fn repository_tools_clone_only_after_click_and_open_the_result() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let source = home.path().join("source");
+        std::fs::create_dir(&source).unwrap();
+        git(&source, &["init", "-q"]);
+        git(&source, &["config", "user.name", "Test"]);
+        git(&source, &["config", "user.email", "test@example.com"]);
+        git(&source, &["config", "commit.gpgsign", "false"]);
+        std::fs::write(source.join("README.txt"), "cloned content").unwrap();
+        git(&source, &["add", "."]);
+        git(&source, &["commit", "-qm", "initial"]);
+        let target = home.path().canonicalize().unwrap().join("result");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.vcs.tools.visible = true;
+        app.vcs.tools.source = source.display().to_string();
+        app.vcs.tools.destination = target.display().to_string();
+        let mut first = true;
+        let mut h = Harness::builder().with_size(egui::vec2(900.0, 1000.0)).build_ui_state(
+            move |ui, app: &mut DotCraftApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                app.vcs.update(&mut app.docs, true);
+                git_window(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        assert!(!target.exists());
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Clone Repository")).click();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while h.state().vcs.tools.cloned.is_none() && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(h.state().vcs.tools.cloned.as_deref(), Some(target.as_path()));
+        assert_eq!(std::fs::read_to_string(target.join("README.txt")).unwrap(), "cloned content");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Open cloned repository")).click();
+        h.run_steps(3);
+        assert_eq!(h.state().workspace.as_ref().unwrap().ws.root, target);
+        h.state_mut().close_workspace();
+    }
+
+    #[test]
+    fn repository_tools_destructive_confirmation_can_be_cancelled() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.vcs.tools.visible = true;
+        app.vcs.tools.confirmation = Some(crate::vcs::tools::ToolAction::RemoveWorktree(home.path().to_path_buf()));
+        let mut first = true;
+        let mut h = Harness::builder().with_size(egui::vec2(900.0, 1100.0)).build_ui_state(
+            move |ui, app: &mut DotCraftApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                git_window(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        assert!(h.state().vcs.busy.is_none());
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Cancel")).click();
+        h.run_steps(2);
+        assert!(h.state().vcs.tools.confirmation.is_none());
+        assert!(h.state().vcs.busy.is_none());
+        assert!(home.path().exists());
+    }
 }

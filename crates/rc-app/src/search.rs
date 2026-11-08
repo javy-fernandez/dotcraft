@@ -1,4 +1,4 @@
-//! Search: the file index, Search Everywhere (files, types, symbols, actions), the editor's
+//! Search: the file index, Search Everywhere (files, types, symbols, actions, settings), the editor's
 //! find/replace bar and Find in Files.
 
 use rc_core::{Inbox, Waker};
@@ -110,6 +110,7 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Build Solution"), Build),
         (tr("Run"), Run),
         (tr("Debug"), Debug),
+        (tr("Attach to Process…"), AttachProcess),
         (tr("Stop"), StopRun),
         (tr("Run Tests"), RunTests),
         (tr("Settings…"), ShowSettings),
@@ -135,6 +136,18 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Bookmarks"), ShowBookmarks),
         (tr("Collapse All"), FoldAll),
         (tr("Expand All"), UnfoldAll),
+    ]
+}
+
+/// Existing settings pages offered by Search Everywhere. Keep destinations limited to
+/// implemented pages so choosing a result always opens a real settings section.
+pub fn settings_items() -> Vec<(&'static str, crate::ui::dialogs::SettingsPage)> {
+    use crate::ui::dialogs::SettingsPage;
+    vec![
+        (tr("Appearance"), SettingsPage::Appearance),
+        (tr("Editor"), SettingsPage::Editor),
+        (tr("Keymap"), SettingsPage::Keymap),
+        (tr("Tools"), SettingsPage::Tools),
     ]
 }
 

@@ -17,15 +17,56 @@ pub struct Edited {
 /// Indentation settings of a document.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Indent {
-    /// One level: four spaces, or `"\t"`.
+    /// One level from column zero, using spaces, tabs, or a combination.
     pub unit: String,
     /// Columns a tab advances to.
     pub tab_width: usize,
+    /// Prefer hard tabs even when one logical level is narrower than a tab stop.
+    pub prefer_tabs: bool,
 }
 
 impl Default for Indent {
     fn default() -> Self {
-        Indent { unit: "    ".into(), tab_width: 4 }
+        Indent { unit: "    ".into(), tab_width: 4, prefer_tabs: false }
+    }
+}
+
+impl Indent {
+    pub fn uses_tabs(&self) -> bool {
+        self.prefer_tabs || self.unit.contains('\t')
+    }
+
+    /// Logical columns in one indentation level, accounting for tab stops.
+    pub fn width(&self) -> usize {
+        self.columns(&self.unit).max(1)
+    }
+
+    pub fn columns(&self, text: &str) -> usize {
+        let tab = self.tab_width.max(1);
+        text.chars().fold(0, |column, ch| if ch == '\t' { column + tab - column % tab } else { column + 1 })
+    }
+
+    pub fn previous_stop(&self, column: usize) -> usize {
+        let width = self.width();
+        column.saturating_sub(if column % width == 0 { width } else { column % width })
+    }
+
+    /// Whitespace advancing from `from` to `to`, without overshooting a tab stop.
+    pub fn whitespace(&self, from: usize, to: usize) -> String {
+        let mut text = String::new();
+        let mut column = from;
+        let tab = self.tab_width.max(1);
+        while column < to {
+            let next = column + tab - column % tab;
+            if self.uses_tabs() && next <= to {
+                text.push('\t');
+                column = next;
+            } else {
+                text.push(' ');
+                column += 1;
+            }
+        }
+        text
     }
 }
 
@@ -365,12 +406,14 @@ pub fn newline(rope: &Rope, sel: &Selection, indent: &Indent) -> Edited {
         let prev = trimmed.chars().last();
         // `{|}` and `<div>|</div>` open an indented block.
         let block = (prev == Some('{') && char_at(rope, end) == Some('}')) || (prev == Some('>') && end == r.end() && crate::markup::between_tags(rope, r.end()));
+        let column = indent.columns(&base);
+        let deeper = indent.whitespace(0, column + indent.width());
         let (text, caret_offset) = if block {
-            let inner = format!("\n{base}{}", indent.unit);
+            let inner = format!("\n{deeper}");
             let n = inner.chars().count();
             (format!("{inner}\n{base}"), n)
         } else {
-            let t = if prev == Some('{') { format!("\n{base}{}", indent.unit) } else { format!("\n{base}") };
+            let t = if prev == Some('{') { format!("\n{deeper}") } else { format!("\n{base}") };
             let n = t.chars().count();
             (t, n)
         };
@@ -407,14 +450,12 @@ pub fn backspace(rope: &Rope, sel: &Selection, indent: &Indent) -> Edited {
             let line = rope.char_to_line(pos);
             let line_start = rope.line_to_char(line);
             let before = rope.slice(line_start..pos).to_string();
-            if !before.is_empty() && before.chars().all(|c| c == ' ') && indent.unit != "\t" {
-                let width = indent.unit.chars().count().max(1);
-                let n = before.chars().count();
-                let remove = match n % width {
-                    0 => width,
-                    m => m,
-                };
-                return Some(Change::delete(pos - remove, pos));
+            if !before.is_empty() && before.chars().all(|c| c == ' ' || c == '\t') {
+                let column = indent.columns(&before);
+                let target = indent.previous_stop(column);
+                let replacement = indent.whitespace(0, target);
+                let common = before.chars().zip(replacement.chars()).take_while(|(left, right)| left == right).count();
+                return Some(Change::new(line_start + common, pos, replacement.chars().skip(common).collect::<String>()));
             }
             Some(Change::delete(pos - 1, pos))
         })
@@ -598,18 +639,14 @@ pub fn indent_lines(rope: &Rope, sel: &Selection, indent: &Indent, outdent: bool
     for (first, last) in selected_line_blocks(rope, sel) {
         for line in first..=last {
             let start = rope.line_to_char(line);
+            let lead = line_indent(rope, line);
+            let column = indent.columns(&lead);
             if outdent {
-                let lead = line_indent(rope, line);
-                let n = if lead.starts_with('\t') {
-                    1
-                } else {
-                    lead.chars().take_while(|c| *c == ' ').count().min(indent.unit.chars().count().max(1))
-                };
-                if n > 0 {
-                    changes.push(Change::delete(start, start + n));
+                if !lead.is_empty() {
+                    changes.push(Change::new(start, start + lead.chars().count(), indent.whitespace(0, indent.previous_stop(column))));
                 }
             } else if line_len(rope, line) > 0 {
-                changes.push(Change::insert(start, indent.unit.clone()));
+                changes.push(Change::new(start, start + lead.chars().count(), indent.whitespace(0, column + indent.width())));
             }
         }
     }
@@ -623,16 +660,13 @@ pub fn indent_lines(rope: &Rope, sel: &Selection, indent: &Indent, outdent: bool
 
 /// Tab without a multi-line selection: inserts spaces up to the next indent stop.
 pub fn insert_tab(rope: &Rope, sel: &Selection, indent: &Indent) -> Edited {
-    if indent.unit == "\t" {
-        return replace_selections(sel, "\t", None);
-    }
-    let width = indent.unit.chars().count().max(1);
+    let width = indent.width();
     let texts: Vec<String> = sel
         .ranges()
         .iter()
         .map(|r| {
             let col = visual_col(rope, r.start(), indent.tab_width);
-            " ".repeat(width - col % width)
+            indent.whitespace(col, col + width - col % width)
         })
         .collect();
     replace_selections(sel, "", Some(&texts))
@@ -724,6 +758,53 @@ mod tests {
         assert_eq!(t, "    x");
         let (t, _) = run("f()", Selection::point(2), |r, s| backspace(r, s, &Indent::default()));
         assert_eq!(t, "f");
+    }
+
+    #[test]
+    fn mixed_indentation_edits_follow_logical_columns() {
+        let indent = Indent { unit: "\t ".into(), tab_width: 3, prefer_tabs: true };
+        assert_eq!(indent.width(), 4);
+        for (source, expected_column) in [("", 4), ("\t ", 8), ("\t\t  ", 12), ("\t", 4), ("  ", 4)] {
+            let (text, selection) = run(source, Selection::point(source.chars().count()), |rope, selection| insert_tab(rope, selection, &indent));
+            assert_eq!(visual_col(&Rope::from_str(&text), selection.primary().head, 3), expected_column, "Tab after {source:?}");
+        }
+        let (text, selection) = run("\t if (x) {}", Selection::point(10), |rope, selection| newline(rope, selection, &indent));
+        assert_eq!(text, "\t if (x) {\n\t\t  \n\t }");
+        assert_eq!(visual_col(&Rope::from_str(&text), selection.primary().head, 3), 8);
+        for (source, expected) in [("\t\t  x", "\t x"), ("\t\t x", "\t x"), ("\t x", "x")] {
+            let caret = source.chars().take_while(|ch| *ch != 'x').count();
+            let (text, _) = run(source, Selection::point(caret), |rope, selection| backspace(rope, selection, &indent));
+            assert_eq!(text, expected, "Backspace in {source:?}");
+        }
+        let source = "\t x\n\t\t  y";
+        let (text, selection) = run(source, Selection::new(vec![Range::new(0, source.chars().count())], 0), |rope, selection| indent_lines(rope, selection, &indent, false));
+        assert_eq!(text, "\t\t  x\n\t\t\t\ty");
+        let rope = Rope::from_str(&text);
+        let edited = indent_lines(&rope, &selection, &indent, true);
+        let mut restored = rope.clone();
+        edited.changes.apply(&mut restored);
+        assert_eq!(restored.to_string(), "\t x\n\t\t  y");
+    }
+
+    #[test]
+    fn tab_preference_survives_an_indent_narrower_than_one_tab() {
+        let indent = Indent { unit: "  ".into(), tab_width: 4, prefer_tabs: true };
+        assert_eq!(indent.width(), 2);
+        assert!(indent.uses_tabs());
+        assert_eq!(indent.whitespace(0, 2), "  ");
+        assert_eq!(indent.whitespace(0, 4), "\t");
+        assert_eq!(indent.whitespace(0, 6), "\t  ");
+        let (text, selection) = run("  if (x) {}", Selection::point(10), |rope, selection| newline(rope, selection, &indent));
+        assert_eq!(text, "  if (x) {\n\t\n  }");
+        assert_eq!(visual_col(&Rope::from_str(&text), selection.primary().head, 4), 4);
+        let (text, selection) = run("  ", Selection::point(2), |rope, selection| insert_tab(rope, selection, &indent));
+        assert_eq!(text, "  \t");
+        assert_eq!(visual_col(&Rope::from_str(&text), selection.primary().head, 4), 4);
+        let (text, _) = run("\tvalue", Selection::point(1), |rope, selection| backspace(rope, selection, &indent));
+        assert_eq!(text, "  value");
+        let legacy_tabs = Indent { unit: "\t".into(), tab_width: 4, prefer_tabs: false };
+        assert!(legacy_tabs.uses_tabs());
+        assert_eq!(legacy_tabs.whitespace(0, 4), "\t");
     }
 
     #[test]

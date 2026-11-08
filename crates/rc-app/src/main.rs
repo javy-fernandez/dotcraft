@@ -9,6 +9,7 @@ mod monitor;
 mod update;
 mod convert;
 mod debugger;
+mod database;
 mod insight;
 mod item_templates;
 mod runner;

@@ -7,3 +7,6 @@ taken unchanged from [JetBrains/intellij-community](https://github.com/JetBrains
 Copyright 2000-2025 JetBrains s.r.o. and contributors. Licensed under the
 [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0); see `LICENSE-APACHE`
 at the root of this repository. Files ending in `_dark.svg` are the dark-theme variants.
+
+`toolwindows/database.svg` and `toolwindows/monitoring.svg` are DotCraft's own, drawn in the same style
+(IntelliJ Community has no database icon).

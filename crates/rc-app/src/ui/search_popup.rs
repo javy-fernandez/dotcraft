@@ -1,8 +1,9 @@
 //! Search Everywhere (⇧⇧) and its Go to File / Type / Symbol tabs: a popup under the toolbar
-//! with tabs, an input and ranked results.
+//! with tabs, an input and ranked file, symbol, action and settings results.
 
 use crate::app::DotCraftApp;
-use crate::search::{SeTab, SearchEverywhere, action_items};
+use crate::search::{SeTab, SearchEverywhere, action_items, settings_items};
+use crate::ui::dialogs::{Dialog, SettingsPage};
 use egui::{Align2, Color32, Context, FontId, Id, Key, Rect, Sense, Ui, pos2, vec2};
 use rc_kit::i18n::tr;
 use rc_kit::{Ico, ico, icons, theme};
@@ -14,6 +15,7 @@ enum Hit {
     File { path: PathBuf, rel: String, indices: Vec<u32>, line: Option<u32>, col: Option<u32> },
     Symbol(crate::search::SymbolHit),
     Action(&'static str, rc_editor::Action),
+    Settings(&'static str, SettingsPage),
 }
 
 const ROW_H: f32 = 28.0;
@@ -68,6 +70,14 @@ fn collect(app: &DotCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static str
         ranked.sort_by_key(|r| std::cmp::Reverse(r.0));
         for (i, (_, l, a)) in ranked.into_iter().take(if se.tab == SeTab::All { 5 } else { 40 }).enumerate() {
             out.push(((i == 0 && se.tab == SeTab::All).then_some(tr("Actions")), Hit::Action(l, a)));
+        }
+        let mut settings: Vec<_> = settings_items().into_iter().filter_map(|(label, page)| {
+            let name = format!("{} {label}", tr("Settings"));
+            rc_editor::popup::fuzzy_score(&name, text).map(|score| (score, label, page))
+        }).collect();
+        settings.sort_by_key(|entry| std::cmp::Reverse(entry.0));
+        for (index, (_, label, page)) in settings.into_iter().enumerate() {
+            out.push(((index == 0).then_some(tr("Settings")), Hit::Settings(label, page)));
         }
     }
     out
@@ -152,7 +162,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
                     SeTab::Types => tr("Type a class, interface or struct name"),
                     SeTab::Symbols => tr("Type a member name"),
                     SeTab::Actions => tr("Type an action name"),
-                    SeTab::All => tr("Search files, types, symbols and actions"),
+                    SeTab::All => tr("Search files, types, symbols, actions and settings"),
                 };
                 let te = child.add(egui::TextEdit::singleline(&mut se.text).frame(egui::Frame::NONE).hint_text(hint).font(FontId::proportional(14.0)).desired_width(f32::INFINITY));
                 if std::mem::take(&mut se.focus) {
@@ -193,6 +203,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
                             }
                             Hit::Symbol(s) => (crate::convert::symbol_icon(s.kind), s.name.clone(), s.container.clone(), s.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), Vec::new()),
                             Hit::Action(l, a) => (crate::search::action_icon(*a).unwrap_or(ico::RUN_ANYTHING), l.to_string(), String::new(), app.keymap.shortcut_text(*a).unwrap_or_default(), Vec::new()),
+                            Hit::Settings(label, _) => (ico::SETTINGS, label.to_string(), tr("Settings").to_string(), String::new(), Vec::new()),
                         };
                         icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 18.0, r.center().y), vec2(16.0, 16.0)), icon, &p, true);
                         // Name with the matched chars in bold accent.
@@ -236,12 +247,16 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
             app.pending.push(a);
             close = true;
         }
+        Some(Hit::Settings(_, page)) => {
+            app.dialog = Some(Dialog::Settings { draft: Box::new(app.settings.clone()), page });
+            close = true;
+        }
         None => {}
     }
     if !close {
         app.search_everywhere = Some(se);
     } else {
-        app.focus_editor = true;
+        app.focus_editor = !matches!(app.dialog, Some(Dialog::Settings { .. }));
     }
 }
 
@@ -377,4 +392,63 @@ pub fn find_bar(app: &mut DotCraftApp, ui: &mut Ui, rect: Rect) -> f32 {
         app.find_bar = Some(bar);
     }
     h
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+
+    #[test]
+    fn settings_results_open_each_existing_page_from_search_everywhere() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        for tab in [SeTab::All, SeTab::Actions] {
+            for (label, page) in settings_items() {
+                let mut app = crate::screens::test_app(home.path(), true);
+                let original_size = app.settings.editor_font_size;
+                app.search_everywhere = Some(SearchEverywhere::new(tab, format!("{} {label}", tr("Settings"))));
+                let mut first = true;
+                let mut harness = Harness::builder().with_size(vec2(900.0, 600.0)).build_ui_state(
+                    move |ui, app: &mut DotCraftApp| {
+                        if std::mem::take(&mut first) {
+                            rc_kit::theme::install_fonts(ui.ctx());
+                            return;
+                        }
+                        show(app, ui.ctx());
+                    },
+                    app,
+                );
+                harness.run_steps(3);
+                if tab == SeTab::All {
+                    harness.key_press(Key::Enter);
+                } else {
+                    harness.get_by_label(label).click();
+                }
+                harness.run_steps(2);
+                assert!(harness.state().search_everywhere.is_none());
+                match &harness.state().dialog {
+                    Some(Dialog::Settings { page: actual, draft }) => {
+                        assert!(*actual == page, "search must open the requested settings page");
+                        assert_eq!(draft.editor_font_size, original_size);
+                    }
+                    _ => panic!("search did not open settings"),
+                }
+                assert!(!harness.state().focus_editor, "settings must retain focus after selection");
+                assert_eq!(harness.state().settings.editor_font_size, original_size);
+            }
+        }
+    }
+
+    #[test]
+    fn settings_results_stay_out_of_file_type_and_symbol_searches() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let app = crate::screens::test_app(home.path(), true);
+        for tab in [SeTab::Files, SeTab::Types, SeTab::Symbols] {
+            let search = SearchEverywhere::new(tab, tr("Settings").into());
+            assert!(!collect(&app, &search).iter().any(|(_, hit)| matches!(hit, Hit::Settings(..))));
+        }
+        assert!(!collect(&app, &SearchEverywhere::new(SeTab::All, String::new())).iter().any(|(_, hit)| matches!(hit, Hit::Settings(..))));
+    }
 }

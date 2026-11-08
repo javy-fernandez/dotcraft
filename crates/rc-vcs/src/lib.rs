@@ -19,6 +19,7 @@ pub mod side_by_side;
 pub mod stash;
 pub mod status;
 pub mod textdiff;
+pub mod tools;
 
 pub use blame::{Blame, BlameCommit, BlameLine};
 pub use branch::{Branch, BranchKind};

@@ -108,6 +108,7 @@ pub enum Action {
     Build,
     Run,
     Debug,
+    AttachProcess,
     StopRun,
     RunTests,
     StepOver,
@@ -190,6 +191,7 @@ impl Action {
                 | Build
                 | Run
                 | Debug
+                | AttachProcess
                 | StopRun
                 | RunTests
                 | StepOver

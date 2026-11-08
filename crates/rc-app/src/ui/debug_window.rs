@@ -37,10 +37,10 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         tr("Restart").to_string(),
     );
     let actions: [(Ico, &str, bool); 9] = [
-        (ico::RERUN, &t_restart, has),
+        (ico::RERUN, &t_restart, app.debugger.session.as_ref().is_some_and(|session| !session.is_attached())),
         (ico::RESUME, &t_resume, stopped),
         (ico::PAUSE, &t_pause, active && !stopped),
-        (ico::STOP, &t_stop, active),
+        (ico::STOP, &t_stop, active || app.debugger.downloading.is_some()),
         (ico::STEP_OVER, &t_over, stopped),
         (ico::STEP_INTO, &t_into, stopped),
         (ico::STEP_OUT, &t_out, stopped),
@@ -449,6 +449,40 @@ fn clone_row(r: &Row) -> Row {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn restart_is_disabled_for_attach_sessions_and_available_for_launches() {
+        use egui_kittest::{Harness, kittest::{NodeT, Queryable}};
+        use rc_dap::{AdapterCommand, Breakpoints, DebugOptions, DebugSession, DebugTarget, LaunchConfig};
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        for attached in [true, false] {
+            let mut app = crate::screens::test_app(home.path(), true);
+            // An unavailable adapter fails immediately without launching target code. The
+            // target identity must still govern restart behavior after an attach failure.
+            let adapter = AdapterCommand::new(home.path().join("missing-adapter"), rc_dap::netcoredbg::Origin::Settings);
+            let target = if attached { DebugTarget::Attach { pid: 42 } } else {
+                DebugTarget::Launch(LaunchConfig { program: home.path().join("unused-target"), args: Vec::new(), cwd: home.path().to_path_buf(), env: Vec::new() })
+            };
+            let session = DebugSession::start(adapter, target, DebugOptions::default(), Breakpoints::new(), rc_core::Waker::noop());
+            assert_eq!(session.is_attached(), attached);
+            app.debugger.session = Some(session);
+            let mut first = true;
+            let mut harness = Harness::builder().with_size(egui::vec2(1000.0, 400.0)).build_ui_state(
+                move |ui, app: &mut crate::app::DotCraftApp| {
+                    if std::mem::take(&mut first) {
+                        rc_kit::theme::install_fonts(ui.ctx());
+                        return;
+                    }
+                    super::show(app, ui);
+                }, app,
+            );
+            harness.run_steps(2);
+            let restart = harness.get_by_label(rc_kit::i18n::tr("Restart"));
+            assert_eq!(restart.accesskit_node().is_disabled(), attached);
+            assert!(harness.state().pending.is_empty());
+        }
+    }
+
     #[test]
     fn short_types_drop_namespaces() {
         assert_eq!(super::short_type("System.Collections.Generic.List<Shop.Core.OrderLine>"), "List<OrderLine>");

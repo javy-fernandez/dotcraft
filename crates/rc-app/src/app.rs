@@ -49,6 +49,7 @@ pub struct DotCraftApp {
     pub editor_config: EditorConfig,
     pub workspace: Option<WorkspaceState>,
     pub docs: Docs,
+    pub editor_workflows: crate::ui::editor_workflows::EditorWorkflows,
     pub dock: Dock,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
@@ -78,6 +79,7 @@ pub struct DotCraftApp {
     window_title: String,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
+    pub database: crate::database::Database,
     pub nuget: crate::ui::nuget::NugetManager,
     pub split: Option<Split>,
     /// Documents shown in windows of their own (editor ids).
@@ -99,6 +101,8 @@ pub struct DotCraftApp {
     pub waker: Waker,
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
+    /// A filter outside the underlying solution root still needs change notifications.
+    _filter_watcher: Option<FileWatcher>,
     /// Open documents outside the workspace: their folders are watched too.
     doc_inbox: Inbox<FsEvent>,
     doc_watcher: Option<FileWatcher>,
@@ -155,10 +159,11 @@ impl DotCraftApp {
             editor_config,
             workspace: None,
             docs: {
-                let mut d = Docs::new(pool);
+                let mut d = Docs::with_waker(pool, waker.clone());
                 d.history = true;
                 d
             },
+            editor_workflows: Default::default(),
             dock: Dock::default(),
             explorer: ExplorerState::default(),
             dialog: None,
@@ -179,6 +184,7 @@ impl DotCraftApp {
             window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
+            database: crate::database::Database::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             split: None,
             floating: Vec::new(),
@@ -199,6 +205,7 @@ impl DotCraftApp {
             doc_watch_dirs: Vec::new(),
             waker,
             _watcher: None,
+            _filter_watcher: None,
             pending: Vec::new(),
             focus_editor: false,
             nav_back: Vec::new(),
@@ -293,7 +300,7 @@ impl DotCraftApp {
 
     /// Opens a folder, solution or project, restoring its session.
     pub fn open_workspace(&mut self, path: &Path) {
-        let ws = match Workspace::open(path) {
+        let mut ws = match Workspace::open(path) {
             Ok(ws) => ws,
             Err(e) => {
                 self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &e)]), true);
@@ -312,13 +319,13 @@ impl DotCraftApp {
         if let Some(err) = &solution_error {
             self.notify(trf("Could not read the solution: {error}", &[("error", err)]), true);
         }
+        if let Some(root) = solution.as_ref().and_then(|s| s.source_path.parent()) {
+            ws.root = root.to_path_buf();
+        }
         self.settings.add_recent(ws.key_path().to_path_buf());
         self.settings.last_workspace = Some(ws.key_path().to_path_buf());
         let _ = self.settings.save();
-        self._watcher = FileWatcher::new(&ws.root, self.fs_inbox.sender()).ok();
-        self.files.open(&ws.root, self.waker.clone());
-        self.todos = Some(crate::todo::Todos::new(&ws.root, self.waker.clone()));
-        self.vcs.open(&ws.root);
+        self.watch_workspace(&ws);
         let session = Session::load(ws.key_path());
         let projects = match &ws.kind {
             rc_core::WorkspaceKind::Project(p) => vec![p.clone()],
@@ -333,6 +340,16 @@ impl DotCraftApp {
         self.workspace = Some(WorkspaceState { ws, solution });
         self.refresh_endpoints();
         self.restore_session(session);
+    }
+
+    fn watch_workspace(&mut self, ws: &Workspace) {
+        self._watcher = FileWatcher::new(&ws.root, self.fs_inbox.sender()).ok();
+        self._filter_watcher = ws.solution().filter(|target| !target.starts_with(&ws.root)).and_then(|target| {
+            target.parent().and_then(|parent| FileWatcher::dirs(&[parent.to_path_buf()], self.fs_inbox.sender()).ok())
+        });
+        self.files.open(&ws.root, self.waker.clone());
+        self.vcs.open(&ws.root);
+        self.todos = Some(crate::todo::Todos::new(&ws.root, self.waker.clone()));
     }
 
     /// Runs every test collecting coverage (coverlet), then shows the Coverage window.
@@ -443,13 +460,19 @@ impl DotCraftApp {
             self.save_session();
         }
         self.workspace = None;
+        self.editor_workflows = Default::default();
+        self.endpoints = crate::web::Endpoints::new();
         self._watcher = None;
+        self._filter_watcher = None;
         self.insight.stop();
+        self.debugger.stop();
         self.runner.stop_all();
         self.runner.clear();
         self.files.close();
         self.todos = None;
         self.vcs.close();
+        self.http = crate::web::HttpClient::new(self.waker.clone());
+        self.database.disconnect();
         self.find_in_files = None;
         self.search_everywhere = None;
         self.find_bar = None;
@@ -464,6 +487,8 @@ impl DotCraftApp {
     }
 
     fn restore_session(&mut self, s: Session) {
+        self.editor_workflows.favorites = s.favorites.clone();
+        self.editor_workflows.templates = std::sync::Arc::new(s.custom_templates.clone());
         // Before the files open: each picks its own up.
         self.docs.bookmarks = s.bookmarks.iter().map(|(p, b)| (p.clone(), b.iter().copied().collect())).collect();
         // A solution without a layout of its own starts with the last one used.
@@ -539,6 +564,8 @@ impl DotCraftApp {
             .map(|d| (d.path.clone(), d.editor.breakpoints.keys().map(|l| (*l, self.debugger.conditions.get(&(d.path.clone(), *l)).cloned())).collect()))
             .collect();
         Session {
+            favorites: self.editor_workflows.favorites.clone(),
+            custom_templates: (*self.editor_workflows.templates).clone(),
             files,
             active: self.docs.active,
             tool_windows: self.dock.to_session(),
@@ -589,7 +616,10 @@ impl DotCraftApp {
             self.notify(e, true);
         }
         for p in modified {
-            self.insight.did_save(&p);
+            // A failed save keeps the buffer dirty and must not send didSave.
+            if self.docs.index_of(&p).is_some_and(|i| !self.docs.list[i].is_modified()) {
+                self.insight.did_save_synced(&mut self.docs, &p);
+            }
         }
     }
 
@@ -842,7 +872,17 @@ impl DotCraftApp {
     /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
         match action {
-            Action::SaveAll | Action::Save => {
+            Action::Save => {
+                if let Some(i) = self.docs.active && !self.docs.list[i].editor.read_only {
+                    let path = self.docs.list[i].path.clone();
+                    match self.docs.save(i) {
+                        Ok(()) => self.insight.did_save_synced(&mut self.docs, &path),
+                        Err(error) => self.notify(error, true),
+                    }
+                }
+                self.save_session();
+            }
+            Action::SaveAll => {
                 self.save_all_docs();
                 self.save_session();
             }
@@ -892,7 +932,7 @@ impl DotCraftApp {
                 }
             }
             Action::StopRun => {
-                if self.debugger.active() {
+                if self.debugger.active() || self.debugger.downloading.is_some() {
                     self.debugger.stop();
                 } else {
                     self.runner.stop_all();
@@ -903,6 +943,9 @@ impl DotCraftApp {
                 if let Some(s) = &mut self.debugger.session {
                     s.continue_();
                 }
+            }
+            Action::AttachProcess => {
+                self.dialog = Some(Dialog::AttachProcess { pid: String::new(), focus: true });
             }
             Action::Debug => {
                 self.save_all_docs();
@@ -1298,18 +1341,33 @@ impl DotCraftApp {
                 changed.push(p);
             }
         }
+        let reload = self.workspace.as_ref().and_then(|w| {
+            w.ws.solution().filter(|target| changed.iter().any(|path| path == *target || w.solution.as_ref().is_some_and(|s| s.source_path == *path))).map(Path::to_path_buf)
+        });
         for p in changed {
             self.docs.on_disk_change(&p);
-            // A changed solution file reloads the explorer's model.
-            if let Some(w) = &mut self.workspace
-                && w.ws.solution() == Some(p.as_path())
-                && let Ok(s) = Solution::load(&p)
-            {
-                // Projects added or removed by hand: new run configurations too.
-                let remembered = self.runner.selected_config().map(|c| c.name.clone());
-                self.runner.set_workspace(Some(&s), &[], &dotnet_path(&self.settings), remembered.as_deref());
-                w.solution = Some(s);
+        }
+        if let Some(target) = reload
+            && let Ok(solution) = Solution::load(&target)
+        {
+            let root = solution.source_path.parent().unwrap_or(Path::new(".")).to_path_buf();
+            if let Some(w) = &mut self.workspace {
+                let root_changed = w.ws.root != root;
+                w.ws.root = root.clone();
+                let ws = w.ws.clone();
+                if root_changed {
+                    self.watch_workspace(&ws);
+                }
             }
+            let remembered = self.runner.selected_config().map(|c| c.name.clone());
+            self.runner.set_workspace(Some(&solution), &[], &dotnet_path(&self.settings), remembered.as_deref());
+            if target.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("slnf")) {
+                self.insight.start(&root, Some(&target), Vec::new(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
+            }
+            if let Some(w) = &mut self.workspace {
+                w.solution = Some(solution);
+            }
+            self.refresh_endpoints();
         }
         self.sync_doc_watcher();
         let mut outside: Vec<PathBuf> = self.doc_inbox.drain().into_iter().map(|e| e.path().to_path_buf()).collect();
@@ -1516,7 +1574,10 @@ impl eframe::App for DotCraftApp {
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
         }
+        self.database.update();
+        for doc in &mut self.docs.list { doc.editor.custom_templates = self.editor_workflows.templates.clone(); }
         crate::ui::frame(self, ui, editor_actions);
+        crate::ui::editor_workflows::show(self, &ctx);
         self.update_notice(&ctx);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);

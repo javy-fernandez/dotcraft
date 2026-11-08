@@ -320,3 +320,70 @@ fn breakpoint_conditions_and_disabled_state_survive_the_session() {
     assert_eq!(d.editor.breakpoints.get(&26), Some(&BreakpointKind::Disabled));
     assert_eq!(app.debugger.conditions.get(&(calc.clone(), 20)).map(String::as_str), Some("subtotal > 0"));
 }
+
+#[test]
+fn attach_action_opens_pid_dialog_without_a_run_configuration() {
+    let mut app = DotCraftApp::with_settings(Settings::default(), Waker::noop(), None);
+    assert!(app.runner.selected_config().is_none());
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::AttachProcess);
+    assert!(matches!(app.dialog, Some(crate::ui::dialogs::Dialog::AttachProcess { .. })));
+    assert!(app.debugger.session.is_none());
+}
+
+#[test]
+fn attach_rejects_invalid_targets_before_starting_an_adapter() {
+    let mut app = DotCraftApp::with_settings(Settings::default(), Waker::noop(), None);
+    for pid in [0, std::process::id()] {
+        let outputs = app.debugger.attach(pid, Some(Path::new("/nonexistent")), &app.docs);
+        assert!(matches!(outputs.as_slice(), [crate::debugger::DebugOutput::Notify(_, true)]));
+        assert!(app.debugger.session.is_none());
+        assert!(app.debugger.downloading.is_none());
+    }
+}
+
+/// Requires a .NET SDK and a working netcoredbg installation/download.
+#[test]
+#[ignore = "requires .NET SDK and netcoredbg; run explicitly on a configured host"]
+fn attaches_from_the_ide_and_stop_leaves_the_target_running() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut app = app(home.path());
+    let dotnet = rc_dotnet::Dotnet::locate(None).expect("install a .NET SDK");
+    let api = crate::screens::fixtures().join("Shop/src/Shop.Api/Shop.Api.csproj");
+    let build = dotnet.std_command().args(["build", api.to_str().unwrap(), "-nologo", "-v:q"]).output().unwrap();
+    assert!(build.status.success(), "{}", String::from_utf8_lossy(&build.stdout));
+    let dll = api.parent().unwrap().join("bin/Debug/net8.0/Shop.Api.dll");
+    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    struct Target(std::process::Child);
+    impl Drop for Target {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let mut target = Target(dotnet.std_command().arg(&dll).env("ASPNETCORE_URLS", format!("http://127.0.0.1:{port}"))
+        .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap());
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
+        assert!(target.0.try_wait().unwrap().is_none(), "target exited before attaching");
+        assert!(Instant::now() < deadline, "target did not start");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let outputs = app.debugger.attach(target.0.id(), app.settings.netcoredbg_path.as_deref(), &app.docs);
+    app.handle_debug(outputs);
+    pump(&mut app, "attach", Duration::from_secs(60), |a| a.debugger.session.as_ref().is_some_and(|s| s.state() == &rc_dap::SessionState::Running));
+    let client = app.debugger.session.as_ref().unwrap().client().unwrap().clone();
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::StopRun);
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while !client.has_exited() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(client.has_exited(), "adapter did not disconnect");
+    assert!(target.0.try_wait().unwrap().is_none(), "Stop killed the attached process");
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    write!(stream, "GET /orders/sample HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n").unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+}

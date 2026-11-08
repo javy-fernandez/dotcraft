@@ -21,6 +21,11 @@ pub enum DebugOutput {
 /// An Evaluate request: id, expression and its result once it arrives.
 pub type Evaluation = (u64, String, Option<Result<EvalValue, String>>);
 
+enum PendingStart {
+    Launch(RunConfig, rc_dotnet::RunRequest, PathBuf),
+    Attach(u32),
+}
+
 pub struct Debugger {
     pub session: Option<DebugSession>,
     pub console: Option<crate::runner::Console>,
@@ -28,7 +33,7 @@ pub struct Debugger {
     downloads: Inbox<DownloadEvent>,
     download: Option<rc_dap::netcoredbg::DownloadHandle>,
     pub downloading: Option<(u64, Option<u64>)>,
-    pending: Option<(RunConfig, rc_dotnet::RunRequest, PathBuf)>,
+    pending: Option<PendingStart>,
     waker: Waker,
     /// Expanded rows of the Variables tree, by path of names (kept across steps).
     pub expanded: BTreeSet<String>,
@@ -102,6 +107,7 @@ impl Debugger {
         let (ConfigKind::App { .. }, Some(mut run)) = (&config.kind, request) else {
             return vec![DebugOutput::Notify(tr("Choose an application run configuration to debug").into(), false)];
         };
+        self.pending = None;
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -110,7 +116,7 @@ impl Debugger {
                 self.downloading = Some((0, None));
                 self.download = Some(rc_dap::netcoredbg::start_download(self.downloads.sender()));
             }
-            self.pending = Some((config.clone(), run, dotnet.to_path_buf()));
+            self.pending = Some(PendingStart::Launch(config.clone(), run, dotnet.to_path_buf()));
             return vec![DebugOutput::Notify(tr("Downloading the netcoredbg debugger (first use)…").into(), false)];
         };
         let Some(dotnet) = rc_dotnet::Dotnet::locate(Some(dotnet)) else {
@@ -133,7 +139,50 @@ impl Debugger {
         vec![DebugOutput::ShowDebugWindow]
     }
 
+    /// Attach without building or launching the target. Stopping this session detaches.
+    pub fn attach(&mut self, pid: u32, configured: Option<&Path>, docs: &Docs) -> Vec<DebugOutput> {
+        if pid == 0 || pid == std::process::id() {
+            return vec![DebugOutput::Notify(tr("Enter a positive process ID other than DotCraft's own process").into(), true)];
+        }
+        if self.active() {
+            return vec![DebugOutput::Notify(tr("Stop the current debug session before attaching").into(), true)];
+        }
+        let Some(adapter) = rc_dap::netcoredbg::locate(configured) else {
+            if self.download.is_none() {
+                self.downloading = Some((0, None));
+                self.download = Some(rc_dap::netcoredbg::start_download(self.downloads.sender()));
+            }
+            self.pending = Some(PendingStart::Attach(pid));
+            return vec![DebugOutput::Notify(tr("Downloading the netcoredbg debugger (first use)…").into(), false)];
+        };
+        self.pending = None;
+        self.urls.clear();
+        self.expanded.clear();
+        self.eval = None;
+        self.hover = None;
+        self.hover_result = None;
+        self.temp = None;
+        self.name = trf("Process {pid}", &[("pid", &pid.to_string())]);
+        let console = crate::runner::Console::new(&self.waker);
+        console.note(&trf("Attaching to process {pid}…", &[("pid", &pid.to_string())]));
+        self.console = Some(console);
+        let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
+        let mut session = DebugSession::start(adapter, DebugTarget::Attach { pid }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        for watch in watches {
+            session.add_watch(watch);
+        }
+        self.session = Some(session);
+        vec![DebugOutput::ShowDebugWindow]
+    }
+
     pub fn stop(&mut self) {
+        self.pending = None;
+        if let Some(download) = self.download.take() {
+            download.cancel();
+        }
+        self.downloading = None;
+        // Ignore completion events queued by an adapter download before cancellation.
+        self.downloads = Inbox::new(self.waker.clone());
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -211,8 +260,11 @@ impl Debugger {
                     self.downloading = None;
                     self.download = None;
                     out.push(DebugOutput::Notify(tr("netcoredbg is ready").into(), false));
-                    if let Some((cfg, run, dotnet)) = self.pending.take() {
-                        out.extend(self.start(cfg, Some(run), &dotnet, None, docs));
+                    if let Some(pending) = self.pending.take() {
+                        out.extend(match pending {
+                            PendingStart::Launch(cfg, run, dotnet) => self.start(cfg, Some(run), &dotnet, None, docs),
+                            PendingStart::Attach(pid) => self.attach(pid, None, docs),
+                        });
                     }
                 }
                 DownloadEvent::Failed(e) => {
@@ -395,6 +447,66 @@ pub fn expression_at(rope: &rc_text::Rope, pos: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn closing_workspace_cancels_deferred_attach_and_discards_download_events() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.debugger.pending = Some(PendingStart::Attach(42));
+        app.debugger.downloading = Some((10, Some(100)));
+        let stale = app.debugger.downloads.sender();
+        stale.send(DownloadEvent::Progress { done: 20, total: Some(100) });
+        app.close_workspace();
+        assert!(app.debugger.pending.is_none());
+        assert!(app.debugger.downloading.is_none());
+        // A completed old task must not restart attach or restore its progress UI.
+        stale.send(DownloadEvent::Done(PathBuf::from("/nonexistent/netcoredbg")));
+        assert!(app.debugger.update(&mut app.docs).is_empty());
+        assert!(app.debugger.session.is_none());
+        assert!(app.debugger.downloading.is_none());
+    }
+
+    #[test]
+    fn deferred_attach_can_be_stopped_from_both_toolbars() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let workspace = tempfile::tempdir().unwrap();
+        for main_toolbar in [true, false] {
+            let mut app = crate::screens::test_app(home.path(), true);
+            app.open_workspace(workspace.path());
+            app.debugger.pending = Some(PendingStart::Attach(42));
+            app.debugger.downloading = Some((10, Some(100)));
+            let stop = match app.keymap.shortcut_text(rc_editor::Action::StopRun) {
+                Some(shortcut) => format!("{} ({shortcut})", tr("Stop")),
+                None => tr("Stop").to_string(),
+            };
+            let mut first = true;
+            let mut harness = Harness::builder().with_size(egui::vec2(1200.0, 400.0)).build_ui_state(
+                move |ui, app: &mut crate::app::DotCraftApp| {
+                    if std::mem::take(&mut first) {
+                        rc_kit::theme::install_fonts(ui.ctx());
+                        return;
+                    }
+                    if main_toolbar { crate::ui::header::show(app, ui); } else { crate::ui::debug_window::show(app, ui); }
+                }, app,
+            );
+            harness.run_steps(2);
+            harness.get_by_label(&stop).click();
+            harness.run_steps(2);
+            if main_toolbar {
+                assert!(harness.state().pending.contains(&rc_editor::Action::StopRun));
+                let context = egui::Context::default();
+                harness.state_mut().run_ide_action(&context, rc_editor::Action::StopRun);
+            }
+            assert!(harness.state().debugger.pending.is_none());
+            assert!(harness.state().debugger.downloading.is_none());
+            assert!(harness.state().debugger.session.is_none());
+        }
+    }
+
     #[test]
     fn hover_expression_follows_member_chains() {
         let rope = rc_text::Rope::from_str("var t = order.Customer.Name;");

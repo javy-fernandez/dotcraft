@@ -1,4 +1,4 @@
-//! Solution files: the classic text `.sln` and the XML `.slnx`.
+//! Solution files: classic `.sln`, XML `.slnx`, and JSON `.slnf` filters.
 
 use std::path::{Path, PathBuf};
 
@@ -22,18 +22,24 @@ pub enum SolutionItem {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Solution {
+    /// Build/test target and session identity, including a filter when one was opened.
     pub path: PathBuf,
+    /// Underlying `.sln` or `.slnx` whose directory owns the workspace services.
+    pub source_path: PathBuf,
     pub name: String,
     pub items: Vec<SolutionItem>,
 }
 
 impl Solution {
     pub fn load(path: &Path) -> anyhow::Result<Solution> {
+        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("slnf")) {
+            return load_filter(path);
+        }
         let text = std::fs::read_to_string(path)?;
         let dir = path.parent().unwrap_or(Path::new("."));
         let items = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("slnx")) { parse_slnx(&text, dir)? } else { parse_sln(&text, dir) };
         let name = path.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned());
-        Ok(Solution { path: path.to_path_buf(), name, items })
+        Ok(Solution { path: path.to_path_buf(), source_path: path.to_path_buf(), name, items })
     }
 
     /// Every project, depth first in solution order.
@@ -53,17 +59,55 @@ impl Solution {
     }
 }
 
+/// Filter paths are relative to the filter; project paths are relative to its solution.
+/// Keep the filter as the command target so build/test continue to honor its selection.
+fn load_filter(path: &Path) -> anyhow::Result<Solution> {
+    use anyhow::Context;
+    #[derive(serde::Deserialize)]
+    struct Filter { solution: Selection }
+    #[derive(serde::Deserialize)]
+    struct Selection { path: String, projects: Vec<String> }
+
+    let text = std::fs::read_to_string(path).with_context(|| format!("Could not read filter {}", path.display()))?;
+    let filter: Filter = serde_json::from_str(&text).context("Invalid solution filter JSON")?;
+    let source = resolve(path.parent().unwrap_or(Path::new(".")), &filter.solution.path);
+    anyhow::ensure!(source.extension().is_some_and(|e| e.eq_ignore_ascii_case("sln") || e.eq_ignore_ascii_case("slnx")),
+        "A solution filter must reference a .sln or .slnx file");
+    let mut solution = Solution::load(&source).with_context(|| format!("Could not load filtered solution {}", source.display()))?;
+    let dir = source.parent().unwrap_or(Path::new("."));
+    let selected: Vec<PathBuf> = filter.solution.projects.iter().map(|p| resolve(dir, p)).collect();
+    for project in &selected {
+        anyhow::ensure!(solution.projects().iter().any(|p| p.path == *project),
+            "Filtered project {} is not in the solution", project.display());
+    }
+    fn retain(items: &mut Vec<SolutionItem>, selected: &[PathBuf]) {
+        items.retain_mut(|item| match item {
+            SolutionItem::Project(p) => selected.contains(&p.path),
+            SolutionItem::Folder { children, .. } => {
+                retain(children, selected);
+                !children.is_empty()
+            }
+            SolutionItem::File(_) => true,
+        });
+    }
+    retain(&mut solution.items, &selected);
+    solution.path = path.to_path_buf();
+    solution.name = path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+    Ok(solution)
+}
+
 /// Normalizes a path written in a solution (Windows separators) against its folder.
 fn resolve(dir: &Path, rel: &str) -> PathBuf {
     let rel = rel.replace('\\', "/");
     let mut out = dir.to_path_buf();
-    for part in rel.split('/') {
+    for part in Path::new(&rel).components() {
         match part {
-            "" | "." => {}
-            ".." => {
-                out.pop();
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => { out.pop(); }
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => {
+                out.push(part.as_os_str());
             }
-            p => out.push(p),
+            std::path::Component::Normal(p) => out.push(p),
         }
     }
     out
@@ -282,6 +326,65 @@ Global
 	EndGlobalSection
 EndGlobal
 "#;
+
+    #[test]
+    fn solution_filters_select_projects_relative_to_the_solution() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("App.sln"), SLN).unwrap();
+        std::fs::create_dir(dir.path().join("filters")).unwrap();
+        let filter = dir.path().join("filters/Backend.slnf");
+        std::fs::write(&filter, r#"{"solution":{"path":"../App.sln","projects":["src\\App\\App.csproj"]}}"#).unwrap();
+        let loaded = Solution::load(&filter).unwrap();
+        assert_eq!(loaded.path, filter);
+        assert_eq!(loaded.source_path, dir.path().join("App.sln"));
+        assert_eq!(loaded.name, "Backend");
+        assert_eq!(loaded.projects().len(), 1);
+        assert_eq!(loaded.projects()[0].path, dir.path().join("src/App/App.csproj"));
+        assert!(matches!(&loaded.items[1], SolutionItem::Folder { name, .. } if name == "src"));
+    }
+
+    #[test]
+    fn solution_filters_validate_input_and_support_slnx() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("App.slnx"), r#"<Solution><Folder Name="/src/"><Project Path="A/A.csproj" /></Folder><Project Path="B/B.csproj" /></Solution>"#).unwrap();
+        let path = dir.path().join("Subset.slnf");
+        for invalid in [
+            r#"{"solution":{"path":"Subset.slnf","projects":[]}}"#,
+            r#"{"solution":{"path":"App.slnx","projects":["Missing.csproj"]}}"#,
+            r#"{"solution":{"path":"Missing.sln","projects":[]}}"#,
+            r#"{"solution":{"path":"App.slnx"}}"#,
+            "not json",
+        ] {
+            std::fs::write(&path, invalid).unwrap();
+            assert!(Solution::load(&path).is_err(), "{invalid}");
+        }
+        std::fs::write(&path, r#"{"solution":{"path":"App.slnx","projects":["B/B.csproj","B/B.csproj"]}}"#).unwrap();
+        let loaded = Solution::load(&path).unwrap();
+        assert_eq!(loaded.items.len(), 1);
+        assert_eq!(loaded.projects()[0].name, "B");
+        std::fs::write(&path, r#"{"solution":{"path":"App.slnx","projects":[]}}"#).unwrap();
+        assert!(Solution::load(&path).unwrap().projects().is_empty());
+    }
+
+    #[test]
+    fn filters_load_real_fixture_projects() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/TenProjects");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Modules.slnf");
+        let json = serde_json::json!({"solution": {
+            "path": fixture.join("TenProjects.slnx"),
+            "projects": ["src/Module01/Module01.csproj", "src/Module10/Module10.csproj"]
+        }});
+        std::fs::write(&path, json.to_string()).unwrap();
+        let loaded = Solution::load(&path).unwrap();
+        let projects = loaded.projects();
+        assert_eq!(projects.len(), 2);
+        for project in projects {
+            let info = crate::ProjectInfo::load(&project.path).unwrap();
+            assert_eq!(info.sdk, "Microsoft.NET.Sdk");
+            assert!(!info.target_frameworks.is_empty());
+        }
+    }
 
     #[test]
     fn sln_folders_nest_projects() {

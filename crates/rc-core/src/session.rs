@@ -74,6 +74,8 @@ impl Default for ToolWindowState {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Session {
+    pub favorites: Vec<PathBuf>,
+    pub custom_templates: BTreeMap<String, String>,
     pub files: Vec<OpenFile>,
     pub active: Option<usize>,
     /// Tool window id → state.
@@ -132,6 +134,8 @@ mod tests {
         let mut s = Session::default();
         s.files.push(OpenFile { path: ws.join("Program.cs"), line: 12, col: 4, scroll_y: 120.0, folded: vec![3], pinned: false });
         s.active = Some(0);
+        s.favorites.push(ws.join("Program.cs"));
+        s.custom_templates.insert("greet".into(), "Console.WriteLine(${1:name});$0".into());
         s.save(&ws).unwrap();
         assert_eq!(Session::load(&ws), s);
         assert_eq!(Session::load(&dir.path().join("Other")), Session::default());

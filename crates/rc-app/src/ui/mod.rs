@@ -2,15 +2,19 @@
 //! sides, tool windows and the editor as rounded islands, status bar at the bottom.
 
 pub mod debug_window;
+pub mod database_window;
 pub mod dialogs;
+pub mod sdk_selection;
 pub mod editor_area;
 pub mod explorer;
 pub mod git;
+pub mod main_menu;
 pub mod markdown;
 pub mod monitoring;
 pub mod new_project;
 pub mod nuget;
 pub mod header;
+pub mod kit;
 pub mod status;
 pub mod run_windows;
 pub mod search_popup;
@@ -127,3 +131,5 @@ fn remember_size(app: &mut DotCraftApp, tw: crate::toolwindow::ToolWindow, size:
         app.session_dirty = true;
     }
 }
+
+pub mod editor_workflows;

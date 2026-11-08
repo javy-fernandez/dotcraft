@@ -216,7 +216,7 @@ pub fn client_capabilities() -> Value {
     json!({
         "workspace": {
             "applyEdit": true,
-            "workspaceEdit": { "documentChanges": true, "resourceOperations": ["create", "rename", "delete"] },
+            "workspaceEdit": { "documentChanges": true },
             "didChangeConfiguration": { "dynamicRegistration": true },
             "didChangeWatchedFiles": { "dynamicRegistration": true },
             "configuration": true,

@@ -259,6 +259,7 @@ pub mod ico {
         TW_FIND = "toolwindows/find",
         TW_SERVICES = "toolwindows/services",
         TW_MONITORING = "toolwindows/monitoring",
+        TW_DATABASE = "toolwindows/database",
         TW_TODO = "toolwindows/todo",
         TW_HIERARCHY = "toolwindows/hierarchy",
         TW_HTTP = "toolwindows/httpClient",
@@ -386,6 +387,8 @@ pub mod ico {
         EXCLUDED = "nodes/excludeRoot",
         PLUGIN = "nodes/plugin",
         SERVICES = "nodes/services",
+        DATA_TABLE = "nodes/dataTables",
+        DATA_COLUMN = "nodes/dataColumn",
         // symbols
         CLASS = "nodes/class",
         CLASS_ABSTRACT = "nodes/classAbstract",

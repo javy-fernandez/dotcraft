@@ -411,7 +411,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
     // Indent guides: one at the indent of every enclosing block (IntelliJ draws them from
     // the line of the `{` down to the line before the `}`).
     if config.show_indent_guides {
-        let unit = state.indent.unit.chars().count().max(1);
+        let unit = state.indent.width();
         let tab = state.indent.tab_width;
         let indent_of = |line: usize| -> Option<usize> {
             let t = rope.line(line);
@@ -1164,10 +1164,10 @@ fn markup_assist(state: &mut EditorState, ch: char) {
     use rc_syntax::Lang;
     use rc_text::markup;
     let lang = state.syntax.lang;
-    if !matches!(lang, Lang::Razor | Lang::Xml) || state.selection.len() != 1 || !state.selection.primary().is_empty() {
+    if !matches!(lang, Lang::Razor | Lang::Html | Lang::Xml) || state.selection.len() != 1 || !state.selection.primary().is_empty() {
         return;
     }
-    let html = lang == Lang::Razor;
+    let html = matches!(lang, Lang::Razor | Lang::Html);
     let caret = state.caret();
     let rope = state.buffer.rope().clone();
     let mut remove = 0;
@@ -1196,6 +1196,21 @@ fn markup_assist(state: &mut EditorState, ch: char) {
     state.apply(commands::Edited { changes: cs, selection: Selection::point(caret_after) }, EditKind::Insert);
 }
 
+#[cfg(test)]
+mod web_markup_tests {
+    use super::*;
+
+    #[test]
+    fn native_html_keeps_tag_and_attribute_typing_assists() {
+        for (input, ch, expected) in [("<main>", '>', "<main></main>"), ("<input>", '>', "<input>"), ("<main class=", '=', "<main class=\"\"")] {
+            let mut editor = EditorState::new(1, Some("index.html".into()), input);
+            editor.selection = Selection::point(input.chars().count());
+            markup_assist(&mut editor, ch);
+            assert_eq!(editor.buffer.rope().to_string(), expected);
+        }
+    }
+}
+
 fn electric_close_brace(rope: &rc_text::Rope, state: &EditorState) -> Option<commands::Edited> {
     let pos = state.caret();
     let line = rope.char_to_line(pos);
@@ -1204,15 +1219,29 @@ fn electric_close_brace(rope: &rc_text::Rope, state: &EditorState) -> Option<com
     if !before.chars().all(|c| c == ' ' || c == '\t') || before.is_empty() {
         return None;
     }
-    let unit = state.indent.unit.chars().count();
-    let new_indent: String = if state.indent.unit == "\t" {
-        before.chars().skip(1).collect()
-    } else {
-        " ".repeat(before.chars().count().saturating_sub(unit))
-    };
+    let width = state.indent.previous_stop(state.indent.columns(&before));
+    let new_indent = state.indent.whitespace(0, width);
     let text = format!("{new_indent}}}");
     let cs = rc_text::ChangeSet::single(rc_text::Change::new(ls, pos, text.clone()));
     Some(commands::Edited { changes: cs, selection: Selection::point(ls + text.chars().count()) })
+}
+
+#[cfg(test)]
+mod mixed_indentation_tests {
+    use super::*;
+
+    #[test]
+    fn electric_closing_brace_outdents_by_visual_columns_and_undoes() {
+        let mut editor = EditorState::new(1, Some("App.cs".into()), "\t\t  ");
+        editor.indent = commands::Indent { unit: "\t ".into(), tab_width: 3, prefer_tabs: true };
+        editor.selection = Selection::point(4);
+        let edit = electric_close_brace(editor.buffer.rope(), &editor).unwrap();
+        editor.apply(edit, EditKind::Other);
+        assert_eq!(editor.buffer.rope().to_string(), "\t }");
+        assert_eq!(commands::visual_col(editor.buffer.rope(), editor.caret() - 1, 3), 4);
+        editor.undo();
+        assert_eq!(editor.buffer.rope().to_string(), "\t\t  ");
+    }
 }
 
 fn copy(ui: &Ui, state: &mut EditorState, cut: bool) {
@@ -1385,7 +1414,7 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         }
         Indent if !ro && state.snippet_jump(false) => {}
         Unindent if !ro && state.snippet_jump(true) => {}
-        Indent if !ro && expand_template(state) => {}
+        Indent if !ro && (crate::templates::expand_postfix(state) || expand_template(state)) => {}
         Indent if !ro => {
             let multi_line = sel.ranges().iter().any(|r| rope.char_to_line(r.start()) != rope.char_to_line(r.end()));
             let e = if multi_line { commands::indent_lines(&rope, &sel, &indent, false) } else { commands::insert_tab(&rope, &sel, &indent) };
@@ -1572,9 +1601,12 @@ fn expand_template(state: &mut EditorState) -> bool {
         return false;
     }
     let key: String = rope.slice(start..caret).to_string();
-    let Some(t) = crate::templates::find(&key) else { return false };
+    let body = match state.custom_templates.get(&key) {
+        Some(body) => body.as_str(),
+        None => match crate::templates::find(&key) { Some(t) => t.body, None => return false },
+    };
     let stem = state.path.as_ref().and_then(|p| p.file_stem()).map_or_else(|| "Name".to_string(), |s| s.to_string_lossy().into_owned());
-    let body = crate::templates::fill(t.body, &stem);
+    let body = crate::templates::fill(body, &stem);
     state.insert_snippet(start, caret, &body);
     true
 }

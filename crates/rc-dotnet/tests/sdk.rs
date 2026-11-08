@@ -477,6 +477,16 @@ fn watch_reloads_a_web_app_after_a_change() {
     req.env.push(("DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER".into(), "1".into()));
     let inbox = rc_core::Inbox::new(rc_core::Waker::noop());
     let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
+    // On a failed assertion the test process ends before the async stop: kill the tree here.
+    struct KillOnDrop<'a>(&'a rc_dotnet::run::RunHandle);
+    impl Drop for KillOnDrop<'_> {
+        fn drop(&mut self) {
+            if let Some(pid) = self.0.pid() {
+                rc_dotnet::kill_tree(pid);
+            }
+        }
+    }
+    let _guard = KillOnDrop(&handle);
     let get = || -> Option<String> {
         let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).ok()?;
         s.set_read_timeout(Some(std::time::Duration::from_secs(20))).ok()?;
@@ -516,4 +526,26 @@ fn watch_reloads_a_web_app_after_a_change() {
     // Waits for the kill: the test process ending first would leave the tree running.
     let events = collect(&inbox, Duration::from_secs(30), |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
     assert!(matches!(events.last(), Some(RunEvent::Exited { .. } | RunEvent::Failed(_))), "{:?}", events.last());
+}
+
+#[test]
+fn global_json_selection_controls_the_real_sdk_and_preserves_policies() {
+    let d = dotnet();
+    let sdks = d.list_sdks().unwrap();
+    let sdk8 = &sdks.iter().find(|s| s.major() == 8).expect(".NET 8 SDK").version;
+    let sdk10 = &sdks.iter().find(|s| s.major() == 10).expect(".NET 10 SDK").version;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::copy(shop().join("src/Shop.Core/Shop.Core.csproj"), root.join("Core.csproj")).unwrap();
+    std::fs::write(root.join("global.json"), r#"{"sdk":{"rollForward":"disable","allowPrerelease":false},"test":{"runner":"VSTest"}}"#).unwrap();
+    for version in [sdk8, sdk10] {
+        rc_dotnet::global_json::GlobalJson::load(root).unwrap().save_version(version).unwrap();
+        assert_eq!(&d.version(Some(root)).unwrap(), version);
+        let out = d.std_command().args(["build", "Core.csproj", "--nologo", "-v:q"]).current_dir(root).output().unwrap();
+        assert!(out.status.success(), "{}\n{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        let json: serde_json::Value = serde_json::from_slice(&std::fs::read(root.join("global.json")).unwrap()).unwrap();
+        assert_eq!(json["sdk"]["rollForward"], "disable");
+        assert_eq!(json["sdk"]["allowPrerelease"], false);
+        assert_eq!(json["test"]["runner"], "VSTest");
+    }
 }
