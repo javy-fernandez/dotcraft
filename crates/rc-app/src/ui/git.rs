@@ -642,7 +642,7 @@ mod repository_tools_tests {
         std::fs::write(source.join("README.txt"), "cloned content").unwrap();
         git(&source, &["add", "."]);
         git(&source, &["commit", "-qm", "initial"]);
-        let target = home.path().join("result");
+        let target = home.path().canonicalize().unwrap().join("result");
         let mut app = crate::screens::test_app(home.path(), true);
         app.vcs.tools.visible = true;
         app.vcs.tools.source = source.display().to_string();

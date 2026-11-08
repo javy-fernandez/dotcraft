@@ -643,8 +643,10 @@ fn solution_filter_explorer_shows_only_selected_real_projects() {
 fn solution_filter_open_route_uses_source_root_and_watches_both_locations() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let home = tempfile::tempdir().unwrap();
-    let source = home.path().join("source");
-    let filters = home.path().join("filters");
+    // Canonical, as the app opens paths (/private/var on macOS).
+    let base = home.path().canonicalize().unwrap();
+    let source = base.join("source");
+    let filters = base.join("filters");
     std::fs::create_dir_all(&source).unwrap();
     std::fs::create_dir_all(&filters).unwrap();
     assert!(std::process::Command::new("git").args(["init", "-q"]).arg(&source).status().unwrap().success());
@@ -712,7 +714,7 @@ fn solution_filter_open_route_uses_source_root_and_watches_both_locations() {
     std::fs::write(&solution, "<Solution><Project Path=\"Selected/Selected.csproj\"/><Folder Name=\"/Changed/\"><Project Path=\"Other/Other.csproj\"/></Folder></Solution>").unwrap();
     wait(&mut harness, &|app| matches!(app.workspace.as_ref().unwrap().solution.as_ref().unwrap().items.first(), Some(rc_dotnet::solution::SolutionItem::Folder { name, .. }) if name == "Changed"));
     assert_eq!(harness.state().workspace.as_ref().unwrap().ws.key_path(), filter);
-    let alternate = home.path().join("alternate");
+    let alternate = base.join("alternate");
     std::fs::create_dir_all(alternate.join("Moved")).unwrap();
     std::fs::write(alternate.join("Moved/Moved.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>").unwrap();
     std::fs::write(alternate.join("Moved/Program.cs"), "class Moved {}\n").unwrap();

@@ -1092,13 +1092,13 @@ mod web_window_tests {
     #[test]
     fn endpoints_window_filters_groups_conflicts_and_imports_on_click() {
         let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = tempfile::tempdir().unwrap(); let source = dir.path().join("api.json"); let output = dir.path().join("imported.http");
+        let tmp = tempfile::tempdir().unwrap(); let dir = tmp.path().canonicalize().unwrap(); let dir = &dir; let source = dir.join("api.json"); let output = dir.join("imported.http");
         std::fs::write(&source, r#"{"openapi":"3.1.0","servers":[{"url":"http://localhost:5000"}],"paths":{"/ready":{"get":{}}}}"#).unwrap();
-        let mut app = crate::screens::test_app(dir.path(), true);
-        let endpoints = rc_dotnet::endpoints::scan_source(&dir.path().join("Program.cs"), r#"app.MapGet("/orders/{id}", GetOne); app.MapGet("/orders/{key}", GetTwo); app.MapPost("/create", Create);"#);
+        let mut app = crate::screens::test_app(dir, true);
+        let endpoints = rc_dotnet::endpoints::scan_source(&dir.join("Program.cs"), r#"app.MapGet("/orders/{id}", GetOne); app.MapGet("/orders/{key}", GetTwo); app.MapPost("/create", Create);"#);
         let issues = rc_dotnet::endpoints::route_issues(&endpoints);
         app.endpoints.conflicts = issues.into_iter().map(|i| ("Api".into(), endpoints[i.first].clone(), endpoints[i.second].clone())).collect();
-        app.endpoints.projects = vec![("Api".into(), dir.path().join("Api.csproj"), endpoints)];
+        app.endpoints.projects = vec![("Api".into(), dir.join("Api.csproj"), endpoints)];
         app.endpoints.import_path = source.display().to_string(); app.endpoints.output_path = output.display().to_string();
         let mut first = true;
         let mut harness = Harness::builder().with_size(vec2(1000.0, 800.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {

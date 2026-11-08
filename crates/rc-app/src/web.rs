@@ -324,7 +324,7 @@ mod tests {
             let server = std::thread::spawn(move || {
                 let mut connection = None;
                 wait(|| match listener.accept() { Ok((stream, _)) => { connection = Some(stream); true }, Err(_) => false });
-                let mut stream = connection.unwrap();
+                let mut stream = connection.unwrap(); stream.set_nonblocking(false).unwrap(); // macOS: accepted sockets inherit it.
                 stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
                 let mut data = [0; 4096];
                 assert!(stream.read(&mut data).unwrap() > 0);
@@ -351,7 +351,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             let mut connection = None;
             wait(|| match listener.accept() { Ok((stream, _)) => { connection = Some(stream); true }, Err(_) => false });
-            let mut stream = connection.unwrap(); stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+            let mut stream = connection.unwrap(); stream.set_nonblocking(false).unwrap(); // macOS: accepted sockets inherit it. stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
             stream.set_write_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
             assert!(stream.read(&mut [0; 4096]).unwrap() > 0);
             stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 9437184\r\nConnection: close\r\n\r\n").unwrap();
@@ -378,7 +378,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             let mut connection = None;
             wait(|| match listener.accept() { Ok((stream, _)) => { connection = Some(stream); true }, Err(_) => false });
-            let mut stream = connection.unwrap(); stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+            let mut stream = connection.unwrap(); stream.set_nonblocking(false).unwrap(); // macOS: accepted sockets inherit it. stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
             let mut data = Vec::new(); let mut chunk = [0; 1024];
             while !String::from_utf8_lossy(&data).contains("{\"from\":\"file\"}") {
                 let len = stream.read(&mut chunk).unwrap(); assert!(len > 0); data.extend_from_slice(&chunk[..len]);

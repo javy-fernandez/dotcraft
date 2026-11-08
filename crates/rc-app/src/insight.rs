@@ -1551,7 +1551,7 @@ while True:
         send({'jsonrpc': '2.0', 'id': message['id'], 'result': result})
 "#).unwrap();
         let mut app = crate::screens::test_app(dir.path(), true);
-        let path = dir.path().join("Clean.cs");
+        let path = dir.path().canonicalize().unwrap().join("Clean.cs");
         let original = "class Café {} // 🦀  ";
         std::fs::write(&path, original).unwrap();
         let index = app.docs.open(&path).unwrap();

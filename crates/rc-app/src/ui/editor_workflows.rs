@@ -160,7 +160,7 @@ mod tests {
         use egui_kittest::{Harness, kittest::Queryable};
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
-        let file = home.path().join("Order.cs");
+        let file = home.path().canonicalize().unwrap().join("Order.cs");
         std::fs::write(&file, "class Order {}\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
         app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(home.path()).unwrap(), solution: None });
@@ -185,7 +185,7 @@ mod tests {
         assert_eq!(restored.favorites, session.favorites);
         h.get_by_label(tr("Toggle Current Favorite")).click(); h.run_steps(2);
         assert!(h.state().session().favorites.is_empty());
-        let related = home.path().join("Order.razor");
+        let related = home.path().canonicalize().unwrap().join("Order.razor");
         std::fs::write(&related, "<h1>Order</h1>").unwrap();
         h.state_mut().editor_workflows.related = vec![related.clone()];
         h.run_steps(2);
