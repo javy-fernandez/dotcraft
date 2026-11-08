@@ -11,6 +11,7 @@ pub mod git;
 pub mod http_window;
 pub mod main_menu;
 pub mod markdown;
+pub mod monitoring;
 pub mod new_project;
 pub mod nuget;
 pub mod header;

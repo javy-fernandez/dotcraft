@@ -133,6 +133,7 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Zoom In"), ZoomIn),
         (tr("Zoom Out"), ZoomOut),
         (tr("Reset Zoom"), ZoomReset),
+        (tr("Bookmarks"), ShowBookmarks),
         (tr("Collapse All"), FoldAll),
         (tr("Expand All"), UnfoldAll),
     ]
@@ -306,6 +307,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         Resume => ico::RESUME,
         Evaluate => ico::EVALUATE,
         ToggleBreakpoint => ico::BREAKPOINT,
+        ToggleBookmark | ShowBookmarks => ico::BOOKMARK,
         ShowSettings => ico::SETTINGS,
         Find | SearchEverywhere => ico::SEARCH,
         Replace | ReplaceInFiles => ico::REPLACE,

@@ -6,6 +6,16 @@ This is a broad capability inventory, not a claim of exhaustive action-by-action
 individual inspections, context actions, shortcuts, plugin features and platform variants
 require their own follow-up breakdowns. No Rider source code or proprietary assets are reused.
 
+## Upstream integration audit (2026-11-08)
+
+Original repository delivery is tracked in [upstream PR 108](https://github.com/javy-fernandez/dotcraft/pull/108).
+The original `main` is now `9e849cd` (0.4.0). Historical verified counts below apply to the
+fork's documented feature snapshots; they are not fresh validation of the upstream merge.
+The new main already contains coverage, profiling, HTTP/Endpoints, local history,
+bookmarks, hierarchies, and templates. Located upstream implementations are marked existing
+or partial below; no new runtime/platform parity is inferred from their presence.
+See [upstream integration evidence](docs/implementation/upstream-integration.md) for current checks.
+
 ## Status rules
 
 | Status | Meaning |
@@ -23,10 +33,10 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 33 |
-| 🚧 In progress | 14 |
-| 🟢 Existing | 71 |
-| 🔁 Reuse candidate | 28 |
-| ⬜ Backlog | 227 |
+| 🚧 In progress | 15 |
+| 🟢 Existing | 83 |
+| 🔁 Reuse candidate | 25 |
+| ⬜ Backlog | 217 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -199,7 +209,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-22 | Import completion | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-23 | Live templates editor | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-24 | Postfix templates | ⬜ | Implement with integration and UI acceptance evidence. |
-| C-25 | Surround with templates | ⬜ | Implement with integration and UI acceptance evidence. |
+| C-25 | Surround with templates | 🟢 | Upstream 0.4.0 includes built-in Surround With templates; revalidate on a real .NET fixture. |
 | C-26 | Generate constructors and members | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-27 | Override and implement members | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-28 | Code cleanup profiles | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -233,13 +243,13 @@ Source / reuse boundary: `crates/rc-app/src/search.rs; crates/rc-search; crates/
 | D-08 | Replace in files | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-09 | File structure | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-10 | Navigation history | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| D-11 | Type hierarchy | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| D-12 | Call hierarchy | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| D-11 | Type hierarchy | 🟢 | Upstream 0.4.0 includes a Roslyn type hierarchy; integration/runtime validation remains pending. |
+| D-12 | Call hierarchy | 🟢 | Upstream 0.4.0 includes a Roslyn call hierarchy; integration/runtime validation remains pending. |
 | D-13 | Scope-aware search | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | D-14 | Stack trace navigation | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | D-15 | Navigate to base and derived symbols | ⬜ | Implement with integration and UI acceptance evidence. |
 | D-16 | Related files navigation | ⬜ | Implement with integration and UI acceptance evidence. |
-| D-17 | Bookmarks and favorites | ⬜ | Implement with integration and UI acceptance evidence. |
+| D-17 | Bookmarks and favorites | 🚧 | Upstream bookmarks and mnemonic navigation exist; favorites and broader acceptance remain pending. |
 | D-18 | File nesting | ⬜ | Implement with integration and UI acceptance evidence. |
 | D-19 | Assembly explorer | ⬜ | Implement with integration and UI acceptance evidence. |
 | D-20 | Library decompilation | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -383,15 +393,15 @@ Source / reuse boundary: `crates/rc-dotnet/src/test.rs; crates/rc-app/src/ui/run
 | H-13 | Parameterized test navigation | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-14 | Test playlists | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-15 | Test impact analysis | ⬜ | Implement with integration and UI acceptance evidence. |
-| H-16 | Code coverage collection | ⬜ | Implement with integration and UI acceptance evidence. |
-| H-17 | Coverage gutter | ⬜ | Implement with integration and UI acceptance evidence. |
-| H-18 | Coverage reports | ⬜ | Implement with integration and UI acceptance evidence. |
+| H-16 | Code coverage collection | 🟢 | Upstream coverlet collection exists; revalidate SDK/tool prerequisites and a real test run. |
+| H-17 | Coverage gutter | 🟢 | Upstream coverage gutter exists; integration and real coverage validation remain pending. |
+| H-18 | Coverage reports | 🟢 | Upstream coverage report view exists; revalidate with a real .NET coverage run. |
 | H-19 | Coverage thresholds | ⬜ | Implement with integration and UI acceptance evidence. |
-| H-20 | CPU profiling | ⬜ | Implement with integration and UI acceptance evidence. |
+| H-20 | CPU profiling | 🟢 | Upstream EventPipe CPU sampling exists; runtime/platform validation remains pending. |
 | H-21 | Allocation profiling | ⬜ | Implement with integration and UI acceptance evidence. |
-| H-22 | Memory snapshots | ⬜ | Implement with integration and UI acceptance evidence. |
+| H-22 | Memory snapshots | 🟢 | Upstream GC memory snapshots exist; runtime/platform validation remains pending. |
 | H-23 | Profiling comparison | ⬜ | Implement with integration and UI acceptance evidence. |
-| H-24 | Application monitoring | ⬜ | Implement with integration and UI acceptance evidence. |
+| H-24 | Application monitoring | 🟢 | Upstream application monitoring follows the selected runtime process and counters; merged runtime/platform validation remains pending. |
 | H-25 | Performance issue detection | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-26 | BenchmarkDotNet integration | ⬜ | Implement with integration and UI acceptance evidence. |
 
@@ -434,7 +444,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-31 | Mercurial integration | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-32 | Perforce integration | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-33 | Azure DevOps integration | ⬜ | Implement with integration and UI acceptance evidence. |
-| I-34 | Local history | ⬜ | Implement with integration and UI acceptance evidence. |
+| I-34 | Local history | 🟢 | Upstream local history, comparison, and restoration exist; integration validation remains pending. |
 
 ## J. Web, services and databases
 
@@ -447,10 +457,10 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-03 | JSON syntax parsing | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | J-04 | Markdown preview | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | J-05 | HTTP client | 🚧 | PRs 13 and 15 verify basic HTTP execution, cancellation and inline variables; advanced HTTP integrations remain pending. |
-| J-06 | HTTP environment variables | 🚧 | PR 15 verifies inline file variables only; environment files and generated variables remain pending. |
+| J-06 | HTTP environment variables | 🚧 | The bounded scratchpad inline variables have historical fork validation. Upstream HTTP Client also implements environment files and dynamic variables; revalidate those separately on this merged base. |
 | J-07 | Database connections and SQL console | 🚧 | PR 16 verifies read-only SQLite connections and explicit bounded SQL; writes, persistent sessions and other engines remain pending. |
 | J-08 | SQL injection support | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| J-09 | ASP.NET endpoints explorer | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| J-09 | ASP.NET endpoints explorer | 🟢 | Upstream ASP.NET endpoint scanning and HTTP generation exist; fixture validation remains pending. |
 | J-10 | Container tools | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | J-11 | ASP.NET MVC navigation | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-12 | ASP.NET route analysis | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -464,7 +474,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-20 | npm yarn and pnpm | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-21 | Browser debugging | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-22 | Web test runners | ⬜ | Implement with integration and UI acceptance evidence. |
-| J-23 | REST request generation | ⬜ | Implement with integration and UI acceptance evidence. |
+| J-23 | REST request generation | 🟢 | Upstream Endpoints generates HTTP request files from ASP.NET routes; merged fixture/runtime validation remains pending. |
 | J-24 | OpenAPI support | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-25 | gRPC client | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-26 | WebSocket client | ⬜ | Implement with integration and UI acceptance evidence. |

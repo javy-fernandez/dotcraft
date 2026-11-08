@@ -223,6 +223,39 @@ fn handshake_order_stops_caches_watches_and_exit() {
 }
 
 #[test]
+fn attached_session_disconnects_without_terminating_the_target() {
+    struct Target(std::process::Child);
+    impl Drop for Target {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let mut target = Target(std::process::Command::new("python3")
+        .args(["-c", "import time; time.sleep(60)"]).spawn().unwrap());
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, log) = fake(dir.path(), "late");
+    let mut session = DebugSession::start(adapter, DebugTarget::Attach { pid: target.0.id() },
+        DebugOptions::default(), Breakpoints::new(), Waker::noop());
+    let mut events = Vec::new();
+    pump_until(&mut session, &mut events, stopped);
+    assert!(session.is_attached());
+    assert_eq!(commands(&log)[..2], ["initialize", "attach"]);
+    assert_eq!(requests(&log)[1]["arguments"]["processId"], target.0.id());
+    let client = session.client().unwrap().clone();
+    session.stop();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !client.has_exited() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(client.has_exited(), "adapter did not disconnect");
+    let requests = requests(&log);
+    let disconnect = requests.iter().find(|request| request["command"] == "disconnect").unwrap();
+    assert_eq!(disconnect["arguments"]["terminateDebuggee"], false);
+    assert!(target.0.try_wait().unwrap().is_none(), "detach terminated the existing target");
+}
+
+#[test]
 fn logpoints_and_hit_conditions_are_emulated() {
     let dir = tempfile::tempdir().unwrap();
     let (adapter, log) = fake(dir.path(), "early");

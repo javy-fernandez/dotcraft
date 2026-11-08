@@ -2591,6 +2591,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ntapi"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3b335231dfd352ffb0f8017f3b6027a4917f7df785ea2143d8af2adc66980ae"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "nucleo-matcher"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2799,6 +2808,16 @@ dependencies = [
  "bitflags 2.13.2",
  "block2 0.6.2",
  "objc2 0.6.5",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-io-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
+dependencies = [
+ "libc",
  "objc2-core-foundation",
 ]
 
@@ -3543,7 +3562,7 @@ dependencies = [
 
 [[package]]
 name = "rc-app"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -3557,6 +3576,7 @@ dependencies = [
  "embed-resource",
  "fallible-iterator",
  "image",
+ "libc",
  "muda",
  "objc2 0.6.5",
  "objc2-foundation 0.3.2",
@@ -3576,14 +3596,16 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sysinfo",
  "tempfile",
  "tokio",
  "wgpu",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "rc-core"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
@@ -3602,7 +3624,7 @@ dependencies = [
 
 [[package]]
 name = "rc-dap"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "dunce",
@@ -3622,7 +3644,7 @@ dependencies = [
 
 [[package]]
 name = "rc-dotnet"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "dunce",
@@ -3638,7 +3660,7 @@ dependencies = [
 
 [[package]]
 name = "rc-editor"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "criterion",
  "egui",
@@ -3652,7 +3674,7 @@ dependencies = [
 
 [[package]]
 name = "rc-kit"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "eframe",
  "egui",
@@ -3668,7 +3690,7 @@ dependencies = [
 
 [[package]]
 name = "rc-lsp"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "lsp-types",
@@ -3687,7 +3709,7 @@ dependencies = [
 
 [[package]]
 name = "rc-search"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "criterion",
  "crossbeam-channel",
@@ -3706,7 +3728,7 @@ dependencies = [
 
 [[package]]
 name = "rc-syntax"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "criterion",
  "crossbeam-channel",
@@ -3726,7 +3748,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -3741,7 +3763,7 @@ dependencies = [
 
 [[package]]
 name = "rc-text"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "proptest",
  "ropey",
@@ -3751,7 +3773,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vcs"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "criterion",
  "dunce",
@@ -4608,6 +4630,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8eab9a99a024a169fe8a903cf9d4a3b3601109bcc13bd9e3c6fff259138626c4"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "sysinfo"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e8a3edbe0394ce115f3917a00349dd242be09eb5a091ed509eaf67b55cfb8a8"
+dependencies = [
+ "libc",
+ "memchr",
+ "ntapi",
+ "objc2-core-foundation",
+ "objc2-io-kit",
+ "windows",
 ]
 
 [[package]]

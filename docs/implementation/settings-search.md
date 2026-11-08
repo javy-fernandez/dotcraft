@@ -35,10 +35,11 @@ for this new hint; existing translated settings and page labels are reused.
 Run the headless regression tests without a .NET SDK or language server:
 
 ```sh
-cargo test -p rc-app settings_results_ -- --nocapture
+cargo test -p rc-app --locked --offline --target-dir /home/rafael-mendes/Documentos/dotcraft/target/upstream-git --jobs 2 settings_results -- --nocapture
 ```
 
-Verified result: two tests passed.
+Verified on November 8, 2026, against original upstream `main` commit
+`9e849cda99043fce68e8896d64a2608ff78141c8`: two tests passed on Linux.
 
 - `ui::search_popup::tests::settings_results_open_each_existing_page_from_search_everywhere`
   opens all four destinations with Enter from All and with a pointer click from Actions.
@@ -47,13 +48,20 @@ Verified result: two tests passed.
 - `ui::search_popup::tests::settings_results_stay_out_of_file_type_and_symbol_searches`
   verifies exclusions from file, type, and symbol searches and the empty All search.
 
-Translation coverage also passed:
+All five translation invariant checks also passed:
 
 ```sh
-cargo test -p rc-app -p rc-kit every_text_in_the_code_has_a_translation --offline
+cargo test -p rc-app -p rc-kit --locked --offline --target-dir /home/rafael-mendes/Documentos/dotcraft/target/upstream-git --jobs 2 i18n::tests
 ```
 
 Including `rc-app` enables the Linux window-platform dependencies needed by the shared UI crates.
 
 These tests exercise native egui widgets headlessly; they do not establish screen-reader
 support or operating-system-specific desktop behavior.
+
+## Provenance
+
+Ported from fork PR 12, implementation commit `9218232d9c78b964105654ec5323da68118aa2ea`,
+with current upstream action registrations preserved. No external code, assets, or new
+dependencies are introduced. The locale merge preserves every existing upstream value;
+the TSV importer reproduces the single new English fallback hint.

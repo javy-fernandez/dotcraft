@@ -3,6 +3,7 @@ name = "rc-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "DotCraft: a lightweight native IDE for .NET"
 
 [[bin]]
@@ -13,6 +14,8 @@ path = "src/main.rs"
 rusqlite = { version = "=0.40.1", features = ["bundled", "hooks", "limits", "extra_check"] }
 fallible-iterator = "0.3"
 dunce.workspace = true
+tokio.workspace = true
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "system-proxy", "http2"] }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -31,20 +34,23 @@ rc-term.workspace = true
 rc-search.workspace = true
 rc-vcs.workspace = true
 rc-dap.workspace = true
-tokio.workspace = true
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2"] }
 rfd = "0.17"
 dirs = "6"
 muda = { version = "0.21", default-features = false }
 egui_commonmark = { version = "0.25", default-features = false, features = ["pulldown_cmark", "load-images"] }
 egui_extras = { version = "0.36", default-features = false, features = ["image", "file"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
+sysinfo = { version = "0.40.1", default-features = false, features = ["system"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSURL", "NSString"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Time"] }
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "wgsl"] }
 
 # Linux: Vulkan (or OpenGL ES where there is none), on X11 and Wayland.

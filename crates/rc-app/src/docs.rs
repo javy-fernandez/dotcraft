@@ -76,6 +76,10 @@ pub struct Docs {
     /// Recently opened files, most recent first (⌘E).
     pub recent: Vec<PathBuf>,
     styles: StyleWorker,
+    /// Bookmarks of the files that aren't open (open ones live in their editor).
+    pub bookmarks: std::collections::BTreeMap<PathBuf, std::collections::BTreeMap<usize, Option<char>>>,
+    /// Record Local History on saves and outside changes (off in unit tests: no home folder).
+    pub history: bool,
 }
 
 /// A single background reader per document collection; no filesystem work on the UI thread.
@@ -109,6 +113,14 @@ impl Drop for StyleWorker {
     }
 }
 
+/// A bookmark anywhere in the workspace.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Bookmark {
+    pub path: PathBuf,
+    pub line: usize,
+    pub mnemonic: Option<char>,
+}
+
 /// Reads a text file: (text without BOM, had BOM). Binary files are refused.
 pub fn read_text(path: &Path) -> Result<(String, bool, Option<SystemTime>), String> {
     let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
@@ -136,7 +148,48 @@ impl Docs {
     }
 
     pub fn with_waker(pool: ParserPool, waker: rc_core::Waker) -> Self {
-        Docs { list: Vec::new(), active: None, next_id: 1, pool, recent: Vec::new(), styles: StyleWorker::new(waker) }
+        Docs { list: Vec::new(), active: None, next_id: 1, pool, recent: Vec::new(), styles: StyleWorker::new(waker), bookmarks: Default::default(), history: false }
+    }
+
+    /// Every bookmark: open files' from their editors, the others' from the store; by file and line.
+    pub fn all_bookmarks(&self) -> Vec<Bookmark> {
+        let mut out: Vec<Bookmark> = self.list.iter().flat_map(|d| d.editor.bookmarks.iter().map(|(l, m)| Bookmark { path: d.path.clone(), line: *l, mnemonic: *m })).collect();
+        out.extend(self.bookmarks.iter().flat_map(|(p, b)| b.iter().map(|(l, m)| Bookmark { path: p.clone(), line: *l, mnemonic: *m })));
+        out.sort_by(|a, b| a.path.cmp(&b.path).then(a.line.cmp(&b.line)));
+        out
+    }
+
+    /// Sets or removes the bookmark of `path`:`line`; a mnemonic moves from wherever it was.
+    pub fn set_bookmark(&mut self, path: &Path, line: usize, mark: Option<Option<char>>) {
+        if let Some(Some(c)) = mark {
+            // The old line keeps a plain bookmark.
+            let maps = self.list.iter_mut().map(|d| &mut d.editor.bookmarks).chain(self.bookmarks.values_mut());
+            for map in maps {
+                for m in map.values_mut().filter(|m| **m == Some(c)) {
+                    *m = None;
+                }
+            }
+        }
+        let map = match self.index_of(path) {
+            Some(i) => &mut self.list[i].editor.bookmarks,
+            None => self.bookmarks.entry(path.to_path_buf()).or_default(),
+        };
+        match mark {
+            Some(m) => {
+                map.insert(line, m);
+            }
+            None => {
+                map.remove(&line);
+            }
+        }
+        self.bookmarks.retain(|_, b| !b.is_empty());
+    }
+
+    /// Keeps a closing document's bookmarks.
+    fn stash_bookmarks(&mut self, doc: &Doc) {
+        if !doc.editor.bookmarks.is_empty() {
+            self.bookmarks.insert(doc.path.clone(), doc.editor.bookmarks.clone());
+        }
     }
 
     pub fn index_of(&self, path: &Path) -> Option<usize> {
@@ -176,6 +229,10 @@ impl Docs {
             editor.read_only = true;
         }
         let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
+        if let Some(marks) = self.bookmarks.remove(&path) {
+            let lines = editor.buffer.len_lines();
+            editor.bookmarks = marks.into_iter().filter(|(l, _)| *l < lines).collect();
+        }
         let detected_indent = editor.indent.clone();
         let _ = self.styles.requests.send((id, 0, path.clone()));
         self.list.push(Doc { detected_indent, style_revision: 0, resolved_style: Default::default(), editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view });
@@ -197,7 +254,8 @@ impl Docs {
         match old {
             Some(o) => {
                 let doc = self.list.remove(i);
-                self.list[o] = doc;
+                let old = std::mem::replace(&mut self.list[o], doc);
+                self.stash_bookmarks(&old);
                 self.activate(o);
                 Ok(o)
             }
@@ -232,6 +290,7 @@ impl Docs {
             return None;
         }
         let doc = self.list.remove(i);
+        self.stash_bookmarks(&doc);
         self.active = match self.active {
             _ if self.list.is_empty() => None,
             Some(a) if a > i => Some(a - 1),
@@ -242,7 +301,14 @@ impl Docs {
     }
 
     pub fn save(&mut self, i: usize) -> Result<(), String> {
+        let history = self.history;
         let doc = &mut self.list[i];
+        // The first revision is the file as it was before DotCraft touched it.
+        if history && rc_core::local_history::revisions(&doc.path).is_empty()
+            && let Ok((old, _, _)) = read_text(&doc.path)
+        {
+            let _ = rc_core::local_history::record(&doc.path, &old, "Original");
+        }
         let mut bytes = Vec::new();
         if doc.bom {
             bytes.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
@@ -252,6 +318,9 @@ impl Docs {
         doc.editor.buffer.mark_saved();
         doc.mtime = std::fs::metadata(&doc.path).and_then(|m| m.modified()).ok();
         doc.conflict = false;
+        if history {
+            let _ = rc_core::local_history::record(&doc.path, &doc.editor.buffer.rope().to_string(), "Saved");
+        }
         Ok(())
     }
 
@@ -280,6 +349,9 @@ impl Docs {
         if doc.is_modified() {
             doc.conflict = true;
             return;
+        }
+        if self.history {
+            let _ = rc_core::local_history::record(path, &text.replace("\r\n", "\n"), "External change");
         }
         doc.reload(&text);
         doc.bom = bom;
@@ -382,6 +454,30 @@ impl Docs {
 mod tests {
     use super::*;
     use std::sync::Arc;
+
+    #[test]
+    fn editorconfig_and_upstream_bookmarks_survive_reopen_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("App.cs");
+        std::fs::write(&file, "class App {\n    int value;\n}\n").unwrap();
+        std::fs::write(dir.path().join(".editorconfig"), "root=true\n[*.cs]\nindent_size=2\nindent_style=space\n").unwrap();
+        let (wake, frames) = std::sync::mpsc::channel();
+        let mut docs = Docs::with_waker(ParserPool::new(Arc::new(|| {})), rc_core::Waker::new(move || { let _ = wake.send(()); }));
+        let index = docs.open(&file).unwrap();
+        frames.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        docs.poll_parses();
+        docs.set_bookmark(&file, 1, Some(Some('A')));
+        assert_eq!(docs.list[index].editor.indent.unit, "  ");
+        docs.close(index).unwrap();
+        assert_eq!(docs.all_bookmarks()[0].mnemonic, Some('A'));
+        let index = docs.open(&file).unwrap();
+        frames.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        docs.poll_parses();
+        assert_eq!(docs.list[index].editor.bookmarks.get(&1), Some(&Some('A')));
+        assert_eq!(docs.list[index].editor.indent.unit, "  ");
+        assert!(!docs.list[index].is_modified());
+        assert!(!docs.history, "test document collections must keep history opt-in");
+    }
 
     #[test]
     fn editorconfig_tab_sized_spaces_use_the_editor_tab_width() {
@@ -583,6 +679,33 @@ mod tests {
         docs.move_tab(2, 0);
         assert_eq!(docs.list.iter().map(|d| d.name()).collect::<Vec<_>>(), ["d.cs", "a.cs", "c.cs"]);
         assert_eq!(docs.active_doc().unwrap().name(), "d.cs");
+    }
+
+    #[test]
+    fn bookmarks_survive_closing_and_mnemonics_are_unique() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let (a, b) = (root.join("A.cs"), root.join("B.cs"));
+        std::fs::write(&a, "one\ntwo\nthree\n").unwrap();
+        std::fs::write(&b, "x\ny\n").unwrap();
+        let mut docs = Docs::new(ParserPool::new(Arc::new(|| {})));
+        docs.open(&a).unwrap();
+        docs.set_bookmark(&a, 1, Some(Some('1')));
+        docs.set_bookmark(&b, 0, Some(None));
+        // Closed: kept aside, and back when the file opens again.
+        docs.close(0);
+        assert_eq!(docs.all_bookmarks().len(), 2);
+        let i = docs.open(&a).unwrap();
+        assert_eq!(docs.list[i].editor.bookmarks.get(&1), Some(&Some('1')));
+        // A mnemonic moves from where it was.
+        docs.set_bookmark(&b, 1, Some(Some('1')));
+        let marks = docs.all_bookmarks();
+        assert_eq!(marks.iter().filter(|m| m.mnemonic == Some('1')).count(), 1);
+        assert!(marks.iter().any(|m| m.path == b && m.line == 1 && m.mnemonic == Some('1')));
+        assert!(marks.iter().any(|m| m.path == a && m.line == 1 && m.mnemonic.is_none()));
+        // Edits above move the bookmark with its line.
+        docs.list[i].editor.replace(0, 0, "zero\n");
+        assert!(docs.list[i].editor.bookmarks.contains_key(&2));
     }
 
     #[test]

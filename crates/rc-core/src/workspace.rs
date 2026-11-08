@@ -101,13 +101,20 @@ pub struct FileNode {
 
 /// Children of `dir`: folders first, then files, each sorted case-insensitively.
 pub fn list_dir(dir: &Path) -> Vec<FileNode> {
+    list_dir_with(dir, false)
+}
+
+/// Like [`list_dir`]; with `all` (the explorer's Show All Files) it also lists what
+/// [`is_hidden`] hides, except `.git` and the OS's own files.
+pub fn list_dir_with(dir: &Path, all: bool) -> Vec<FileNode> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     let mut out: Vec<FileNode> = entries
         .flatten()
         .filter_map(|e| {
             let name = e.file_name().to_string_lossy().into_owned();
             let is_dir = e.file_type().ok()?.is_dir();
-            (!is_hidden(&name, is_dir)).then(|| FileNode { path: e.path(), name, is_dir })
+            let shown = if all { !(is_dir && name == ".git") && !HIDDEN_FILES.contains(&name.as_str()) } else { !is_hidden(&name, is_dir) };
+            shown.then(|| FileNode { path: e.path(), name, is_dir })
         })
         .collect();
     out.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));

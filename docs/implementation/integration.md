@@ -1,5 +1,7 @@
 # Reviewing the combined implementation
 
+The branch now integrates original upstream `main` at `9e849cd` for [upstream PR 108](https://github.com/javy-fernandez/dotcraft/pull/108). See [current integration evidence](upstream-integration.md) before using the historical validation counts below. Upstream HTTP Client/Endpoints, coverage, monitoring, bookmarks, templates, and history are retained. The fork HTTP workflow is separately named HTTP Scratchpad.
+
 Each feature has its own pull request, linked from [the implementation checklist](../features.md). Some changes touch the same app state, menu, settings dialog, or locale catalogs. Review and merge those changes with their documented dependencies rather than replacing a shared file with a single feature's version.
 
 The [combined integration branch](https://github.com/RafaelMendes1407/dotcraft/tree/integration/rider-implementation-batch) provides the assembled source for testing these changes together. It is a snapshot for review, while the feature PRs remain separate and unmerged.

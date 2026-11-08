@@ -60,6 +60,7 @@ pub struct Vcs {
     pub amend: bool,
     pub excluded: BTreeSet<String>,
     pub busy: Option<&'static str>,
+    operation: Option<tokio::task::AbortHandle>,
     pub error: Option<String>,
     inbox: Inbox<VcsEvent>,
     waker: Waker,
@@ -93,6 +94,7 @@ impl Vcs {
             amend: false,
             excluded: BTreeSet::new(),
             busy: None,
+            operation: None,
             error: None,
             inbox: Inbox::new(waker.clone()),
             waker,
@@ -212,14 +214,28 @@ impl Vcs {
         self.busy = Some(what);
         self.error = None;
         let out = self.inbox.sender();
+        let task = Runtime::spawn(f);
+        self.operation = Some(task.abort_handle());
         Runtime::spawn(async move {
-            let r = f.await;
+            let r = match task.await {
+                Ok(result) => result,
+                Err(error) if error.is_cancelled() => Err(rc_vcs::GitError::Cancelled),
+                Err(error) => Err(rc_vcs::GitError::Parse(error.to_string())),
+            };
             out.send(VcsEvent::Done(what, r.err().map(|e| {
                 let (tpl, args) = e.user_message();
                 let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
                 trf(tpl, &args)
             })));
         });
+    }
+
+    /// Cancels the current operation. The completion event releases the busy state only
+    /// after its future has been dropped, which also kills its active Git process.
+    pub fn cancel_operation(&self) {
+        if let Some(operation) = &self.operation {
+            operation.abort();
+        }
     }
 
     /// Commits the included changes (and pushes when `push`).
@@ -420,6 +436,7 @@ impl Vcs {
                 }
                 VcsEvent::Done(what, err) => {
                     self.busy = None;
+                    self.operation = None;
                     match err {
                         Some(e) => {
                             self.error = Some(e.clone());
@@ -517,6 +534,11 @@ impl Vcs {
         !self.status.as_ref().is_some_and(|s| s.entries.iter().any(|e| e.path == rel))
     }
 
+    /// A side-by-side diff of two texts in the editor area (Local History uses it too).
+    pub fn show_diff(&mut self, title: String, path: PathBuf, left: &str, right: &str, dark: bool) {
+        self.diff = Some(self.make_diff(title, path, left, right, dark));
+    }
+
     fn make_diff(&mut self, title: String, path: PathBuf, left: &str, right: &str, dark: bool) -> DiffView {
         let sbs = rc_vcs::SideBySide::compute(left, right);
         let ll: Vec<&str> = left.split('\n').collect();
@@ -563,6 +585,12 @@ impl Vcs {
     }
 }
 
+impl Drop for Vcs {
+    fn drop(&mut self) {
+        self.cancel_operation();
+    }
+}
+
 fn short_author(a: &str) -> String {
     a.split_whitespace().next().unwrap_or(a).to_string()
 }
@@ -586,6 +614,48 @@ pub fn format_date(secs: i64) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cancelling_and_closing_stop_background_git_operations() {
+        use super::*;
+        use std::sync::{Arc, mpsc};
+
+        struct NotifyOnDrop(mpsc::Sender<()>);
+        impl Drop for NotifyOnDrop {
+            fn drop(&mut self) {
+                let _ = self.0.send(());
+            }
+        }
+
+        for close in [false, true] {
+            let mut vcs = Vcs::new(Waker::noop());
+            let (started, start) = mpsc::channel();
+            let (dropped, drop_event) = mpsc::channel();
+            vcs.op("stash_push", async move {
+                let _guard = NotifyOnDrop(dropped);
+                started.send(()).unwrap();
+                std::future::pending::<Result<(), rc_vcs::GitError>>().await
+            });
+            start.recv_timeout(Duration::from_secs(3)).unwrap();
+            if close {
+                vcs.close();
+                assert!(vcs.busy.is_none());
+            } else {
+                vcs.cancel_operation();
+            }
+            drop_event.recv_timeout(Duration::from_secs(3)).unwrap();
+            if !close {
+                let mut docs = Docs::new(rc_syntax::ParserPool::new(Arc::new(|| {})));
+                let deadline = Instant::now() + Duration::from_secs(3);
+                while vcs.busy.is_some() && Instant::now() < deadline {
+                    vcs.update(&mut docs, true);
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                assert!(vcs.busy.is_none());
+                assert!(vcs.error.is_some());
+            }
+        }
+    }
+
     #[test]
     fn dates() {
         assert_eq!(super::format_date(0), "1970-01-01");

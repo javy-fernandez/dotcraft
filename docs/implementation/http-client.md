@@ -1,3 +1,8 @@
+> Upstream integration note (2026-11-08): this bounded explicit-send tool is named
+> **HTTP Scratchpad**. Upstream 0.4.0's existing HTTP Client, editor gutter actions,
+> environments, and Endpoints integration remain separate and unchanged by this tool.
+> This note's earlier tests describe the fork snapshot; see [current integration evidence](upstream-integration.md).
+
 # HTTP Client
 
 DotCraft can send requests from the active `.http` or `.rest` editor buffer and inspect the response in the HTTP Client tool window. Requests run only after an explicit Send Request action. Opening or editing a request file performs no network activity.

@@ -1,0 +1,22 @@
+# Memory snapshot and CPU profiler (Monitoring). Import: python3 scripts/i18n_tsv.py app scripts/i18n/profiler.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Charts	Gráficas	Graphiques	Gráficos	Diagramme	Wykresy	图表	グラフ
+Stop Profiling	Detener profiling	Arrêter le profilage	Parar profiling	Profiling beenden	Zatrzymaj profilowanie	停止分析	プロファイリングを停止
+Start CPU Profiling	Iniciar profiling de CPU	Démarrer le profilage CPU	Iniciar profiling de CPU	CPU-Profiling starten	Rozpocznij profilowanie CPU	开始 CPU 分析	CPU プロファイリングを開始
+Get Memory Snapshot	Tomar instantánea de memoria	Prendre un instantané mémoire	Capturar snapshot de memória	Speicher-Snapshot erstellen	Zrób zrzut pamięci	获取内存快照	メモリスナップショットを取得
+Taking a memory snapshot (it runs a full garbage collection)…	Tomando una instantánea de memoria (fuerza una recolección completa)…	Prise d'un instantané mémoire (une collecte complète est lancée)…	Capturando snapshot de memória (executa uma coleta completa)…	Speicher-Snapshot wird erstellt (mit vollständiger Garbage Collection)…	Wykonywanie zrzutu pamięci (pełne odśmiecanie)…	正在获取内存快照（会执行一次完整垃圾回收）…	メモリスナップショットを取得中（フル GC を実行します）…
+No memory snapshot	Sin instantánea de memoria	Aucun instantané mémoire	Nenhum snapshot de memória	Kein Speicher-Snapshot	Brak zrzutu pamięci	没有内存快照	メモリスナップショットはありません
+Get a snapshot of the running program to see which types use its memory.	Toma una instantánea del programa en ejecución para ver qué tipos ocupan su memoria.	Prenez un instantané du programme en cours pour voir quels types utilisent sa mémoire.	Capture um snapshot do programa em execução para ver quais tipos usam a memória.	Erstellen Sie einen Snapshot des laufenden Programms, um zu sehen, welche Typen den Speicher belegen.	Zrób zrzut działającego programu, aby zobaczyć, które typy zajmują pamięć.	获取运行中程序的快照，查看哪些类型占用内存。	実行中のプログラムのスナップショットを取得し、どの型がメモリを使っているか確認します。
+{objects} objects · {size}	{objects} objetos · {size}	{objects} objets · {size}	{objects} objetos · {size}	{objects} Objekte · {size}	{objects} obiektów · {size}	{objects} 个对象 · {size}	{objects} オブジェクト · {size}
+Type	Tipo	Type	Tipo	Typ	Typ	类型	型
+Objects	Objetos	Objets	Objetos	Objekte	Obiekty	对象	オブジェクト
+Size	Tamaño	Taille	Tamanho	Größe	Rozmiar	大小	サイズ
+Profiling… {secs} s. Stop to see where the time goes.	Haciendo profiling… {secs} s. Detén para ver en qué se va el tiempo.	Profilage… {secs} s. Arrêtez pour voir où passe le temps.	Fazendo profiling… {secs} s. Pare para ver onde o tempo é gasto.	Profiling… {secs} s. Beenden Sie es, um zu sehen, wohin die Zeit geht.	Profilowanie… {secs} s. Zatrzymaj, aby zobaczyć, gdzie idzie czas.	正在分析… {secs} 秒。停止后可查看时间花在哪里。	プロファイリング中… {secs} 秒。停止すると時間の使われ方を表示します。
+No CPU profile	Sin perfil de CPU	Aucun profil CPU	Nenhum perfil de CPU	Kein CPU-Profil	Brak profilu CPU	没有 CPU 分析结果	CPU プロファイルはありません
+Start profiling the running program, use it for a while and stop to see its hot methods.	Inicia el profiling del programa en ejecución, úsalo un rato y detenlo para ver sus métodos más costosos.	Démarrez le profilage du programme en cours, utilisez-le un moment et arrêtez pour voir ses méthodes les plus coûteuses.	Inicie o profiling do programa em execução, use-o um pouco e pare para ver seus métodos mais custosos.	Starten Sie das Profiling des laufenden Programms, nutzen Sie es eine Weile und beenden Sie es, um die teuersten Methoden zu sehen.	Rozpocznij profilowanie działającego programu, używaj go przez chwilę i zatrzymaj, aby zobaczyć najkosztowniejsze metody.	开始分析运行中的程序，使用一段时间后停止，即可查看热点方法。	実行中のプログラムのプロファイリングを開始し、しばらく使ってから停止するとホットなメソッドが表示されます。
+{n} samples	{n} muestras	{n} échantillons	{n} amostras	{n} Stichproben	{n} próbek	{n} 个样本	{n} サンプル
+Hot Spots	Puntos calientes	Points chauds	Pontos críticos	Hotspots	Gorące punkty	热点	ホットスポット
+Call Tree	Árbol de llamadas	Arbre des appels	Árvore de chamadas	Aufrufbaum	Drzewo wywołań	调用树	呼び出しツリー
+Method	Método	Méthode	Método	Methode	Metoda	方法	メソッド
+Self	Propio	Propre	Próprio	Eigen	Własny	自身	自身
+Total	Total	Total	Total	Gesamt	Łącznie	总计	合計

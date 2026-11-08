@@ -6,28 +6,52 @@ The existing netcoredbg adapter is located or downloaded on first use. Attachmen
 
 Closing or switching workspaces stops the debugger and cancels deferred attachment. Stop is available in both toolbars while an adapter download is pending; cancellation discards queued completion events so an old download cannot start a new session afterward.
 
-## Validation
+## Upstream integration and validation
+
+This slice ports fork branch `feat/attach-to-process` at
+`d675eafa2a1eb857c89fe43cbf528dd3a63f9eee` to original DotCraft 0.4.0,
+upstream commit `9e849cda99043fce68e8896d64a2608ff78141c8`. It preserves
+upstream's About/update dialog, templates, bookmarks, monitoring, coverage,
+HTTP/Endpoints tools, and existing locale entries. It does not depend on the
+fork's inventory or other feature branches.
+
+Use an isolated Cargo target directory for this checkout:
 
 ```sh
-cargo test -p rc-app attach_ --offline
-cargo test -p rc-app validates_external_process_ids --offline
-cargo test -p rc-app debugger::tests --offline
-cargo test -p rc-dap --lib --offline
-cargo test -p rc-app restart_is_disabled_for_attach_sessions_and_available_for_launches --offline
-cargo test -p rc-app -p rc-kit every_text_in_the_code_has_a_translation --offline
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo test -p rc-dap --lib --locked --offline --target-dir target/upstream-attach --jobs 1
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo test -p rc-app attach_ --locked --offline --target-dir target/upstream-attach --jobs 1
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo test -p rc-app -p rc-kit i18n::tests --locked --offline --target-dir target/upstream-attach --jobs 1
 ```
 
-The attach action, workspace requirement for button and Enter activation, invalid PID rejection, PID parsing, workspace closure, stale download events, Stop interactions, and attach-versus-launch Restart behavior have passed targeted tests. The attach action also compiles independently from the parallel HTTP, web, stash, settings, and stripe changes.
+Fresh checks of this upstream port passed on Linux: 19 DAP unit tests, seven
+attachment/PID/headless application tests, and five translation invariants.
+Cargo resolution used `--locked --offline` in the dedicated
+`target/upstream-attach` directory. These are targeted checks, not a full
+workspace or cross-platform validation run.
 
-The live regression requires an installed .NET 8 SDK, netcoredbg, and restored fixture dependencies:
+The headless regressions cover PID parsing, opening Attach without a run
+configuration, workspace requirements for button and Enter activation, invalid
+PID rejection before adapter startup, workspace closure, stale download events,
+Stop in both toolbars, and attach-versus-launch Restart behavior. The DAP suite
+also verifies that fake-adapter log snapshots read only completed records. A
+protocol regression attaches the scripted adapter to a controlled Python target,
+checks `terminateDebuggee=false` on disconnect, waits for adapter exit, and
+verifies that the target is still alive. This validates detach lifecycle without
+requiring a .NET installation; it does not replace live netcoredbg validation.
+
+The live regression remains explicitly ignored for hosts without an installed
+.NET 8 SDK, netcoredbg, and restored fixture dependencies:
 
 ```sh
 cargo test -p rc-app attaches_from_the_ide_and_stop_leaves_the_target_running -- --ignored --nocapture
 ```
 
-It builds and starts the sample ASP.NET application, attaches from the IDE, stops debugging, waits for the adapter to exit, and verifies the target still serves an HTTP request. Live verification passed with .NET SDK 8.0.427, ASP.NET runtime 8.0.33, and the downloaded netcoredbg adapter: one test passed in 4.63 seconds, including the HTTP 200 response after detaching. Dependencies were restored using temporary SDK, CLI-home, and NuGet directories under `/tmp`. The test stays explicitly ignored for hosts without these prerequisites.
-
-The existing live `debugs_the_cli_and_the_api_from_the_ide` regression also passed, exercising conditional breakpoints, Step Over, Run to Cursor, values, watches, evaluation, hover values, and the API launch path. The DAP unit suite passes 18 tests. Its fake-adapter log reader accepts only newline-completed records; a regression verifies that a partially appended record cannot cause a JSON parse race.
+It builds and starts the sample ASP.NET application, attaches from the IDE,
+stops debugging, waits for the adapter to exit, and verifies HTTP 200 from the
+still-running target. The fork previously recorded this live regression passing
+on Linux with SDK 8.0.427 and ASP.NET runtime 8.0.33. That historical result does
+not establish fresh live validation of the upstream port. No .NET executable is
+available on the current validation host's PATH.
 
 ## Scope
 

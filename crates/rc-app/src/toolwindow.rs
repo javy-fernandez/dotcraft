@@ -22,6 +22,14 @@ pub enum ToolWindow {
     Nuget,
     Http,
     Database,
+    Monitoring,
+    Bookmarks,
+    Todo,
+    Hierarchy,
+    LocalHistory,
+    HttpClient,
+    Endpoints,
+    Coverage,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,18 +65,26 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 15] = [
+    pub const ALL: [ToolWindow; 23] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
+        ToolWindow::Bookmarks,
         ToolWindow::Run,
         ToolWindow::Debug,
         ToolWindow::Tests,
+        ToolWindow::Coverage,
         ToolWindow::Build,
+        ToolWindow::Monitoring,
+        ToolWindow::Endpoints,
+        ToolWindow::HttpClient,
         ToolWindow::Find,
         ToolWindow::Problems,
+        ToolWindow::Todo,
         ToolWindow::Terminal,
         ToolWindow::Git,
+        ToolWindow::Hierarchy,
+        ToolWindow::LocalHistory,
         ToolWindow::Nuget,
         ToolWindow::Http,
         ToolWindow::Database,
@@ -92,6 +108,14 @@ impl ToolWindow {
             ToolWindow::Nuget => "nuget",
             ToolWindow::Http => "http",
             ToolWindow::Database => "database",
+            ToolWindow::Monitoring => "monitoring",
+            ToolWindow::Bookmarks => "bookmarks",
+            ToolWindow::Todo => "todo",
+            ToolWindow::Hierarchy => "hierarchy",
+            ToolWindow::LocalHistory => "local_history",
+            ToolWindow::HttpClient => "http_client",
+            ToolWindow::Endpoints => "endpoints",
+            ToolWindow::Coverage => "coverage",
         }
     }
 
@@ -110,8 +134,16 @@ impl ToolWindow {
             ToolWindow::Find => tr("Find"),
             ToolWindow::Notifications => tr("Notifications"),
             ToolWindow::Nuget => "NuGet",
-            ToolWindow::Http => tr("HTTP Client"),
+            ToolWindow::Http => tr("HTTP Scratchpad"),
             ToolWindow::Database => tr("Database"),
+            ToolWindow::Monitoring => tr("Monitoring"),
+            ToolWindow::Bookmarks => tr("Bookmarks"),
+            ToolWindow::Todo => "TODO",
+            ToolWindow::Hierarchy => tr("Hierarchy"),
+            ToolWindow::LocalHistory => tr("Local History"),
+            ToolWindow::HttpClient => tr("HTTP Client"),
+            ToolWindow::Endpoints => tr("Endpoints"),
+            ToolWindow::Coverage => tr("Coverage"),
         }
     }
 
@@ -132,13 +164,21 @@ impl ToolWindow {
             ToolWindow::Nuget => ico::PACKAGE,
             ToolWindow::Http => ico::TW_RUN,
             ToolWindow::Database => ico::PACKAGE,
+            ToolWindow::Monitoring => ico::TW_MONITORING,
+            ToolWindow::Bookmarks => ico::TW_BOOKMARKS,
+            ToolWindow::Todo => ico::TW_TODO,
+            ToolWindow::Hierarchy => ico::TW_HIERARCHY,
+            ToolWindow::LocalHistory => ico::HISTORY,
+            ToolWindow::HttpClient => ico::TW_HTTP,
+            ToolWindow::Endpoints => ico::TW_ENDPOINTS,
+            ToolWindow::Coverage => ico::RUN_COVERAGE,
         }
     }
 
     pub fn side(self) -> Side {
         match self {
-            ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit => Side::Left,
-            ToolWindow::Notifications => Side::Right,
+            ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit | ToolWindow::Bookmarks => Side::Left,
+            ToolWindow::Notifications | ToolWindow::Hierarchy => Side::Right,
             _ => Side::Bottom,
         }
     }
@@ -271,6 +311,20 @@ impl Dock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merged_tools_keep_distinct_session_identities() {
+        let mut ids = std::collections::BTreeSet::new();
+        for tool in ToolWindow::ALL {
+            assert!(ids.insert(tool.id()), "duplicate persistent tool identity: {}", tool.id());
+            let mut dock = Dock::default();
+            dock.show(tool);
+            let restored = Dock::from_session(&dock.to_session());
+            assert!(restored.is_open(tool), "tool lost after restoring its session: {tool:?}");
+        }
+        assert_ne!(ToolWindow::Http.id(), ToolWindow::HttpClient.id());
+        assert_ne!(ToolWindow::Http.title(), ToolWindow::HttpClient.title());
+    }
 
     #[test]
     fn one_window_per_side_and_session_round_trip() {

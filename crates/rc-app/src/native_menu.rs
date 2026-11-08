@@ -25,6 +25,7 @@ use std::sync::mpsc::{Receiver, channel};
 pub enum MenuCommand {
     Act(Action),
     About,
+    CheckUpdates,
     Quit,
     OpenProject,
     OpenFile,
@@ -34,6 +35,8 @@ pub enum MenuCommand {
     AddUsings,
     CloseProject,
     ReloadFromDisk,
+    ShowHistory,
+    RunCoverage,
     /// An entry of File › Open Recent (index into [`NativeMenu::recent_path`]).
     OpenRecent(usize),
     ClearRecent,
@@ -61,6 +64,8 @@ impl MenuCommand {
             MenuCommand::OpenProject | MenuCommand::OpenFile => ico::OPEN,
             MenuCommand::CloseProject => ico::CLOSE,
             MenuCommand::ReloadFromDisk => ico::REFRESH,
+            MenuCommand::ShowHistory => ico::HISTORY,
+            MenuCommand::RunCoverage => ico::RUN_COVERAGE,
             MenuCommand::EditRunConfig => ico::SETTINGS,
             MenuCommand::AddUsings => ico::NAMESPACE,
             MenuCommand::Undo => ico::UNDO,
@@ -422,6 +427,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         true,
         &[
             &item(MenuCommand::About, || tr("About DotCraft"), None),
+            &item(MenuCommand::CheckUpdates, || tr("Check for Updates…"), None),
             &sep(),
             &act(Action::ShowSettings, || tr("Settings…")),
             &sep(),
@@ -448,6 +454,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &sep(),
             &act(Action::SaveAll, || tr("Save All")),
             &item(MenuCommand::ReloadFromDisk, || tr("Reload from Disk"), None),
+            &item(MenuCommand::ShowHistory, || tr("Local History"), None),
             &act(Action::CloseTab, || tr("Close Tab")),
         ],
     )?;
@@ -526,6 +533,12 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::GotoTypeDeclaration, || tr("Go to Type Declaration")),
             &act(Action::FindUsages, || tr("Find Usages")),
             &act(Action::FileStructure, || tr("File Structure")),
+            &act(Action::CallHierarchy, || tr("Call Hierarchy")),
+            &act(Action::TypeHierarchy, || tr("Type Hierarchy")),
+            &sep(),
+            &act(Action::ToggleBookmark, || tr("Toggle Bookmark")),
+            &act(Action::ToggleBookmarkMnemonic, || tr("Toggle Bookmark with Mnemonic")),
+            &act(Action::ShowBookmarks, || tr("Bookmarks")),
             &sep(),
             &act(Action::NextError, || tr("Next Highlighted Error")),
             &act(Action::PreviousError, || tr("Previous Highlighted Error")),
@@ -535,6 +548,8 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         || tr("Code"),
         &[
             &act(Action::Complete, || tr("Code Completion")),
+            &act(Action::InsertLiveTemplate, || tr("Insert Live Template…")),
+            &act(Action::SurroundWith, || tr("Surround With…")),
             &act(Action::ParameterInfo, || tr("Parameter Info")),
             &act(Action::QuickDoc, || tr("Quick Documentation")),
             &act(Action::ShowIntentions, || tr("Show Context Actions")),
@@ -553,6 +568,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::AttachProcess, || tr("Attach to Process…")),
             &act(Action::StopRun, || tr("Stop")),
             &act(Action::RunTests, || tr("Run Tests")),
+            &item(MenuCommand::RunCoverage, || tr("Run All Tests with Coverage"), None),
             &item(MenuCommand::EditRunConfig, || tr("Edit Run Configuration…"), None),
             &sep(),
             &act(Action::StepOver, || tr("Step Over")),
@@ -577,7 +593,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
     )?;
     #[cfg(target_os = "macos")]
     window_menu.set_as_windows_menu_for_nsapp();
-    let help_menu = submenu(|| tr("Help"), &[&item(MenuCommand::About, || tr("About DotCraft"), None)])?;
+    let help_menu = submenu(|| tr("Help"), &[&item(MenuCommand::CheckUpdates, || tr("Check for Updates…"), None), &item(MenuCommand::About, || tr("About DotCraft"), None)])?;
     #[cfg(target_os = "macos")]
     help_menu.set_as_help_menu_for_nsapp();
 

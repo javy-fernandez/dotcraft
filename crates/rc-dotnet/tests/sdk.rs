@@ -455,6 +455,9 @@ fn runs_a_blazor_webassembly_app_with_its_dev_server() {
     let _ = s.read_to_string(&mut out);
     assert!(out.starts_with("HTTP/1.1 200"), "{out}");
     handle.stop();
+    // Waits for the kill: the test process ending first would leave the tree running.
+    let events = collect(&inbox, Duration::from_secs(30), |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
+    assert!(matches!(events.last(), Some(RunEvent::Exited { .. } | RunEvent::Failed(_))), "{:?}", events.last());
 }
 
 /// `watch`: a web app started with `dotnet watch` picks up a saved change without being
@@ -510,6 +513,9 @@ fn watch_reloads_a_web_app_after_a_change() {
     wait("the change", "Hello Hot Reload!", &mut log);
     assert!(log.contains("dotnet watch") || log.contains("watch"), "{log}");
     handle.stop();
+    // Waits for the kill: the test process ending first would leave the tree running.
+    let events = collect(&inbox, Duration::from_secs(30), |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
+    assert!(matches!(events.last(), Some(RunEvent::Exited { .. } | RunEvent::Failed(_))), "{:?}", events.last());
 }
 
 #[test]

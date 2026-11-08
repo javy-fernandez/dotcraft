@@ -39,6 +39,14 @@ pub struct InlayHint {
     pub pad_right: bool,
 }
 
+/// Coverage of a line (gutter bar while coverage is shown).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CoverageMark {
+    Covered,
+    Partial,
+    NotCovered,
+}
+
 /// Icons of the gutter's icon column (test runners, implementations…).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GutterIcon {
@@ -133,6 +141,12 @@ pub struct EditorState {
     /// Semantic colours per line (from the language server), char columns.
     pub semantic: Vec<Vec<Span>>,
     pub breakpoints: BTreeMap<usize, BreakpointKind>,
+    /// Bookmarks (F3): line → mnemonic (0-9, A-Z) or none.
+    pub bookmarks: BTreeMap<usize, Option<char>>,
+    /// The snippet whose fields Tab moves through (live templates, completion snippets).
+    pub snippet: Option<crate::snippet::Session>,
+    /// Test coverage per line: covered, partly covered (branches), not covered.
+    pub coverage: BTreeMap<usize, CoverageMark>,
     pub gutter_icons: BTreeMap<usize, GutterIcon>,
     pub line_changes: BTreeMap<usize, LineChange>,
     pub search_matches: Vec<(usize, usize)>,
@@ -191,6 +205,9 @@ impl EditorState {
             inlays: Vec::new(),
             semantic: Vec::new(),
             breakpoints: BTreeMap::new(),
+            bookmarks: BTreeMap::new(),
+            snippet: None,
+            coverage: BTreeMap::new(),
             gutter_icons: BTreeMap::new(),
             line_changes: BTreeMap::new(),
             search_matches: Vec::new(),
@@ -349,7 +366,67 @@ impl EditorState {
         self.selection = Selection::point(pos);
     }
 
+    /// Inserts a snippet over `start..end`: `\t` becomes one indent level, new lines keep the
+    /// line's indentation, and its fields are selected one after another with Tab.
+    pub fn insert_snippet(&mut self, start: usize, end: usize, body: &str) {
+        let line = self.buffer.rope().char_to_line(start);
+        let base = commands::line_indent(self.buffer.rope(), line);
+        let body = body.replace('\t', &self.indent.unit).replace('\n', &format!("\n{base}"));
+        let parsed = crate::snippet::parse(&body);
+        let len = parsed.text.chars().count();
+        self.snippet = None;
+        self.replace(start, end, &parsed.text);
+        let mut fields: Vec<Vec<(usize, usize)>> = Vec::new();
+        let mut has_final = false;
+        for (n, ranges) in parsed.fields {
+            has_final |= n == 0;
+            fields.push(ranges.into_iter().map(|(a, b)| (start + a, start + b)).collect());
+        }
+        if !has_final {
+            fields.push(vec![(start + len, start + len)]);
+        }
+        self.snippet = Some(crate::snippet::Session { fields, current: 0 });
+        self.select_snippet_field();
+        self.scroll_to_caret = true;
+    }
+
+    /// Tab / Shift+Tab inside a snippet: the next or previous field; false when there is none.
+    pub fn snippet_jump(&mut self, back: bool) -> bool {
+        let caret = self.caret();
+        let Some(s) = &mut self.snippet else { return false };
+        if !s.contains(caret) {
+            self.snippet = None;
+            return false;
+        }
+        if back {
+            if s.current == 0 {
+                return true;
+            }
+            s.current -= 1;
+        } else {
+            s.current += 1;
+        }
+        self.select_snippet_field();
+        true
+    }
+
+    /// Selects every occurrence of the current field (one caret each); the last field is the
+    /// final caret, which ends the snippet.
+    fn select_snippet_field(&mut self) {
+        let Some(s) = &self.snippet else { return };
+        let Some(ranges) = s.fields.get(s.current) else {
+            self.snippet = None;
+            return;
+        };
+        let last = s.current + 1 >= s.fields.len();
+        self.selection = Selection::new(ranges.iter().map(|&(a, b)| rc_text::Range::new(a, b)), 0);
+        if last {
+            self.snippet = None;
+        }
+    }
+
     pub fn undo(&mut self) {
+        self.snippet = None;
         if let Some((edits, sel)) = self.buffer.undo() {
             self.after_raw_edits(edits);
             self.selection = sel;
@@ -358,6 +435,7 @@ impl EditorState {
     }
 
     pub fn redo(&mut self) {
+        self.snippet = None;
         if let Some((edits, sel)) = self.buffer.redo() {
             self.after_raw_edits(edits);
             self.selection = sel;
@@ -368,6 +446,13 @@ impl EditorState {
     fn after_change(&mut self, changes: &ChangeSet, edits: Vec<Edit>) {
         // Decorations anchored to offsets follow the text.
         let map = |p: usize| changes.map_pos(p, rc_text::Assoc::Before);
+        // Snippet fields grow with what is typed at their ends.
+        if let Some(s) = &mut self.snippet {
+            for r in s.fields.iter_mut().flatten() {
+                r.0 = changes.map_pos(r.0, rc_text::Assoc::Before);
+                r.1 = changes.map_pos(r.1, rc_text::Assoc::After).max(r.0);
+            }
+        }
         for d in &mut self.diagnostics {
             d.start = map(d.start);
             d.end = map(d.end).max(d.start);
@@ -388,6 +473,8 @@ impl EditorState {
             let added = e.new_end_point.row as isize - e.old_end_point.row as isize;
             let row = e.start_point.row;
             shift_lines(&mut self.breakpoints, row, added);
+            shift_lines(&mut self.bookmarks, row, added);
+            shift_lines(&mut self.coverage, row, added);
             shift_lines(&mut self.gutter_icons, row, added);
             shift_line_set(&mut self.folded, row, added);
             if added != 0 && row < self.semantic.len() {

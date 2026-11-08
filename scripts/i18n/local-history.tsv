@@ -1,0 +1,15 @@
+# Local History. Import: python3 scripts/i18n_tsv.py app scripts/i18n/local-history.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Local History	Historial local	Historique local	Histórico local	Lokaler Verlauf	Historia lokalna	本地历史记录	ローカル履歴
+No local history	Sin historial local	Aucun historique local	Nenhum histórico local	Kein lokaler Verlauf	Brak historii lokalnej	没有本地历史记录	ローカル履歴はありません
+A copy of the file is kept each time it is saved or changed by another app.	Se guarda una copia del archivo cada vez que se guarda o lo cambia otra aplicación.	Une copie du fichier est conservée à chaque enregistrement ou modification par une autre application.	Uma cópia do arquivo é guardada sempre que ele é salvo ou alterado por outro aplicativo.	Bei jedem Speichern oder jeder Änderung durch eine andere App wird eine Kopie der Datei aufbewahrt.	Kopia pliku jest zachowywana przy każdym zapisie lub zmianie przez inną aplikację.	每次保存或被其他应用更改时都会保留文件的副本。	保存するたび、または他のアプリが変更するたびにファイルのコピーを保存します。
+Saved	Guardado	Enregistré	Salvo	Gespeichert	Zapisano	已保存	保存
+Original	Original	Original	Original	Original	Oryginał	原始版本	オリジナル
+External change	Cambio externo	Modification externe	Alteração externa	Externe Änderung	Zmiana zewnętrzna	外部更改	外部での変更
+Before restore	Antes de restaurar	Avant la restauration	Antes de restaurar	Vor der Wiederherstellung	Przed przywróceniem	恢复之前	復元前
+Show Diff	Mostrar diferencias	Afficher les différences	Mostrar diferenças	Unterschiede anzeigen	Pokaż różnice	显示差异	差分を表示
+Revert to This Version	Volver a esta versión	Revenir à cette version	Reverter para esta versão	Auf diese Version zurücksetzen	Przywróć tę wersję	还原到此版本	このバージョンに戻す
+Current	Actual	Actuel	Atual	Aktuell	Bieżąca	当前	現在
+Restored; ⌘Z undoes it	Restaurado; ⌘Z lo deshace	Restauré ; ⌘Z annule	Restaurado; ⌘Z desfaz	Wiederhergestellt; ⌘Z macht es rückgängig	Przywrócono; ⌘Z cofa	已恢复；⌘Z 可撤销	復元しました。⌘Z で元に戻せます
+Today	Hoy	Aujourd'hui	Hoje	Heute	Dzisiaj	今天	今日
+Yesterday	Ayer	Hier	Ontem	Gestern	Wczoraj	昨天	昨日

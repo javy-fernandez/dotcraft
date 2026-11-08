@@ -77,6 +77,18 @@ pub enum Action {
     NextError,
     PreviousError,
     ToggleBreakpoint,
+    /// F3: bookmark the caret line (or remove its bookmark).
+    ToggleBookmark,
+    /// ⌥F3: bookmark with a mnemonic (0-9, A-Z).
+    ToggleBookmarkMnemonic,
+    /// ⌃⌥H: callers and callees of the method at the caret.
+    CallHierarchy,
+    /// ⌃H: base and derived types of the type at the caret.
+    TypeHierarchy,
+    /// ⌘J: the live templates list.
+    InsertLiveTemplate,
+    /// ⌥⌘T: surround the selection with a template.
+    SurroundWith,
     // --- IDE (reported to the app)
     SearchEverywhere,
     GotoFile,
@@ -116,6 +128,10 @@ pub enum Action {
     ZoomIn,
     ZoomOut,
     ZoomReset,
+    /// ⌘F3: the Bookmarks tool window.
+    ShowBookmarks,
+    /// ⌃1…⌃9: jump to the bookmark with that digit.
+    GotoBookmark(u8),
 }
 
 impl Action {
@@ -143,6 +159,12 @@ impl Action {
                 | NextError
                 | PreviousError
                 | ToggleBreakpoint
+                | ToggleBookmark
+                | ToggleBookmarkMnemonic
+                | CallHierarchy
+                | TypeHierarchy
+                | InsertLiveTemplate
+                | SurroundWith
         ) && !self.is_ide()
     }
 
@@ -189,6 +211,8 @@ impl Action {
                 | ZoomIn
                 | ZoomOut
                 | ZoomReset
+                | ShowBookmarks
+                | GotoBookmark(_)
         )
     }
 }
@@ -323,8 +347,9 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
     let ctrl = m(false, true, false, false);
     let ctrl_s = m(false, true, true, false);
     let ctrl_c = m(false, true, false, true);
+    let ctrl_a = m(true, true, false, false);
     let b = |key, mods, action| (Chord { key, mods }, action);
-    vec![
+    let mut v = vec![
         b(Key::ArrowLeft, none, Left(false)),
         b(Key::ArrowLeft, s, Left(true)),
         b(Key::ArrowRight, none, Right(false)),
@@ -410,7 +435,13 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::R, c, Replace),
         b(Key::G, c, FindNext),
         b(Key::G, cs, FindPrevious),
-        b(Key::F3, none, FindNext),
+        b(Key::F3, none, ToggleBookmark),
+        b(Key::F3, a, ToggleBookmarkMnemonic),
+        b(Key::F3, c, ShowBookmarks),
+        b(Key::H, ctrl_a, CallHierarchy),
+        b(Key::H, ctrl, TypeHierarchy),
+        b(Key::J, c, InsertLiveTemplate),
+        b(Key::T, ca, SurroundWith),
         b(Key::F3, s, FindPrevious),
         b(Key::F2, none, NextError),
         b(Key::F2, s, PreviousError),
@@ -453,7 +484,10 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::Plus, ca, ZoomIn),
         b(Key::Minus, ca, ZoomOut),
         b(Key::Num0, ca, ZoomReset),
-    ]
+    ];
+    let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
+    v.extend(digits.into_iter().enumerate().map(|(i, k)| b(k, ctrl, GotoBookmark(i as u8 + 1))));
+    v
 }
 
 fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
@@ -545,6 +579,10 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         b(Key::F10, c, RunToCursor),
         b(Key::F9, s, Evaluate),
     ];
+    // Bookmarks: F11 and Shift+F11 step in and out, so Rider's F11 family moves to Ctrl.
+    v.extend([b(Key::F11, ca, ToggleBookmark), b(Key::F11, c, ToggleBookmarkMnemonic), b(Key::F11, cs, ShowBookmarks), b(Key::H, ca, CallHierarchy), b(Key::H, cas, TypeHierarchy), b(Key::J, c, InsertLiveTemplate), b(Key::T, ca, SurroundWith)]);
+    let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
+    v.extend(digits.into_iter().enumerate().map(|(i, k)| b(k, c, GotoBookmark(i as u8 + 1))));
     if visual_studio {
         v.extend([
             b(Key::F12, none, GotoDeclaration),

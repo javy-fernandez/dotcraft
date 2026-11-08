@@ -8,8 +8,15 @@
 //! [`CancelToken`] and a callback instead.
 
 pub mod build;
+pub mod counters;
+pub mod cpu_profile;
+mod eventpipe;
+pub mod gcdump;
+pub mod coverage;
 pub mod diagnostics;
 pub mod global_json;
+pub mod endpoints;
+pub mod http_file;
 pub mod launch;
 pub mod msbuild;
 pub mod new_project;
@@ -22,6 +29,7 @@ pub mod solution;
 pub mod test;
 pub mod trx;
 
+pub use counters::{RuntimeCounters, watch as watch_counters};
 pub use build::{BuildAction, BuildEvent, BuildRequest, BuildResult, start_build};
 pub use diagnostics::{Diagnostic, Severity};
 pub use launch::{LaunchProfile, LaunchSettings};

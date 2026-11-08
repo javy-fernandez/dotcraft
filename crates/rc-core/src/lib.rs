@@ -3,6 +3,7 @@
 
 pub mod editorconfig;
 pub mod inbox;
+pub mod local_history;
 pub mod paths;
 pub mod runtime;
 pub mod session;

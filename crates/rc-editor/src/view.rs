@@ -46,6 +46,8 @@ pub(crate) struct Metrics {
     /// Y offset of the galley inside a row (centres the glyphs).
     pub text_dy: f32,
     pub gutter_w: f32,
+    /// Centre x of the bookmark column.
+    pub bookmark_x: f32,
     pub num_right: f32,
     pub icons_x: f32,
     pub vcs_x: f32,
@@ -194,13 +196,15 @@ pub(crate) fn metrics(ui: &Ui, state: &EditorState, config: &EditorConfig, rect:
         let longest = a.iter().map(|s| s.chars().count()).max().unwrap_or(0).min(40) as f32;
         (longest * char_w * 0.92 + 16.0).round()
     });
-    let left = rect.left() + ann_w;
+    // Bookmarks take a column of their own while the file has any.
+    let bm_w = if state.bookmarks.is_empty() { 0.0 } else { 16.0 };
+    let left = rect.left() + ann_w + bm_w;
     let num_right = snap(left + 10.0 + num_w);
     let icons_x = num_right + 8.0;
     let vcs_x = icons_x + 18.0;
     let fold_x = vcs_x + 5.0;
     let gutter_w = snap(fold_x + 14.0 - rect.left() + 2.0);
-    Metrics { row_h, char_w, text_dy, gutter_w, num_right, icons_x, vcs_x, fold_x }
+    Metrics { row_h, char_w, text_dy, gutter_w, bookmark_x: rect.left() + ann_w + 12.0, num_right, icons_x, vcs_x, fold_x }
 }
 
 fn display_row_count(state: &mut EditorState) -> usize {
@@ -638,6 +642,17 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
             let gy = (center_y - g.size().y / 2.0).round();
             painter.galley(pos2(m.num_right - g.size().x, gy), g, color);
         }
+        // Bookmark: the flag, or the mnemonic's letter in a box, left of the line number.
+        if let Some(mnemonic) = state.bookmarks.get(&l) {
+            let r = Rect::from_center_size(pos2(m.bookmark_x, center_y), Vec2::splat(14.0));
+            match mnemonic {
+                Some(c) => {
+                    painter.rect(r, 3.0, pal.badge_bg, egui::Stroke::new(1.0, pal.control_border), egui::StrokeKind::Inside);
+                    painter.text(r.center(), egui::Align2::CENTER_CENTER, c.to_string(), egui::FontId::monospace(10.5), pal.text);
+                }
+                None => icons::paint(&painter, Rect::from_center_size(r.center(), Vec2::splat(16.0)), ico::BOOKMARK, pal, true),
+            }
+        }
         // Execution point arrow.
         if Some(l) == state.execution_line {
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
@@ -656,6 +671,17 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
             };
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
             icons::paint(&painter, r, ic, pal, true);
+        }
+        // Coverage bar (the VCS bar wins on changed lines).
+        if let Some(mark) = state.coverage.get(&l)
+            && !state.line_changes.contains_key(&l)
+        {
+            let color = match mark {
+                crate::state::CoverageMark::Covered => egui::Color32::from_rgb(0x5F, 0xB8, 0x65),
+                crate::state::CoverageMark::Partial => egui::Color32::from_rgb(0xE0, 0xB0, 0x40),
+                crate::state::CoverageMark::NotCovered => egui::Color32::from_rgb(0xE5, 0x53, 0x53),
+            };
+            painter.rect_filled(Rect::from_min_size(pos2(m.vcs_x, y), vec2(4.0, m.row_h)), 0.0, color);
         }
         // VCS change bar.
         if let Some(change) = state.line_changes.get(&l) {
@@ -1386,6 +1412,9 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
                 state.apply(e, EditKind::Other);
             }
         }
+        Indent if !ro && state.snippet_jump(false) => {}
+        Unindent if !ro && state.snippet_jump(true) => {}
+        Indent if !ro && expand_template(state) => {}
         Indent if !ro => {
             let multi_line = sel.ranges().iter().any(|r| rope.char_to_line(r.start()) != rope.char_to_line(r.end()));
             let e = if multi_line { commands::indent_lines(&rope, &sel, &indent, false) } else { commands::insert_tab(&rope, &sel, &indent) };
@@ -1462,6 +1491,8 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         Escape => {
             if state.popups.any() {
                 state.popups.close_all();
+            } else if state.snippet.take().is_some() {
+                state.selection = Selection::point(state.caret());
             } else if sel.len() > 1 {
                 state.selection = sel.clone().into_primary();
             } else if !sel.primary().is_empty() {
@@ -1543,4 +1574,36 @@ fn toggle_block_comment(rope: &rc_text::Rope, sel: &Selection, open: &str, close
     let cs = rc_text::ChangeSet::new(changes);
     let selection = sel.map(&cs);
     commands::Edited { changes: cs, selection }
+}
+
+/// Tab after a live template's abbreviation (C#): expands it. Only at the start of a statement
+/// or member (after whitespace, `{`, `;` or `}`), not after `.` or inside an identifier.
+fn expand_template(state: &mut EditorState) -> bool {
+    if state.lang() != rc_syntax::Lang::CSharp || state.selection.len() != 1 || !state.selection.primary().is_empty() {
+        return false;
+    }
+    let rope = state.buffer.rope();
+    let caret = state.caret();
+    let mut start = caret;
+    while start > 0 && {
+        let c = rope.char(start - 1);
+        c.is_ascii_alphanumeric() || c == '_'
+    } {
+        start -= 1;
+    }
+    if start == caret || (start > 0 && !matches!(rope.char(start - 1), ' ' | '\t' | '\n' | '{' | ';' | '}')) {
+        return false;
+    }
+    if caret < rope.len_chars() && {
+        let c = rope.char(caret);
+        c.is_alphanumeric() || c == '_'
+    } {
+        return false;
+    }
+    let key: String = rope.slice(start..caret).to_string();
+    let Some(t) = crate::templates::find(&key) else { return false };
+    let stem = state.path.as_ref().and_then(|p| p.file_stem()).map_or_else(|| "Name".to_string(), |s| s.to_string_lossy().into_owned());
+    let body = crate::templates::fill(t.body, &stem);
+    state.insert_snippet(start, caret, &body);
+    true
 }

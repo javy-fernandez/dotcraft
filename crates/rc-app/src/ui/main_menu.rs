@@ -17,8 +17,8 @@ fn groups() -> Vec<(&'static str, Vec<(&'static str, Action)>)> {
         (tr("File"), vec![(tr("Save"), Save), (tr("Save All"), SaveAll), (tr("Close Tab"), CloseTab), (tr("Settings…"), ShowSettings)]),
         (tr("Edit"), vec![(tr("Undo"), Undo), (tr("Redo"), Redo), (tr("Cut"), Cut), (tr("Copy"), Copy), (tr("Paste"), Paste), (tr("Select All"), SelectAll), (tr("Find…"), Find), (tr("Replace…"), Replace), (tr("Duplicate Line or Selection"), DuplicateLine), (tr("Comment with Line Comment"), CommentLine), (tr("Comment with Block Comment"), CommentBlock), (tr("Join Lines"), JoinLines), (tr("Toggle Case"), ToggleCase), (tr("Move Line Up"), MoveLineUp), (tr("Move Line Down"), MoveLineDown)]),
         (tr("View"), vec![(tr("Zoom In"), ZoomIn), (tr("Zoom Out"), ZoomOut), (tr("Reset Zoom"), ZoomReset), (tr("Hide All Tool Windows"), HideToolWindows)]),
-        (tr("Navigate"), vec![(tr("Search Everywhere"), SearchEverywhere), (tr("Go to File…"), GotoFile), (tr("Go to Type…"), GotoClass), (tr("Go to Symbol…"), GotoSymbol), (tr("Go to Line…"), GotoLine), (tr("Back"), NavigateBack), (tr("Forward"), NavigateForward), (tr("Recent Files"), RecentFiles), (tr("Recent Locations"), RecentLocations), (tr("Go to Declaration"), GotoDeclaration), (tr("Go to Implementation"), GotoImplementation), (tr("Go to Type Declaration"), GotoTypeDeclaration), (tr("Find Usages"), FindUsages), (tr("File Structure"), FileStructure)]),
-        (tr("Code"), vec![(tr("Code Completion"), Complete), (tr("Parameter Info"), ParameterInfo), (tr("Quick Documentation"), QuickDoc), (tr("Show Context Actions"), ShowIntentions), (tr("Rename…"), Rename), (tr("Reformat Code"), Reformat)]),
+        (tr("Navigate"), vec![(tr("Search Everywhere"), SearchEverywhere), (tr("Go to File…"), GotoFile), (tr("Go to Type…"), GotoClass), (tr("Go to Symbol…"), GotoSymbol), (tr("Go to Line…"), GotoLine), (tr("Back"), NavigateBack), (tr("Forward"), NavigateForward), (tr("Recent Files"), RecentFiles), (tr("Recent Locations"), RecentLocations), (tr("Go to Declaration"), GotoDeclaration), (tr("Go to Implementation"), GotoImplementation), (tr("Go to Type Declaration"), GotoTypeDeclaration), (tr("Find Usages"), FindUsages), (tr("File Structure"), FileStructure), (tr("Call Hierarchy"), CallHierarchy), (tr("Type Hierarchy"), TypeHierarchy), (tr("Toggle Bookmark"), ToggleBookmark), (tr("Toggle Bookmark with Mnemonic"), ToggleBookmarkMnemonic), (tr("Bookmarks"), ShowBookmarks)]),
+        (tr("Code"), vec![(tr("Code Completion"), Complete), (tr("Parameter Info"), ParameterInfo), (tr("Quick Documentation"), QuickDoc), (tr("Show Context Actions"), ShowIntentions), (tr("Rename…"), Rename), (tr("Reformat Code"), Reformat), (tr("Insert Live Template…"), InsertLiveTemplate), (tr("Surround With…"), SurroundWith)]),
         (tr("Build"), vec![(tr("Build Solution"), Build)]),
         (tr("Run"), vec![(tr("Run"), Run), (tr("Debug"), Debug), (tr("Stop"), StopRun), (tr("Run Tests"), RunTests), (tr("Step Over"), StepOver), (tr("Step Into"), StepInto), (tr("Step Out"), StepOut), (tr("Run to Cursor"), RunToCursor), (tr("Resume Program"), Resume), (tr("Evaluate Expression…"), Evaluate), (tr("Attach to Process…"), AttachProcess)]),
         (tr("Tools"), vec![(tr("Settings…"), ShowSettings)]),
@@ -40,6 +40,7 @@ fn enabled(app: &DotCraftApp, action: Action) -> bool {
         Action::RunToCursor => app.debugger.stopped() && document,
         Action::Build | Action::RunTests | Action::HideToolWindows | Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => app.workspace.is_some(),
         Action::Commit => app.vcs.repo.is_some(),
+        Action::ShowBookmarks => app.workspace.is_some(),
         Action::SaveAll => !app.docs.list.is_empty(),
         Action::Cut | Action::Paste => app.docs.active_doc().is_some_and(|doc| !doc.editor.read_only),
         _ => document,
@@ -138,6 +139,12 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
         ui.separator();
         if theme::menu_entry(ui, None, tr("Tool Windows"), Some("›"), false, true).clicked() { *page = Page::ToolWindows; }
     }
+    if category == tr("File") {
+        let document = app.docs.active_doc().is_some();
+        if command(ui, tr("Reload from Disk"), Some(ico::REFRESH), document) { app.reload_active_from_disk(); }
+        if command(ui, tr("Local History"), Some(ico::HISTORY), document) { app.show_local_history(None); }
+    }
+    if category == tr("Help") && command(ui, tr("Check for Updates…"), None, true) { app.check_for_updates(ui.ctx()); }
     if category == tr("Build") {
         for (label, icon, action) in [(tr("Rebuild Solution"), ico::REBUILD, rc_dotnet::BuildAction::Rebuild), (tr("Clean Solution"), ico::DELETE, rc_dotnet::BuildAction::Clean), (tr("Restore NuGet Packages"), ico::DOWNLOAD, rc_dotnet::BuildAction::Restore)] {
             if command(ui, label, Some(icon), app.workspace.is_some())
@@ -148,6 +155,7 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
             }
         }
     }
+    if category == tr("Run") && command(ui, tr("Run All Tests with Coverage"), Some(ico::RUN_COVERAGE), app.workspace.is_some()) { app.run_coverage(); }
     if category == tr("Tools") {
         if command(ui, tr(".NET CLI"), Some(ico::SETTINGS), true) {
             app.dialog = Some(Dialog::Settings { draft: Box::new(app.settings.clone()), page: SettingsPage::Tools });

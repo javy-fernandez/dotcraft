@@ -215,7 +215,7 @@ impl Runner {
         self.build.as_ref().is_some_and(|b| b.handle.is_some()) || self.tests.as_ref().is_some_and(|t| t.running) || self.runs.iter().any(|r| r.running())
     }
 
-    fn dotnet(&mut self) -> Result<Dotnet, String> {
+    pub fn dotnet(&mut self) -> Result<Dotnet, String> {
         self.dotnet.clone().ok_or_else(|| tr("The .NET SDK was not found. Install it or set its path in Settings › Tools.").to_string())
     }
 
@@ -370,6 +370,41 @@ impl Runner {
         }
     }
 
+    /// Quitting: kills every running program and what it started, right away. A graceful stop
+    /// is asynchronous and would never finish once the app is gone (`dotnet watch` and its app
+    /// were left running).
+    pub fn kill_all_now(&mut self) {
+        let pids: Vec<u32> = self.runs.iter().filter_map(|r| r.handle.as_ref().and_then(|h| h.pid())).collect();
+        self.stop_all();
+        if pids.is_empty() {
+            return;
+        }
+        use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+        let Ok(mut sys) = System::new() else {
+            for pid in pids {
+                rc_dotnet::process::kill_tree(pid);
+            }
+            return;
+        };
+        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
+        for root in pids {
+            // Children first (they may have left the process group), then the group.
+            let mut tree = vec![root];
+            let mut i = 0;
+            while i < tree.len() {
+                let parent = tree[i];
+                tree.extend(sys.processes().iter().filter(|(_, p)| p.parent().is_some_and(|pp| pp.as_u32() == parent)).map(|(pid, _)| pid.as_u32()));
+                i += 1;
+            }
+            for pid in tree.iter().skip(1).rev() {
+                if let Some(p) = sys.process(sysinfo::Pid::from_u32(*pid)) {
+                    p.kill();
+                }
+            }
+            rc_dotnet::process::kill_tree(root);
+        }
+    }
+
     pub fn close_run(&mut self, i: usize) {
         if i < self.runs.len() {
             let r = self.runs.remove(i);
@@ -425,7 +460,13 @@ impl Runner {
     /// Runs every test of the workspace: the "All Tests" configuration, or `dotnet test` on the
     /// solution or folder when no test project was recognised (it still finds them).
     pub fn run_all_tests(&mut self, workspace: &Path) -> Vec<RunnerOutput> {
-        let target = self
+        let target = self.all_tests_target(workspace);
+        self.run_tests(&target, None)
+    }
+
+    /// What `dotnet test` runs for "all tests": the solution, the only test project, or the folder.
+    pub fn all_tests_target(&self, workspace: &Path) -> PathBuf {
+        self
             .configs
             .iter()
             .find_map(|c| match &c.kind {
@@ -437,8 +478,7 @@ impl Runner {
                 let tests: Vec<&PathBuf> = self.configs.iter().filter_map(|c| if let ConfigKind::Tests { target } = &c.kind { Some(target) } else { None }).collect();
                 (tests.len() == 1).then(|| tests[0].clone())
             })
-            .unwrap_or_else(|| workspace.to_path_buf());
-        self.run_tests(&target, None)
+            .unwrap_or_else(|| workspace.to_path_buf())
     }
 
     /// Runs the tests that failed in the last run.

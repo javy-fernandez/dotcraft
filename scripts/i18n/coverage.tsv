@@ -1,0 +1,11 @@
+# Test coverage. Import: python3 scripts/i18n_tsv.py app scripts/i18n/coverage.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Coverage	Cobertura	Couverture	Cobertura	Abdeckung	Pokrycie	覆盖率	カバレッジ
+Run All Tests with Coverage	Ejecutar todos los tests con cobertura	Exécuter tous les tests avec couverture	Executar todos os testes com cobertura	Alle Tests mit Abdeckung ausführen	Uruchom wszystkie testy z pokryciem	运行所有测试并收集覆盖率	すべてのテストをカバレッジ付きで実行
+No coverage yet	Aún no hay cobertura	Pas encore de couverture	Ainda não há cobertura	Noch keine Abdeckung	Brak pokrycia	尚无覆盖率	カバレッジはまだありません
+Run the tests with coverage to see which lines they reach.	Ejecuta los tests con cobertura para ver qué líneas recorren.	Exécutez les tests avec couverture pour voir quelles lignes ils atteignent.	Execute os testes com cobertura para ver quais linhas eles alcançam.	Führen Sie die Tests mit Abdeckung aus, um zu sehen, welche Zeilen sie erreichen.	Uruchom testy z pokryciem, aby zobaczyć, które wiersze wykonują.	运行带覆盖率的测试，查看它们覆盖了哪些行。	カバレッジ付きでテストを実行すると、どの行に到達するかがわかります。
+Show Coverage in Editor	Mostrar cobertura en el editor	Afficher la couverture dans l'éditeur	Mostrar cobertura no editor	Abdeckung im Editor anzeigen	Pokaż pokrycie w edytorze	在编辑器中显示覆盖率	エディターにカバレッジを表示
+{pc}% of lines ({covered}/{total})	{pc}% de las líneas ({covered}/{total})	{pc} % des lignes ({covered}/{total})	{pc}% das linhas ({covered}/{total})	{pc} % der Zeilen ({covered}/{total})	{pc}% wierszy ({covered}/{total})	{pc}% 的行（{covered}/{total}）	行の {pc}%（{covered}/{total}）
+Running {project}…	Ejecutando {project}…	Exécution de {project}…	Executando {project}…	{project} wird ausgeführt…	Uruchamianie {project}…	正在运行 {project}…	{project} を実行中…
+Building…	Compilando…	Compilation…	Compilando…	Wird erstellt…	Kompilowanie…	正在生成…	ビルド中…
+The build failed with {n} errors	La compilación falló con {n} errores	La compilation a échoué avec {n} erreurs	A compilação falhou com {n} erros	Der Build ist mit {n} Fehlern fehlgeschlagen	Kompilacja nie powiodła się: {n} błędów	生成失败，有 {n} 个错误	ビルドは {n} 件のエラーで失敗しました

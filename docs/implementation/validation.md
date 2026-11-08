@@ -1,5 +1,7 @@
 # Validation evidence
 
+These results describe the earlier fork snapshots. For the upstream 0.4.0 merge, use [current integration evidence](upstream-integration.md). Counts below have not been silently promoted to current-merge results.
+
 The implementation batch is validated on Linux with Rust 1.99.1. Each independent feature snapshot uses its own Cargo target directory. The combined working tree uses `target/validation-sdk`; the temporary `/tmp/dotcraft-sdk-validation-target` path points to that directory. Keeping local-crate artifacts separate across checkouts avoids stale dependency reuse.
 
 ## Combined implementation checks

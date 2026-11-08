@@ -1,0 +1,12 @@
+# Update notice (as in DataCraft). Import: python3 scripts/i18n_tsv.py app scripts/i18n/updates.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Check for Updates…	Buscar actualizaciones…	Rechercher des mises à jour…	Verificar atualizações…	Nach Updates suchen…	Sprawdź aktualizacje…	检查更新…	アップデートを確認…
+Check for updates at startup	Buscar actualizaciones al iniciar	Rechercher des mises à jour au démarrage	Verificar atualizações ao iniciar	Beim Start nach Updates suchen	Sprawdzaj aktualizacje przy uruchomieniu	启动时检查更新	起動時にアップデートを確認
+Checking for updates…	Buscando actualizaciones…	Recherche de mises à jour…	Verificando atualizações…	Suche nach Updates…	Sprawdzanie aktualizacji…	正在检查更新…	アップデートを確認しています…
+Could not check for updates: {error}	No se pudo buscar actualizaciones: {error}	Impossible de rechercher des mises à jour : {error}	Não foi possível verificar atualizações: {error}	Updates konnten nicht gesucht werden: {error}	Nie udało się sprawdzić aktualizacji: {error}	无法检查更新：{error}	アップデートを確認できませんでした: {error}
+DotCraft {version} is available	DotCraft {version} está disponible	DotCraft {version} est disponible	DotCraft {version} está disponível	DotCraft {version} ist verfügbar	DotCraft {version} jest dostępny	DotCraft {version} 已发布	DotCraft {version} が利用可能です
+DotCraft {version} is up to date	DotCraft {version} está actualizado	DotCraft {version} est à jour	DotCraft {version} está atualizado	DotCraft {version} ist aktuell	DotCraft {version} jest aktualny	DotCraft {version} 已是最新版本	DotCraft {version} は最新です
+You have {version}. Download it from the release page.	Tienes la {version}. Descárgala desde la página de la versión.	Vous avez la {version}. Téléchargez-la depuis la page de la version.	Você tem a {version}. Baixe-a na página da versão.	Sie haben {version}. Laden Sie sie von der Release-Seite herunter.	Masz {version}. Pobierz ją ze strony wydania.	当前版本为 {version}，请从发布页面下载。	現在のバージョンは {version} です。リリースページからダウンロードしてください。
+View Release	Ver versión	Voir la version	Ver versão	Release anzeigen	Zobacz wydanie	查看发布	リリースを表示
+Skip This Version	Saltar esta versión	Ignorer cette version	Pular esta versão	Diese Version überspringen	Pomiń tę wersję	跳过此版本	このバージョンをスキップ
+Later	Más tarde	Plus tard	Mais tarde	Später	Później	稍后	後で

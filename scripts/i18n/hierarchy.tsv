@@ -1,0 +1,13 @@
+# Call / Type Hierarchy. Import: python3 scripts/i18n_tsv.py app scripts/i18n/hierarchy.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Hierarchy	Jerarquía	Hiérarchie	Hierarquia	Hierarchie	Hierarchia	层次结构	階層
+Call Hierarchy	Jerarquía de llamadas	Hiérarchie des appels	Hierarquia de chamadas	Aufrufhierarchie	Hierarchia wywołań	调用层次结构	呼び出し階層
+Type Hierarchy	Jerarquía de tipos	Hiérarchie des types	Hierarquia de tipos	Typhierarchie	Hierarchia typów	类型层次结构	型階層
+Callers	Llamadores	Appelants	Chamadores	Aufrufer	Wywołujący	调用方	呼び出し元
+Callees	Llamados	Appelés	Chamados	Aufgerufene	Wywoływane	被调用方	呼び出し先
+Base Types	Tipos base	Types de base	Tipos base	Basistypen	Typy bazowe	基类型	基本型
+Derived Types	Tipos derivados	Types dérivés	Tipos derivados	Abgeleitete Typen	Typy pochodne	派生类型	派生型
+No hierarchy	Sin jerarquía	Aucune hiérarchie	Nenhuma hierarquia	Keine Hierarchie	Brak hierarchii	没有层次结构	階層はありません
+Press ⌃⌥H on a method for its calls, or ⌃H on a type for its base and derived types.	Pulsa ⌃⌥H en un método para ver sus llamadas, o ⌃H en un tipo para ver sus tipos base y derivados.	Appuyez sur ⌃⌥H sur une méthode pour ses appels, ou ⌃H sur un type pour ses types de base et dérivés.	Pressione ⌃⌥H em um método para ver suas chamadas, ou ⌃H em um tipo para seus tipos base e derivados.	Drücken Sie ⌃⌥H auf einer Methode für ihre Aufrufe oder ⌃H auf einem Typ für Basis- und abgeleitete Typen.	Naciśnij ⌃⌥H na metodzie, aby zobaczyć wywołania, lub ⌃H na typie, aby zobaczyć typy bazowe i pochodne.	在方法上按 ⌃⌥H 查看调用，在类型上按 ⌃H 查看基类型和派生类型。	メソッドで ⌃⌥H を押すと呼び出し、型で ⌃H を押すと基本型と派生型を表示します。
+Place the caret on a method or property to see its calls	Coloca el cursor en un método o propiedad para ver sus llamadas	Placez le curseur sur une méthode ou une propriété pour voir ses appels	Coloque o cursor em um método ou propriedade para ver suas chamadas	Setzen Sie den Cursor auf eine Methode oder Eigenschaft, um ihre Aufrufe zu sehen	Umieść kursor na metodzie lub właściwości, aby zobaczyć wywołania	将光标放在方法或属性上以查看其调用	呼び出しを見るにはメソッドまたはプロパティにカーソルを置いてください
+Place the caret on a type to see its hierarchy	Coloca el cursor en un tipo para ver su jerarquía	Placez le curseur sur un type pour voir sa hiérarchie	Coloque o cursor em um tipo para ver sua hierarquia	Setzen Sie den Cursor auf einen Typ, um seine Hierarchie zu sehen	Umieść kursor na typie, aby zobaczyć jego hierarchię	将光标放在类型上以查看其层次结构	階層を見るには型にカーソルを置いてください

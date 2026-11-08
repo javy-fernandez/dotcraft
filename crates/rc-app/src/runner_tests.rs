@@ -79,7 +79,7 @@ fn a_compound_configuration_starts_several_applications() {
     assert_eq!(app.runner.selected_config().unwrap().name, "Both");
     app.runner.run_selected();
     assert_eq!(app.runner.runs.iter().map(|r| r.name.clone()).collect::<Vec<_>>(), apps);
-    app.runner.stop_all();
+    app.runner.kill_all_now();
     pump(&mut app, "the runs to stop", |a| a.runner.runs.iter().all(|r| r.exit.is_some()));
     // Kept in the session.
     app.save_session();

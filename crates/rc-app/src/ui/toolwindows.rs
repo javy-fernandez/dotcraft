@@ -33,6 +33,19 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Nuget => crate::ui::nuget::window(app, ui),
         ToolWindow::Http => crate::ui::http_window::show(app, ui),
         ToolWindow::Database => crate::ui::database_window::show(app, ui),
+        ToolWindow::Monitoring => crate::ui::monitoring::show(app, ui),
+        ToolWindow::Todo => todo_window(app, ui),
+        ToolWindow::Hierarchy => hierarchy_window(app, ui),
+        ToolWindow::LocalHistory => local_history_window(app, ui),
+        ToolWindow::HttpClient => http_client_window(app, ui),
+        ToolWindow::Endpoints => endpoints_window(app, ui),
+        ToolWindow::Coverage => coverage_window(app, ui),
+        ToolWindow::Bookmarks => {
+            if header(ui, tw.title()) {
+                app.toggle_tool(tw);
+            }
+            bookmarks(app, ui);
+        }
         ToolWindow::Tests => crate::ui::run_windows::tests(app, ui),
         ToolWindow::Terminal => crate::ui::run_windows::terminal(app, ui),
         ToolWindow::Commit => crate::ui::git::commit_window(app, ui),
@@ -90,6 +103,694 @@ fn list_row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, s
     }
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     resp
+}
+
+/// A coverage bar: the covered part green, the rest red.
+fn coverage_bar(ui: &Ui, rect: Rect, percent: f64) {
+    let p = rc_kit::pal(ui);
+    ui.painter().rect_filled(rect, 2.0, egui::Color32::from_rgb(0xE5, 0x53, 0x53).gamma_multiply(0.75));
+    let w = rect.width() * (percent / 100.0).clamp(0.0, 1.0) as f32;
+    ui.painter().rect_filled(Rect::from_min_size(rect.min, vec2(w, rect.height())), 2.0, egui::Color32::from_rgb(0x5F, 0xB8, 0x65));
+    let _ = p;
+}
+
+/// Coverage: total, then assemblies and their classes with a bar each; double click opens.
+fn coverage_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, tr("Coverage"), theme::bold(13.0), p.text);
+    let mut x = t.right() + 14.0;
+    if let Some(rep) = &app.coverage.report
+        && let Some(pc) = rep.total.percent()
+    {
+        let s = ui.painter().text(pos2(x, r.center().y), Align2::LEFT_CENTER, rc_kit::i18n::trf("{pc}% of lines ({covered}/{total})", &[("pc", &format!("{pc:.0}")), ("covered", &rep.total.covered), ("total", &rep.total.total)]), FontId::proportional(12.0), p.muted);
+        x = s.right() + 12.0;
+    }
+    if app.coverage.running {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
+        ui.painter().text(pos2(x, r.center().y), Align2::LEFT_CENTER, &app.coverage.status, FontId::proportional(12.0), p.muted);
+    }
+    let mut clicked = None;
+    let running = app.coverage.running;
+    let has = app.coverage.report.is_some();
+    let actions = [
+        (rc_kit::ico::HIDE, tr("Hide"), true),
+        (if running { rc_kit::ico::STOP } else { rc_kit::ico::RUN_COVERAGE }, if running { tr("Stop") } else { tr("Run All Tests with Coverage") }, app.workspace.is_some()),
+        (rc_kit::ico::SHOW, tr("Show Coverage in Editor"), has),
+    ];
+    for (i, (icon, tip, enabled)) in actions.into_iter().enumerate() {
+        let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0 * (i + 1) as f32, r.center().y - 13.0), vec2(26.0, 26.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        let resp = if i == 2 { theme::icon_toggle(&mut child, icon, app.coverage.show_in_editor && has, tip) } else { theme::icon_button(&mut child, icon, enabled, tip) };
+        if resp.clicked() && enabled {
+            clicked = Some(i);
+        }
+    }
+    match clicked {
+        Some(0) => {
+            app.toggle_tool(ToolWindow::Coverage);
+            return;
+        }
+        Some(1) if running => app.coverage.stop(),
+        Some(1) => app.run_coverage(),
+        Some(2) => app.coverage.show_in_editor = !app.coverage.show_in_editor,
+        _ => {}
+    }
+    for w in app.coverage.warnings.clone() {
+        ui.horizontal(|ui| {
+            ui.add_space(12.0);
+            rc_kit::icons::image(ui, rc_kit::ico::WARNING, 14.0);
+            ui.label(egui::RichText::new(w).size(12.0).color(p.muted));
+        });
+    }
+    if let Some(e) = app.coverage.error.clone() {
+        ui.horizontal(|ui| {
+            ui.add_space(12.0);
+            rc_kit::icons::image(ui, rc_kit::ico::ERROR, 14.0);
+            ui.label(egui::RichText::new(e).size(12.5).color(p.error));
+        });
+    }
+    let Some(rep) = &app.coverage.report else {
+        if !running && app.coverage.error.is_none() {
+            let (title, hint) = empty_text(ToolWindow::Coverage);
+            if empty_state_with(ui, ToolWindow::Coverage.icon(), title, hint, app.workspace.is_some().then_some(tr("Run All Tests with Coverage"))) {
+                app.run_coverage();
+            }
+        }
+        return;
+    };
+    let mut toggle: Option<String> = None;
+    let mut open: Option<(std::path::PathBuf, usize)> = None;
+    egui::ScrollArea::vertical().id_salt("coverage").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for a in &rep.assemblies {
+            let expanded = app.coverage.expanded.contains(&a.name);
+            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(420.0), 24.0), Sense::click());
+            if resp.hovered() {
+                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+            }
+            icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.left() + 18.0, rect.center().y), vec2(16.0, 16.0)), if expanded { rc_kit::ico::CHEVRON_DOWN } else { rc_kit::ico::CHEVRON_RIGHT }, &p, true);
+            icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.left() + 36.0, rect.center().y), vec2(16.0, 16.0)), rc_kit::ico::PROJECT, &p, true);
+            ui.painter().text(pos2(rect.left() + 50.0, rect.center().y), Align2::LEFT_CENTER, &a.name, theme::bold(13.0), p.text);
+            coverage_row_stats(ui, rect, a.ratio.percent(), a.ratio.covered, a.ratio.total);
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &a.name));
+            if resp.clicked() {
+                toggle = Some(a.name.clone());
+            }
+            if !expanded {
+                continue;
+            }
+            for c in rep.classes.iter().filter(|c| c.assembly == a.name) {
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(420.0), 24.0), Sense::click());
+                if resp.hovered() {
+                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+                }
+                icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.left() + 54.0, rect.center().y), vec2(16.0, 16.0)), rc_kit::ico::CLASS, &p, true);
+                let name = c.name.rsplit('.').next().unwrap_or(&c.name);
+                ui.painter().text(pos2(rect.left() + 68.0, rect.center().y), Align2::LEFT_CENTER, name, FontId::proportional(13.0), p.text);
+                coverage_row_stats(ui, rect, c.ratio.percent(), c.ratio.covered, c.ratio.total);
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name));
+                if resp.double_clicked() {
+                    open = Some((c.file.clone(), c.lines.iter().next().copied().unwrap_or(0)));
+                }
+            }
+        }
+    });
+    if let Some(n) = toggle
+        && !app.coverage.expanded.remove(&n)
+    {
+        app.coverage.expanded.insert(n);
+    }
+    if let Some((path, line)) = open {
+        app.open_at(&path, line, 0);
+    }
+}
+
+/// Right side of a coverage row: the percentage, its bar and "covered/total".
+fn coverage_row_stats(ui: &Ui, rect: Rect, percent: Option<f64>, covered: u32, total: u32) {
+    let p = rc_kit::pal(ui);
+    let x = (rect.right() - 300.0).max(rect.left() + 260.0);
+    let pc = percent.unwrap_or(0.0);
+    ui.painter().text(pos2(x, rect.center().y), Align2::RIGHT_CENTER, format!("{pc:.0}%"), FontId::monospace(12.0), p.text);
+    coverage_bar(ui, Rect::from_min_size(pos2(x + 10.0, rect.center().y - 4.0), vec2(140.0, 8.0)), pc);
+    ui.painter().text(pos2(x + 160.0, rect.center().y), Align2::LEFT_CENTER, format!("{covered}/{total}"), FontId::proportional(12.0), p.muted);
+}
+
+/// A coloured HTTP method badge ("GET" green, "POST" blue…); returns its right edge.
+fn method_badge(ui: &Ui, left_center: egui::Pos2, method: &str) -> f32 {
+    let color = match method {
+        "GET" => egui::Color32::from_rgb(0x5F, 0xB8, 0x65),
+        "POST" => egui::Color32::from_rgb(0x35, 0x74, 0xF0),
+        "PUT" | "PATCH" => egui::Color32::from_rgb(0xE0, 0x88, 0x55),
+        "DELETE" => egui::Color32::from_rgb(0xE5, 0x53, 0x53),
+        _ => rc_kit::pal(ui).muted,
+    };
+    let g = ui.painter().layout_no_wrap(method.to_string(), FontId::monospace(11.0), color);
+    let r = Rect::from_min_size(pos2(left_center.x, left_center.y - 9.0), vec2(g.size().x.max(30.0) + 10.0, 18.0));
+    ui.painter().rect(r, 4.0, color.gamma_multiply(0.15), egui::Stroke::NONE, egui::StrokeKind::Inside);
+    ui.painter().galley(pos2(r.center().x - g.size().x / 2.0, r.center().y - g.size().y / 2.0), g, color);
+    r.right()
+}
+
+/// Endpoints: routes by project; double click opens the handler, the context menu writes a
+/// request in the project's `.http` file.
+fn endpoints_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, tr("Endpoints"), theme::bold(13.0), p.text);
+    let status = if app.endpoints.scanning { tr("Scanning…").to_string() } else { rc_kit::i18n::trf("{n} items", &[("n", &app.endpoints.count())]) };
+    ui.painter().text(pos2(t.right() + 12.0, r.center().y), Align2::LEFT_CENTER, status, FontId::proportional(12.0), p.muted);
+    let fr = Rect::from_min_size(pos2(t.right() + 110.0, r.center().y - 12.0), vec2((r.width() - t.width() - 200.0).clamp(120.0, 320.0), 24.0));
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(fr));
+    child.add(egui::TextEdit::singleline(&mut app.endpoints.filter).hint_text(tr("Filter")).desired_width(fr.width()));
+    let mut hide = false;
+    let mut refresh = false;
+    for (i, (icon, tip)) in [(rc_kit::ico::HIDE, tr("Hide")), (rc_kit::ico::REFRESH, tr("Refresh"))].into_iter().enumerate() {
+        let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0 * (i + 1) as f32, r.center().y - 13.0), vec2(26.0, 26.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        if theme::icon_button(&mut child, icon, true, tip).clicked() {
+            if i == 0 { hide = true } else { refresh = true }
+        }
+    }
+    if hide {
+        app.toggle_tool(ToolWindow::Endpoints);
+        return;
+    }
+    if refresh {
+        app.refresh_endpoints();
+    }
+    if app.endpoints.projects.is_empty() && !app.endpoints.scanning {
+        let (title, hint) = empty_text(ToolWindow::Endpoints);
+        empty_state(ui, ToolWindow::Endpoints.icon(), title, hint);
+        return;
+    }
+    let f = app.endpoints.filter.to_lowercase();
+    let mut open: Option<(std::path::PathBuf, usize)> = None;
+    let mut generate: Option<(std::path::PathBuf, rc_dotnet::endpoints::Endpoint)> = None;
+    egui::ScrollArea::vertical().id_salt("endpoints").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (name, project, eps) in &app.endpoints.projects {
+            let shown: Vec<&rc_dotnet::endpoints::Endpoint> = eps.iter().filter(|e| f.is_empty() || e.route.to_lowercase().contains(&f) || e.handler.to_lowercase().contains(&f) || e.method.to_lowercase() == f).collect();
+            if shown.is_empty() {
+                continue;
+            }
+            list_row(ui, 0, rc_kit::ico::PROJECT, name, &rc_kit::i18n::trf("{n} items", &[("n", &shown.len())]), false);
+            for e in shown {
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(400.0), 24.0), Sense::click());
+                if resp.hovered() {
+                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+                }
+                let x = method_badge(ui, pos2(rect.left() + 30.0, rect.center().y), &e.method);
+                let g = ui.painter().layout_no_wrap(e.route.clone(), FontId::monospace(12.5), p.text);
+                ui.painter().galley(pos2(x + 10.0, rect.center().y - g.size().y / 2.0), g.clone(), p.text);
+                let file = e.file.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+                ui.painter().text(pos2(x + 24.0 + g.size().x, rect.center().y), Align2::LEFT_CENTER, format!("{}  {file}:{}", e.handler, e.line + 1), FontId::proportional(12.0), p.muted);
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} {}", e.method, e.route)));
+                if resp.double_clicked() {
+                    open = Some((e.file.clone(), e.line));
+                }
+                resp.context_menu(|ui| {
+                    if theme::menu_item(ui, Some(rc_kit::ico::TW_HTTP), tr("Generate Request in HTTP Client"), false).clicked() {
+                        generate = Some((project.clone(), e.clone()));
+                        ui.close();
+                    }
+                    if theme::menu_item(ui, Some(rc_kit::ico::OPEN), tr("Go to Handler"), false).clicked() {
+                        open = Some((e.file.clone(), e.line));
+                        ui.close();
+                    }
+                });
+            }
+        }
+    });
+    if let Some((path, line)) = open {
+        app.open_at(&path, line, 0);
+    }
+    if let Some((project, e)) = generate {
+        match crate::web::generate_request(&project, &e) {
+            Ok((file, line)) => app.open_at(&file, line, 0),
+            Err(err) => app.notify(err.to_string(), true),
+        }
+    }
+}
+
+/// HTTP Client: environment, the request sent, then status, time, size and the body (or the
+/// headers).
+fn http_client_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, tr("HTTP Client"), theme::bold(13.0), p.text);
+    // Environment of the active .http file.
+    let http_path = app.docs.active_doc().map(|d| d.path.clone()).filter(|p| crate::web::is_http_file(p));
+    let envs = http_path.as_deref().map(rc_dotnet::http_file::environments).unwrap_or_default();
+    if !envs.is_empty() {
+        let er = Rect::from_min_size(pos2(t.right() + 14.0, r.center().y - 12.0), vec2(170.0, 24.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(er));
+        let selected = app.http.env.clone().unwrap_or_else(|| tr("No environment").to_string());
+        egui::ComboBox::from_id_salt("http_env").selected_text(selected).width(160.0).show_ui(&mut child, |ui| {
+            if ui.selectable_label(app.http.env.is_none(), tr("No environment")).clicked() {
+                app.http.env = None;
+            }
+            for e in &envs {
+                if ui.selectable_label(app.http.env.as_deref() == Some(e), e).clicked() {
+                    app.http.env = Some(e.clone());
+                }
+            }
+        });
+    }
+    let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0, r.center().y - 13.0), vec2(26.0, 26.0));
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+    if theme::icon_button(&mut child, rc_kit::ico::HIDE, true, tr("Hide")).clicked() {
+        app.toggle_tool(ToolWindow::HttpClient);
+        return;
+    }
+    let Some(request) = app.http.request.clone() else {
+        let (title, hint) = empty_text(ToolWindow::HttpClient);
+        empty_state(ui, ToolWindow::HttpClient.icon(), title, hint);
+        return;
+    };
+    // Request line and status.
+    let line = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 28.0));
+    ui.allocate_rect(line, Sense::hover());
+    let (method, url) = request.split_once(' ').unwrap_or(("", &request));
+    let x = method_badge(ui, pos2(line.left() + 12.0, line.center().y), method);
+    let u = ui.painter().text(pos2(x + 10.0, line.center().y), Align2::LEFT_CENTER, url, FontId::monospace(12.5), p.text);
+    let mut sx = u.right() + 16.0;
+    match &app.http.response {
+        None if app.http.busy() => {
+            ui.painter().text(pos2(sx, line.center().y), Align2::LEFT_CENTER, tr("Sending…"), FontId::proportional(12.0), p.muted);
+        }
+        Some(Err(e)) => {
+            let g = ui.painter().layout(e.clone(), FontId::proportional(12.5), p.error, (line.width() - sx + line.left() - 12.0).max(200.0));
+            ui.painter().galley(pos2(sx, line.top() + 6.0), g, p.error);
+        }
+        Some(Ok(resp)) => {
+            let color = if resp.status < 300 { p.ok } else if resp.status < 400 { p.warn } else { p.error };
+            let s = ui.painter().text(pos2(sx, line.center().y), Align2::LEFT_CENTER, format!("{} {}", resp.status, resp.reason), theme::bold(12.5), color);
+            sx = s.right() + 14.0;
+            let size = if resp.body.len() >= 1024 { format!("{:.1} KB", resp.body.len() as f64 / 1024.0) } else { format!("{} B", resp.body.len()) };
+            ui.painter().text(pos2(sx, line.center().y), Align2::LEFT_CENTER, format!("{} ms · {size}", resp.elapsed.as_millis()), FontId::proportional(12.0), p.muted);
+            // Body / Headers.
+            let tabs = Rect::from_min_size(pos2(line.right() - 190.0, line.center().y - 12.0), vec2(180.0, 24.0));
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(tabs).layout(egui::Layout::left_to_right(egui::Align::Center)));
+            if theme::tool_button(&mut child, rc_kit::ico::FILE_TEXT, tr("Body"), !app.http.show_headers).clicked() {
+                app.http.show_headers = false;
+            }
+            if theme::tool_button(&mut child, rc_kit::ico::MENU, tr("Headers"), app.http.show_headers).clicked() {
+                app.http.show_headers = true;
+            }
+        }
+        None => {}
+    }
+    let Some(Ok(resp)) = &app.http.response else { return };
+    let body_rect = ui.available_rect_before_wrap();
+    ui.painter().hline(body_rect.x_range(), body_rect.top(), egui::Stroke::new(1.0, p.island_border));
+    if app.http.show_headers {
+        let headers = resp.headers.clone();
+        egui::ScrollArea::vertical().id_salt("http_headers").auto_shrink([false, false]).show(ui, |ui| {
+            for (k, v) in &headers {
+                ui.horizontal(|ui| {
+                    ui.add_space(12.0);
+                    ui.label(egui::RichText::new(format!("{k}:")).monospace().color(p.muted));
+                    ui.label(egui::RichText::new(v).monospace());
+                });
+            }
+        });
+    } else if let Some(body) = &mut app.http.body {
+        let config = app.editor_config.clone();
+        let mut eu = ui.new_child(egui::UiBuilder::new().max_rect(body_rect));
+        eu.set_clip_rect(body_rect.intersect(ui.clip_rect()));
+        rc_editor::EditorView::new(body, &config, &app.keymap).show(&mut eu);
+        ui.allocate_rect(body_rect, Sense::hover());
+    }
+}
+
+/// Local History of a file: its revisions, newest first; a click shows the diff with the
+/// current text, the context menu restores one.
+fn local_history_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let path = app.history_file.clone().or_else(|| app.docs.active_doc().map(|d| d.path.clone()));
+    let name = path.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let title = if name.is_empty() { tr("Local History").to_string() } else { format!("{} · {name}", tr("Local History")) };
+    if header(ui, &title) {
+        app.toggle_tool(ToolWindow::LocalHistory);
+        return;
+    }
+    let revisions = path.as_deref().map(rc_core::local_history::revisions).unwrap_or_default();
+    let Some(path) = path.filter(|_| !revisions.is_empty()) else {
+        let (title, hint) = empty_text(ToolWindow::LocalHistory);
+        empty_state(ui, ToolWindow::LocalHistory.icon(), title, hint);
+        return;
+    };
+    let current = match app.docs.index_of(&path) {
+        Some(i) => app.docs.list[i].editor.buffer.rope().to_string(),
+        None => std::fs::read_to_string(&path).unwrap_or_default().replace("\r\n", "\n"),
+    };
+    let mut show: Option<usize> = None;
+    let mut restore: Option<usize> = None;
+    egui::ScrollArea::vertical().id_salt("local_history").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (i, r) in revisions.iter().enumerate() {
+            let when = format_time(r.time);
+            let label = match r.label.as_str() {
+                "Saved" => tr("Saved"),
+                "Original" => tr("Original"),
+                "External change" => tr("External change"),
+                "Before restore" => tr("Before restore"),
+                other => other,
+            };
+            let resp = list_row(ui, 0, rc_kit::ico::HISTORY, &when, label, app.history_selected == Some(i));
+            if resp.clicked() {
+                show = Some(i);
+            }
+            resp.context_menu(|ui| {
+                if theme::menu_item(ui, Some(rc_kit::ico::DIFF), tr("Show Diff"), false).clicked() {
+                    show = Some(i);
+                    ui.close();
+                }
+                if theme::menu_item(ui, Some(rc_kit::ico::UNDO), tr("Revert to This Version"), false).clicked() {
+                    restore = Some(i);
+                    ui.close();
+                }
+            });
+        }
+    });
+    let _ = p;
+    let dark = app.dark(ui.ctx());
+    if let Some(i) = show
+        && let Ok(old) = revisions[i].read()
+    {
+        app.history_selected = Some(i);
+        let title = format!("{name}: {} ↔ {}", format_time(revisions[i].time), tr("Current"));
+        app.vcs.show_diff(title, path.clone(), &old, &current, dark);
+    }
+    if let Some(i) = restore
+        && let Ok(old) = revisions[i].read()
+    {
+        let _ = rc_core::local_history::record(&path, &current, "Before restore");
+        app.open_file(&path);
+        if let Some(d) = app.docs.active_doc_mut() {
+            let len = d.editor.buffer.len_chars();
+            // An edit, so ⌘Z brings the current text back.
+            d.editor.replace(0, len, &old);
+        }
+        app.vcs.diff = None;
+        app.notify(tr("Restored; ⌘Z undoes it"), false);
+    }
+}
+
+/// "Today 14:05:12", "Yesterday 09:30:00" or "2026-11-04 18:20".
+pub(crate) fn format_time(t: std::time::SystemTime) -> String {
+    let secs = t.duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()) as i64;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()) as i64;
+    let offset = local_offset_secs();
+    let (day, tod) = ((secs + offset).div_euclid(86400), (secs + offset).rem_euclid(86400));
+    let today = (now + offset).div_euclid(86400);
+    let hms = format!("{:02}:{:02}:{:02}", tod / 3600, tod / 60 % 60, tod % 60);
+    match today - day {
+        0 => format!("{} {hms}", tr("Today")),
+        1 => format!("{} {hms}", tr("Yesterday")),
+        _ => {
+            let (y, m, d) = civil_from_days(day);
+            format!("{y}-{m:02}-{d:02} {}", &hms[..5])
+        }
+    }
+}
+
+/// The local time zone's offset from UTC, in seconds.
+fn local_offset_secs() -> i64 {
+    #[cfg(unix)]
+    {
+        // SAFETY: localtime_r writes into the struct we own.
+        unsafe {
+            let now = libc::time(std::ptr::null_mut());
+            let mut tm: libc::tm = std::mem::zeroed();
+            libc::localtime_r(&now, &mut tm);
+            tm.tm_gmtoff as i64
+        }
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Time::{GetTimeZoneInformation, TIME_ZONE_INFORMATION};
+        // SAFETY: the function fills the struct we own; Bias is in minutes, UTC = local + bias.
+        unsafe {
+            let mut tz: TIME_ZONE_INFORMATION = std::mem::zeroed();
+            let mode = GetTimeZoneInformation(&mut tz);
+            let dst = if mode == 2 { tz.DaylightBias } else { tz.StandardBias };
+            -((tz.Bias + dst) as i64) * 60
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        0
+    }
+}
+
+/// Days since 1970-01-01 → (year, month, day) (Howard Hinnant's algorithm).
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z.rem_euclid(146097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (yoe + era * 400 + i64::from(m <= 2), m, d)
+}
+
+/// Call / Type Hierarchy: direction toggles in the header, a lazily loaded tree.
+fn hierarchy_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    use crate::hierarchy::{Direction, HierarchyKind};
+    let p = rc_kit::pal(ui);
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let title = match app.hierarchy.as_ref().map(|h| h.kind) {
+        Some(HierarchyKind::Calls) => tr("Call Hierarchy"),
+        Some(HierarchyKind::Types) => tr("Type Hierarchy"),
+        None => tr("Hierarchy"),
+    };
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, title, theme::bold(13.0), p.text);
+    let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0, r.center().y - 13.0), vec2(26.0, 26.0));
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+    if theme::icon_button(&mut child, rc_kit::ico::HIDE, true, tr("Hide")).clicked() {
+        app.toggle_tool(ToolWindow::Hierarchy);
+        return;
+    }
+    let Some(h) = &mut app.hierarchy else {
+        let (title, hint) = empty_text(ToolWindow::Hierarchy);
+        empty_state(ui, ToolWindow::Hierarchy.icon(), title, hint);
+        return;
+    };
+    let mut x = t.right() + 14.0;
+    let labels = match h.kind {
+        HierarchyKind::Calls => [(tr("Callers"), Direction::Up), (tr("Callees"), Direction::Down)],
+        HierarchyKind::Types => [(tr("Base Types"), Direction::Up), (tr("Derived Types"), Direction::Down)],
+    };
+    let mut new_dir = None;
+    for (label, dir) in labels {
+        let w = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(12.5), p.text).size().x + 32.0;
+        let br = Rect::from_min_size(pos2(x, r.center().y - 12.0), vec2(w, 24.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        let icon = if dir == Direction::Up { rc_kit::ico::UP } else { rc_kit::ico::DOWN };
+        if theme::tool_button(&mut child, icon, label, h.direction == dir).clicked() {
+            new_dir = Some(dir);
+        }
+        x += w + 6.0;
+    }
+    let mut load: Vec<(usize, serde_json::Value)> = Vec::new();
+    if let Some(dir) = new_dir
+        && dir != h.direction
+    {
+        h.set_direction(dir);
+        h.nodes[0].expanded = true;
+        load.push((0, h.nodes[0].item.clone()));
+    }
+    let mut open: Option<(std::path::PathBuf, usize, usize)> = None;
+    let rows = h.rows();
+    egui::ScrollArea::both().id_salt("hierarchy").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for id in rows {
+            let n = &h.nodes[id];
+            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(260.0), 24.0), Sense::click());
+            let selected = h.selected == Some(id);
+            if selected {
+                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.selection);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+            }
+            let x0 = rect.left() + 10.0 + n.depth as f32 * 18.0;
+            let leaf = n.children.as_ref().is_some_and(|c| c.is_empty());
+            if !leaf {
+                let chevron = if n.expanded { rc_kit::ico::CHEVRON_DOWN } else { rc_kit::ico::CHEVRON_RIGHT };
+                icons::paint(ui.painter(), Rect::from_center_size(pos2(x0 + 8.0, rect.center().y), vec2(16.0, 16.0)), chevron, &p, true);
+            }
+            let kind: rc_lsp::lsp_types::SymbolKind = serde_json::from_value(serde_json::json!(n.kind)).unwrap_or(rc_lsp::lsp_types::SymbolKind::METHOD);
+            icons::paint(ui.painter(), Rect::from_center_size(pos2(x0 + 26.0, rect.center().y), vec2(16.0, 16.0)), crate::convert::symbol_icon(kind), &p, true);
+            let g = ui.painter().layout_no_wrap(n.name.clone(), FontId::proportional(13.0), p.text);
+            let lx = x0 + 40.0;
+            ui.painter().galley(pos2(lx, (rect.center().y - g.size().y / 2.0).round()), g.clone(), p.text);
+            let file = n.path.as_ref().and_then(|p| p.file_name()).map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            let secondary = if n.detail.is_empty() { format!("{file}:{}", n.line + 1) } else { format!("{}  {file}:{}", n.detail, n.line + 1) };
+            ui.painter().text(pos2(lx + g.size().x + 8.0, rect.center().y), Align2::LEFT_CENTER, secondary, FontId::proportional(12.0), p.muted);
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &n.name));
+            let on_chevron = ui.input(|i| i.pointer.interact_pos()).is_some_and(|pt| pt.x < x0 + 18.0);
+            if resp.clicked() {
+                h.selected = Some(id);
+            }
+            if (resp.clicked() && on_chevron && !leaf) || (resp.double_clicked() && !leaf && n.children.is_none()) {
+                let n = &mut h.nodes[id];
+                n.expanded = !n.expanded;
+                if n.expanded && n.children.is_none() {
+                    load.push((id, n.item.clone()));
+                }
+            }
+            if resp.double_clicked()
+                && let Some(path) = &h.nodes[id].path
+            {
+                open = Some((path.clone(), h.nodes[id].line, h.nodes[id].col));
+            }
+        }
+    });
+    let (kind, dir, generation) = (h.kind, h.direction, h.generation);
+    for (id, item) in load {
+        app.insight.hierarchy_children(kind, dir, generation, id, &item);
+    }
+    if let Some((path, line, col)) = open {
+        app.open_at(&path, line, col);
+    }
+}
+
+/// TODO: Project / Current File tabs, a refresh button, the comments by file.
+fn todo_window(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let now = ui.input(|i| i.time);
+    let active = app.docs.active_doc().map(|d| d.path.clone());
+    let Some(todos) = &mut app.todos else {
+        if header(ui, "TODO") {
+            app.toggle_tool(ToolWindow::Todo);
+        }
+        let (title, hint) = empty_text(ToolWindow::Todo);
+        empty_state(ui, ToolWindow::Todo.icon(), title, hint);
+        return;
+    };
+    // Rescan when the window shows again after a while (files changed meanwhile).
+    if !todos.scanning && todos.scanned_at.is_none_or(|t| now - t > 30.0) {
+        todos.refresh(now);
+    }
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
+    ui.allocate_rect(r, Sense::hover());
+    let t = ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, "TODO", theme::bold(13.0), p.text);
+    let mut x = t.right() + 14.0;
+    let mut hide = false;
+    let mut refresh = false;
+    for (label, current) in [(tr("Project"), false), (tr("Current File"), true)] {
+        let w = ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(12.5), p.text).size().x + 32.0;
+        let br = Rect::from_min_size(pos2(x, r.center().y - 12.0), vec2(w, 24.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        if theme::tool_button(&mut child, if current { rc_kit::ico::FILE_TEXT } else { rc_kit::ico::TW_PROJECT }, label, todos.current_file == current).clicked() {
+            todos.current_file = current;
+        }
+        x += w + 6.0;
+    }
+    if todos.scanning {
+        ui.painter().text(pos2(x + 6.0, r.center().y), Align2::LEFT_CENTER, tr("Scanning…"), FontId::proportional(12.0), p.muted);
+    } else {
+        ui.painter().text(pos2(x + 6.0, r.center().y), Align2::LEFT_CENTER, rc_kit::i18n::trf("{n} items", &[("n", &todos.count())]), FontId::proportional(12.0), p.muted);
+    }
+    for (i, (icon, tip)) in [(rc_kit::ico::HIDE, tr("Hide")), (rc_kit::ico::REFRESH, tr("Refresh"))].into_iter().enumerate() {
+        let br = Rect::from_min_size(pos2(r.right() - 8.0 - 26.0 * (i + 1) as f32, r.center().y - 13.0), vec2(26.0, 26.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        if theme::icon_button(&mut child, icon, true, tip).clicked() {
+            if i == 0 { hide = true } else { refresh = true }
+        }
+    }
+    if refresh {
+        todos.refresh(now);
+    }
+    let files: Vec<crate::todo::TodoFile> = todos.files.iter().filter(|f| !todos.current_file || active.as_ref() == Some(&f.path)).cloned().collect();
+    let mut open: Option<(std::path::PathBuf, usize, usize)> = None;
+    if files.is_empty() && !todos.scanning {
+        let (title, hint) = empty_text(ToolWindow::Todo);
+        empty_state(ui, ToolWindow::Todo.icon(), title, hint);
+    } else {
+        egui::ScrollArea::vertical().id_salt("todo").auto_shrink([false, false]).show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            for f in &files {
+                let name = f.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                let dir = f.rel.rsplit_once('/').map_or("", |(d, _)| d);
+                list_row(ui, 0, rc_kit::icons::for_file(&name), &name, &format!("{dir}  {}", rc_kit::i18n::trf("{n} items", &[("n", &f.items.len())])), false);
+                for item in &f.items {
+                    let resp = list_row(ui, 1, rc_kit::ico::TW_TODO, &item.text, &format!(":{}", item.line + 1), false);
+                    if resp.double_clicked() || resp.clicked() {
+                        open = Some((f.path.clone(), item.line, item.col));
+                    }
+                }
+            }
+        });
+    }
+    if hide {
+        app.toggle_tool(ToolWindow::Todo);
+    }
+    if let Some((path, line, col)) = open {
+        app.open_at(&path, line, col);
+    }
+}
+
+/// Bookmarks by file: double click opens, the context menu removes.
+fn bookmarks(app: &mut DotCraftApp, ui: &mut Ui) {
+    let marks = app.docs.all_bookmarks();
+    if marks.is_empty() {
+        let (title, hint) = empty_text(ToolWindow::Bookmarks);
+        empty_state(ui, ToolWindow::Bookmarks.icon(), title, hint);
+        return;
+    }
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    let mut open: Option<(std::path::PathBuf, usize)> = None;
+    let mut remove: Option<(std::path::PathBuf, usize)> = None;
+    egui::ScrollArea::vertical().id_salt("bookmarks").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let mut last: Option<&std::path::Path> = None;
+        for b in &marks {
+            if last != Some(b.path.as_path()) {
+                let name = b.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                let dir = root.as_ref().and_then(|r| b.path.parent()?.strip_prefix(r).ok()).map(|d| d.display().to_string()).unwrap_or_default();
+                list_row(ui, 0, rc_kit::icons::for_file(&name), &name, &dir, false);
+                last = Some(b.path.as_path());
+            }
+            let text = match app.docs.index_of(&b.path) {
+                Some(i) => app.docs.list[i].editor.buffer.line_text(b.line),
+                None => std::fs::read_to_string(&b.path).ok().and_then(|t| t.lines().nth(b.line).map(str::to_string)).unwrap_or_default(),
+            };
+            let label = match b.mnemonic {
+                Some(c) => format!("{c}  {}", text.trim()),
+                None => text.trim().to_string(),
+            };
+            let resp = list_row(ui, 1, rc_kit::ico::BOOKMARK, &label, &format!(":{}", b.line + 1), false);
+            if resp.double_clicked() {
+                open = Some((b.path.clone(), b.line));
+            }
+            resp.context_menu(|ui| {
+                if theme::menu_item(ui, Some(rc_kit::ico::BOOKMARK), tr("Go to Bookmark"), false).clicked() {
+                    open = Some((b.path.clone(), b.line));
+                    ui.close();
+                }
+                if theme::menu_item(ui, Some(rc_kit::ico::DELETE), tr("Remove Bookmark"), false).clicked() {
+                    remove = Some((b.path.clone(), b.line));
+                    ui.close();
+                }
+            });
+        }
+    });
+    if let Some((path, line)) = open {
+        app.open_at(&path, line, 0);
+    }
+    if let Some((path, line)) = remove {
+        app.docs.set_bookmark(&path, line, None);
+        app.session_dirty = true;
+    }
 }
 
 fn problems(app: &mut DotCraftApp, ui: &mut Ui) {
@@ -332,8 +1033,16 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Find => (tr("No search results"), tr("Find in Files shows its results here.")),
         ToolWindow::Notifications => (tr("No notifications"), tr("Messages from builds, tools and updates show up here.")),
         ToolWindow::Nuget => ("NuGet", ""),
-        ToolWindow::Http => (tr("HTTP Client"), ""),
+        ToolWindow::Http => (tr("HTTP Scratchpad"), ""),
         ToolWindow::Database => (tr("Database"), ""),
+        ToolWindow::Monitoring => ("", ""),
+        ToolWindow::HttpClient => (tr("No requests sent"), tr("Open a .http file and click ▶ next to a request, or generate one from the Endpoints window.")),
+        ToolWindow::Coverage => (tr("No coverage yet"), tr("Run the tests with coverage to see which lines they reach.")),
+        ToolWindow::Endpoints => (tr("No endpoints"), tr("Controllers and minimal APIs of the solution show up here.")),
+        ToolWindow::LocalHistory => (tr("No local history"), tr("A copy of the file is kept each time it is saved or changed by another app.")),
+        ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Press ⌃⌥H on a method for its calls, or ⌃H on a type for its base and derived types.")),
+        ToolWindow::Todo => (tr("No TODO items"), tr("TODO and FIXME comments of the solution show up here.")),
+        ToolWindow::Bookmarks => (tr("No bookmarks"), tr("Press F3 on a line to bookmark it, or ⌥F3 to give it a letter or digit.")),
         ToolWindow::Explorer => ("", ""),
     }
 }

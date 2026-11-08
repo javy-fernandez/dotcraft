@@ -53,13 +53,33 @@ pub struct DotCraftApp {
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
+    /// Monitoring: CPU and memory of the program in the selected Run tab.
+    pub monitor: crate::monitor::Monitor,
+    /// TODO tool window: the workspace's TODO and FIXME comments.
+    pub todos: Option<crate::todo::Todos>,
+    /// Hierarchy tool window (Call / Type Hierarchy).
+    pub hierarchy: Option<crate::hierarchy::Hierarchy>,
+    /// Local History window: the file shown and its selected revision.
+    pub history_file: Option<std::path::PathBuf>,
+    /// HTTP Client: `.http` requests and their responses.
+    pub http: crate::web::HttpClient,
+    /// Endpoints window.
+    pub endpoints: crate::web::Endpoints,
+    /// Test coverage run and report.
+    pub coverage: crate::coverage::Coverage,
+    pub history_selected: Option<usize>,
+    /// The update check under way, and whether it was asked for (Check for Updates…).
+    update_check: Option<(std::sync::mpsc::Receiver<Result<crate::update::Release, String>>, bool)>,
+    /// A newer release, shown in the bottom-right notice until dismissed.
+    pub update: Option<crate::update::Release>,
     pub insight: Insight,
     pub runner: Runner,
     pub debugger: crate::debugger::Debugger,
     window_title: String,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
-    pub http: crate::http_client::HttpClient,
+    /// Explicit-send, bounded HTTP scratchpad; independent of the upstream gutter client.
+    pub http_scratchpad: crate::http_client::HttpClient,
     pub database: crate::database::Database,
     pub nuget: crate::ui::nuget::NugetManager,
     pub split: Option<Split>,
@@ -116,6 +136,9 @@ impl DotCraftApp {
         let keymap = Keymap::new(keymap_kind(settings.keymap));
         let native_menu = NativeMenu::install(&cc.egui_ctx, &keymap);
         let mut app = Self::with_settings(settings, waker, native_menu);
+        if app.settings.check_updates {
+            app.update_check = Some((crate::update::check(cc.egui_ctx.clone(), std::time::Duration::from_secs(5)), false));
+        }
         crate::open_files::set_context(&cc.egui_ctx);
         // Files sent by Finder at launch arrive before the first frame: open them instead of
         // the last project.
@@ -136,18 +159,32 @@ impl DotCraftApp {
             keymap,
             editor_config,
             workspace: None,
-            docs: Docs::with_waker(pool, waker.clone()),
+            docs: {
+                let mut d = Docs::with_waker(pool, waker.clone());
+                d.history = true;
+                d
+            },
             dock: Dock::default(),
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
+            monitor: crate::monitor::Monitor::new(waker.clone()),
+            todos: None,
+            hierarchy: None,
+            history_file: None,
+            http: crate::web::HttpClient::new(waker.clone()),
+            endpoints: crate::web::Endpoints::new(),
+            coverage: crate::coverage::Coverage::new(waker.clone()),
+            history_selected: None,
+            update_check: None,
+            update: None,
             insight: Insight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
-            http: crate::http_client::HttpClient::new(waker.clone()),
+            http_scratchpad: crate::http_client::HttpClient::new(waker.clone()),
             database: crate::database::Database::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             split: None,
@@ -190,6 +227,69 @@ impl DotCraftApp {
             ThemeChoice::Dark => true,
             ThemeChoice::Light => false,
             ThemeChoice::System => ctx.system_theme().is_none_or(|t| t == egui::Theme::Dark),
+        }
+    }
+
+    /// Check for Updates…: the result is shown even for a skipped version, and when up to date.
+    pub fn check_for_updates(&mut self, ctx: &Context) {
+        self.notify(tr("Checking for updates…"), false);
+        self.update_check = Some((crate::update::check(ctx.clone(), std::time::Duration::ZERO), true));
+    }
+
+    /// The update check's result, and the notice of a newer release in the bottom-right corner
+    /// (as in DataCraft). Nothing is downloaded: the notice links to the release page.
+    fn update_notice(&mut self, ctx: &Context) {
+        if let Some((rx, asked)) = &self.update_check
+            && let Ok(result) = rx.try_recv()
+        {
+            let asked = *asked;
+            self.update_check = None;
+            match result {
+                Ok(r) if crate::update::is_newer(&r.version) => {
+                    if asked || self.settings.skipped_version.as_deref() != Some(r.version.as_str()) {
+                        self.update = Some(r);
+                    }
+                }
+                Ok(_) if asked => self.notify(trf("DotCraft {version} is up to date", &[("version", &env!("CARGO_PKG_VERSION"))]), false),
+                Err(e) if asked => self.notify(trf("Could not check for updates: {error}", &[("error", &e)]), true),
+                _ => {}
+            }
+        }
+        // Not over a dialog: it comes back when the dialog closes.
+        let Some(release) = self.update.clone().filter(|_| self.dialog.is_none()) else { return };
+        let mut close = false;
+        egui::Area::new(egui::Id::new("update_notice")).anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -40.0)).order(egui::Order::Foreground).show(ctx, |ui| {
+            let p = rc_kit::pal(ui);
+            egui::Frame::popup(ui.style()).fill(p.popup_bg).corner_radius(10).inner_margin(egui::Margin::same(14)).stroke(egui::Stroke::new(1.0, p.popup_border)).show(ui, |ui| {
+                ui.set_width(300.0);
+                ui.horizontal(|ui| {
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::hover());
+                    rc_kit::branding::paint(ui, r);
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new(trf("DotCraft {version} is available", &[("version", &release.version)])).strong());
+                        ui.label(egui::RichText::new(trf("You have {version}. Download it from the release page.", &[("version", &env!("CARGO_PKG_VERSION"))])).size(12.0).color(p.muted));
+                    });
+                });
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    if rc_kit::theme::primary_button(ui, tr("View Release")).clicked() {
+                        crate::ui::run_windows::open_url(&release.url);
+                        close = true;
+                    }
+                    if rc_kit::theme::secondary_button(ui, tr("Skip This Version")).clicked() {
+                        self.settings.skipped_version = Some(release.version.clone());
+                        let _ = self.settings.save();
+                        close = true;
+                    }
+                    if rc_kit::theme::secondary_button(ui, tr("Later")).clicked() {
+                        close = true;
+                    }
+                });
+            });
+        });
+        if close {
+            self.update = None;
         }
     }
 
@@ -239,6 +339,7 @@ impl DotCraftApp {
         self.runner.options = session.run_options.clone();
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         self.workspace = Some(WorkspaceState { ws, solution });
+        self.refresh_endpoints();
         self.restore_session(session);
     }
 
@@ -249,6 +350,50 @@ impl DotCraftApp {
         });
         self.files.open(&ws.root, self.waker.clone());
         self.vcs.open(&ws.root);
+        self.todos = Some(crate::todo::Todos::new(&ws.root, self.waker.clone()));
+    }
+
+    /// Runs every test collecting coverage (coverlet), then shows the Coverage window.
+    pub fn run_coverage(&mut self) {
+        let Some(ws) = self.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) else { return };
+        self.save_all_docs();
+        match self.runner.dotnet() {
+            Ok(dotnet) => {
+                let target = self.runner.all_tests_target(&ws);
+                self.coverage.start(&dotnet, &target);
+                self.dock.show(ToolWindow::Coverage);
+            }
+            Err(e) => self.notify(e, true),
+        }
+    }
+
+    /// Scans the projects' controllers and minimal APIs for the Endpoints window.
+    pub fn refresh_endpoints(&mut self) {
+        let projects: Vec<(String, PathBuf)> = self.solution_projects().into_iter().map(|p| (p.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned()), p)).collect();
+        self.endpoints.refresh(projects, self.waker.clone());
+    }
+
+    /// ▶ next to a request of a `.http` file (or Run Request at the caret): sends it.
+    pub fn send_http_request(&mut self, i: usize, line: usize) {
+        let (path, text) = (self.docs.list[i].path.clone(), self.docs.list[i].editor.buffer.rope().to_string());
+        match self.http.send(&path, &text, line) {
+            Ok(()) => self.dock.show(ToolWindow::HttpClient),
+            Err(e) => self.notify(e, true),
+        }
+    }
+
+    /// ▶ markers on the requests of the active `.http` file.
+    fn update_http_markers(&mut self) {
+        let Some(i) = self.docs.active else { return };
+        let doc = &mut self.docs.list[i];
+        if !crate::web::is_http_file(&doc.path) {
+            return;
+        }
+        let file = rc_dotnet::http_file::parse(&doc.editor.buffer.rope().to_string());
+        doc.editor.gutter_icons.retain(|_, icon| *icon != rc_editor::GutterIcon::RunApp);
+        for r in &file.requests {
+            doc.editor.gutter_icons.insert(r.start_line, rc_editor::GutterIcon::RunApp);
+        }
     }
 
     /// Every project of the workspace (its solution's, or the ones found in the folder).
@@ -323,8 +468,10 @@ impl DotCraftApp {
         self.runner.stop_all();
         self.runner.clear();
         self.files.close();
+        self.todos = None;
         self.vcs.close();
-        self.http = crate::http_client::HttpClient::new(self.waker.clone());
+        self.http_scratchpad = crate::http_client::HttpClient::new(self.waker.clone());
+        self.http = crate::web::HttpClient::new(self.waker.clone());
         self.database.disconnect();
         self.find_in_files = None;
         self.search_everywhere = None;
@@ -340,9 +487,12 @@ impl DotCraftApp {
     }
 
     fn restore_session(&mut self, s: Session) {
+        // Before the files open: each picks its own up.
+        self.docs.bookmarks = s.bookmarks.iter().map(|(p, b)| (p.clone(), b.iter().copied().collect())).collect();
         // A solution without a layout of its own starts with the last one used.
         self.dock = Dock::from_session(if s.tool_windows.is_empty() { &self.settings.tool_windows } else { &s.tool_windows });
         self.explorer.expanded = s.expanded.iter().cloned().collect();
+        self.explorer.set_show_all(s.show_all_files);
         if self.explorer.expanded.is_empty() {
             // First open: the solution and its top folders expanded, like Rider.
             self.explorer.expanded.insert("sln".into());
@@ -420,6 +570,14 @@ impl DotCraftApp {
                 v.sort();
                 v
             },
+            show_all_files: self.explorer.show_all,
+            bookmarks: {
+                let mut m: std::collections::BTreeMap<std::path::PathBuf, Vec<(usize, Option<char>)>> = Default::default();
+                for b in self.docs.all_bookmarks() {
+                    m.entry(b.path).or_default().push((b.line, b.mnemonic));
+                }
+                m
+            },
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
@@ -475,6 +633,22 @@ impl DotCraftApp {
                 InsightOutput::Actions(list) => self.dialog = Some(Dialog::CodeActions { list, selected: 0 }),
                 InsightOutput::AskRename { doc, pos, name } => self.dialog = Some(Dialog::RenameSymbol { doc, pos, original: name.clone(), name, focus: true }),
                 InsightOutput::Message(m) => self.notify(m, false),
+                InsightOutput::Hierarchy { kind, items } => {
+                    let generation = self.hierarchy.as_ref().map_or(1, |h| h.generation + 1);
+                    let mut h = crate::hierarchy::Hierarchy::new(kind, items, generation);
+                    // The first level right away, like Rider.
+                    h.nodes[0].expanded = true;
+                    self.insight.hierarchy_children(kind, h.direction, generation, 0, &h.nodes[0].item.clone());
+                    self.hierarchy = Some(h);
+                    self.dock.show(ToolWindow::Hierarchy);
+                }
+                InsightOutput::HierarchyChildren { generation, node, items } => {
+                    if let Some(h) = &mut self.hierarchy
+                        && h.generation == generation
+                    {
+                        h.set_children(node, items);
+                    }
+                }
             }
         }
     }
@@ -524,6 +698,8 @@ impl DotCraftApp {
             Action::Rename => self.insight.prepare_rename(doc),
             Action::Reformat => self.insight.format(doc),
             Action::FileStructure => self.dialog = Some(Dialog::FileStructure { filter: String::new(), selected: 0 }),
+            Action::CallHierarchy => self.insight.prepare_hierarchy(doc, caret, crate::hierarchy::HierarchyKind::Calls),
+            Action::TypeHierarchy => self.insight.prepare_hierarchy(doc, caret, crate::hierarchy::HierarchyKind::Types),
             _ => {}
         }
     }
@@ -590,6 +766,17 @@ impl DotCraftApp {
         if self.settings.add_recent_file(path) {
             let _ = self.settings.save();
         }
+    }
+
+    /// File › Local History › Show History: the window for `path` (or the active file).
+    pub fn show_local_history(&mut self, path: Option<std::path::PathBuf>) {
+        let path = path.or_else(|| self.docs.active_doc().map(|d| d.path.clone()));
+        if path.is_none() {
+            return;
+        }
+        self.history_file = path;
+        self.history_selected = None;
+        self.dock.show(ToolWindow::LocalHistory);
     }
 
     /// File › Reload from Disk for the active document.
@@ -810,6 +997,14 @@ impl DotCraftApp {
             Action::ZoomIn => self.set_zoom(ctx, self.settings.ui_zoom + 0.1),
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
             Action::ZoomReset => self.set_zoom(ctx, 1.0),
+            Action::ShowBookmarks => self.dock.show(ToolWindow::Bookmarks),
+            Action::GotoBookmark(n) => {
+                let c = char::from(b'0' + n);
+                match self.docs.all_bookmarks().into_iter().find(|b| b.mnemonic == Some(c)) {
+                    Some(b) => self.open_at(&b.path, b.line, 0),
+                    None => self.notify(rc_kit::i18n::trf("No bookmark {n}", &[("n", &c)]), false),
+                }
+            }
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
             Action::RecentLocations => {
                 if !self.nav_back.is_empty() {
@@ -1080,6 +1275,7 @@ impl DotCraftApp {
                     self.session_dirty = true;
                 }
                 ExplorerAction::LocateActive => self.locate_active(),
+                ExplorerAction::ToggleShowAll => self.explorer.set_show_all(!self.explorer.show_all),
                 ExplorerAction::NewItem(dir, kind) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind, error: None }),
                 ExplorerAction::Rename(path) => {
                     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
@@ -1154,6 +1350,7 @@ impl DotCraftApp {
             if let Some(w) = &mut self.workspace {
                 w.solution = Some(solution);
             }
+            self.refresh_endpoints();
         }
         self.sync_doc_watcher();
         let mut outside: Vec<PathBuf> = self.doc_inbox.drain().into_iter().map(|e| e.path().to_path_buf()).collect();
@@ -1256,6 +1453,7 @@ impl eframe::App for DotCraftApp {
                 match cmd {
                     MenuCommand::Act(a) => self.pending.push(a),
                     MenuCommand::About => self.dialog = Some(Dialog::About),
+                    MenuCommand::CheckUpdates => self.check_for_updates(ctx),
                     MenuCommand::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
                     MenuCommand::OpenProject => self.pick_and_open(),
                     MenuCommand::OpenFile => self.pick_file(),
@@ -1269,6 +1467,8 @@ impl eframe::App for DotCraftApp {
                     }
                     MenuCommand::CloseProject => self.close_project(),
                     MenuCommand::ReloadFromDisk => self.reload_active_from_disk(),
+                    MenuCommand::ShowHistory => self.show_local_history(None),
+                    MenuCommand::RunCoverage => self.run_coverage(),
                     MenuCommand::OpenRecent(n) => {
                         if let Some(p) = self.native_menu.as_ref().and_then(|m| m.recent_path(n)) {
                             self.open_path(&p);
@@ -1331,6 +1531,13 @@ impl eframe::App for DotCraftApp {
         self.handle_insight(outputs);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
+        // Monitoring follows the selected Run tab's process (or the last one started).
+        let target = self.runner.runs.get(self.runner.active_run).filter(|r| r.running()).or_else(|| self.runner.runs.iter().rev().find(|r| r.running()));
+        self.monitor.follow(target.and_then(|r| Some((r.name.clone(), r.handle.as_ref()?.pid()?))));
+        self.monitor.poll();
+        if let Some(t) = &mut self.todos {
+            t.poll();
+        }
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
         for (_, ev) in self.terminals.poll() {
@@ -1339,13 +1546,21 @@ impl eframe::App for DotCraftApp {
             }
         }
         self.update_test_markers();
+        self.update_http_markers();
+        self.http.poll();
+        self.endpoints.poll();
+        if self.coverage.poll() {
+            self.dock.show(ToolWindow::Coverage);
+        }
+        self.coverage.mark(&mut self.docs);
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
         }
-        self.http.update();
+        self.http_scratchpad.update();
         self.database.update();
         crate::ui::frame(self, ui, editor_actions);
+        self.update_notice(&ctx);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);
         if self.session_dirty && now - self.last_session_save > 2.0 {
@@ -1355,7 +1570,7 @@ impl eframe::App for DotCraftApp {
     }
 
     fn on_exit(&mut self) {
-        self.runner.stop_all();
+        self.runner.kill_all_now();
         self.debugger.stop();
         self.insight.stop();
         self.save_all_docs();

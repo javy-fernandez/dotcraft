@@ -1,0 +1,9 @@
+# TODO tool window. Import: python3 scripts/i18n_tsv.py app scripts/i18n/todo.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+No TODO items	No hay TODO	Aucun TODO	Nenhum TODO	Keine TODOs	Brak TODO	没有 TODO	TODO はありません
+TODO and FIXME comments of the solution show up here.	Aquí aparecen los comentarios TODO y FIXME de la solución.	Les commentaires TODO et FIXME de la solution apparaissent ici.	Os comentários TODO e FIXME da solução aparecem aqui.	TODO- und FIXME-Kommentare der Projektmappe erscheinen hier.	Tutaj pojawiają się komentarze TODO i FIXME z rozwiązania.	解决方案中的 TODO 和 FIXME 注释显示在这里。	ソリューションの TODO と FIXME コメントがここに表示されます。
+Project	Proyecto	Projet	Projeto	Projekt	Projekt	项目	プロジェクト
+Current File	Archivo actual	Fichier actuel	Arquivo atual	Aktuelle Datei	Bieżący plik	当前文件	現在のファイル
+Scanning…	Buscando…	Analyse…	Analisando…	Wird durchsucht…	Skanowanie…	正在扫描…	スキャン中…
+{n} items	{n} elementos	{n} éléments	{n} itens	{n} Einträge	{n} elementów	{n} 项	{n} 件
+Refresh	Actualizar	Actualiser	Atualizar	Aktualisieren	Odśwież	刷新	更新

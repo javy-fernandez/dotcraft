@@ -1,5 +1,4 @@
 # English fallback values for the initial HTTP Client implementation.
-HTTP Client	HTTP Client	HTTP Client	HTTP Client	HTTP Client	HTTP Client	HTTP Client	HTTP Client
 Open an .http or .rest file to select a request.	Open an .http or .rest file to select a request.	Open an .http or .rest file to select a request.	Open an .http or .rest file to select a request.	Open an .http or .rest file to select a request.	Open an .http or .rest file to select a request.	Open an .http or .rest file to select a request.	Open an .http or .rest file to select a request.
 No HTTP requests found.	No HTTP requests found.	No HTTP requests found.	No HTTP requests found.	No HTTP requests found.	No HTTP requests found.	No HTTP requests found.	No HTTP requests found.
 Send Request	Send Request	Send Request	Send Request	Send Request	Send Request	Send Request	Send Request
@@ -13,3 +12,4 @@ Binary response body is not displayed.	Binary response body is not displayed.	Bi
 Invalid HTTP request: {error}	Invalid HTTP request: {error}	Invalid HTTP request: {error}	Invalid HTTP request: {error}	Invalid HTTP request: {error}	Invalid HTTP request: {error}	Invalid HTTP request: {error}	Invalid HTTP request: {error}
 HTTP request failed: {error}	HTTP request failed: {error}	HTTP request failed: {error}	HTTP request failed: {error}	HTTP request failed: {error}	HTTP request failed: {error}	HTTP request failed: {error}	HTTP request failed: {error}
 HTTP request timed out.	HTTP request timed out.	HTTP request timed out.	HTTP request timed out.	HTTP request timed out.	HTTP request timed out.	HTTP request timed out.	HTTP request timed out.
+HTTP Scratchpad	HTTP Scratchpad	HTTP Scratchpad	HTTP Scratchpad	HTTP Scratchpad	HTTP Scratchpad	HTTP Scratchpad	HTTP Scratchpad

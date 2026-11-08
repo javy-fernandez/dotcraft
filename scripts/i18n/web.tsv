@@ -1,0 +1,16 @@
+# HTTP Client and Endpoints. Import: python3 scripts/i18n_tsv.py app scripts/i18n/web.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+HTTP Client	Cliente HTTP	Client HTTP	Cliente HTTP	HTTP-Client	Klient HTTP	HTTP 客户端	HTTP クライアント
+Endpoints	Endpoints	Points de terminaison	Endpoints	Endpunkte	Punkty końcowe	端点	エンドポイント
+No requests sent	No se ha enviado ninguna petición	Aucune requête envoyée	Nenhuma requisição enviada	Keine Anfragen gesendet	Nie wysłano żądań	尚未发送请求	送信されたリクエストはありません
+Open a .http file and click ▶ next to a request, or generate one from the Endpoints window.	Abre un archivo .http y pulsa ▶ junto a una petición, o genera una desde la ventana Endpoints.	Ouvrez un fichier .http et cliquez sur ▶ à côté d'une requête, ou générez-en une depuis la fenêtre des points de terminaison.	Abra um arquivo .http e clique em ▶ ao lado de uma requisição, ou gere uma na janela Endpoints.	Öffnen Sie eine .http-Datei und klicken Sie auf ▶ neben einer Anfrage, oder erzeugen Sie eine im Endpunkte-Fenster.	Otwórz plik .http i kliknij ▶ obok żądania lub wygeneruj je w oknie punktów końcowych.	打开 .http 文件并点击请求旁的 ▶，或在端点窗口中生成请求。	.http ファイルを開いてリクエスト横の ▶ をクリックするか、エンドポイントウィンドウから生成します。
+No endpoints	No hay endpoints	Aucun point de terminaison	Nenhum endpoint	Keine Endpunkte	Brak punktów końcowych	没有端点	エンドポイントはありません
+Controllers and minimal APIs of the solution show up here.	Aquí aparecen los controllers y las minimal APIs de la solución.	Les contrôleurs et API minimales de la solution apparaissent ici.	Os controllers e as minimal APIs da solução aparecem aqui.	Controller und Minimal APIs der Projektmappe erscheinen hier.	Tutaj pojawiają się kontrolery i minimal API rozwiązania.	解决方案的控制器和最小 API 显示在这里。	ソリューションのコントローラーと Minimal API がここに表示されます。
+Filter	Filtrar	Filtrer	Filtrar	Filtern	Filtruj	筛选	フィルター
+Generate Request in HTTP Client	Generar petición en el cliente HTTP	Générer une requête dans le client HTTP	Gerar requisição no cliente HTTP	Anfrage im HTTP-Client erzeugen	Wygeneruj żądanie w kliencie HTTP	在 HTTP 客户端中生成请求	HTTP クライアントでリクエストを生成
+Go to Handler	Ir al handler	Aller au gestionnaire	Ir para o handler	Zum Handler	Przejdź do obsługi	转到处理程序	ハンドラーへ移動
+No environment	Sin entorno	Aucun environnement	Nenhum ambiente	Keine Umgebung	Brak środowiska	无环境	環境なし
+Sending…	Enviando…	Envoi…	Enviando…	Wird gesendet…	Wysyłanie…	正在发送…	送信中…
+Body	Cuerpo	Corps	Corpo	Body	Treść	正文	ボディ
+Headers	Cabeceras	En-têtes	Cabeçalhos	Header	Nagłówki	标头	ヘッダー
+No request at this line	No hay ninguna petición en esta línea	Aucune requête à cette ligne	Nenhuma requisição nesta linha	Keine Anfrage in dieser Zeile	Brak żądania w tym wierszu	此行没有请求	この行にリクエストはありません

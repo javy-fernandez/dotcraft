@@ -725,3 +725,382 @@ fn solution_filter_open_route_uses_source_root_and_watches_both_locations() {
     harness.state_mut().close_workspace();
     assert!(harness.state().files.index.is_none());
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/show-all-files-dark.png"]
+fn screens_show_all_files() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let shop = fixtures().join("Shop");
+    std::fs::create_dir_all(shop.join("src/Shop.Core/bin/Debug")).unwrap();
+    std::fs::create_dir_all(shop.join("src/Shop.Core/obj")).unwrap();
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(&shop.join("Shop.sln"));
+    app.explorer.expanded.insert(format!("proj:{}", shop.join("src/Shop.Core/Shop.Core.csproj").display()));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(2);
+    h.get_by_label("Show All Files").click();
+    h.run_steps(3);
+    assert!(h.state().explorer.show_all);
+    h.render().unwrap().save(out.join("show-all-files-dark.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/update-notice-dark.png"]
+fn screens_update_notice() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.update = Some(crate::update::Release { version: "9.0.0".into(), url: "https://github.com/javy-fernandez/dotcraft/releases/tag/v9.0.0".into() });
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("update-notice-dark.png")).unwrap();
+    h.get_by_label("Skip This Version").click();
+    h.run_steps(2);
+    assert!(h.state().update.is_none());
+    assert_eq!(h.state().settings.skipped_version.as_deref(), Some("9.0.0"));
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::About);
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("about-dark.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/monitoring-*.png"]
+fn screens_monitoring() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    for (dark, width) in [(true, 1440.0), (false, 900.0)] {
+        let mut app = test_app(home.path(), dark);
+        app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+        app.dock.show(crate::toolwindow::ToolWindow::Monitoring);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Monitoring, 300.0);
+        // A minute and a half of a web app warming up, then allocating steadily.
+        app.monitor.name = "Shop.Api".into();
+        app.monitor.pid = Some(4242);
+        app.monitor.running = true;
+        for i in 0..90 {
+            let t = i as f64;
+            let rt = (i % 2 == 0).then(|| crate::monitor::Runtime {
+                gc_heap_mb: Some(12.0 + (t * 0.4) % 18.0),
+                gen0: Some((t / 3.0).floor()),
+                gen1: Some((t / 20.0).floor()),
+                gen2: Some((t / 60.0).floor()),
+                time_in_gc: Some(if i % 7 == 0 { 3.0 } else { 0.0 }),
+                alloc_rate: Some(2.4 * 1024.0 * 1024.0),
+                threadpool_threads: Some(6.0),
+                exceptions: Some(0.0),
+            });
+            app.monitor.samples.push_back(crate::monitor::Sample { t, cpu: if i < 10 { 60.0 - t * 4.0 } else { 8.0 + (t * 0.7).sin().abs() * 14.0 }, memory_mb: 60.0 + t.min(30.0) * 1.5 + (t * 0.4) % 18.0, runtime: rt });
+        }
+        let mut h = harness(app, vec2(width, 800.0));
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("monitoring-{}.png", if dark { "dark" } else { "light-narrow" }))).unwrap();
+    }
+}
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; runs Shop.Api and writes target/snapshots/monitoring-live-dark.png"]
+fn screens_monitoring_live() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    app.dock.show(crate::toolwindow::ToolWindow::Monitoring);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Monitoring, 320.0);
+    app.runner.selected = app.runner.configs.iter().position(|c| c.name.starts_with("Shop.Api")).unwrap();
+    let outs = app.runner.run_selected();
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    // The process, then the runtime's counters through its diagnostic port.
+    run_frames(&mut h, "runtime counters", |a| a.monitor.runtime().is_some_and(|r| r.gc_heap_mb.is_some()) && a.monitor.samples.len() >= 6);
+    // Running opened the Run window in the same place.
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Monitoring);
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("monitoring-live-dark.png")).unwrap();
+    let pid = h.state().monitor.app_pid.or(h.state().monitor.pid).unwrap();
+    assert!(crate::monitor::has_diagnostic_port(pid));
+    let root = h.state().monitor.pid.unwrap();
+    // Quitting kills dotnet watch and the app at once (nothing is left running).
+    h.state_mut().runner.kill_all_now();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    #[cfg(unix)]
+    {
+        // SAFETY: signal 0 only checks that the process exists.
+        let alive = |p: u32| unsafe { libc::kill(p as i32, 0) == 0 };
+        assert!(!alive(pid) && !alive(root), "left running: app {} watch {}", alive(pid), alive(root));
+    }
+    run_frames(&mut h, "exit", |a| !a.monitor.running);
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/bookmarks-*.png"]
+fn screens_bookmarks() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    let calc = fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs");
+    let order = fixtures().join("Shop/src/Shop.Core/Order.cs");
+    app.docs.set_bookmark(&order, 2, Some(Some('2')));
+    app.open_file(&calc);
+    app.docs.set_bookmark(&calc, 4, Some(None));
+    app.docs.set_bookmark(&calc, 8, Some(Some('1')));
+    app.dock.show(crate::toolwindow::ToolWindow::Bookmarks);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("bookmarks-dark.png")).unwrap();
+    // ⌃2 jumps to Order.cs.
+    {
+        let ctx = h.ctx.clone();
+        h.state_mut().run_ide_action(&ctx, rc_editor::Action::GotoBookmark(2));
+    }
+    h.run_steps(2);
+    assert_eq!(h.state().docs.active_doc().unwrap().path, order);
+    // ⌥F3 picker.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::BookmarkMnemonic { path: order.clone(), line: 2 });
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("bookmarks-mnemonic-dark.png")).unwrap();
+    h.get_by_label("A").click();
+    h.run_steps(2);
+    assert!(h.state().docs.all_bookmarks().iter().any(|b| b.path == order && b.mnemonic == Some('A')));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/hierarchy-dark.png"]
+fn screens_hierarchy() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    let calc = fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs");
+    app.open_file(&calc);
+    let uri = |p: &str| rc_lsp::path_to_uri(&fixtures().join(p)).as_str().to_string();
+    let item = |name: &str, detail: &str, file: &str, line: u64| serde_json::json!({ "name": name, "detail": detail, "kind": 6, "uri": uri(file), "range": {}, "selectionRange": { "start": { "line": line, "character": 4 }, "end": { "line": line, "character": 8 } } });
+    let mut h = crate::hierarchy::Hierarchy::new(crate::hierarchy::HierarchyKind::Calls, vec![item("PriceCalculator.Calculate(Order)", "Shop.Core.PriceCalculator", "Shop/src/Shop.Core/PriceCalculator.cs", 16)], 1);
+    h.set_children(0, vec![
+        serde_json::json!({ "from": item("OrdersController.Post(QuoteRequest)", "Shop.Api.Controllers.OrdersController", "Shop/src/Shop.Api/Controllers/OrdersController.cs", 30) }),
+        serde_json::json!({ "from": item("Program.<Main>$(string[])", "Program", "Shop/src/Shop.Cli/Program.cs", 12) }),
+        serde_json::json!({ "from": item("PriceCalculatorTests.AppliesBulkDiscount()", "Shop.Core.XunitTests.PriceCalculatorTests", "Shop/tests/Shop.Core.XunitTests/PriceCalculatorTests.cs", 20) }),
+    ]);
+    h.nodes[0].expanded = true;
+    h.set_children(1, vec![]);
+    app.hierarchy = Some(h);
+    app.dock.show(crate::toolwindow::ToolWindow::Hierarchy);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Hierarchy, 520.0);
+    let mut hh = harness(app, vec2(1440.0, 800.0));
+    hh.run_steps(3);
+    hh.render().unwrap().save(out.join("hierarchy-dark.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/local-history-*.png"]
+fn screens_local_history() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::Builder::new().prefix("dotcraft-history").tempdir().unwrap();
+    let file = dunce::canonicalize(dir.path()).unwrap().join("Notes.cs");
+    std::fs::write(&file, "class Notes\n{\n    int a = 1;\n}\n").unwrap();
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(file.parent().unwrap());
+    app.open_file(&file);
+    // Two saves and a change by another app.
+    for text in ["class Notes\n{\n    int a = 2;\n}\n", "class Notes\n{\n    int a = 2;\n    int b = 3;\n}\n"] {
+        let d = app.docs.active_doc_mut().unwrap();
+        let len = d.editor.buffer.len_chars();
+        d.editor.replace(0, len, text);
+        app.docs.save(0).unwrap();
+    }
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(&file, "class Notes\n{\n    int a = 2;\n    int b = 3;\n    // edited elsewhere\n}\n").unwrap();
+    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+    std::fs::File::options().write(true).open(&file).unwrap().set_modified(later).unwrap();
+    app.docs.check_disk_changes();
+    let revs = rc_core::local_history::revisions(&file);
+    assert_eq!(revs.iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["External change", "Saved", "Saved", "Original"]);
+    app.show_local_history(None);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    // The original version against the current text.
+    let original = crate::ui::toolwindows::format_time(revs[3].time);
+    h.get_all_by_label(&original).last().unwrap().click();
+    h.run_steps(3);
+    assert!(h.state().vcs.diff.is_some());
+    h.render().unwrap().save(out.join("local-history-dark.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/templates-dark.png"]
+fn screens_templates() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    let dir = tempfile::Builder::new().prefix("dotcraft-templates").tempdir().unwrap();
+    let file = dunce::canonicalize(dir.path()).unwrap().join("Cart.cs");
+    std::fs::write(&file, "public class Cart\n{\n    public void Checkout()\n    {\n        Pay();\n        Ship();\n    }\n}\n").unwrap();
+    app.open_workspace(file.parent().unwrap());
+    app.open_file(&file);
+    // ⌥⌘T on the two calls: "try" puts them in a try/catch.
+    let d = app.docs.active_doc_mut().unwrap();
+    let text = d.editor.buffer.rope().to_string();
+    let (a, b) = (text.find("        Pay").unwrap(), text.find("    }\n}").unwrap());
+    d.editor.selection = rc_text::Selection::single(rc_text::Range::new(a, b));
+    app.dialog = Some(crate::ui::dialogs::Dialog::Templates { surround: true, filter: String::new(), selected: 0 });
+    let mut h = harness(app, vec2(1280.0, 720.0));
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("templates-surround-dark.png")).unwrap();
+    h.get_by_label("try").click();
+    h.run_steps(3);
+    let text = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(text.contains("        try\n        {\n            Pay();\n            Ship();\n        }\n        catch (Exception e)\n"), "{text}");
+    h.render().unwrap().save(out.join("templates-dark.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; runs Shop.Api and writes target/snapshots/http-*.png"]
+fn screens_http_client_and_endpoints() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    app.runner.selected = app.runner.configs.iter().position(|c| c.name.starts_with("Shop.Api")).unwrap();
+    let outs = app.runner.run_selected();
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    let http = fixtures().join("Shop/src/Shop.Api/Shop.Api.http");
+    app.open_file(&http);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "the app to listen", |a| a.runner.runs.iter().any(|r| !r.urls.is_empty()));
+    // ▶ on the request: retried until the server answers (it may still be starting).
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    loop {
+        let i = h.state().docs.active.unwrap();
+        h.state_mut().send_http_request(i, 2);
+        run_frames(&mut h, "a response", |a| a.http.response.is_some());
+        if matches!(&h.state().http.response, Some(Ok(r)) if r.status == 200) || std::time::Instant::now() > deadline {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    let resp = h.state().http.response.clone().unwrap().unwrap();
+    assert_eq!(resp.status, 200);
+    assert!(resp.text.contains("temperatureC"), "{}", resp.text);
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.gutter_icons.get(&2), Some(&rc_editor::GutterIcon::RunApp));
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::HttpClient);
+    h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::HttpClient, 380.0);
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("http-client-dark.png")).unwrap();
+    // Endpoints of Shop.Api.
+    run_frames(&mut h, "endpoints", |a| !a.endpoints.scanning);
+    assert!(h.state().endpoints.projects.iter().any(|(n, _, eps)| n == "Shop.Api" && eps.iter().any(|e| e.route == "/WeatherForecast")));
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Endpoints);
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("endpoints-dark.png")).unwrap();
+    h.state_mut().runner.kill_all_now();
+}
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; runs Shop's tests with coverage and writes target/snapshots/coverage-dark.png"]
+fn screens_coverage() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    let calc = fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs");
+    app.open_file(&calc);
+    app.run_coverage();
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "coverage", |a| !a.coverage.running && (a.coverage.report.is_some() || a.coverage.error.is_some()));
+    assert!(h.state().coverage.error.is_none(), "{:?}", h.state().coverage.error);
+    let d = h.state().docs.active_doc().unwrap();
+    let line = d.editor.buffer.rope().to_string().lines().position(|l| l.contains("subtotal += line.Subtotal")).unwrap();
+    assert_eq!(d.editor.coverage.get(&line), Some(&rc_editor::CoverageMark::Covered));
+    h.state_mut().coverage.expanded.insert("Shop.Core".into());
+    h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Coverage, 320.0);
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("coverage-dark.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; runs Shop.Api and writes target/snapshots/profiler-*.png"]
+fn screens_profiler() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    app.runner.selected = app.runner.configs.iter().position(|c| c.name.starts_with("Shop.Api")).unwrap();
+    let outs = app.runner.run_selected();
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "runtime counters", |a| a.monitor.runtime().is_some());
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Monitoring);
+    h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Monitoring, 420.0);
+    h.run_steps(3);
+    // CPU profile of a few seconds while requests come in.
+    h.get_by_label("Start CPU Profiling").click();
+    h.run_steps(2);
+    // Load: requests from a few threads for three seconds.
+    let load: Vec<_> = (0..4)
+        .map(|_| {
+            std::thread::spawn(|| {
+                let end = std::time::Instant::now() + std::time::Duration::from_secs(3);
+                while std::time::Instant::now() < end {
+                    let _ = std::process::Command::new("curl").args(["-s", "-o", "/dev/null", "http://localhost:5112/weatherforecast"]).status();
+                }
+            })
+        })
+        .collect();
+    while !load.iter().all(|t| t.is_finished()) {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    if h.state().monitor.profiling() {
+        h.get_by_label("Stop Profiling").click();
+    }
+    run_frames(&mut h, "the profile", |a| a.monitor.profile.is_some());
+    let prof = h.state().monitor.profile.clone().unwrap().expect("profile");
+    assert!(prof.samples > 0);
+    h.state_mut().monitor.show_tree = true;
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("profiler-cpu-dark.png")).unwrap();
+    h.state_mut().monitor.show_tree = false;
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("profiler-hotspots-dark.png")).unwrap();
+    // Memory snapshot.
+    h.get_by_label("Get Memory Snapshot").click();
+    run_frames(&mut h, "the snapshot", |a| a.monitor.snapshot.is_some());
+    let snap = h.state().monitor.snapshot.clone().unwrap().expect("snapshot");
+    assert!(snap.total_objects > 1000 && snap.types.iter().any(|t| t.name == "System.String"), "{} objects", snap.total_objects);
+    // The web app itself, not MSBuild or dotnet watch.
+    assert!(snap.types.iter().any(|t| t.name.starts_with("Microsoft.AspNetCore")), "{:?}", snap.types.iter().take(20).map(|t| &t.name).collect::<Vec<_>>());
+    assert!(!snap.types.iter().any(|t| t.name.starts_with("Microsoft.Build.")), "profiled MSBuild");
+    h.render().unwrap().save(out.join("profiler-memory-dark.png")).unwrap();
+    h.state_mut().runner.kill_all_now();
+}

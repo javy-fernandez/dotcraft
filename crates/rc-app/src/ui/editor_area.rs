@@ -18,6 +18,7 @@ enum TabCommand {
     Pin(usize),
     CopyPath(usize),
     Reload(usize),
+    History(usize),
     Reveal(usize),
     Locate(usize),
     Blame(usize),
@@ -224,6 +225,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         app.insight.completion_accepted(doc, data);
     }
     let mut run_test_line = None;
+    let mut http_line = None;
     // ⌘+click: the clicked spot goes into Back/Forward history.
     let navigated_from = out.events.iter().find_map(|e| matches!(e, EditorEvent::NavigateAt(_)).then(|| (doc.path.clone(), doc.editor.caret())));
     let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
@@ -251,6 +253,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
             EditorEvent::CaretMoved => app.session_dirty = true,
             // Editing a preview tab keeps it.
             EditorEvent::Changed => doc.preview = false,
+            EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunApp } if crate::web::is_http_file(&doc.path) => http_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
             _ => {}
         }
@@ -276,6 +279,20 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
                     app.debugger.conditions.remove(&(doc.path.clone(), line));
                 }
                 app.session_dirty = true;
+            }
+            Action::ToggleBookmark => {
+                let line = doc.editor.caret_line_col().0;
+                if doc.editor.bookmarks.remove(&line).is_none() {
+                    doc.editor.bookmarks.insert(line, None);
+                }
+                app.session_dirty = true;
+            }
+            Action::InsertLiveTemplate | Action::SurroundWith => {
+                app.dialog = Some(crate::ui::dialogs::Dialog::Templates { surround: a == Action::SurroundWith, filter: String::new(), selected: 0 });
+            }
+            Action::ToggleBookmarkMnemonic => {
+                let line = doc.editor.caret_line_col().0;
+                app.dialog = Some(crate::ui::dialogs::Dialog::BookmarkMnemonic { path: doc.path.clone(), line });
             }
             Action::NextError | Action::PreviousError => {
                 doc.editor.next_diagnostic(a == Action::NextError);
@@ -316,6 +333,11 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         }
     }
     insight_actions.extend(from_menu);
+    if let Some(line) = http_line
+        && let Some(i) = app.docs.active
+    {
+        app.send_http_request(i, line);
+    }
     if let Some(line) = run_test_line {
         app.run_test_at(line);
     }
@@ -368,6 +390,12 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
         }
         ui.separator();
         entry(ui, Some(ico::BREAKPOINT), tr("Toggle Line Breakpoint"), Action::ToggleBreakpoint);
+        entry(ui, Some(ico::BOOKMARK), tr("Toggle Bookmark"), Action::ToggleBookmark);
+        if csharp {
+            entry(ui, Some(ico::TW_HIERARCHY), tr("Call Hierarchy"), Action::CallHierarchy);
+            entry(ui, None, tr("Type Hierarchy"), Action::TypeHierarchy);
+        }
+        entry(ui, None, tr("Toggle Bookmark with Mnemonic"), Action::ToggleBookmarkMnemonic);
     });
     if let Some(cmd) = edit {
         forward_edit(&resp.ctx, cmd);
@@ -583,6 +611,10 @@ fn tab_menu(app: &mut DotCraftApp, resp: &egui::Response, i: usize, commands: &m
             commands.push(TabCommand::Reload(i));
             ui.close();
         }
+        if theme::menu_item(ui, Some(ico::HISTORY), tr("Local History"), false).clicked() {
+            commands.push(TabCommand::History(i));
+            ui.close();
+        }
         if theme::menu_item(ui, Some(ico::COPY), tr("Copy Path"), false).clicked() {
             commands.push(TabCommand::CopyPath(i));
             ui.close();
@@ -673,6 +705,10 @@ fn run_tab_commands(app: &mut DotCraftApp, ui: &Ui, commands: Vec<TabCommand>) {
                 if let Err(e) = app.docs.reload_from_disk(i) {
                     app.notify(e, true);
                 }
+            }
+            TabCommand::History(i) => {
+                let path = app.docs.list[i].path.clone();
+                app.show_local_history(Some(path));
             }
             TabCommand::Reveal(i) => crate::app::reveal_in_file_manager(&app.docs.list[i].path),
             TabCommand::Blame(i) => {

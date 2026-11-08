@@ -172,6 +172,9 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
         }
         if app.vcs.busy.is_some() {
             ui.spinner();
+            if ui.button(tr("Cancel")).clicked() {
+                app.vcs.cancel_operation();
+            }
         }
     });
     if app.vcs.show_stashes {

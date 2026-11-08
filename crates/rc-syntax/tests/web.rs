@@ -51,6 +51,8 @@ fn jsx_and_tsx_highlight_components_attributes_comments_and_constants() {
         let rope = Rope::from_str(source);
         let tree = parse_now(lang, &rope, None).unwrap();
         assert!(!tree.root_node().has_error(), "{file}: {}", tree.root_node().to_sexp());
+        let folds = folding_ranges(lang, &tree, &rope);
+        assert!(folds.iter().any(|fold| fold.start_line == 0 && fold.end_line == 4), "{file}: missing multiline component fold");
         let highlights = highlight_lines(lang, &tree, &rope, 0, rope.len_lines());
         for (token, role) in [
             ("Panel", Hl::Tag),

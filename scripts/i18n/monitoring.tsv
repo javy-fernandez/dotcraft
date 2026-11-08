@@ -1,0 +1,19 @@
+# Monitoring tool window. Import: python3 scripts/i18n_tsv.py app scripts/i18n/monitoring.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Monitoring	Monitorización	Surveillance	Monitoramento	Überwachung	Monitorowanie	监控	モニタリング
+{name} · PID {pid}	{name} · PID {pid}	{name} · PID {pid}	{name} · PID {pid}	{name} · PID {pid}	{name} · PID {pid}	{name} · PID {pid}	{name} · PID {pid}
+{name} · exited	{name} · finalizado	{name} · terminé	{name} · encerrado	{name} · beendet	{name} · zakończony	{name} · 已退出	{name} · 終了
+Nothing to monitor	Nada que monitorizar	Rien à surveiller	Nada para monitorar	Nichts zu überwachen	Nic do monitorowania	没有可监控的内容	監視対象がありません
+Run a project to see its CPU, memory and garbage collections here.	Ejecuta un proyecto para ver aquí su CPU, memoria y recolecciones de basura.	Exécutez un projet pour voir ici son CPU, sa mémoire et ses collectes de mémoire.	Execute um projeto para ver aqui sua CPU, memória e coletas de lixo.	Führen Sie ein Projekt aus, um hier CPU, Speicher und Garbage Collections zu sehen.	Uruchom projekt, aby zobaczyć tu jego procesor, pamięć i odśmiecanie.	运行项目即可在此查看其 CPU、内存和垃圾回收。	プロジェクトを実行すると、ここに CPU、メモリ、ガベージコレクションが表示されます。
+CPU	CPU	CPU	CPU	CPU	Procesor	CPU	CPU
+Process	Proceso	Processus	Processo	Prozess	Proces	进程	プロセス
+Memory	Memoria	Mémoire	Memória	Speicher	Pamięć	内存	メモリ
+Working set	Working set	Working set	Working set	Working Set	Zestaw roboczy	工作集	ワーキングセット
+GC heap	Heap del GC	Tas du GC	Heap do GC	GC-Heap	Sterta GC	GC 堆	GC ヒープ
+Gen 0 / 1 / 2 collections	Recolecciones gen 0 / 1 / 2	Collectes gén. 0 / 1 / 2	Coletas gen 0 / 1 / 2	Gen-0/1/2-Collections	Odśmiecania gen 0 / 1 / 2	第 0/1/2 代回收	第 0/1/2 世代 GC
+Time in GC	Tiempo en GC	Temps dans le GC	Tempo no GC	Zeit im GC	Czas w GC	GC 时间占比	GC 時間
+Allocation rate	Ritmo de asignación	Taux d'allocation	Taxa de alocação	Allokationsrate	Tempo alokacji	分配速率	割り当て速度
+Thread pool threads	Hilos del thread pool	Threads du pool	Threads do pool	Threadpool-Threads	Wątki puli	线程池线程	スレッドプールのスレッド
+Exceptions	Excepciones	Exceptions	Exceções	Ausnahmen	Wyjątki	异常	例外
+.NET runtime	Runtime de .NET	Runtime .NET	Runtime do .NET	.NET-Laufzeit	Środowisko .NET	.NET 运行时	.NET ランタイム
+The runtime's counters show up when the process opens its diagnostic port.	Los contadores del runtime aparecen cuando el proceso abre su puerto de diagnóstico.	Les compteurs du runtime apparaissent quand le processus ouvre son port de diagnostic.	Os contadores do runtime aparecem quando o processo abre sua porta de diagnóstico.	Die Laufzeitzähler erscheinen, sobald der Prozess seinen Diagnoseport öffnet.	Liczniki środowiska pojawią się, gdy proces otworzy port diagnostyczny.	进程打开诊断端口后会显示运行时计数器。	プロセスが診断ポートを開くとランタイムのカウンターが表示されます。

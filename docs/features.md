@@ -198,6 +198,18 @@ Reference: [Junie](https://www.jetbrains.com/help/ai-assistant/junie-agent.html)
 
 Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ and ReSharper plugins are reference ecosystems; compatibility requires a separate technical assessment.
 
+## Upstream delivery
+
+[Original repository PR 108](https://github.com/javy-fernandez/dotcraft/pull/108) integrates the
+assembled batch with upstream 0.4.0. [Current integration evidence](implementation/upstream-integration.md)
+distinguishes fresh merge checks from historical fork validation. The fork PR links below
+are the original review slices; they do not imply that their changes are already merged upstream.
+
+Upstream's HTTP Client and Endpoints tools retain their behavior. The bounded explicit-send
+fork workflow has a separate **HTTP Scratchpad** window, with independent state and cancellation.
+Both are reset when a workspace closes. The native main menu also exposes upstream bookmarks,
+hierarchies, templates, and coverage alongside the fork actions.
+
 ## Implementation progress
 
 See [combined validation evidence](implementation/validation.md) for commands and tested scope.
@@ -226,3 +238,13 @@ Each pull request below has a separate implementation note with validation evide
 ## Completion criteria
 
 For each item, record the implemented scope, supported platforms and runtimes, required dependencies, user-facing documentation, and validation evidence. Split broad items into smaller implementation tasks as work starts. Existing partial implementations should be completed or validated before being marked done.
+
+## Independently rebased upstream slices
+
+These branches in [the fork](https://github.com/RafaelMendes1407/dotcraft/branches) are based directly
+on original `main` at `9e849cd`, with fresh validation recorded in their evidence notes:
+`upstream/git-deleted-conflicts`, `upstream/git-stash-management`,
+`upstream/workspace-resource-edit-safety`, `upstream/settings-search`,
+`upstream/web-language-syntax`, `upstream/attach-to-process`, and
+`upstream/tool-window-overflow`. Branches are review candidates; publishing a branch is
+separate from opening or merging its upstream PR. Combined delivery remains PR 108.

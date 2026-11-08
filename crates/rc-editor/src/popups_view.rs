@@ -5,7 +5,6 @@ use crate::state::{EditorState, Severity};
 use crate::view::{EditorOutput, Metrics};
 use egui::{Align2, Color32, FontId, Id, Key, Modifiers, Order, Pos2, Rect, Sense, Stroke, Ui, pos2, vec2};
 use rc_kit::{Palette, Scheme, ico, icons};
-use rc_text::Selection;
 
 const ROW_H: f32 = 24.0;
 const MAX_ROWS: usize = 12;
@@ -63,10 +62,8 @@ pub fn accept(state: &mut EditorState, index: usize, replace_word: bool) {
             end += 1;
         }
     }
-    let (text, caret_offset) = expand_snippet(&item.insert);
-    state.replace(start, end, &text);
-    let pos = start + caret_offset.unwrap_or(text.chars().count());
-    state.selection = Selection::point(pos);
+    let insert = item.insert.clone();
+    state.insert_snippet(start, end, &insert);
     state.request_scroll_to_caret();
 }
 
