@@ -162,8 +162,6 @@ DotCraft is a Cargo workspace; each crate has one job:
 | `rc-term` | Terminal emulator (alacritty_terminal) |
 | `rc-core` | Settings, sessions, workspace, background work |
 
-Track implementation and CrabCraft reuse in [FEATURES.md](FEATURES.md). See the [high-level checklist and PR evidence](docs/features.md) for delivered implementation slices.
-
 See [docs/architecture.md](docs/architecture.md) and [docs/performance.md](docs/performance.md).
 
 ## License

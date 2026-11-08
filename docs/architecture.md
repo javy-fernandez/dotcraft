@@ -40,9 +40,10 @@ or on the shared tokio runtime and reports back through channels that wake the U
   against the real `dotnet` SDK (8.0 and 10.0 installed), Roslyn and netcoredbg, with the
   fixtures in `tests/fixtures/` (`Shop`: console, class library, ASP.NET API and xUnit /
   NUnit / MSTest projects; `TenProjects`: ten libraries in a `.slnx`).
-- **Commits.** Use English messages and independently reviewable feature commits. Include
-  `Co-authored-by: Codex <codex@openai.com>` in every commit created by Codex. Open a
-  separate pull request per completed feature or implementation slice.
+- **Commits.** One commit per finished task, short one-line English messages, capitalized
+  (e.g. "Add TRX parser"), no attribution trailers. Code comments in English too.
+- **Third-party code.** Parts of the HTTP client, EditorConfig, SQLite browser and egui menu
+  are adapted from CrabCraft (MIT); its notice is in `docs/third-party/`.
 
 ## Packaging
 
