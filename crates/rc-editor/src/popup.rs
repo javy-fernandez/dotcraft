@@ -34,6 +34,9 @@ pub struct Completion {
     pub doc: Option<String>,
     /// Set while the server has not answered yet.
     pub loading: bool,
+    /// Matches keep the order of `items` (prefix matches first) instead of ranking by score:
+    /// versions newest first, search results by relevance.
+    pub keep_order: bool,
     pub(crate) scroll_to_selected: bool,
 }
 
@@ -58,7 +61,13 @@ impl Completion {
         // Ties keep the server's order (its sort text ranks the type's own members first);
         // `object`'s members go last, like Rider.
         let inherited = |i: usize| matches!(self.items[i].label.as_str(), "Equals" | "GetHashCode" | "GetType" | "ToString" | "ReferenceEquals" | "MemberwiseClone");
-        scored.sort_by(|a, b| b.0.cmp(&a.0).then(inherited(a.1).cmp(&inherited(b.1))).then(a.1.cmp(&b.1)));
+        if self.keep_order {
+            let lower = prefix.to_lowercase();
+            let starts = |i: usize| self.items[i].label.to_lowercase().starts_with(&lower);
+            scored.sort_by(|a, b| starts(b.1).cmp(&starts(a.1)).then(a.1.cmp(&b.1)));
+        } else {
+            scored.sort_by(|a, b| b.0.cmp(&a.0).then(inherited(a.1).cmp(&inherited(b.1))).then(a.1.cmp(&b.1)));
+        }
         self.filtered = scored.into_iter().map(|(_, i)| i).collect();
         self.selected = 0;
         self.scroll_to_selected = true;
@@ -139,6 +148,8 @@ pub struct Hover {
     /// Diagnostic message shown above the documentation.
     pub problem: Option<(crate::state::Severity, String)>,
     pub screen: egui::Pos2,
+    /// Buttons under the text; a click reports [`crate::EditorEvent::HoverAction`] with the index.
+    pub actions: Vec<(rc_kit::Ico, String)>,
 }
 
 #[derive(Default)]
@@ -170,5 +181,17 @@ mod tests {
         assert!(a > b && b > c, "{a} {b} {c}");
         assert!(fuzzy_score("WriteLine", "xyz").is_none());
         assert!(fuzzy_score("GetByName", "gbn").is_some());
+    }
+
+    #[test]
+    fn ordered_lists_keep_their_order_with_prefix_matches_first() {
+        let item = |l: &str| CompletionItem { label: l.into(), detail: String::new(), type_text: String::new(), icon: rc_kit::ico::PACKAGE, insert: l.into(), replace: None, deprecated: false, data: 0 };
+        let mut c = Completion::new(0, ["13.0.4", "13.0.3", "12.0.3", "13.0.1", "14.0.0-beta1"].map(item).to_vec(), false);
+        c.keep_order = true;
+        c.filter("13");
+        let labels: Vec<&str> = c.filtered.iter().map(|&i| c.items[i].label.as_str()).collect();
+        assert_eq!(labels, ["13.0.4", "13.0.3", "13.0.1", "12.0.3"]);
+        c.filter("");
+        assert_eq!(c.filtered, [0, 1, 2, 3, 4]);
     }
 }

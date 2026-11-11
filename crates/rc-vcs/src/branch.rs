@@ -1,7 +1,12 @@
-//! Local and remote-tracking branches: listing, creating, checking out, renaming, deleting.
+//! Local and remote-tracking branches: listing, creating, checking out, renaming, deleting,
+//! merging, rebasing, comparing and pushing them.
 
+use crate::cancel::CancelToken;
 use crate::error::{GitError, Result};
-use crate::repo::Repository;
+use crate::git::ProgressSink;
+use crate::log::{Commit, LogOptions};
+use crate::remote::PushOptions;
+use crate::repo::{RepoState, Repository};
 
 /// Where a branch lives.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -94,6 +99,91 @@ impl Repository {
     /// it on the remote use [`Repository::push`] with [`crate::PushOptions::delete`].
     pub async fn delete_remote_tracking_branch(&self, name: &str) -> Result<()> {
         self.cmd().args(["branch", "-d", "-r", "--end-of-options", name]).output().await.map(drop)
+    }
+
+    /// Fails with [`GitError::InvalidBranchName`] unless `name` is a valid new branch name.
+    pub async fn check_branch_name(&self, name: &str) -> Result<()> {
+        if name.is_empty() || name.starts_with('-') {
+            return Err(GitError::InvalidBranchName(name.to_string()));
+        }
+        self.cmd().args(["check-ref-format", "--branch", name]).output().await.map(drop).map_err(|_| GitError::InvalidBranchName(name.to_string()))
+    }
+
+    /// Refuses branch operations while a merge, rebase, cherry-pick… is in progress or files
+    /// are conflicted.
+    pub async fn ensure_no_conflicts(&self) -> Result<()> {
+        let conflicted = self.conflicted_paths().await?;
+        if self.state().await != RepoState::Clean || !conflicted.is_empty() {
+            return Err(GitError::Conflicts(conflicted.join("\n")));
+        }
+        Ok(())
+    }
+
+    /// Checks out a remote-tracking branch (`origin/feature`): the local branch of the same
+    /// name when it already tracks it, otherwise a new tracking branch.
+    pub async fn checkout_tracking(&self, remote_branch: &str) -> Result<()> {
+        let local = remote_branch.split_once('/').map_or(remote_branch, |(_, b)| b);
+        if let Some(existing) = self.branches().await?.into_iter().find(|b| b.kind == BranchKind::Local && b.name == local) {
+            if existing.upstream.as_deref() == Some(remote_branch) {
+                return self.checkout_branch(local).await;
+            }
+            return Err(GitError::BranchExists(local.to_string()));
+        }
+        self.checkout_remote_branch(remote_branch, Some(local)).await
+    }
+
+    /// Rebases the current branch onto `onto`. Conflicts fail with [`GitError::Conflicts`] and
+    /// leave the rebase in progress (see [`Repository::abort_rebase`]).
+    pub async fn rebase(&self, onto: &str) -> Result<()> {
+        self.cmd().args(["rebase", "--end-of-options", onto]).output().await.map(drop)
+    }
+
+    pub async fn abort_rebase(&self) -> Result<()> {
+        self.cmd().args(["rebase", "--abort"]).output().await.map(drop)
+    }
+
+    /// Commits reachable from `other` but not from `base` (up to `max`), newest first.
+    pub async fn commits_between(&self, base: &str, other: &str, max: usize) -> Result<Vec<Commit>> {
+        self.log(&LogOptions { revs: vec![format!("{base}..{other}")], max_count: max, ..Default::default() }).await
+    }
+
+    /// Pushes a local branch: to its upstream when it has one, otherwise to the default remote
+    /// (`remote.pushDefault`, `origin` or the only remote) setting the upstream. Returns the
+    /// remote it pushed to.
+    pub async fn push_branch(&self, name: &str, progress: Option<ProgressSink>, cancel: Option<&CancelToken>) -> Result<String> {
+        let config = |key: String| async move { self.cmd().args(["config", "--get", &key]).ok_code(1).text().await.map(|s| s.trim().to_string()) };
+        let remote = config(format!("branch.{name}.remote")).await?;
+        let merge = config(format!("branch.{name}.merge")).await?;
+        if !remote.is_empty() && remote != "." && !merge.is_empty() {
+            let target = merge.strip_prefix("refs/heads/").unwrap_or(&merge);
+            let opts = PushOptions { remote: Some(remote.clone()), refspec: Some(format!("refs/heads/{name}:refs/heads/{target}")), ..Default::default() };
+            self.push(&opts, progress, cancel).await?;
+            return Ok(remote);
+        }
+        let remotes = self.remotes().await?;
+        let default = config("remote.pushDefault".into()).await?;
+        let remote = if !default.is_empty() {
+            default
+        } else if remotes.iter().any(|r| r.name == "origin") {
+            "origin".to_string()
+        } else {
+            match remotes.as_slice() {
+                [only] => only.name.clone(),
+                [] => return Err(GitError::NoRemote),
+                _ => return Err(GitError::NoUpstream),
+            }
+        };
+        let opts = PushOptions { remote: Some(remote.clone()), refspec: Some(name.to_string()), set_upstream: true, ..Default::default() };
+        self.push(&opts, progress, cancel).await?;
+        Ok(remote)
+    }
+
+    /// Deletes a branch on its remote (`git push origin --delete feature` for `origin/feature`),
+    /// which also removes the remote-tracking branch.
+    pub async fn delete_remote_branch(&self, remote_branch: &str, cancel: Option<&CancelToken>) -> Result<()> {
+        let (remote, branch) = remote_branch.split_once('/').ok_or_else(|| GitError::NotFound(remote_branch.to_string()))?;
+        let opts = PushOptions { remote: Some(remote.to_string()), refspec: Some(branch.to_string()), delete: true, ..Default::default() };
+        self.push(&opts, None, cancel).await
     }
 
     /// Sets the upstream of a local branch.

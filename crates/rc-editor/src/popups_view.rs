@@ -131,7 +131,8 @@ pub fn expand_snippet(s: &str) -> (String, Option<usize>) {
     (out, first)
 }
 
-pub(crate) fn show(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Palette, m: &Metrics, text_rect: Rect, focused: bool) -> Option<usize> {
+/// Draws the popups; (accepted completion `data`, clicked hover action).
+pub(crate) fn show(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Palette, m: &Metrics, text_rect: Rect, focused: bool) -> (Option<usize>, Option<usize>) {
     let mut accepted = None;
     // A completion whose anchor is no longer before the caret is stale.
     if let Some(c) = &state.popups.completion {
@@ -153,10 +154,11 @@ pub(crate) fn show(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
             accept(state, i, false);
         }
     }
+    let mut action = None;
     if let Some(h) = state.popups.hover.clone() {
-        show_hover(ui, &h, scheme, pal, m);
+        action = show_hover(ui, &h, scheme, pal, m);
     }
-    accepted
+    (accepted, action)
 }
 
 fn popup_frame(pal: &Palette) -> egui::Frame {
@@ -185,7 +187,8 @@ fn show_completion(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
                 ui.painter().text(pos2(r.left() + 10.0, r.center().y), Align2::LEFT_CENTER, text, FontId::proportional(13.0), pal.muted);
                 return;
             }
-            let scroll = egui::ScrollArea::vertical().max_height(MAX_ROWS as f32 * ROW_H).auto_shrink([false, true]);
+            // Short lists show every row (egui's default minimum would cut a third row).
+            let scroll = egui::ScrollArea::vertical().max_height(MAX_ROWS as f32 * ROW_H).min_scrolled_height(rows as f32 * ROW_H).auto_shrink([false, true]);
             scroll.show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 for (row, &i) in c.filtered.iter().enumerate() {
@@ -283,8 +286,9 @@ fn show_signature(ui: &Ui, sig: &crate::popup::SignatureHelp, scheme: &Scheme, p
     let _ = (scheme, m);
 }
 
-fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, m: &Metrics) {
+fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, m: &Metrics) -> Option<usize> {
     let pos = h.screen + vec2(-4.0, m.row_h);
+    let mut clicked = None;
     let resp = egui::Area::new(Id::new("hover_popup")).order(Order::Foreground).fixed_pos(pos).show(ui.ctx(), |ui| {
         popup_frame(pal).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
             ui.set_max_width(560.0);
@@ -306,10 +310,24 @@ fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, 
             if !h.text.trim().is_empty() {
                 render_doc(ui, &h.text, scheme, pal);
             }
+            if !h.actions.is_empty() {
+                ui.add_space(4.0);
+                ui.separator();
+                ui.horizontal_wrapped(|ui| {
+                    for (i, (icon, label)) in h.actions.iter().enumerate() {
+                        let resp = rc_kit::theme::flat_button(ui, Some(*icon), label, FontId::proportional(13.0), false, true);
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+                        if resp.clicked() {
+                            clicked = Some(i);
+                        }
+                    }
+                });
+            }
         });
     });
     let hovered = resp.response.hovered() || resp.response.contains_pointer();
     ui.ctx().data_mut(|d| d.insert_temp(Id::new("dotcraft_hover_popup_hovered"), hovered));
+    clicked
 }
 
 /// Minimal Markdown for documentation: fenced code blocks in monospace, `inline code`,

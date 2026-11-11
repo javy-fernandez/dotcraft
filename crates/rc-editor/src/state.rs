@@ -59,6 +59,8 @@ pub enum GutterIcon {
     Overridden,
     Overriding,
     Bookmark,
+    /// A newer stable version of the line's package exists.
+    PackageUpdate,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,6 +101,8 @@ pub enum EditorEvent {
     HoverAt { pos: usize, screen: egui::Pos2 },
     /// The mouse left the hovered word.
     HoverEnd,
+    /// A button of the hover popup was clicked (index in [`crate::Hover::actions`]).
+    HoverAction(usize),
     /// The editor gained keyboard focus.
     Focused,
     /// Text was pasted.

@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CentralShop.Cli/CentralShop.Cli.csproj" />
+    <Project Path="src/CentralShop.Core/CentralShop.Core.csproj" />
+  </Folder>
+</Solution>

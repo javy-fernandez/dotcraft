@@ -1,5 +1,6 @@
 #!/bin/sh
 # Regenerates the .NET fixtures with the installed SDK (offline-friendly: restore is separate).
+# CentralShop (Central Package Management) is written by hand and not regenerated here.
 # Usage: sh tests/fixtures/make_fixtures.sh
 set -e
 cd "$(dirname "$0")"
