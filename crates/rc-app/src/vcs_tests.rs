@@ -249,3 +249,85 @@ fn branch_merge_rebase_push_and_conflict_guard() {
     pump(&mut app, "clean state", |a| a.vcs.state == rc_vcs::RepoState::Clean);
     assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "main\n");
 }
+
+type AppHarness = egui_kittest::Harness<'static, DotCraftApp>;
+
+fn frames(h: &mut AppHarness, what: &str, done: impl Fn(&DotCraftApp) -> bool) {
+    let start = Instant::now();
+    while !done(h.state()) {
+        assert!(start.elapsed() < Duration::from_secs(30), "timed out waiting for {what}; error {:?}", h.state().vcs.error);
+        h.run_steps(1);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    h.run_steps(2);
+}
+
+/// The subjects of the interactive rebase dialog's plan, in order.
+fn rebase_plan(a: &DotCraftApp) -> Option<Vec<String>> {
+    match &a.dialog {
+        Some(crate::ui::dialogs::Dialog::InteractiveRebase(d)) => d.plan().map(|p| p.steps.iter().map(|s| s.commit.subject.clone()).collect()),
+        _ => None,
+    }
+}
+
+/// c1 and c2 both rewrite `a.txt`: dragging c2 above c1 in the dialog conflicts twice; both
+/// pauses are resolved from the banner and the rebase continues to the end.
+#[test]
+fn interactive_rebase_drag_conflict_pause_and_continue() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    use rc_kit::i18n::tr;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    for (key, value) in [("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")] {
+        git(&root, &["config", key, value]);
+    }
+    for (file, text, subject) in [("a.txt", "base\n", "init"), ("a.txt", "one\n", "c1"), ("a.txt", "two\n", "c2"), ("b.txt", "b\n", "c3")] {
+        std::fs::write(root.join(file), text).unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", subject]);
+    }
+    let mut app = crate::screens::test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.dock.show(crate::toolwindow::ToolWindow::Git);
+    let mut h = crate::screens::harness(app, egui::vec2(1200.0, 800.0));
+    frames(&mut h, "log", |a| a.vcs.log.len() == 4);
+    let c1 = h.state().vcs.log.iter().find(|c| c.subject == "c1").unwrap().hash.clone();
+    crate::ui::rebase::open(h.state_mut(), &c1);
+    frames(&mut h, "plan", |a| rebase_plan(a).is_some());
+    assert_eq!(rebase_plan(h.state()).unwrap(), ["c1", "c2", "c3"]);
+    // Nothing changed yet: Start is disabled.
+    assert!(h.get_by_label(tr("Start Rebasing")).accesskit_node().is_disabled());
+
+    // Drag c2 above c1.
+    let (from, to) = (h.get_by_label("c2").rect(), h.get_by_label("c1").rect());
+    h.drag_at(from.center());
+    h.run_steps(1);
+    for y in [from.center().y - 8.0, to.center().y, to.top() + 4.0] {
+        h.hover_at(egui::pos2(from.center().x, y));
+        h.run_steps(1);
+    }
+    h.drop_at(egui::pos2(from.center().x, to.top() + 4.0));
+    h.run_steps(2);
+    assert_eq!(rebase_plan(h.state()).unwrap(), ["c2", "c1", "c3"]);
+
+    h.get_by_label(tr("Start Rebasing")).click();
+    frames(&mut h, "first stop", |a| a.dialog.is_none() && a.vcs.busy.is_none() && a.vcs.rebase.as_ref().is_some_and(|r| r.conflicts == ["a.txt"]));
+    assert_eq!(h.state().vcs.state, rc_vcs::RepoState::Rebasing);
+    assert!(h.get_by_label(tr("Continue Rebase")).accesskit_node().is_disabled());
+    for step in 1..=2 {
+        h.get_by_label(tr("Accept Commit")).click();
+        frames(&mut h, "resolved", |a| a.vcs.busy.is_none() && a.vcs.rebase.as_ref().is_some_and(|r| r.conflicts.is_empty()));
+        h.get_by_label(tr("Continue Rebase")).click();
+        if step == 1 {
+            frames(&mut h, "second stop", |a| a.vcs.busy.is_none() && a.vcs.rebase.as_ref().is_some_and(|r| r.step == 2 && !r.conflicts.is_empty()));
+        }
+    }
+    frames(&mut h, "finished", |a| a.vcs.busy.is_none() && a.vcs.state == rc_vcs::RepoState::Clean && a.notices.iter().any(|n| n.text == tr("Rebase finished")));
+    let log = std::process::Command::new("git").args(["log", "--format=%s"]).current_dir(&root).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&log.stdout).lines().collect::<Vec<_>>(), ["c3", "c1", "c2", "init"]);
+    assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "one\n");
+}

@@ -58,6 +58,8 @@ pub enum Dialog {
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
     Evaluate { expression: String, focus: bool },
+    /// "Interactively Rebase from Here…" on a commit of the Git log.
+    InteractiveRebase(Box<crate::ui::rebase::RebaseDialog>),
 }
 
 impl Dialog {
@@ -104,6 +106,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
+        Dialog::InteractiveRebase(state) => if crate::ui::rebase::dialog(app, ctx, state) { Outcome::Close } else { Outcome::Keep },
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);

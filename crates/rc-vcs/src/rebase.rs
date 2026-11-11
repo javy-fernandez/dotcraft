@@ -273,6 +273,9 @@ impl Repository {
     pub async fn rebase_status(&self) -> Result<Option<RebaseStatus>> {
         let merge = self.git_dir().join("rebase-merge");
         let apply = self.git_dir().join("rebase-apply");
+        if !merge.is_dir() && !apply.is_dir() {
+            return Ok(None);
+        }
         let read = |p: PathBuf| std::fs::read_to_string(p).unwrap_or_default();
         let conflicts = self.conflicted_paths().await?;
         if merge.is_dir() {
