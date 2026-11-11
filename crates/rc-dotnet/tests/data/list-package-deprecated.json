@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "parameters": "--deprecated",
+  "sources": [
+    "https://api.nuget.org/v3/index.json"
+  ],
+  "projects": [
+    {
+      "path": "/work/Audit/A/A.csproj",
+      "frameworks": [
+        {
+          "framework": "net8.0",
+          "topLevelPackages": [
+            {
+              "id": "WindowsAzure.Storage",
+              "requestedVersion": "9.3.3",
+              "resolvedVersion": "9.3.3",
+              "deprecationReasons": [
+                "Legacy"
+              ],
+              "alternativePackage": {
+                "id": "Azure.Storage.Common",
+                "versionRange": ">= 0.0.0"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "/work/Audit/B/B.csproj"
+    }
+  ]
+}
