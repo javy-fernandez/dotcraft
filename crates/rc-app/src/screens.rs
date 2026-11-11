@@ -1211,3 +1211,79 @@ fn screens_nuget_cpm() {
         h.render().unwrap().save(out.join(format!("nuget-cpm-issues-{suffix}.png"))).unwrap();
     }
 }
+
+/// Copies a folder without `bin/` and `obj/`.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap().flatten() {
+        if e.file_name() == "bin" || e.file_name() == "obj" {
+            continue;
+        }
+        if e.file_type().unwrap().is_dir() {
+            copy_tree(&e.path(), &to.join(e.file_name()));
+        } else {
+            std::fs::copy(e.path(), to.join(e.file_name())).unwrap();
+        }
+    }
+}
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; writes NuGet CPM migration and audit captures to target/snapshots"]
+fn screens_nuget_migrate_and_audit() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    // Shop with a version conflict and a conditional reference.
+    let tmp = tempfile::Builder::new().prefix("dotcraft-screens-cpm").tempdir().unwrap();
+    let shop = tmp.path().canonicalize().unwrap().join("Shop");
+    copy_tree(&fixtures().join("Shop"), &shop);
+    let nunit = shop.join("tests/Shop.Core.NunitTests/Shop.Core.NunitTests.csproj");
+    let text = std::fs::read_to_string(&nunit).unwrap().replace(r#""coverlet.collector" Version="6.0.0""#, r#""coverlet.collector" Version="6.0.4""#);
+    std::fs::write(&nunit, text).unwrap();
+    let api = shop.join("src/Shop.Api/Shop.Api.csproj");
+    let text = std::fs::read_to_string(&api).unwrap().replace(
+        "  <ItemGroup>\n    <ProjectReference",
+        "  <ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">\n    <PackageReference Include=\"Swashbuckle.AspNetCore\" Version=\"6.5.0\" />\n  </ItemGroup>\n\n  <ItemGroup>\n    <ProjectReference",
+    );
+    std::fs::write(&api, text).unwrap();
+    let central = fixtures().join("CentralShop");
+    let path = |rel: &str| central.join(rel).display().to_string();
+    let json = include_str!("../../rc-dotnet/tests/data/list-package-vulnerable.json").replace("/work/Audit/A/A.csproj", &path("src/CentralShop.Core/CentralShop.Core.csproj")).replace("/work/Audit/B/B.csproj", &path("src/CentralShop.Cli/CentralShop.Cli.csproj"));
+    let deprecated = include_str!("../../rc-dotnet/tests/data/list-package-deprecated.json").replace("/work/Audit/A/A.csproj", &path("src/CentralShop.Core/CentralShop.Core.csproj")).replace("/work/Audit/B/B.csproj", &path("src/CentralShop.Cli/CentralShop.Cli.csproj"));
+    let mut report = rc_dotnet::nuget::parse_list_packages(&json).unwrap();
+    report.merge(rc_dotnet::nuget::parse_list_packages(&deprecated).unwrap());
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        // The migration preview.
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&shop.join("Shop.sln"));
+        app.dock.show(crate::toolwindow::ToolWindow::Nuget);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 500.0);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        run_frames(&mut h, "NuGet", |a| a.nuget.cpm_ready_for_test());
+        let app = h.state_mut();
+        app.nuget.start_migration_for_test(&app.docs, "Shop.Core.XunitTests.csproj");
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("nuget-migrate-{suffix}.png"))).unwrap();
+        // The audit, fed with sample results.
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&central.join("CentralShop.slnx"));
+        app.dock.show(crate::toolwindow::ToolWindow::Nuget);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 500.0);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        run_frames(&mut h, "CPM evaluation", |a| a.nuget.cpm_ready_for_test());
+        h.state_mut().nuget.set_audit_for_test(report.clone(), &[("Newtonsoft.Json", "13.0.3"), ("System.Net.Http", "4.3.4"), ("System.Text.RegularExpressions", "4.3.1")]);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("nuget-audit-{suffix}.png"))).unwrap();
+        h.state_mut().nuget.select_audit_for_test("System.Text.RegularExpressions", true);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("nuget-audit-pin-{suffix}.png"))).unwrap();
+        h.state_mut().nuget.select_audit_for_test("WindowsAzure.Storage", false);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("nuget-audit-deprecated-{suffix}.png"))).unwrap();
+    }
+}
