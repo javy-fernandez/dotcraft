@@ -14,7 +14,6 @@ use crate::toolwindow::ToolWindow;
 use crate::ui::kit;
 use egui::{Align2, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_core::{Inbox, Runtime, Waker};
-use rc_dotnet::nuget::{PackageSource, compare_versions};
 use rc_dotnet::nuget_auth::{self, SourceStatus};
 use rc_dotnet::cpm::{self, CpmCache, CpmIssue, MigrationPlan, MigrationWarning, ProjectCpm, SolutionCpm};
 use rc_dotnet::nuget::{AuditPackage, AuditReport, PackageSource, compare_versions};
@@ -1007,17 +1006,9 @@ fn common_root(paths: &[PathBuf]) -> Option<PathBuf> {
     Some(root)
 }
 
-/// The NuGet tool window.
-pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
-    if !app.nuget.loaded {
-        let projects = app.solution_projects();
-        let dotnet = rc_dotnet::Dotnet::locate(Some(&crate::app::dotnet_path(&app.settings)));
-        app.nuget.solution = app.workspace.as_ref().and_then(|w| w.ws.solution()).map(Path::to_path_buf);
-        app.nuget.set_projects(projects, dotnet);
-    }
-    if std::mem::take(&mut app.nuget.migrate_requested) && !app.nuget.cpm.in_use() {
-        app.nuget.start_migration(&app.docs);
-    }
+/// Takes finished work: applies CPM edits, reloads the explorer when references changed and
+/// shows notifications.
+fn pump(app: &mut DotCraftApp) {
     let mut changed = poll(&mut app.nuget);
     if !app.nuget.edits.is_empty() {
         for f in app.nuget.apply_edits(&mut app.docs) {
@@ -1033,6 +1024,20 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
     for (text, error) in std::mem::take(&mut app.nuget.notices) {
         app.notify(text, error);
     }
+}
+
+/// The NuGet tool window.
+pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
+    if !app.nuget.loaded {
+        let projects = app.solution_projects();
+        let dotnet = rc_dotnet::Dotnet::locate(Some(&crate::app::dotnet_path(&app.settings)));
+        app.nuget.solution = app.workspace.as_ref().and_then(|w| w.ws.solution()).map(Path::to_path_buf);
+        app.nuget.set_projects(projects, dotnet);
+    }
+    if std::mem::take(&mut app.nuget.migrate_requested) && !app.nuget.cpm.in_use() {
+        app.nuget.start_migration(&app.docs);
+    }
+    pump(app);
     let m = &mut app.nuget;
     if m.busy.is_some() || m.searching || m.cpm_evaluating || m.audit.running.is_some() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(150));
