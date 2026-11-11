@@ -117,6 +117,8 @@ pub struct Vcs {
     /// The merge tool (conflicted files and the three-way merge), shown in the editor area.
     pub merge: Option<merge::MergeTool>,
     next_doc_id: u64,
+    /// Work item links and completion of the commit message.
+    pub work_items: crate::work_items::WorkItems,
 }
 
 impl Vcs {
@@ -149,7 +151,7 @@ impl Vcs {
             rebase_plan: None,
             error: None,
             inbox: Inbox::new(waker.clone()),
-            waker,
+            waker: waker.clone(),
             heads: HashMap::new(),
             head_pending: BTreeSet::new(),
             marks_version: HashMap::new(),
@@ -159,6 +161,7 @@ impl Vcs {
             diff: None,
             merge: None,
             next_doc_id: 1 << 40,
+            work_items: crate::work_items::WorkItems::new(waker.clone()),
         }
     }
 

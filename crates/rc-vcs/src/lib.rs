@@ -22,6 +22,7 @@ pub mod stash;
 pub mod status;
 pub mod textdiff;
 pub mod tools;
+pub mod work_items;
 
 pub use blame::{Blame, BlameCommit, BlameLine};
 pub use branch::{Branch, BranchKind};
@@ -39,4 +40,5 @@ pub use remote::{FetchOptions, PullOptions, PushOptions, Remote};
 pub use repo::{RepoState, Repository};
 pub use side_by_side::{Row, RowKind, SideBySide, inline_changes};
 pub use stash::{Stash, StashOptions};
+pub use work_items::{CompletionQuery, LinkPattern, Linker, Tracker, TrackerKind, WorkItem, WorkItemLink};
 pub use status::{BranchStatus, ConflictKind, FileState, Status, StatusEntry, StatusOptions};

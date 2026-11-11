@@ -616,7 +616,20 @@
     "Rebase stopped": "Rebase arrêté",
     "Interactive rebase cannot rewrite merge commits": "Le rebase interactif ne peut pas réécrire les commits de fusion",
     "The rebase plan is not valid": "Le plan de rebase n'est pas valide",
-    "Message of {commit}": "Message de {commit}"
+    "Message of {commit}": "Message de {commit}",
+    "en": "fr",
+    "{key}+Click to open": "{key}+clic pour ouvrir",
+    "Open items and recent commits": "Éléments ouverts et commits récents",
+    "From recent commits": "Depuis les commits récents",
+    "Version Control": "Gestion de versions",
+    "Issue Navigation": "Navigation vers les tickets",
+    "In commit messages, #123 and AB#123 link to the issue tracker of the repository's remote. Add patterns for other trackers; $1, $2… in the link are replaced by the groups of the match.": "Dans les messages de commit, #123 et AB#123 renvoient au gestionnaire de tickets du dépôt distant. Ajoutez des motifs pour d'autres gestionnaires ; $1, $2… dans le lien sont remplacés par les groupes de la correspondance.",
+    "No GitHub, GitLab or Azure DevOps remote found.": "Aucun dépôt distant GitHub, GitLab ou Azure DevOps trouvé.",
+    "Issue ID (regex)": "ID du ticket (regex)",
+    "Issue link": "Lien du ticket",
+    "Add Pattern": "Ajouter un motif",
+    "Invalid pattern: {error}": "Motif non valide : {error}",
+    "Type # or AB# in the commit message to complete ids from recent commits, or from the tracker when GH_TOKEN, GITHUB_TOKEN, GITLAB_TOKEN or AZURE_DEVOPS_EXT_PAT is set or the GitHub CLI is signed in.": "Tapez # ou AB# dans le message de commit pour compléter les identifiants des commits récents, ou du gestionnaire lorsque GH_TOKEN, GITHUB_TOKEN, GITLAB_TOKEN ou AZURE_DEVOPS_EXT_PAT est défini ou que la CLI GitHub est connectée."
   },
   "terminal": {
     "Local": "Local",

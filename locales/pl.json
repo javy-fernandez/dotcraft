@@ -616,7 +616,20 @@
     "Rebase stopped": "Rebase zatrzymany",
     "Interactive rebase cannot rewrite merge commits": "Interaktywny rebase nie może przepisać commitów scalających",
     "The rebase plan is not valid": "Plan rebase jest nieprawidłowy",
-    "Message of {commit}": "Wiadomość {commit}"
+    "Message of {commit}": "Wiadomość {commit}",
+    "en": "pl",
+    "{key}+Click to open": "{key}+kliknięcie, aby otworzyć",
+    "Open items and recent commits": "Otwarte elementy i ostatnie commity",
+    "From recent commits": "Z ostatnich commitów",
+    "Version Control": "Kontrola wersji",
+    "Issue Navigation": "Nawigacja do zgłoszeń",
+    "In commit messages, #123 and AB#123 link to the issue tracker of the repository's remote. Add patterns for other trackers; $1, $2… in the link are replaced by the groups of the match.": "W komunikatach commitów #123 i AB#123 prowadzą do systemu zgłoszeń zdalnego repozytorium. Dodaj wzorce dla innych systemów; $1, $2… w odnośniku są zastępowane grupami dopasowania.",
+    "No GitHub, GitLab or Azure DevOps remote found.": "Nie znaleziono zdalnego repozytorium GitHub, GitLab ani Azure DevOps.",
+    "Issue ID (regex)": "ID zgłoszenia (regex)",
+    "Issue link": "Odnośnik do zgłoszenia",
+    "Add Pattern": "Dodaj wzorzec",
+    "Invalid pattern: {error}": "Nieprawidłowy wzorzec: {error}",
+    "Type # or AB# in the commit message to complete ids from recent commits, or from the tracker when GH_TOKEN, GITHUB_TOKEN, GITLAB_TOKEN or AZURE_DEVOPS_EXT_PAT is set or the GitHub CLI is signed in.": "Wpisz # lub AB# w komunikacie commita, aby uzupełnić identyfikatory z ostatnich commitów lub z systemu zgłoszeń, gdy ustawiono GH_TOKEN, GITHUB_TOKEN, GITLAB_TOKEN lub AZURE_DEVOPS_EXT_PAT albo CLI GitHuba jest zalogowane."
   },
   "terminal": {
     "Local": "Lokalny",

@@ -140,7 +140,8 @@ pub fn commit_window(app: &mut DotCraftApp, ui: &mut Ui) {
     // Message and buttons.
     ui.add_space(4.0);
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap().shrink2(vec2(10.0, 4.0))));
-    child.add(egui::TextEdit::multiline(&mut app.vcs.message).hint_text(tr("Commit Message")).desired_rows(4).desired_width(f32::INFINITY));
+    crate::work_items::sync(app);
+    crate::ui::work_item_links::message_editor(&mut child, &mut app.vcs.message, &app.vcs.work_items, tr("Commit Message"));
     child.horizontal(|ui| {
         ui.checkbox(&mut app.vcs.amend, tr("Amend"));
     });
@@ -230,6 +231,8 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
     let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left));
     lu.set_clip_rect(left.intersect(ui.clip_rect()));
     let log = app.vcs.log.clone();
+    crate::work_items::sync(app);
+    let linker = app.vcs.work_items.linker();
     egui::ScrollArea::vertical().id_salt("git_log").auto_shrink([false, false]).show_rows(&mut lu, 24.0, log.len(), |ui, range| {
         ui.spacing_mut().item_spacing.y = 0.0;
         for c in &log[range] {
@@ -257,15 +260,9 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
             let meta = format!("{}  {}", c.author_name, date);
             let mg = ui.painter().layout_no_wrap(meta, FontId::proportional(12.0), p.muted);
             let maxw = (r.right() - mg.size().x - 16.0 - x).max(40.0);
-            let mut job = egui::text::LayoutJob::simple_singleline(c.subject.clone(), FontId::proportional(13.0), p.text);
-            job.wrap.max_width = maxw;
-            job.wrap.max_rows = 1;
-            job.wrap.break_anywhere = true;
-            job.wrap.overflow_character = Some('…');
-            let g = ui.painter().layout_job(job);
-            ui.painter().galley(pos2(x, (r.center().y - g.size().y / 2.0).round()), g, p.text);
+            let link = crate::ui::work_item_links::linked_line(ui, &linker, resp.id.with("links"), &c.subject, pos2(x, r.center().y), maxw, p.text);
             ui.painter().galley(pos2(r.right() - mg.size().x - 10.0, (r.center().y - mg.size().y / 2.0).round()), mg, p.muted);
-            if resp.clicked() {
+            if resp.clicked() && !link {
                 select = Some(c.hash.clone());
             }
             let can_rebase = app.vcs.busy.is_none() && !has_conflicts(app);
@@ -290,9 +287,10 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
     if let Some(h) = app.vcs.selected_commit.clone()
         && let Some(c) = app.vcs.log.iter().find(|c| c.hash == h).cloned()
     {
-        ru.label(egui::RichText::new(&c.subject).font(theme::bold(13.0)));
+        let linker = app.vcs.work_items.linker();
+        crate::ui::work_item_links::linked_text(&mut ru, &linker, &c.subject, theme::bold(13.0), p.text);
         if !c.body.trim().is_empty() {
-            ru.label(egui::RichText::new(c.body.trim()).size(12.5));
+            crate::ui::work_item_links::linked_text(&mut ru, &linker, c.body.trim(), FontId::proportional(12.5), p.text);
         }
         ru.label(egui::RichText::new(format!("{}  {} <{}>  {}", c.short_hash(), c.author_name, c.author_email, crate::vcs::format_date(c.author_time))).size(12.0).color(p.muted));
         ru.add_space(6.0);

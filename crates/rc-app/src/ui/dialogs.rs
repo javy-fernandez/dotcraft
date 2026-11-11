@@ -15,6 +15,7 @@ pub enum SettingsPage {
     Editor,
     Keymap,
     Tools,
+    VersionControl,
 }
 
 pub enum Dialog {
@@ -155,12 +156,13 @@ impl SettingsLayout {
     }
 }
 
-fn settings_pages() -> [(SettingsPage, &'static str); 4] {
+fn settings_pages() -> [(SettingsPage, &'static str); 5] {
     [
         (SettingsPage::Appearance, tr("Appearance")),
         (SettingsPage::Editor, tr("Editor")),
         (SettingsPage::Keymap, tr("Keymap")),
         (SettingsPage::Tools, tr("Tools")),
+        (SettingsPage::VersionControl, tr("Version Control")),
     ]
 }
 
@@ -201,11 +203,15 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
             // Scroll both axes when a grid needs more width, while keeping the footer fixed.
             // Tools stack their fields and use the available width instead of widening the modal.
             let content_width = (layout.page - ui.spacing().scroll.allocated_width() - ui.spacing().scroll.bar_width - 12.0).max(40.0);
-            egui::ScrollArea::new([*page != SettingsPage::Tools, true]).id_salt("settings_fixed_page").max_height(layout.height).min_scrolled_height(layout.height).max_width(layout.page).auto_shrink([false, false]).show(ui, |ui| ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+            egui::ScrollArea::new([!matches!(*page, SettingsPage::Tools | SettingsPage::VersionControl), true]).id_salt("settings_fixed_page").max_height(layout.height).min_scrolled_height(layout.height).max_width(layout.page).auto_shrink([false, false]).show(ui, |ui| ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
                 ui.set_width(content_width);
                 ui.set_height(layout.height);
                 if *page == SettingsPage::Tools {
                     settings_tools(ui, draft, app);
+                    return;
+                }
+                if *page == SettingsPage::VersionControl {
+                    crate::ui::work_item_links::settings_page(ui, draft, app);
                     return;
                 }
                 egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
@@ -290,7 +296,7 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
                             });
                         ui.end_row();
                     }
-                    SettingsPage::Tools => {}
+                    SettingsPage::Tools | SettingsPage::VersionControl => {}
 
                 });
             }));
@@ -1464,7 +1470,7 @@ mod responsive_settings_tests {
             });
             let mut harness = crate::screens::harness(app, size);
             let mut widths = Vec::new();
-            for page in [SettingsPage::Appearance, SettingsPage::Editor, SettingsPage::Keymap, SettingsPage::Tools] {
+            for page in [SettingsPage::Appearance, SettingsPage::Editor, SettingsPage::Keymap, SettingsPage::Tools, SettingsPage::VersionControl] {
                 let mut draft = Settings::default();
                 if page == SettingsPage::Tools {
                     let long_path = PathBuf::from(format!("/opt/{}/dotnet", "long-installation-folder/".repeat(20)));

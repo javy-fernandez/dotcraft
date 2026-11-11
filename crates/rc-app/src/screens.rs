@@ -1597,3 +1597,38 @@ fn screens_interactive_rebase() {
         run_frames(&mut h, "aborted", |a| a.vcs.busy.is_none() && a.vcs.state == rc_vcs::RepoState::Clean);
     }
 }
+
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/work-items-*.png"]
+fn screens_work_items() {
+    use crate::ui::work_item_links::tests::{open_shop, type_text};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let dir = tempfile::tempdir().unwrap();
+        let mut h = open_shop(&dir.path().canonicalize().unwrap(), dark);
+        let coupons = h.state().vcs.log.iter().find(|c| c.subject.starts_with("Add coupons")).unwrap().hash.clone();
+        h.state_mut().vcs.select_commit(&coupons);
+        run_frames(&mut h, "commit files", |a| !a.vcs.commit_files.is_empty());
+        h.get_by_role_and_label(egui::accesskit::Role::Link, "#15").hover();
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("work-items-log-{suffix}.png"))).unwrap();
+        h.get_by_role(egui::accesskit::Role::MultilineTextInput).hover();
+        h.get_by_role(egui::accesskit::Role::MultilineTextInput).focus();
+        h.run_steps(2);
+        type_text(&mut h, "Fix totals of discounted orders");
+        h.key_press(egui::Key::Enter);
+        h.run_steps(1);
+        type_text(&mut h, "Fixes #12, AB#");
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("work-items-completion-{suffix}.png"))).unwrap();
+        if dark {
+            h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(h.state().settings.clone()), page: crate::ui::dialogs::SettingsPage::VersionControl });
+            h.run_steps(4);
+            h.render().unwrap().save(out.join("work-items-settings-dark.png")).unwrap();
+        }
+    }
+}

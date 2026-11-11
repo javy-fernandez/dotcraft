@@ -616,7 +616,20 @@
     "Rebase stopped": "Rebase parado",
     "Interactive rebase cannot rewrite merge commits": "O rebase interativo não pode reescrever commits de merge",
     "The rebase plan is not valid": "O plano de rebase não é válido",
-    "Message of {commit}": "Mensagem de {commit}"
+    "Message of {commit}": "Mensagem de {commit}",
+    "en": "pt-BR",
+    "{key}+Click to open": "{key}+clique para abrir",
+    "Open items and recent commits": "Itens abertos e commits recentes",
+    "From recent commits": "De commits recentes",
+    "Version Control": "Controle de versão",
+    "Issue Navigation": "Navegação de issues",
+    "In commit messages, #123 and AB#123 link to the issue tracker of the repository's remote. Add patterns for other trackers; $1, $2… in the link are replaced by the groups of the match.": "Nas mensagens de commit, #123 e AB#123 apontam para o rastreador de issues do remoto do repositório. Adicione padrões para outros rastreadores; $1, $2… no link são substituídos pelos grupos da correspondência.",
+    "No GitHub, GitLab or Azure DevOps remote found.": "Nenhum remoto do GitHub, GitLab ou Azure DevOps encontrado.",
+    "Issue ID (regex)": "ID da issue (regex)",
+    "Issue link": "Link da issue",
+    "Add Pattern": "Adicionar padrão",
+    "Invalid pattern: {error}": "Padrão inválido: {error}",
+    "Type # or AB# in the commit message to complete ids from recent commits, or from the tracker when GH_TOKEN, GITHUB_TOKEN, GITLAB_TOKEN or AZURE_DEVOPS_EXT_PAT is set or the GitHub CLI is signed in.": "Digite # ou AB# na mensagem de commit para completar ids dos commits recentes, ou do rastreador quando GH_TOKEN, GITHUB_TOKEN, GITLAB_TOKEN ou AZURE_DEVOPS_EXT_PAT estiver definido ou a CLI do GitHub estiver conectada."
   },
   "terminal": {
     "Local": "Local",
