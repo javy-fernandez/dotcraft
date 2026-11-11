@@ -100,6 +100,8 @@ pub struct Vcs {
     pub blame_for: Option<PathBuf>,
     pub diff: Option<DiffView>,
     next_doc_id: u64,
+    /// Work item links and completion of the commit message.
+    pub work_items: crate::work_items::WorkItems,
 }
 
 impl Vcs {
@@ -130,7 +132,7 @@ impl Vcs {
             compare: None,
             error: None,
             inbox: Inbox::new(waker.clone()),
-            waker,
+            waker: waker.clone(),
             heads: HashMap::new(),
             head_pending: BTreeSet::new(),
             marks_version: HashMap::new(),
@@ -139,6 +141,7 @@ impl Vcs {
             blame_for: None,
             diff: None,
             next_doc_id: 1 << 40,
+            work_items: crate::work_items::WorkItems::new(waker.clone()),
         }
     }
 

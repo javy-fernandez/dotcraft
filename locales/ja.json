@@ -533,7 +533,20 @@
     "{id} has a central version but no project references it": "{id} には集中バージョンがありますが、参照しているプロジェクトはありません",
     "{id} has no version in Directory.Packages.props": "{id} には Directory.Packages.props にバージョンがありません",
     "{id}: with central package management the version belongs in Directory.Packages.props, not on the reference": "{id}: 集中パッケージ管理では、バージョンは参照ではなく Directory.Packages.props に書きます",
-    "{version} available": "{version} が利用可能"
+    "{version} available": "{version} が利用可能",
+    "en": "ja",
+    "{key}+Click to open": "{key}+クリックで開く",
+    "Open items and recent commits": "未完了の項目と最近のコミット",
+    "From recent commits": "最近のコミットから",
+    "Version Control": "バージョン管理",
+    "Issue Navigation": "課題ナビゲーション",
+    "In commit messages, #123 and AB#123 link to the issue tracker of the repository's remote. Add patterns for other trackers; $1, $2… in the link are replaced by the groups of the match.": "コミットメッセージでは、#123 と AB#123 はリポジトリのリモートの課題トラッカーにリンクします。他のトラッカー用のパターンを追加できます。リンク内の $1、$2… は一致したグループに置き換えられます。",
+    "No GitHub, GitLab or Azure DevOps remote found.": "GitHub、GitLab、Azure DevOps のリモートが見つかりません。",
+    "Issue ID (regex)": "課題 ID（正規表現）",
+    "Issue link": "課題のリンク",
+    "Add Pattern": "パターンを追加",
+    "Invalid pattern: {error}": "無効なパターン: {error}",
+    "Type # or AB# in the commit message to complete ids from recent commits, or from the tracker when GH_TOKEN, GITHUB_TOKEN, GITLAB_TOKEN or AZURE_DEVOPS_EXT_PAT is set or the GitHub CLI is signed in.": "コミットメッセージで # または AB# と入力すると、最近のコミットの ID を補完します。GH_TOKEN、GITHUB_TOKEN、GITLAB_TOKEN、AZURE_DEVOPS_EXT_PAT が設定されているか GitHub CLI にサインインしている場合はトラッカーからも補完します。"
   },
   "terminal": {
     "Local": "ローカル",
@@ -1013,7 +1026,6 @@
     "Workspace Templates": "Workspace Templates"
   },
   "batch2-git": {
-    "en": "ja",
     "Abort cherry-pick": "Abort cherry-pick",
     "Abort the current cherry-pick and restore its starting state?": "Abort the current cherry-pick and restore its starting state?",
     "Add worktree": "Add worktree",

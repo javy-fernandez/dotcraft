@@ -533,7 +533,20 @@
     "{id} has a central version but no project references it": "{id} tiene versión central pero ningún proyecto lo referencia",
     "{id} has no version in Directory.Packages.props": "{id} no tiene versión en Directory.Packages.props",
     "{id}: with central package management the version belongs in Directory.Packages.props, not on the reference": "{id}: con la gestión central de paquetes la versión va en Directory.Packages.props, no en la referencia",
-    "{version} available": "{version} disponible"
+    "{version} available": "{version} disponible",
+    "en": "es",
+    "{key}+Click to open": "{key}+clic para abrir",
+    "Open items and recent commits": "Elementos abiertos y commits recientes",
+    "From recent commits": "De commits recientes",
+    "Version Control": "Control de versiones",
+    "Issue Navigation": "Navegación de incidencias",
+    "In commit messages, #123 and AB#123 link to the issue tracker of the repository's remote. Add patterns for other trackers; $1, $2… in the link are replaced by the groups of the match.": "En los mensajes de commit, #123 y AB#123 enlazan con el gestor de incidencias del remoto del repositorio. Añade patrones para otros gestores; $1, $2… en el enlace se sustituyen por los grupos de la coincidencia.",
+    "No GitHub, GitLab or Azure DevOps remote found.": "No se ha encontrado ningún remoto de GitHub, GitLab ni Azure DevOps.",
+    "Issue ID (regex)": "ID de incidencia (regex)",
+    "Issue link": "Enlace de la incidencia",
+    "Add Pattern": "Añadir patrón",
+    "Invalid pattern: {error}": "Patrón no válido: {error}",
+    "Type # or AB# in the commit message to complete ids from recent commits, or from the tracker when GH_TOKEN, GITHUB_TOKEN, GITLAB_TOKEN or AZURE_DEVOPS_EXT_PAT is set or the GitHub CLI is signed in.": "Escribe # o AB# en el mensaje de commit para completar ids de los commits recientes, o del gestor cuando GH_TOKEN, GITHUB_TOKEN, GITLAB_TOKEN o AZURE_DEVOPS_EXT_PAT están definidos o la CLI de GitHub tiene sesión iniciada."
   },
   "terminal": {
     "Local": "Local",
@@ -1013,7 +1026,6 @@
     "Workspace Templates": "Workspace Templates"
   },
   "batch2-git": {
-    "en": "es",
     "Abort cherry-pick": "Abort cherry-pick",
     "Abort the current cherry-pick and restore its starting state?": "Abort the current cherry-pick and restore its starting state?",
     "Add worktree": "Add worktree",

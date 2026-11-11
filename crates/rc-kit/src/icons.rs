@@ -202,6 +202,7 @@ pub mod ico {
         MORE_VERT = "general/moreVertical",
         REFRESH = "general/refresh",
         SEARCH = "general/search",
+        HASHTAG = "general/hashtag",
         SETTINGS = "general/settings",
         SHOW = "general/show",
         SORT = "general/sortBy",

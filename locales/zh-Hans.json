@@ -533,7 +533,20 @@
     "{id} has a central version but no project references it": "{id} 有集中版本，但没有项目引用它",
     "{id} has no version in Directory.Packages.props": "{id} 在 Directory.Packages.props 中没有版本",
     "{id}: with central package management the version belongs in Directory.Packages.props, not on the reference": "{id}：使用集中包管理时，版本应写在 Directory.Packages.props 中，而不是引用上",
-    "{version} available": "{version} 可用"
+    "{version} available": "{version} 可用",
+    "en": "zh-Hans",
+    "{key}+Click to open": "{key}+单击以打开",
+    "Open items and recent commits": "未关闭的工作项和最近的提交",
+    "From recent commits": "来自最近的提交",
+    "Version Control": "版本控制",
+    "Issue Navigation": "问题导航",
+    "In commit messages, #123 and AB#123 link to the issue tracker of the repository's remote. Add patterns for other trackers; $1, $2… in the link are replaced by the groups of the match.": "在提交消息中，#123 和 AB#123 会链接到仓库远程的问题跟踪器。可为其他跟踪器添加模式；链接中的 $1、$2… 会替换为匹配的分组。",
+    "No GitHub, GitLab or Azure DevOps remote found.": "未找到 GitHub、GitLab 或 Azure DevOps 远程。",
+    "Issue ID (regex)": "问题 ID（正则）",
+    "Issue link": "问题链接",
+    "Add Pattern": "添加模式",
+    "Invalid pattern: {error}": "无效的模式：{error}",
+    "Type # or AB# in the commit message to complete ids from recent commits, or from the tracker when GH_TOKEN, GITHUB_TOKEN, GITLAB_TOKEN or AZURE_DEVOPS_EXT_PAT is set or the GitHub CLI is signed in.": "在提交消息中输入 # 或 AB# 可补全最近提交中的 ID；设置了 GH_TOKEN、GITHUB_TOKEN、GITLAB_TOKEN 或 AZURE_DEVOPS_EXT_PAT，或已登录 GitHub CLI 时，也会从跟踪器补全。"
   },
   "terminal": {
     "Local": "本地",
@@ -1013,7 +1026,6 @@
     "Workspace Templates": "Workspace Templates"
   },
   "batch2-git": {
-    "en": "zh-Hans",
     "Abort cherry-pick": "Abort cherry-pick",
     "Abort the current cherry-pick and restore its starting state?": "Abort the current cherry-pick and restore its starting state?",
     "Add worktree": "Add worktree",

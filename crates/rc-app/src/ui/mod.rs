@@ -21,6 +21,7 @@ pub mod search_popup;
 pub mod stripes;
 pub mod toolwindows;
 pub mod welcome;
+pub mod work_item_links;
 
 use crate::app::DotCraftApp;
 use crate::toolwindow::Side;
