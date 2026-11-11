@@ -49,6 +49,10 @@ pub enum GitError {
     Locked(String),
     #[error("Network error")]
     Network(String),
+    #[error("Interactive rebase cannot rewrite merge commits")]
+    RebaseMergeCommits,
+    #[error("The rebase plan is not valid: {0}")]
+    InvalidRebasePlan(String),
     #[error("Cancelled")]
     Cancelled,
     #[error("Unexpected Git output: {0}")]
@@ -85,6 +89,8 @@ impl GitError {
             IdentityUnknown => ("Set user.name and user.email in Git first", vec![]),
             Locked(_) => ("Another Git process is running in this repository", vec![]),
             Network(_) => ("Network error", vec![]),
+            RebaseMergeCommits => ("Interactive rebase cannot rewrite merge commits", vec![]),
+            InvalidRebasePlan(_) => ("The rebase plan is not valid", vec![]),
             Cancelled => ("Cancelled", vec![]),
             Parse(_) | Io(_) | Failed { .. } => ("Git command failed", vec![]),
         }
