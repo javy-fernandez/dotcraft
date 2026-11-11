@@ -171,8 +171,13 @@ impl<'a> EditorView<'a> {
         }
 
         // ---------------------------------------------------------------- popups
-        if let Some(i) = crate::popups_view::show(ui, state, &scheme, &pal, &m, text_rect, focused) {
+        let (accepted, hover_action) = crate::popups_view::show(ui, state, &scheme, &pal, &m, text_rect, focused);
+        if let Some(i) = accepted {
             out.accepted_completion = Some(i);
+        }
+        if let Some(i) = hover_action {
+            state.popups.hover = None;
+            out.events.push(EditorEvent::HoverAction(i));
         }
 
         if (response.hovered() || response.dragged()) && state.link.is_none() {
@@ -668,6 +673,7 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
                 GutterIcon::Overridden => ico::GUTTER_OVERRIDDEN,
                 GutterIcon::Overriding => ico::GUTTER_OVERRIDING,
                 GutterIcon::Bookmark => ico::GUTTER_BOOKMARK,
+                GutterIcon::PackageUpdate => ico::UP,
             };
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
             icons::paint(&painter, r, ic, pal, true);

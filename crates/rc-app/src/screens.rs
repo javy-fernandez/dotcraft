@@ -1358,3 +1358,44 @@ fn screens_nuget_migrate_and_audit() {
         h.render().unwrap().save(out.join(format!("nuget-audit-deprecated-{suffix}.png"))).unwrap();
     }
 }
+
+
+#[test]
+#[ignore = "Requires a GPU; writes package insight captures (local feed) to target/snapshots"]
+fn screens_package_insight() {
+    use crate::package_insight_tests::{app_with, caret_at, central_shop, fake_feed, settle, text, type_text};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let feed = fake_feed();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let (_tmp, root) = central_shop(&feed);
+        let core = root.join("src/CentralShop.Core/CentralShop.Core.csproj");
+        let mut h = app_with(&root, home.path(), dark, &core);
+        // Update markers: gutter icon and inline hint.
+        let line = text(h.state()).lines().position(|l| l.contains("Humanizer.Core")).unwrap();
+        settle(&mut h, "markers", |a| a.docs.active_doc().unwrap().editor.gutter_icons.contains_key(&line));
+        h.render().unwrap().save(out.join(format!("package-update-{suffix}.png"))).unwrap();
+        // Hover on the package id.
+        caret_at(&mut h, "Humanizer", false);
+        h.run_steps(2);
+        let screen = h.state().caret_screen.unwrap() - egui::vec2(0.0, 10.0);
+        let pos = h.state().docs.active_doc().unwrap().editor.caret() + 3;
+        {
+            let app = h.state_mut();
+            let doc = &mut app.docs.list[app.docs.active.unwrap()];
+            app.packages.on_editor_events(doc, &[rc_editor::EditorEvent::HoverAt { pos, screen }]);
+        }
+        settle(&mut h, "hover", |a| a.docs.active_doc().unwrap().editor.popups.hover.is_some());
+        h.render().unwrap().save(out.join(format!("package-hover-{suffix}.png"))).unwrap();
+        // Completion of a new reference's id.
+        h.state_mut().docs.active_doc_mut().unwrap().editor.popups.hover = None;
+        caret_at(&mut h, "<PackageReference Include=\"Newtonsoft.Json\" />", true);
+        type_text(&mut h, "\n<PackageReference Include=");
+        type_text(&mut h, "Seri");
+        settle(&mut h, "completion", |a| a.docs.active_doc().unwrap().editor.popups.completion.as_ref().is_some_and(|c| !c.loading && !c.items.is_empty()));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("package-completion-{suffix}.png"))).unwrap();    }
+}

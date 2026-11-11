@@ -74,6 +74,8 @@ pub struct DotCraftApp {
     /// A newer release, shown in the bottom-right notice until dismissed.
     pub update: Option<crate::update::Release>,
     pub insight: Insight,
+    /// Package completion, hover, updates and CPM problems in project files.
+    pub packages: crate::package_insight::PackageInsight,
     pub runner: Runner,
     pub debugger: crate::debugger::Debugger,
     window_title: String,
@@ -179,6 +181,7 @@ impl DotCraftApp {
             update_check: None,
             update: None,
             insight: Insight::new(waker.clone()),
+            packages: crate::package_insight::PackageInsight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
@@ -337,7 +340,9 @@ impl DotCraftApp {
         self.runner.compounds = session.compounds.clone();
         self.runner.options = session.run_options.clone();
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
+        let root = ws.root.clone();
         self.workspace = Some(WorkspaceState { ws, solution });
+        self.packages.set_workspace(&root, self.solution_projects());
         self.refresh_endpoints();
         self.restore_session(session);
     }
@@ -660,9 +665,62 @@ impl DotCraftApp {
         }
     }
 
+    /// Results of the package insight of project files.
+    pub fn handle_packages(&mut self, outputs: Vec<crate::package_insight::PackageOutput>) {
+        use crate::package_insight::PackageOutput;
+        for o in outputs {
+            match o {
+                PackageOutput::Actions(list) => self.dialog = Some(Dialog::CodeActions { list, selected: 0 }),
+                PackageOutput::Fix(fix) => self.apply_package_fix(fix),
+                PackageOutput::Message(m) => self.notify(m, false),
+            }
+        }
+    }
+
+    /// Applies a fix of a project file's package (or shows the package in the NuGet window).
+    pub fn apply_package_fix(&mut self, fix: crate::package_insight::PackageFix) {
+        if let crate::package_insight::PackageFix::Open { id } = &fix {
+            self.open_nuget_package(id);
+            return;
+        }
+        match self.packages.apply(&mut self.docs, &fix) {
+            Ok(Some(msg)) => self.notify(msg, false),
+            Ok(None) => {}
+            Err(e) => self.notify(e, true),
+        }
+    }
+
+    /// Opens the NuGet window on a package.
+    pub fn open_nuget_package(&mut self, id: &str) {
+        if !self.nuget.is_loaded() {
+            let projects = self.solution_projects();
+            let dotnet = rc_dotnet::Dotnet::locate(Some(&dotnet_path(&self.settings)));
+            self.nuget.set_projects(projects, dotnet);
+        }
+        self.nuget.open_package(id);
+        self.dock.show(ToolWindow::Nuget);
+    }
+
     /// Runs a code-insight action from the editor's keymap on the active document.
     pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
         let Some(i) = self.docs.active else { return };
+        // Project files: package completion, documentation and fixes.
+        if rc_dotnet::project_xml::is_package_file(&self.docs.list[i].path) && matches!(action, Action::Complete | Action::QuickDoc | Action::ShowIntentions) {
+            let doc = &mut self.docs.list[i];
+            let outputs = match action {
+                Action::Complete => {
+                    self.packages.complete(doc, true);
+                    Vec::new()
+                }
+                Action::QuickDoc => {
+                    self.packages.quick_doc(doc, caret_screen);
+                    Vec::new()
+                }
+                _ => self.packages.context_actions(doc),
+            };
+            self.handle_packages(outputs);
+            return;
+        }
         // JSON and XML are formatted here; C# by the server.
         if action == Action::Reformat && !crate::insight::is_csharp(&self.docs.list[i]) {
             self.format_locally(i);
@@ -1061,7 +1119,15 @@ impl DotCraftApp {
     pub fn set_build_problems(&mut self, list: Vec<rc_dotnet::Diagnostic>) {
         let mut per_file: std::collections::BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>> = std::collections::BTreeMap::new();
         for d in list {
-            let Some(file) = d.file.clone() else { continue };
+            let Some(mut file) = d.file.clone() else { continue };
+            let nuget = d.code.starts_with("NU");
+            // NuGet errors raised in the SDK's targets belong to their project.
+            if nuget
+                && !rc_dotnet::project_xml::is_package_file(&file)
+                && let Some(p) = &d.project
+            {
+                file = p.clone();
+            }
             let text = match self.docs.index_of(&file) {
                 Some(i) => self.docs.list[i].editor.buffer.rope().clone(),
                 None => rc_text::Rope::from_str(&std::fs::read_to_string(&file).unwrap_or_default().replace("\r\n", "\n")),
@@ -1069,10 +1135,21 @@ impl DotCraftApp {
             let line = d.line.unwrap_or(1).saturating_sub(1) as usize;
             let line = line.min(text.len_lines().saturating_sub(1));
             let start = text.line_to_char(line) + d.column.unwrap_or(1).saturating_sub(1) as usize;
-            let start = start.min(text.len_chars());
+            let mut start = start.min(text.len_chars());
+            let mut end = start;
+            // NU1xxx without a line: the item of the package the message names.
+            if nuget
+                && d.line.is_none()
+                && rc_dotnet::project_xml::is_package_file(&file)
+            {
+                let s = text.to_string();
+                if let Some(r) = rc_dotnet::project_xml::locate_message(&s, &d.message) {
+                    (start, end) = (rc_dotnet::project_xml::char_of(&s, r.start), rc_dotnet::project_xml::char_of(&s, r.end));
+                }
+            }
             per_file.entry(file).or_default().push(rc_editor::Diagnostic {
                 start,
-                end: start,
+                end,
                 severity: if d.severity == rc_dotnet::Severity::Error { rc_editor::Severity::Error } else { rc_editor::Severity::Warning },
                 message: d.message,
                 code: (!d.code.is_empty()).then_some(d.code),
@@ -1083,6 +1160,7 @@ impl DotCraftApp {
         for (file, diags) in per_file {
             self.insight.problems.insert(file, diags);
         }
+        self.packages.republish();
     }
 
     /// Opens the declaration of a test from its fully qualified name (Tests window).
@@ -1329,6 +1407,7 @@ impl DotCraftApp {
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();
         self.report_fs_to_server(&events);
+        self.packages.files_changed(&events.iter().map(|e| e.path().to_path_buf()).collect::<Vec<_>>());
         if let Some(index) = &self.files.index
             && !events.is_empty()
         {
@@ -1550,6 +1629,8 @@ impl eframe::App for DotCraftApp {
         }
         let outputs = self.insight.update(&mut self.docs, self.settings.show_inlay_hints);
         self.handle_insight(outputs);
+        let outputs = self.packages.update(&mut self.docs, &mut self.insight.problems, self.nuget.selected_source());
+        self.handle_packages(outputs);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
         // Monitoring follows the selected Run tab's process (or the last one started).

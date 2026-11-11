@@ -408,6 +408,22 @@ impl NugetManager {
         self.tab = Tab::Installed;
     }
 
+    /// The source chosen in the window (the editor's package completion uses it too).
+    pub fn selected_source(&self) -> Option<&PackageSource> {
+        self.sources.get(self.source)
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        self.loaded
+    }
+
+    /// Shows `id` (from the editor): installed packages, or the search when none has it.
+    pub fn open_package(&mut self, id: &str) {
+        self.tab = if self.installed_versions(id).is_empty() { Tab::Browse } else { Tab::Installed };
+        self.query = id.to_string();
+        self.select(id);
+    }
+
     fn reload_installed(&mut self) {
         // CPM: cached or quick static results now, MSBuild in the background for the projects
         // under a Directory.Packages.props (the others never pay for it).
