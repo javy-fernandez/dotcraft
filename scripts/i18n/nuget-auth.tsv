@@ -1,0 +1,20 @@
+# Private NuGet feeds: source status and Sign in. Import: python3 scripts/i18n_tsv.py app scripts/i18n/nuget-auth.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Sign in	Iniciar sesión	Se connecter	Entrar	Anmelden	Zaloguj się	登录	サインイン
+Sign-in required	Requiere iniciar sesión	Connexion requise	Requer login	Anmeldung erforderlich	Wymagane logowanie	需要登录	サインインが必要
+Failed	Error	Échec	Falhou	Fehlgeschlagen	Błąd	失败	失敗
+Checking…	Comprobando…	Vérification…	Verificando…	Wird geprüft…	Sprawdzanie…	正在检查…	確認中…
+Connecting to {source}…	Conectando con {source}…	Connexion à {source}…	Conectando a {source}…	Verbindung mit {source} wird hergestellt…	Łączenie z {source}…	正在连接到 {source}…	{source} に接続しています…
+Could not connect to {source}	No se pudo conectar con {source}	Impossible de se connecter à {source}	Não foi possível conectar a {source}	Verbindung mit {source} nicht möglich	Nie można połączyć się z {source}	无法连接到 {source}	{source} に接続できませんでした
+Could not connect to {source}: {error}	No se pudo conectar con {source}: {error}	Impossible de se connecter à {source} : {error}	Não foi possível conectar a {source}: {error}	Verbindung mit {source} nicht möglich: {error}	Nie można połączyć się z {source}: {error}	无法连接到 {source}：{error}	{source} に接続できませんでした: {error}
+Sign in to {source} to browse its packages	Inicia sesión en {source} para explorar sus paquetes	Connectez-vous à {source} pour parcourir ses packages	Entre em {source} para procurar os pacotes	Melden Sie sich bei {source} an, um die Pakete zu durchsuchen	Zaloguj się do {source}, aby przeglądać pakiety	登录 {source} 以浏览其包	パッケージを参照するには {source} にサインインしてください
+Sign in to {source}	Iniciar sesión en {source}	Se connecter à {source}	Entrar em {source}	Bei {source} anmelden	Zaloguj się do {source}	登录 {source}	{source} にサインイン
+Signed in to {source}	Sesión iniciada en {source}	Connecté à {source}	Conectado a {source}	Bei {source} angemeldet	Zalogowano do {source}	已登录 {source}	{source} にサインインしました
+Could not sign in: {error}	No se pudo iniciar sesión: {error}	Impossible de se connecter : {error}	Não foi possível entrar: {error}	Anmeldung fehlgeschlagen: {error}	Nie można się zalogować: {error}	无法登录：{error}	サインインできませんでした: {error}
+Open the sign-in page in a browser and enter this code:	Abre la página de inicio de sesión en un navegador e introduce este código:	Ouvrez la page de connexion dans un navigateur et saisissez ce code :	Abra a página de login em um navegador e digite este código:	Öffnen Sie die Anmeldeseite in einem Browser und geben Sie diesen Code ein:	Otwórz stronę logowania w przeglądarce i wpisz ten kod:	在浏览器中打开登录页面并输入此代码：	ブラウザーでサインイン ページを開き、次のコードを入力してください:
+Copy Code	Copiar código	Copier le code	Copiar código	Code kopieren	Kopiuj kod	复制代码	コードをコピー
+Open Browser	Abrir navegador	Ouvrir le navigateur	Abrir navegador	Browser öffnen	Otwórz przeglądarkę	打开浏览器	ブラウザーを開く
+Try Again	Reintentar	Réessayer	Tentar novamente	Erneut versuchen	Spróbuj ponownie	重试	再試行
+Waiting for you to sign in…	Esperando a que inicies sesión…	En attente de votre connexion…	Aguardando o seu login…	Warten auf Ihre Anmeldung…	Oczekiwanie na zalogowanie…	正在等待你登录…	サインインを待っています…
+Asking the credential provider…	Consultando al proveedor de credenciales…	Interrogation du fournisseur d'informations d'identification…	Consultando o provedor de credenciais…	Anmeldeinformationsanbieter wird abgefragt…	Odpytywanie dostawcy poświadczeń…	正在询问凭据提供程序…	資格情報プロバイダーに問い合わせています…
+The token stays in memory until DotCraft closes; it is never saved.	El token se guarda en memoria hasta que cierres DotCraft; nunca se escribe en disco.	Le jeton reste en mémoire jusqu'à la fermeture de DotCraft ; il n'est jamais enregistré.	O token fica na memória até o DotCraft ser fechado; nunca é salvo.	Das Token bleibt bis zum Beenden von DotCraft im Speicher und wird nie gespeichert.	Token pozostaje w pamięci do zamknięcia DotCraft; nigdy nie jest zapisywany.	令牌仅保存在内存中直到 DotCraft 关闭，绝不会写入磁盘。	トークンは DotCraft を閉じるまでメモリにのみ保持され、保存されることはありません。
