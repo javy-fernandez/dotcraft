@@ -73,6 +73,8 @@ pub enum ExplorerAction {
     CopyPath(PathBuf),
     OpenInTerminal(PathBuf),
     ManagePackages(PathBuf),
+    /// Migrate this solution to Central Package Management (NuGet window).
+    MigrateToCpm,
     /// Add New Project to this solution.
     AddProject(PathBuf),
     Collapse,
@@ -591,6 +593,11 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, actions: &mut V
         }
         if theme::menu_item(ui, Some(ico::EDIT), tr("Edit Solution File"), false).clicked() {
             actions.push(ExplorerAction::Open(sln.to_path_buf()));
+            ui.close();
+        }
+        // Only for solutions without a Directory.Packages.props.
+        if sln.parent().and_then(rc_dotnet::cpm::find_central_file).is_none() && theme::menu_item(ui, Some(ico::PACKAGE), tr("Migrate to Central Package Management…"), false).clicked() {
+            actions.push(ExplorerAction::MigrateToCpm);
             ui.close();
         }
         if theme::menu_item(ui, Some(ico::OPEN), if cfg!(target_os = "macos") { tr("Reveal in Finder") } else { tr("Open in Explorer") }, false).clicked() {

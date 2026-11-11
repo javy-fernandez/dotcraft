@@ -1303,6 +1303,10 @@ impl DotCraftApp {
                 ExplorerAction::Reveal(path) => reveal_in_file_manager(&path),
                 ExplorerAction::OpenInTerminal(dir) => self.open_terminal(Some(dir)),
                 ExplorerAction::AddProject(sln) => self.new_project_dialog(Some(sln)),
+                ExplorerAction::MigrateToCpm => {
+                    self.nuget.request_migration();
+                    self.dock.show(ToolWindow::Nuget);
+                }
                 ExplorerAction::ManagePackages(project) => {
                     self.nuget.focus_project(&project);
                     self.dock.show(ToolWindow::Nuget);
