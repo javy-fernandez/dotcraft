@@ -1,0 +1,6 @@
+<Project>
+  <!-- Central Package Management for every project below (Directory.Packages.props has the versions). -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

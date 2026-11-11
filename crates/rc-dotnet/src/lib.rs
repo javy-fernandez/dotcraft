@@ -13,6 +13,7 @@ pub mod cpu_profile;
 mod eventpipe;
 pub mod gcdump;
 pub mod coverage;
+pub mod cpm;
 pub mod diagnostics;
 pub mod global_json;
 pub mod endpoints;
