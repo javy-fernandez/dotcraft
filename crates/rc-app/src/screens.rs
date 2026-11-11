@@ -1446,3 +1446,59 @@ fn screens_package_insight() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("package-completion-{suffix}.png"))).unwrap();    }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/sqlserver-*.png"]
+fn screens_sql_server() {
+    use crate::database::{Cell, Grid, Source, mssql};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&fixtures().join("Shop"));
+        app.dock.show(crate::toolwindow::ToolWindow::Database);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Database, 520.0);
+        app.database.source = Source::SqlServer;
+        // No keychain access in captures.
+        app.database.mssql = mssql::SqlServer::with_secrets(Waker::noop(), std::sync::Arc::new(mssql::secrets::Memory::default()));
+        let mut h = harness(app, vec2(1440.0, 900.0));
+        run_frames(&mut h, "the appsettings scan", |a| !a.database.mssql.scanning());
+        let found = |file: &str, name: &str, cs: &str| mssql::conn::Found { file: file.into(), name: name.into(), kind: mssql::conn::classify(cs).unwrap() };
+        h.state_mut().database.mssql.set_found(vec![
+            found("src/Shop.Api/appsettings.json", "ShopDb", "Server=sql01.contoso.local,1433;Database=Shop;User Id=shop_reader;Password=x;TrustServerCertificate=true"),
+            found("src/Shop.Api/appsettings.Development.json", "LocalDb", r"Server=(localdb)\mssqllocaldb;Database=Shop;Trusted_Connection=True"),
+            found("src/Shop.Api/appsettings.Development.json", "Cache", "Data Source=cache.db"),
+        ]);
+        h.state_mut().database.mssql.form.fill(&mssql::conn::parse("Server=sql01.contoso.local,1433;Database=Shop;User Id=shop_reader;TrustServerCertificate=true").unwrap());
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("sqlserver-connect-{suffix}.png"))).unwrap();
+        // Connected: schema tree and a result grid with fake data.
+        let info = mssql::ServerInfo { version: "16.0.4135.4".into(), edition: "Developer Edition (64-bit)".into(), database: "Shop".into(), login: "shop_reader".into(), can_write: false };
+        h.state_mut().database.mssql.set_connected_for_test(info, "sql01.contoso.local,1433 · Shop", mssql::sample_schema());
+        let s = &mut h.state_mut().database.mssql;
+        s.expanded.insert("t:dbo.Orders".into());
+        s.selected = Some(1);
+        s.sql = "SELECT c.Name, COUNT(*) AS Orders, SUM(o.Total) AS Total\nFROM dbo.Orders o JOIN dbo.Customers c ON c.Id = o.CustomerId\nGROUP BY c.Name\nORDER BY Total DESC;".into();
+        let t = |v: &str| Cell::Text(v.into());
+        s.output = Some(mssql::Output::Grid(Grid {
+            columns: vec!["Name".into(), "Orders".into(), "Total".into()],
+            rows: vec![
+                vec![t("Ada Lovelace"), Cell::Integer(12), t("1843.20")],
+                vec![t("Grace Hopper"), Cell::Integer(9), t("1206.75")],
+                vec![t("Linus Torvalds"), Cell::Integer(4), t("164.85")],
+                vec![t("Margaret Hamilton"), Cell::Integer(2), Cell::Null],
+            ],
+            truncated: false,
+        }));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("sqlserver-schema-grid-{suffix}.png"))).unwrap();
+        // Estimated plan.
+        h.state_mut().database.mssql.output = Some(mssql::Output::Plan(mssql::plan::parse(mssql::plan::SAMPLE).unwrap()));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("sqlserver-plan-{suffix}.png"))).unwrap();
+    }
+}

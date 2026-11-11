@@ -40,9 +40,16 @@ muda = { version = "0.21", default-features = false }
 egui_commonmark = { version = "0.25", default-features = false, features = ["pulldown_cmark", "load-images"] }
 egui_extras = { version = "0.36", default-features = false, features = ["image", "file"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
+# SQL Server (read-only Database window): TDS over TCP with rustls; passwords in the OS keychain.
+tiberius = { version = "0.13", default-features = false, features = ["tds73", "rustls", "sql-browser-tokio"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+futures-util = { version = "0.3", default-features = false }
+roxmltree = "0.20"
+keyring = { version = "3.6", default-features = false }
 sysinfo = { version = "0.40.1", default-features = false, features = ["system"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["apple-native"] }
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSURL", "NSString"] }
 
@@ -50,11 +57,14 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["windows-native"] }
+tiberius = { version = "0.13", default-features = false, features = ["tds73", "rustls", "sql-browser-tokio", "winauth"] }
 windows-sys = { version = "0.61", features = ["Win32_System_Time"] }
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "wgsl"] }
 
 # Linux: Vulkan (or OpenGL ES where there is none), on X11 and Wayland.
 [target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["linux-native"] }
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "vulkan", "gles", "wgsl"] }
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu_no_default_features", "persistence", "x11", "wayland"] }
 

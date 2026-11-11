@@ -478,6 +478,7 @@ impl DotCraftApp {
         self.vcs.close();
         self.http = crate::web::HttpClient::new(self.waker.clone());
         self.database.disconnect();
+        self.database.mssql.disconnect();
         self.find_in_files = None;
         self.search_everywhere = None;
         self.find_bar = None;
