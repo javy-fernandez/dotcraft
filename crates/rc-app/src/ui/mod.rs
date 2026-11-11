@@ -64,6 +64,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         theme::fixed_island(ui, &p, |ui| editor_area::show(app, ui, editor_actions));
     });
     dialogs::show(app, &ctx);
+    nuget::sign_in_dialog(app, &ctx);
     search_popup::show(app, &ctx);
     editor_area::floating_windows(app, &ctx);
     if let Some(mut d) = app.new_project.take()
