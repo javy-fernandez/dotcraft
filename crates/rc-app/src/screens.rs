@@ -1446,3 +1446,60 @@ fn screens_package_insight() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("package-completion-{suffix}.png"))).unwrap();    }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes pull request captures (local mock GitHub / Azure DevOps) to target/snapshots"]
+fn screens_pull_requests() {
+    use rc_vcs::hosting::{fake, mock::MockServer};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let github = MockServer::start(fake::github);
+    let azure = MockServer::start(fake::azure);
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        for (service, repo, id) in [("github", fake::github_repo(&github.base), 42), ("azure", fake::azure_repo(&azure.base), 7)] {
+            let home = tempfile::tempdir().unwrap();
+            let mut app = test_app(home.path(), dark);
+            app.settings.roslyn_path = Some("/nonexistent".into());
+            app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+            app.pull_requests.use_repo_for_test(fixtures(), repo);
+            app.dock.show(crate::toolwindow::ToolWindow::PullRequests);
+            app.dock.sizes.insert(crate::toolwindow::ToolWindow::PullRequests, 520.0);
+            let mut h = harness(app, vec2(1440.0, 900.0));
+            h.run_steps(4);
+            // The sign-in form.
+            if service == "github" {
+                h.state_mut().pull_requests.token_input = "ghp_example".into();
+                h.run_steps(4);
+                h.render().unwrap().save(out.join(format!("pr-sign-in-{suffix}.png"))).unwrap();
+            }
+            h.state_mut().pull_requests.token_input = fake::TOKEN.into();
+            h.state_mut().pull_requests.sign_in();
+            run_frames(&mut h, "pull requests", |a| !a.pull_requests.list.is_empty() && !a.pull_requests.loading);
+            // The list and an opened pull request, answering a conversation.
+            h.state_mut().pull_requests.select(id);
+            run_frames(&mut h, "details", |a| a.pull_requests.details.is_some() && !a.pull_requests.details_loading);
+            h.state_mut().pull_requests.reply = Some((if service == "github" { "line:7".into() } else { "10".into() }, "Thanks, fixed in the last push.".into()));
+            h.run_steps(4);
+            h.render().unwrap().save(out.join(format!("pr-{service}-{suffix}.png"))).unwrap();
+            if service == "github" {
+                // The diff of a file and the merge confirmation.
+                let file = h.state().pull_requests.details.as_ref().unwrap().files[0].clone();
+                h.state_mut().pull_requests.reply = None;
+                h.state_mut().pull_requests.open_diff(&file);
+                run_frames(&mut h, "diff", |a| a.vcs.diff.is_some());
+                h.state_mut().pull_requests.confirm_merge = true;
+                h.run_steps(4);
+                h.render().unwrap().save(out.join(format!("pr-diff-{suffix}.png"))).unwrap();
+                // New Pull Request.
+                let branch = |name: &str, kind| rc_vcs::Branch { name: name.into(), full_ref: String::new(), kind, target: String::new(), is_head: false, upstream: None, ahead: 0, behind: 0, upstream_gone: false, commit_time: 0, subject: String::new() };
+                let branches = [branch("feature/order-history", rc_vcs::BranchKind::Local), branch("main", rc_vcs::BranchKind::Local), branch("origin/main", rc_vcs::BranchKind::Remote), branch("origin/develop", rc_vcs::BranchKind::Remote), branch("origin/feature/order-history", rc_vcs::BranchKind::Remote)];
+                h.state_mut().pull_requests.open_create(Some("feature/order-history".into()), &branches);
+                h.state_mut().pull_requests.create.as_mut().unwrap().description = "Shows the past orders of a customer.\n\n- New `OrderHistory` page\n- Paging in `OrderService`".into();
+                h.run_steps(4);
+                h.render().unwrap().save(out.join(format!("pr-create-{suffix}.png"))).unwrap();
+            }
+        }
+    }
+}

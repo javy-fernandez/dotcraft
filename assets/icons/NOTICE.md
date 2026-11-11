@@ -10,3 +10,5 @@ at the root of this repository. Files ending in `_dark.svg` are the dark-theme v
 
 `toolwindows/database.svg` and `toolwindows/monitoring.svg` are DotCraft's own, drawn in the same style
 (IntelliJ Community has no database icon).
+
+`toolwindows/pullRequests.svg` is DotCraft's own as well, drawn in the same style.

@@ -1,0 +1,81 @@
+en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Approve	Aprobar	Approuver	Aprovar	Genehmigen	Zatwierdź	批准	承認
+Approved	Aprobado	Approuvé	Aprovado	Genehmigt	Zatwierdzono	已批准	承認済み
+Approved #{id}	#{id} aprobado	#{id} approuvée	#{id} aprovado	#{id} genehmigt	Zatwierdzono #{id}	已批准 #{id}	#{id} を承認しました
+Approved with suggestions	Aprobado con sugerencias	Approuvé avec suggestions	Aprovado com sugestões	Mit Vorschlägen genehmigt	Zatwierdzono z sugestiami	已批准（附建议）	提案付きで承認
+Changes requested	Cambios solicitados	Modifications demandées	Alterações solicitadas	Änderungen angefordert	Poproszono o zmiany	已请求更改	変更をリクエスト済み
+Checking the token…	Comprobando el token…	Vérification du jeton…	Verificando o token…	Token wird geprüft…	Sprawdzanie tokenu…	正在检查令牌…	トークンを確認しています…
+Closed	Cerrada	Fermée	Fechado	Geschlossen	Zamknięty	已关闭	クローズ済み
+Comment	Comentar	Commenter	Comentar	Kommentieren	Skomentuj	评论	コメント
+Commented	Comentó	A commenté	Comentou	Kommentiert	Skomentowano	已评论	コメント済み
+Complete	Completar	Terminer	Concluir	Abschließen	Zakończ	完成	完了
+Conflicts	Conflictos	Conflits	Conflitos	Konflikte	Konflikty	冲突	競合
+Conversations	Conversaciones	Conversations	Conversas	Unterhaltungen	Dyskusje	对话	会話
+Could not remove the token from the keychain: {reason}	No se pudo quitar el token del llavero: {reason}	Impossible de retirer le jeton du trousseau : {reason}	Não foi possível remover o token do chaveiro: {reason}	Das Token konnte nicht aus dem Schlüsselbund entfernt werden: {reason}	Nie można usunąć tokenu z pęku kluczy: {reason}	无法从钥匙串中移除令牌：{reason}	キーチェーンからトークンを削除できませんでした: {reason}
+Could not save the token in the keychain: {reason}	No se pudo guardar el token en el llavero: {reason}	Impossible d'enregistrer le jeton dans le trousseau : {reason}	Não foi possível salvar o token no chaveiro: {reason}	Das Token konnte nicht im Schlüsselbund gespeichert werden: {reason}	Nie można zapisać tokenu w pęku kluczy: {reason}	无法将令牌保存到钥匙串：{reason}	キーチェーンにトークンを保存できませんでした: {reason}
+Create a Token…	Crear un token…	Créer un jeton…	Criar um token…	Token erstellen…	Utwórz token…	创建令牌…	トークンを作成…
+Create a merge commit	Crear un commit de fusión	Créer un commit de fusion	Criar um commit de merge	Merge-Commit erstellen	Utwórz commit scalający	创建合并提交	マージコミットを作成
+Create as draft	Crear como borrador	Créer en tant que brouillon	Criar como rascunho	Als Entwurf erstellen	Utwórz jako szkic	创建为草稿	下書きとして作成
+Created pull request #{id}	Pull request #{id} creada	Pull request #{id} créée	Pull request #{id} criado	Pull Request #{id} erstellt	Utworzono pull request #{id}	已创建拉取请求 #{id}	プルリクエスト #{id} を作成しました
+Description	Descripción	Description	Descrição	Beschreibung	Opis	描述	説明
+DotCraft uses a personal access token to list, review and create pull requests. It is kept in the system keychain.	DotCraft usa un token de acceso personal para listar, revisar y crear pull requests. Se guarda en el llavero del sistema.	DotCraft utilise un jeton d'accès personnel pour lister, relire et créer des pull requests. Il est conservé dans le trousseau du système.	O DotCraft usa um token de acesso pessoal para listar, revisar e criar pull requests. Ele fica guardado no chaveiro do sistema.	DotCraft verwendet ein persönliches Zugriffstoken, um Pull Requests aufzulisten, zu prüfen und zu erstellen. Es wird im Schlüsselbund des Systems gespeichert.	DotCraft używa osobistego tokenu dostępu do wyświetlania, przeglądania i tworzenia pull requestów. Jest przechowywany w systemowym pęku kluczy.	DotCraft 使用个人访问令牌来列出、审查和创建拉取请求。令牌保存在系统钥匙串中。	DotCraft は個人用アクセストークンを使ってプルリクエストの一覧表示、レビュー、作成を行います。トークンはシステムのキーチェーンに保存されます。
+Draft	Borrador	Brouillon	Rascunho	Entwurf	Szkic	草稿	下書き
+Drafts can't be merged.	Los borradores no se pueden fusionar.	Les brouillons ne peuvent pas être fusionnés.	Rascunhos não podem ser mesclados.	Entwürfe können nicht gemergt werden.	Szkiców nie można scalić.	草稿无法合并。	下書きはマージできません。
+Filter by number, title, author or branch	Filtrar por número, título, autor o rama	Filtrer par numéro, titre, auteur ou branche	Filtrar por número, título, autor ou branch	Nach Nummer, Titel, Autor oder Branch filtern	Filtruj po numerze, tytule, autorze lub gałęzi	按编号、标题、作者或分支筛选	番号、タイトル、作成者、ブランチで絞り込み
+From	De	De	De	Von	Z	从	マージ元
+Leave a comment	Deja un comentario	Laisser un commentaire	Deixe um comentário	Kommentar schreiben	Dodaj komentarz	发表评论	コメントを残す
+Looking for GitHub or Azure DevOps remotes…	Buscando remotos de GitHub o Azure DevOps…	Recherche de dépôts distants GitHub ou Azure DevOps…	Procurando remotos do GitHub ou Azure DevOps…	Suche nach GitHub- oder Azure-DevOps-Remotes…	Wyszukiwanie zdalnych repozytoriów GitHub lub Azure DevOps…	正在查找 GitHub 或 Azure DevOps 远程仓库…	GitHub または Azure DevOps のリモートを探しています…
+Markdown is supported	Se admite Markdown	Markdown est pris en charge	Markdown é suportado	Markdown wird unterstützt	Obsługiwany jest Markdown	支持 Markdown	Markdown を使用できます
+Merge	Fusionar	Fusionner	Mesclar	Mergen	Scal	合并	マージ
+Merge #{id} into {target}?	¿Fusionar #{id} en {target}?	Fusionner #{id} dans {target} ?	Mesclar #{id} em {target}?	#{id} in {target} mergen?	Scalić #{id} z {target}?	将 #{id} 合并到 {target}？	#{id} を {target} にマージしますか?
+Merge (no fast-forward)	Fusionar (sin fast-forward)	Fusionner (sans fast-forward)	Mesclar (sem fast-forward)	Mergen (ohne Fast-Forward)	Scal (bez fast-forward)	合并（不快进）	マージ (fast-forward なし)
+Merged	Fusionada	Fusionnée	Mesclado	Gemergt	Scalony	已合并	マージ済み
+Merged #{id}	#{id} fusionada	#{id} fusionnée	#{id} mesclado	#{id} gemergt	Scalono #{id}	已合并 #{id}	#{id} をマージしました
+Merging…	Fusionando…	Fusion en cours…	Mesclando…	Wird gemergt…	Scalanie…	正在合并…	マージしています…
+Network error: {reason}	Error de red: {reason}	Erreur réseau : {reason}	Erro de rede: {reason}	Netzwerkfehler: {reason}	Błąd sieci: {reason}	网络错误：{reason}	ネットワークエラー: {reason}
+New Pull Request	Nueva pull request	Nouvelle pull request	Novo pull request	Neuer Pull Request	Nowy pull request	新建拉取请求	新しいプルリクエスト
+No GitHub or Azure DevOps remote	No hay remoto de GitHub ni de Azure DevOps	Aucun dépôt distant GitHub ou Azure DevOps	Nenhum remoto do GitHub ou Azure DevOps	Kein GitHub- oder Azure-DevOps-Remote	Brak zdalnego repozytorium GitHub ani Azure DevOps	没有 GitHub 或 Azure DevOps 远程仓库	GitHub または Azure DevOps のリモートがありません
+No comments yet.	Aún no hay comentarios.	Aucun commentaire pour l'instant.	Ainda não há comentários.	Noch keine Kommentare.	Brak komentarzy.	暂无评论。	まだコメントはありません。
+No description provided.	Sin descripción.	Aucune description.	Sem descrição.	Keine Beschreibung.	Brak opisu.	未提供描述。	説明はありません。
+No open pull requests	No hay pull requests abiertas	Aucune pull request ouverte	Nenhum pull request aberto	Keine offenen Pull Requests	Brak otwartych pull requestów	没有打开的拉取请求	オープンなプルリクエストはありません
+No pull request matches the filter	Ninguna pull request coincide con el filtro	Aucune pull request ne correspond au filtre	Nenhum pull request corresponde ao filtro	Kein Pull Request entspricht dem Filter	Żaden pull request nie pasuje do filtra	没有与筛选条件匹配的拉取请求	フィルターに一致するプルリクエストはありません
+Not allowed: {reason}	No permitido: {reason}	Non autorisé : {reason}	Não permitido: {reason}	Nicht erlaubt: {reason}	Niedozwolone: {reason}	不允许：{reason}	許可されていません: {reason}
+Paste the token	Pega el token	Collez le jeton	Cole o token	Token einfügen	Wklej token	粘贴令牌	トークンを貼り付け
+Personal access token	Token de acceso personal	Jeton d'accès personnel	Token de acesso pessoal	Persönliches Zugriffstoken	Osobisty token dostępu	个人访问令牌	個人用アクセストークン
+Pick a target branch other than the source.	Elige una rama de destino distinta de la de origen.	Choisissez une branche cible différente de la source.	Escolha um branch de destino diferente do de origem.	Wählen Sie einen anderen Ziel-Branch als die Quelle.	Wybierz gałąź docelową inną niż źródłowa.	请选择与源分支不同的目标分支。	マージ元とは別のマージ先ブランチを選んでください。
+Pull Requests	Pull requests	Pull requests	Pull requests	Pull Requests	Pull requesty	拉取请求	プルリクエスト
+Pull requests show up here when a remote of the repository is on GitHub or Azure DevOps.	Las pull requests aparecen aquí cuando un remoto del repositorio está en GitHub o Azure DevOps.	Les pull requests apparaissent ici lorsqu'un dépôt distant est sur GitHub ou Azure DevOps.	Os pull requests aparecem aqui quando um remoto do repositório está no GitHub ou Azure DevOps.	Pull Requests erscheinen hier, wenn ein Remote des Repositorys auf GitHub oder Azure DevOps liegt.	Pull requesty pojawią się tutaj, gdy zdalne repozytorium jest na GitHub lub Azure DevOps.	当仓库的远程位于 GitHub 或 Azure DevOps 时，拉取请求会显示在这里。	リポジトリのリモートが GitHub または Azure DevOps にあると、ここにプルリクエストが表示されます。
+Push Branch	Enviar rama	Pousser la branche	Enviar branch	Branch pushen	Wypchnij gałąź	推送分支	ブランチをプッシュ
+Rebase and merge	Rebase y fusionar	Rebaser et fusionner	Rebase e mesclar	Rebase und mergen	Rebase i scal	变基并合并	リベースしてマージ
+Rejected	Rechazada	Rejetée	Rejeitado	Abgelehnt	Odrzucono	已拒绝	却下
+Reply	Responder	Répondre	Responder	Antworten	Odpowiedz	回复	返信
+Reply…	Responder…	Répondre…	Responder…	Antworten…	Odpowiedz…	回复…	返信…
+Request Changes	Solicitar cambios	Demander des modifications	Solicitar alterações	Änderungen anfordern	Poproś o zmiany	请求更改	変更をリクエスト
+Requested changes on #{id}	Cambios solicitados en #{id}	Modifications demandées sur #{id}	Alterações solicitadas em #{id}	Änderungen an #{id} angefordert	Poproszono o zmiany w #{id}	已对 #{id} 请求更改	#{id} に変更をリクエストしました
+Resolved	Resuelta	Résolue	Resolvida	Gelöst	Rozwiązano	已解决	解決済み
+Review comment (optional)	Comentario de revisión (opcional)	Commentaire de revue (facultatif)	Comentário da revisão (opcional)	Review-Kommentar (optional)	Komentarz do recenzji (opcjonalnie)	审查评论（可选）	レビューコメント (任意)
+Review requested	Revisión solicitada	Revue demandée	Revisão solicitada	Review angefordert	Poproszono o recenzję	已请求审查	レビュー依頼中
+Select a pull request to see its changes and conversations	Selecciona una pull request para ver sus cambios y conversaciones	Sélectionnez une pull request pour voir ses modifications et conversations	Selecione um pull request para ver suas alterações e conversas	Wählen Sie einen Pull Request, um seine Änderungen und Unterhaltungen zu sehen	Wybierz pull request, aby zobaczyć jego zmiany i dyskusje	选择一个拉取请求以查看其更改和对话	プルリクエストを選ぶと変更と会話が表示されます
+Sending review…	Enviando revisión…	Envoi de la revue…	Enviando revisão…	Review wird gesendet…	Wysyłanie recenzji…	正在发送审查…	レビューを送信しています…
+Sign In	Iniciar sesión	Se connecter	Entrar	Anmelden	Zaloguj	登录	サインイン
+Sign Out	Cerrar sesión	Se déconnecter	Sair	Abmelden	Wyloguj	退出登录	サインアウト
+Sign in to {service}	Iniciar sesión en {service}	Se connecter à {service}	Entrar no {service}	Bei {service} anmelden	Zaloguj do {service}	登录到 {service}	{service} にサインイン
+Squash and merge	Squash y fusionar	Squash et fusionner	Squash e mesclar	Squash und mergen	Squash i scal	压缩并合并	スカッシュしてマージ
+The GitHub CLI is not installed or not signed in (gh auth login).	GitHub CLI no está instalado o no ha iniciado sesión (gh auth login).	GitHub CLI n'est pas installé ou n'est pas connecté (gh auth login).	O GitHub CLI não está instalado ou não está conectado (gh auth login).	Die GitHub CLI ist nicht installiert oder nicht angemeldet (gh auth login).	GitHub CLI nie jest zainstalowane lub niezalogowane (gh auth login).	GitHub CLI 未安装或未登录（gh auth login）。	GitHub CLI がインストールされていないか、サインインしていません (gh auth login)。
+The token needs the Code (Read & Write) scope of the organization.	El token necesita el ámbito Code (Read & Write) de la organización.	Le jeton doit avoir la portée Code (Read & Write) de l'organisation.	O token precisa do escopo Code (Read & Write) da organização.	Das Token benötigt den Bereich Code (Read & Write) der Organisation.	Token wymaga zakresu Code (Read & Write) organizacji.	令牌需要该组织的 Code (Read & Write) 范围。	トークンには組織の Code (Read & Write) スコープが必要です。
+The token needs the repo scope (classic), or Pull requests and Contents read and write (fine-grained).	El token necesita el ámbito repo (clásico), o lectura y escritura de Pull requests y Contents (de grano fino).	Le jeton doit avoir la portée repo (classique), ou Pull requests et Contents en lecture et écriture (à granularité fine).	O token precisa do escopo repo (clássico), ou leitura e escrita de Pull requests e Contents (refinado).	Das Token benötigt den Bereich repo (klassisch) oder Lese- und Schreibzugriff auf Pull requests und Contents (feingranular).	Token wymaga zakresu repo (klasyczny) lub odczytu i zapisu Pull requests i Contents (szczegółowy).	令牌需要 repo 范围（经典），或 Pull requests 和 Contents 的读写权限（细粒度）。	トークンには repo スコープ (クラシック)、または Pull requests と Contents の読み書き権限 (きめ細かい) が必要です。
+The token was refused. Sign in again with a valid personal access token.	El token fue rechazado. Vuelve a iniciar sesión con un token de acceso personal válido.	Le jeton a été refusé. Reconnectez-vous avec un jeton d'accès personnel valide.	O token foi recusado. Entre novamente com um token de acesso pessoal válido.	Das Token wurde abgelehnt. Melden Sie sich erneut mit einem gültigen persönlichen Zugriffstoken an.	Token został odrzucony. Zaloguj się ponownie z prawidłowym osobistym tokenem dostępu.	令牌被拒绝。请使用有效的个人访问令牌重新登录。	トークンが拒否されました。有効な個人用アクセストークンで再度サインインしてください。
+This pull request has conflicts with its target branch.	Esta pull request tiene conflictos con su rama de destino.	Cette pull request a des conflits avec sa branche cible.	Este pull request tem conflitos com o branch de destino.	Dieser Pull Request hat Konflikte mit seinem Ziel-Branch.	Ten pull request ma konflikty z gałęzią docelową.	此拉取请求与目标分支存在冲突。	このプルリクエストはマージ先ブランチと競合しています。
+Title	Título	Titre	Título	Titel	Tytuł	标题	タイトル
+Use GitHub CLI Login	Usar la sesión de GitHub CLI	Utiliser la connexion GitHub CLI	Usar o login do GitHub CLI	GitHub-CLI-Anmeldung verwenden	Użyj logowania GitHub CLI	使用 GitHub CLI 登录	GitHub CLI のログインを使用
+Wait for Author	Esperar al autor	Attendre l'auteur	Aguardar o autor	Auf Autor warten	Czekaj na autora	等待作者	作成者を待つ
+What does this change?	¿Qué cambia esto?	Que change cette modification ?	O que isso muda?	Was ändert sich?	Co to zmienia?	这项更改做了什么？	何を変更しますか?
+You don't have permission to merge this pull request.	No tienes permiso para fusionar esta pull request.	Vous n'avez pas l'autorisation de fusionner cette pull request.	Você não tem permissão para mesclar este pull request.	Sie haben keine Berechtigung, diesen Pull Request zu mergen.	Nie masz uprawnień do scalenia tego pull requesta.	你没有合并此拉取请求的权限。	このプルリクエストをマージする権限がありません。
+added	añadido	ajouté	adicionado	hinzugefügt	dodany	已添加	追加
+deleted	eliminado	supprimé	excluído	gelöscht	usunięty	已删除	削除
+into	en	dans	em	in	do	到	マージ先
+renamed from {path}	renombrado desde {path}	renommé depuis {path}	renomeado de {path}	umbenannt von {path}	zmieniono nazwę z {path}	从 {path} 重命名	{path} から名前を変更
+{author} wants to merge {source} into {target} · opened {date}	{author} quiere fusionar {source} en {target} · abierta el {date}	{author} veut fusionner {source} dans {target} · ouverte le {date}	{author} quer mesclar {source} em {target} · aberto em {date}	{author} möchte {source} in {target} mergen · geöffnet am {date}	{author} chce scalić {source} z {target} · otwarto {date}	{author} 想要将 {source} 合并到 {target} · 创建于 {date}	{author} が {source} を {target} にマージしようとしています · {date} に作成
+{branch} is not on the remote yet.	{branch} aún no está en el remoto.	{branch} n'est pas encore sur le dépôt distant.	{branch} ainda não está no remoto.	{branch} ist noch nicht auf dem Remote.	{branch} nie ma jeszcze w zdalnym repozytorium.	{branch} 尚未推送到远程。	{branch} はまだリモートにありません。
+{count} open	{count} abiertas	{count} ouvertes	{count} abertos	{count} offen	{count} otwartych	{count} 个打开	{count} 件オープン
+{method}: {title}	{method}: {title}	{method} : {title}	{method}: {title}	{method}: {title}	{method}: {title}	{method}：{title}	{method}: {title}

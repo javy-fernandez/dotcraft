@@ -13,6 +13,7 @@ pub mod markdown;
 pub mod monitoring;
 pub mod new_project;
 pub mod nuget;
+pub mod pull_requests;
 pub mod header;
 pub mod kit;
 pub mod status;

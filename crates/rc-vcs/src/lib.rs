@@ -11,6 +11,7 @@ pub mod error;
 pub mod git;
 pub mod graph;
 pub mod gutter;
+pub mod hosting;
 pub mod log;
 pub mod ops;
 pub mod remote;

@@ -29,6 +29,7 @@ pub enum ToolWindow {
     HttpClient,
     Endpoints,
     Coverage,
+    PullRequests,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,7 +65,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 22] = [
+    pub const ALL: [ToolWindow; 23] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -82,6 +83,7 @@ impl ToolWindow {
         ToolWindow::Todo,
         ToolWindow::Terminal,
         ToolWindow::Git,
+        ToolWindow::PullRequests,
         ToolWindow::Hierarchy,
         ToolWindow::LocalHistory,
         ToolWindow::Nuget,
@@ -113,6 +115,7 @@ impl ToolWindow {
             ToolWindow::HttpClient => "http_client",
             ToolWindow::Endpoints => "endpoints",
             ToolWindow::Coverage => "coverage",
+            ToolWindow::PullRequests => "pull_requests",
         }
     }
 
@@ -140,6 +143,7 @@ impl ToolWindow {
             ToolWindow::HttpClient => tr("HTTP Client"),
             ToolWindow::Endpoints => tr("Endpoints"),
             ToolWindow::Coverage => tr("Coverage"),
+            ToolWindow::PullRequests => tr("Pull Requests"),
         }
     }
 
@@ -167,6 +171,7 @@ impl ToolWindow {
             ToolWindow::HttpClient => ico::TW_HTTP,
             ToolWindow::Endpoints => ico::TW_ENDPOINTS,
             ToolWindow::Coverage => ico::RUN_COVERAGE,
+            ToolWindow::PullRequests => ico::TW_PULL_REQUESTS,
         }
     }
 
