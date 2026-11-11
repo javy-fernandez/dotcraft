@@ -116,7 +116,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
     }
 }
 
-fn modal<R>(ctx: &Context, id: &str, width: f32, add: impl FnOnce(&mut Ui) -> R) -> (R, bool) {
+pub(crate) fn modal<R>(ctx: &Context, id: &str, width: f32, add: impl FnOnce(&mut Ui) -> R) -> (R, bool) {
     let resp = egui::Modal::new(Id::new(id)).show(ctx, |ui| {
         ui.set_width(width);
         add(ui)
@@ -125,12 +125,12 @@ fn modal<R>(ctx: &Context, id: &str, width: f32, add: impl FnOnce(&mut Ui) -> R)
     (resp.inner, escape)
 }
 
-fn title(ui: &mut Ui, text: &str) {
+pub(crate) fn title(ui: &mut Ui, text: &str) {
     ui.label(egui::RichText::new(text).font(theme::bold(15.0)));
     ui.add_space(10.0);
 }
 
-fn buttons(ui: &mut Ui, ok: &str, enabled: bool) -> (bool, bool) {
+pub(crate) fn buttons(ui: &mut Ui, ok: &str, enabled: bool) -> (bool, bool) {
     ui.add_space(14.0);
     let mut res = (false, false);
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

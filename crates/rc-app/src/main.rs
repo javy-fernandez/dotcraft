@@ -12,6 +12,7 @@ mod debugger;
 mod database;
 mod insight;
 mod package_insight;
+mod pull_requests;
 mod item_templates;
 mod runner;
 mod search;

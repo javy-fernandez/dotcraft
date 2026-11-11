@@ -81,6 +81,8 @@ pub struct DotCraftApp {
     window_title: String,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
+    /// Pull requests on GitHub / Azure DevOps.
+    pub pull_requests: crate::pull_requests::PullRequests,
     pub database: crate::database::Database,
     pub nuget: crate::ui::nuget::NugetManager,
     pub split: Option<Split>,
@@ -189,6 +191,7 @@ impl DotCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             database: crate::database::Database::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
+            pull_requests: crate::pull_requests::PullRequests::new(waker.clone()),
             split: None,
             floating: Vec::new(),
             last_main: None,
@@ -1659,6 +1662,15 @@ impl eframe::App for DotCraftApp {
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
         }
+        for out in self.pull_requests.poll(self.vcs.repo.as_ref()) {
+            match out {
+                crate::pull_requests::Output::Notice(n, error) => self.notify(n, error),
+                crate::pull_requests::Output::Diff(title, rel, left, right) => {
+                    let path = self.vcs.repo.as_ref().map(|r| r.abs_path(&rel)).unwrap_or_else(|| rel.into());
+                    self.vcs.show_diff(title, path, &left, &right, dark);
+                }
+            }
+        }
         if let Some(name) = self.vcs.unmerged.take() {
             self.dialog = Some(crate::ui::dialogs::Dialog::DeleteBranch { name, force: true });
         }
@@ -1666,6 +1678,7 @@ impl eframe::App for DotCraftApp {
         for doc in &mut self.docs.list { doc.editor.custom_templates = self.editor_workflows.templates.clone(); }
         crate::ui::frame(self, ui, editor_actions);
         crate::ui::editor_workflows::show(self, &ctx);
+        crate::ui::pull_requests::create_dialog(self, &ctx);
         self.update_notice(&ctx);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);
