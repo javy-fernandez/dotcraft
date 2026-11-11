@@ -1574,6 +1574,9 @@ impl eframe::App for DotCraftApp {
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
         }
+        if let Some(name) = self.vcs.unmerged.take() {
+            self.dialog = Some(crate::ui::dialogs::Dialog::DeleteBranch { name, force: true });
+        }
         self.database.update();
         for doc in &mut self.docs.list { doc.editor.custom_templates = self.editor_workflows.templates.clone(); }
         crate::ui::frame(self, ui, editor_actions);
