@@ -815,6 +815,257 @@ fn insert_item(doc: &roxmltree::Document, text: &str, tag: &str, id: &str, elem:
     }
 }
 
+/// Sets property `name` of a central file to `value`: its element when the file defines it,
+/// otherwise a new element at the end of the first unconditional `PropertyGroup` (a new group
+/// after `<Project>` when there is none).
+pub fn set_central_property(text: &str, name: &str, value: &str) -> anyhow::Result<Vec<TextEdit>> {
+    let doc = parse(text)?;
+    if let Some(p) = doc.descendants().find(|n| n.has_tag_name(name) && n.parent_element().is_some_and(|g| g.has_tag_name("PropertyGroup") && g.attribute("Condition").is_none())) {
+        if p.text().unwrap_or("").trim() == value {
+            return Ok(Vec::new());
+        }
+        return Ok(vec![element_text_edit(text, p, value)]);
+    }
+    let nl = newline(text);
+    let unit = indent_unit(&doc, text);
+    let elem = format!("<{name}>{}</{name}>", escape(value));
+    if let Some(g) = doc.root_element().children().find(|g| g.has_tag_name("PropertyGroup") && g.attribute("Condition").is_none())
+        && let Some(last) = g.children().rfind(|c| c.is_element())
+    {
+        let at = last.range().end;
+        return Ok(vec![match indent_before(text, last.range().start) {
+            Some(ind) => TextEdit { range: at..at, text: format!("{nl}{ind}{elem}") },
+            None => TextEdit { range: at..at, text: elem },
+        }]);
+    }
+    // A new PropertyGroup right after `<Project>`.
+    let root = doc.root_element();
+    let open_end = text[root.range()].find('>').map(|i| root.range().start + i + 1).ok_or_else(|| anyhow::anyhow!("malformed <Project>"))?;
+    Ok(vec![TextEdit { range: open_end..open_end, text: format!("{nl}{unit}<PropertyGroup>{nl}{unit}{unit}{elem}{nl}{unit}</PropertyGroup>") }])
+}
+
+// ---------------------------------------------------------------- migration
+
+/// Something to check after migrating a solution to CPM.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MigrationWarning {
+    /// A conditional reference: kept with its condition (its version becomes a
+    /// `VersionOverride` when it differs from the central one).
+    Conditional { file: PathBuf, id: String, condition: String },
+    /// A floating (`1.*`) or range (`[1.0,2.0)`) version, kept as written.
+    Floating { file: PathBuf, id: String, version: String },
+    /// A `$(Property)` version not defined in the same file: kept as `VersionOverride`.
+    Property { file: PathBuf, id: String, version: String },
+    /// A reference without version: CPM needs a `PackageVersion` for it (NU1010).
+    NoVersion { file: PathBuf, id: String },
+    /// A project outside the folder of the new central file: left alone.
+    Outside { file: PathBuf },
+}
+
+/// Projects that reference different versions of a package.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VersionConflict {
+    pub id: String,
+    /// The highest version: the central one.
+    pub chosen: String,
+    /// (file, version) of the unconditional references with a plain version.
+    pub uses: Vec<(PathBuf, String)>,
+}
+
+/// One file changed by a migration.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileChange {
+    pub path: PathBuf,
+    pub old: String,
+    pub new: String,
+    /// The edits that turn `old` into `new`.
+    pub edits: Vec<TextEdit>,
+}
+
+/// Moving every `PackageReference` version of a solution to a new `Directory.Packages.props`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MigrationPlan {
+    pub central_file: PathBuf,
+    pub central_text: String,
+    /// (id, version) of the new `PackageVersion` items, sorted.
+    pub versions: Vec<(String, String)>,
+    pub changes: Vec<FileChange>,
+    pub conflicts: Vec<VersionConflict>,
+    pub warnings: Vec<MigrationWarning>,
+}
+
+/// The files a migration reads: the projects, then the `Directory.Build.props` and
+/// `Directory.Build.targets` above them inside `root`.
+pub fn migration_files(root: &Path, projects: &[PathBuf]) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = projects.to_vec();
+    for p in projects {
+        for name in ["Directory.Build.props", "Directory.Build.targets"] {
+            if let Some(f) = p.parent().into_iter().flat_map(Path::ancestors).take_while(|d| d.starts_with(root)).map(|d| d.join(name)).find(|f| f.is_file())
+                && !out.contains(&f)
+            {
+                out.push(f);
+            }
+        }
+    }
+    out
+}
+
+/// Floating (`1.*`) or range (`[1.0,2.0)`) versions are kept as written.
+pub fn is_floating_or_range(v: &str) -> bool {
+    let v = v.trim();
+    v.contains('*') || v.starts_with('[') || v.starts_with('(')
+}
+
+/// Where a reference's version is written.
+#[derive(Clone, Debug)]
+enum VersionSite {
+    Attr(Range<usize>),
+    Elem(Range<usize>),
+}
+
+#[derive(Clone, Debug)]
+struct MigRef {
+    file: usize,
+    id: String,
+    /// As written.
+    version: String,
+    /// `$(Property)` resolved from the file's own properties.
+    resolved: String,
+    condition: Option<String>,
+    site: VersionSite,
+}
+
+/// The condition of an item, its `ItemGroup` or an enclosing `When`.
+fn any_condition(n: roxmltree::Node) -> Option<String> {
+    n.ancestors().filter(|a| a.is_element()).find_map(|a| a.attribute("Condition")).map(|c| c.trim().to_string()).filter(|c| !c.is_empty())
+}
+
+/// Plans the migration of `files` ((path, text), as [`migration_files`] lists them) to a new
+/// `Directory.Packages.props` in `dir`. Every plain version moves to it (the highest when
+/// projects disagree); `keep_lower` holds the ids (lowercase) whose lower versions stay in their
+/// projects as `VersionOverride`.
+pub fn plan_migration(dir: &Path, files: &[(PathBuf, String)], keep_lower: &std::collections::BTreeSet<String>) -> anyhow::Result<MigrationPlan> {
+    use crate::nuget::compare_versions;
+    let central_file = dir.join(CENTRAL_FILE);
+    anyhow::ensure!(find_central_file(dir).is_none(), "{} already exists", find_central_file(dir).unwrap_or_default().display());
+    let mut warnings = Vec::new();
+    let mut refs: Vec<MigRef> = Vec::new();
+    for (fi, (path, text)) in files.iter().enumerate() {
+        if !path.starts_with(dir) {
+            warnings.push(MigrationWarning::Outside { file: path.clone() });
+            continue;
+        }
+        let doc = roxmltree::Document::parse(text).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+        let props = properties(&doc);
+        for n in doc.descendants().filter(|n| n.has_tag_name("PackageReference")) {
+            let Some(id) = n.attribute("Include").map(str::trim).filter(|s| !s.is_empty()) else { continue };
+            let condition = any_condition(n);
+            if let Some(c) = &condition {
+                warnings.push(MigrationWarning::Conditional { file: path.clone(), id: id.to_string(), condition: c.clone() });
+            }
+            let site = match (n.attributes().find(|a| a.name() == "Version"), n.children().find(|c| c.has_tag_name("Version"))) {
+                (Some(a), _) => (a.value().trim().to_string(), VersionSite::Attr(a.range())),
+                (None, Some(c)) => (c.text().unwrap_or("").trim().to_string(), VersionSite::Elem(c.range())),
+                (None, None) => {
+                    warnings.push(MigrationWarning::NoVersion { file: path.clone(), id: id.to_string() });
+                    continue;
+                }
+            };
+            let resolved = resolve(&site.0, &props);
+            refs.push(MigRef { file: fi, id: id.to_string(), version: site.0, resolved, condition, site: site.1 });
+        }
+    }
+    // One central version per package.
+    let mut ids: Vec<String> = Vec::new();
+    for r in &refs {
+        if !ids.iter().any(|i| i.eq_ignore_ascii_case(&r.id)) {
+            ids.push(r.id.clone());
+        }
+    }
+    ids.sort_by_key(|i| i.to_ascii_lowercase());
+    let plain = |r: &MigRef| !r.resolved.contains("$(") && !is_floating_or_range(&r.resolved) && !r.resolved.is_empty();
+    let mut versions = Vec::new();
+    let mut conflicts = Vec::new();
+    // (ref index, keep as VersionOverride)
+    let mut decisions: Vec<(usize, bool)> = Vec::new();
+    for id in &ids {
+        let mine: Vec<usize> = (0..refs.len()).filter(|&i| refs[i].id.eq_ignore_ascii_case(id)).collect();
+        let max = |cond: bool| mine.iter().map(|&i| &refs[i]).filter(|r| plain(r) && r.condition.is_none() == cond).map(|r| r.resolved.clone()).max_by(|a, b| compare_versions(a, b));
+        let central = max(true)
+            .or_else(|| max(false))
+            .or_else(|| mine.iter().map(|&i| &refs[i]).find(|r| !r.resolved.contains("$(")).map(|r| r.resolved.clone()));
+        let mut distinct: Vec<String> = Vec::new();
+        for &i in &mine {
+            let r = &refs[i];
+            if plain(r) && r.condition.is_none() && !distinct.iter().any(|d| compare_versions(d, &r.resolved).is_eq()) {
+                distinct.push(r.resolved.clone());
+            }
+            if !plain(r) {
+                warnings.push(if r.resolved.contains("$(") {
+                    MigrationWarning::Property { file: files[r.file].0.clone(), id: r.id.clone(), version: r.version.clone() }
+                } else {
+                    MigrationWarning::Floating { file: files[r.file].0.clone(), id: r.id.clone(), version: r.version.clone() }
+                });
+            }
+        }
+        if let (Some(c), true) = (&central, distinct.len() > 1) {
+            let uses = mine.iter().map(|&i| &refs[i]).filter(|r| plain(r) && r.condition.is_none()).map(|r| (files[r.file].0.clone(), r.resolved.clone())).collect();
+            conflicts.push(VersionConflict { id: id.clone(), chosen: c.clone(), uses });
+        }
+        let keep = keep_lower.contains(&id.to_ascii_lowercase());
+        for &i in &mine {
+            let r = &refs[i];
+            let same = central.as_deref().is_some_and(|c| if plain(r) { compare_versions(c, &r.resolved).is_eq() && !is_floating_or_range(c) } else { c == r.resolved });
+            let over = !same && (r.condition.is_some() || !plain(r) || keep);
+            decisions.push((i, over));
+        }
+        if let Some(c) = central {
+            versions.push((id.clone(), c));
+        }
+    }
+    // Edits per file.
+    let mut changes = Vec::new();
+    for (fi, (path, text)) in files.iter().enumerate() {
+        let mut edits = Vec::new();
+        let rename = |at: usize| TextEdit { range: at..at + "Version".len(), text: "VersionOverride".into() };
+        for &(i, over) in decisions.iter().filter(|(i, _)| refs[*i].file == fi) {
+            match (&refs[i].site, over) {
+                (VersionSite::Attr(r), true) => edits.push(rename(r.start)),
+                (VersionSite::Attr(r), false) => {
+                    // The attribute and the blanks before it.
+                    let start = text[..r.start].trim_end_matches([' ', '\t', '\r', '\n']).len();
+                    edits.push(TextEdit { range: start..r.end, text: String::new() });
+                }
+                (VersionSite::Elem(r), true) => {
+                    let close = text[r.clone()].rfind("</").map_or(r.end, |c| r.start + c);
+                    edits.push(rename(r.start + 1));
+                    edits.push(rename(close + 2));
+                }
+                (VersionSite::Elem(r), false) => edits.push(TextEdit { range: line_span(text, r.clone()), text: String::new() }),
+            }
+        }
+        if !edits.is_empty() {
+            changes.push(FileChange { path: path.clone(), old: text.clone(), new: apply_edits(text, &edits), edits });
+        }
+    }
+    let nl = files.iter().find(|(_, t)| t.contains("\r\n")).map_or("\n", |_| "\r\n");
+    let floating = versions.iter().any(|(_, v)| v.contains('*')) || refs.iter().any(|r| r.resolved.contains('*'));
+    let mut central_text = format!("<Project>{nl}  <PropertyGroup>{nl}    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>{nl}");
+    if floating {
+        central_text.push_str(&format!("    <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>{nl}"));
+    }
+    central_text.push_str(&format!("  </PropertyGroup>{nl}"));
+    if !versions.is_empty() {
+        central_text.push_str(&format!("  <ItemGroup>{nl}"));
+        for (id, v) in &versions {
+            central_text.push_str(&format!("    <PackageVersion Include=\"{}\" Version=\"{}\" />{nl}", escape(id), escape(v)));
+        }
+        central_text.push_str(&format!("  </ItemGroup>{nl}"));
+    }
+    central_text.push_str(&format!("</Project>{nl}"));
+    Ok(MigrationPlan { central_file, central_text, versions, changes, conflicts, warnings })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1072,5 +1323,118 @@ mod tests {
         let f = std::fs::File::options().write(true).open(&central).unwrap();
         f.set_modified(SystemTime::now() + std::time::Duration::from_secs(5)).unwrap();
         assert!(cache.get(&app).is_none());
+    }
+
+    #[test]
+    fn sets_central_properties() {
+        let out = edit(CENTRAL, set_central_property(CENTRAL, "CentralPackageTransitivePinningEnabled", "true"));
+        assert!(out.contains("    <SerilogVersion>4.0.0</SerilogVersion>\n    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>\n  </PropertyGroup>"), "{out}");
+        assert!(set_central_property(&out, "CentralPackageTransitivePinningEnabled", "true").unwrap().is_empty());
+        let off = out.replace(">true</CentralPackageTransitivePinningEnabled>", ">false</CentralPackageTransitivePinningEnabled>");
+        assert_eq!(edit(&off, set_central_property(&off, "CentralPackageTransitivePinningEnabled", "true")), out);
+        let bare = "<Project>\n  <ItemGroup>\n    <PackageVersion Include=\"A\" Version=\"1.0.0\" />\n  </ItemGroup>\n</Project>\n";
+        assert_eq!(
+            edit(bare, set_central_property(bare, "ManagePackageVersionsCentrally", "true")),
+            "<Project>\n  <PropertyGroup>\n    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageVersion Include=\"A\" Version=\"1.0.0\" />\n  </ItemGroup>\n</Project>\n"
+        );
+    }
+
+    fn migrate(root: &Path, files: &[(&str, &str)], keep: &[&str]) -> MigrationPlan {
+        let files: Vec<(PathBuf, String)> = files.iter().map(|(p, t)| (root.join(p), t.to_string())).collect();
+        plan_migration(root, &files, &keep.iter().map(|s| s.to_ascii_lowercase()).collect()).unwrap()
+    }
+
+    fn changed<'a>(plan: &'a MigrationPlan, root: &Path, rel: &str) -> &'a str {
+        &plan.changes.iter().find(|c| c.path == root.join(rel)).unwrap_or_else(|| panic!("{rel} unchanged")).new
+    }
+
+    const APP: &str = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"Newtonsoft.Json\" Version=\"13.0.1\" />\n    <PackageReference Include=\"Serilog\">\n      <Version>4.0.0</Version>\n    </PackageReference>\n  </ItemGroup>\n</Project>\n";
+    const LIB: &str = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"newtonsoft.json\" Version=\"13.0.3\" />\n    <PackageReference Include=\"Dapper\" Version=\"2.1.35\" PrivateAssets=\"all\" />\n  </ItemGroup>\n</Project>\n";
+
+    #[test]
+    fn migration_moves_versions_and_picks_the_highest() {
+        let root = Path::new("/nonexistent/sol");
+        let plan = migrate(root, &[("App/App.csproj", APP), ("Lib/Lib.csproj", LIB)], &[]);
+        assert_eq!(plan.central_file, root.join(CENTRAL_FILE));
+        assert_eq!(plan.versions, [("Dapper".to_string(), "2.1.35".to_string()), ("Newtonsoft.Json".into(), "13.0.3".into()), ("Serilog".into(), "4.0.0".into())]);
+        assert_eq!(
+            plan.central_text,
+            "<Project>\n  <PropertyGroup>\n    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageVersion Include=\"Dapper\" Version=\"2.1.35\" />\n    <PackageVersion Include=\"Newtonsoft.Json\" Version=\"13.0.3\" />\n    <PackageVersion Include=\"Serilog\" Version=\"4.0.0\" />\n  </ItemGroup>\n</Project>\n"
+        );
+        assert_eq!(plan.conflicts, [VersionConflict { id: "Newtonsoft.Json".into(), chosen: "13.0.3".into(), uses: vec![(root.join("App/App.csproj"), "13.0.1".into()), (root.join("Lib/Lib.csproj"), "13.0.3".into())] }]);
+        assert!(plan.warnings.is_empty(), "{:?}", plan.warnings);
+        assert_eq!(
+            changed(&plan, root, "App/App.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"Newtonsoft.Json\" />\n    <PackageReference Include=\"Serilog\">\n    </PackageReference>\n  </ItemGroup>\n</Project>\n"
+        );
+        assert!(changed(&plan, root, "Lib/Lib.csproj").contains("<PackageReference Include=\"Dapper\" PrivateAssets=\"all\" />"));
+        // Keeping the lower version: it becomes an override.
+        let plan = migrate(root, &[("App/App.csproj", APP), ("Lib/Lib.csproj", LIB)], &["Newtonsoft.Json"]);
+        assert!(changed(&plan, root, "App/App.csproj").contains("<PackageReference Include=\"Newtonsoft.Json\" VersionOverride=\"13.0.1\" />"));
+        assert!(changed(&plan, root, "Lib/Lib.csproj").contains("<PackageReference Include=\"newtonsoft.json\" />"));
+    }
+
+    #[test]
+    fn migration_handles_build_props_conditions_floating_versions_and_properties() {
+        let root = Path::new("/nonexistent/sol");
+        let build = "<Project>\n  <ItemGroup>\n    <PackageReference Include=\"StyleCop.Analyzers\" Version=\"1.1.118\" PrivateAssets=\"all\" />\n  </ItemGroup>\n</Project>\n";
+        let app = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <EfVersion>8.0.0</EfVersion>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"EF\" Version=\"$(EfVersion)\" />\n    <PackageReference Include=\"Polly\" Version=\"8.*\" />\n    <PackageReference Include=\"Range\" Version=\"[1.0,2.0)\" />\n    <PackageReference Include=\"Ext\" Version=\"$(ExtVersion)\" />\n    <PackageReference Include=\"Implicit\" />\n  </ItemGroup>\n  <ItemGroup Condition=\"'$(TargetFramework)' == 'net48'\">\n    <PackageReference Include=\"EF\" Version=\"6.0.0\" />\n  </ItemGroup>\n</Project>\n";
+        let other = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"Polly\" Version=\"8.4.0\" />\n  </ItemGroup>\n</Project>\n";
+        let plan = migrate(root, &[("App/App.csproj", app), ("Other/Other.csproj", other), ("Directory.Build.props", build)], &[]);
+        let v = |id: &str| plan.versions.iter().find(|(i, _)| i == id).map(|(_, v)| v.as_str());
+        assert_eq!((v("StyleCop.Analyzers"), v("EF"), v("Polly"), v("Range"), v("Ext")), (Some("1.1.118"), Some("8.0.0"), Some("8.4.0"), Some("[1.0,2.0)"), None));
+        // Directory.Build.props loses its version too.
+        assert!(changed(&plan, root, "Directory.Build.props").contains("<PackageReference Include=\"StyleCop.Analyzers\" PrivateAssets=\"all\" />"));
+        let a = changed(&plan, root, "App/App.csproj");
+        assert!(a.contains("<PackageReference Include=\"EF\" />"), "{a}");
+        assert!(a.contains("<PackageReference Include=\"Polly\" VersionOverride=\"8.*\" />"), "{a}");
+        assert!(a.contains("<PackageReference Include=\"Range\" />"), "{a}");
+        assert!(a.contains("<PackageReference Include=\"Ext\" VersionOverride=\"$(ExtVersion)\" />"), "{a}");
+        assert!(a.contains("<ItemGroup Condition=\"'$(TargetFramework)' == 'net48'\">\n    <PackageReference Include=\"EF\" VersionOverride=\"6.0.0\" />"), "{a}");
+        // A floating override needs floating versions on.
+        assert!(plan.central_text.contains("<CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>"));
+        let app_path = root.join("App/App.csproj");
+        for w in [
+            MigrationWarning::Conditional { file: app_path.clone(), id: "EF".into(), condition: "'$(TargetFramework)' == 'net48'".into() },
+            MigrationWarning::Floating { file: app_path.clone(), id: "Polly".into(), version: "8.*".into() },
+            MigrationWarning::Floating { file: app_path.clone(), id: "Range".into(), version: "[1.0,2.0)".into() },
+            MigrationWarning::Property { file: app_path.clone(), id: "Ext".into(), version: "$(ExtVersion)".into() },
+            MigrationWarning::NoVersion { file: app_path.clone(), id: "Implicit".into() },
+        ] {
+            assert!(plan.warnings.contains(&w), "{w:?} not in {:?}", plan.warnings);
+        }
+        // Conditional or floating references are not conflicts.
+        assert!(plan.conflicts.is_empty(), "{:?}", plan.conflicts);
+        // The edits rebuild each new text.
+        for c in &plan.changes {
+            assert_eq!(apply_edits(&c.old, &c.edits), c.new);
+            roxmltree::Document::parse(&c.new).unwrap();
+        }
+    }
+
+    #[test]
+    fn migration_keeps_line_endings_and_skips_outside_projects() {
+        let root = Path::new("/nonexistent/sol");
+        let crlf = APP.replace('\n', "\r\n");
+        let plan = migrate(root, &[("App/App.csproj", &crlf), ("/elsewhere/E.csproj", LIB)], &[]);
+        assert!(plan.central_text.contains("\r\n") && !plan.central_text.replace("\r\n", "").contains('\n'));
+        assert_eq!(changed(&plan, root, "App/App.csproj"), crlf.replace(" Version=\"13.0.1\"", "").replace("      <Version>4.0.0</Version>\r\n", ""));
+        assert!(plan.warnings.iter().any(|w| matches!(w, MigrationWarning::Outside { .. })));
+        assert_eq!(plan.versions.len(), 2);
+    }
+
+    #[test]
+    fn migration_files_include_build_files_inside_the_root() {
+        let tmp = tempfile::Builder::new().prefix("dotcraft-cpm").tempdir().unwrap();
+        let root = dunce::canonicalize(tmp.path()).unwrap();
+        write(&root, "Directory.Build.props", "<Project />");
+        let sol = root.join("sol");
+        write(&sol, "src/Directory.Build.targets", "<Project />");
+        let app = write(&sol, "src/App/App.csproj", "<Project />");
+        assert_eq!(migration_files(&sol, std::slice::from_ref(&app)), [app.clone(), sol.join("src/Directory.Build.targets")]);
+        assert_eq!(migration_files(&root, std::slice::from_ref(&app)), [app.clone(), root.join("Directory.Build.props"), sol.join("src/Directory.Build.targets")]);
+        // A solution that already has a central file is not migrated.
+        write(&sol, CENTRAL_FILE, "<Project />");
+        assert!(plan_migration(&sol, &[], &Default::default()).is_err());
     }
 }

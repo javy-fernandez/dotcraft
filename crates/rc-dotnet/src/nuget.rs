@@ -451,9 +451,262 @@ fn central_versions(dir: &Path) -> Vec<(String, String)> {
     Vec::new()
 }
 
+// ---------------------------------------------------------------- audit
+
+/// A security advisory of a package version.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Advisory {
+    /// `Low`, `Moderate`, `High` or `Critical`.
+    pub severity: String,
+    pub url: String,
+}
+
+/// Why a package is deprecated and what replaces it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Deprecation {
+    pub reasons: Vec<String>,
+    /// (id, version range) of the alternative package.
+    pub alternative: Option<(String, String)>,
+}
+
+/// A package `dotnet list package` reports as vulnerable or deprecated.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AuditPackage {
+    pub id: String,
+    /// The resolved version.
+    pub version: String,
+    /// Projects that reference it.
+    pub direct: Vec<PathBuf>,
+    /// Projects that get it through another package.
+    pub transitive: Vec<PathBuf>,
+    pub advisories: Vec<Advisory>,
+    pub deprecation: Option<Deprecation>,
+}
+
+impl AuditPackage {
+    /// The worst advisory: 4 critical, 3 high, 2 moderate, 1 low, 0 none.
+    pub fn severity(&self) -> u8 {
+        self.advisories.iter().map(|a| severity_rank(&a.severity)).max().unwrap_or(0)
+    }
+}
+
+pub fn severity_rank(s: &str) -> u8 {
+    match s.to_ascii_lowercase().as_str() {
+        "critical" | "3" => 4,
+        "high" | "2" => 3,
+        "moderate" | "medium" | "1" => 2,
+        "low" | "0" => 1,
+        _ => 0,
+    }
+}
+
+/// What `dotnet list package --vulnerable / --deprecated` found.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AuditReport {
+    /// Vulnerable first (worst first), then deprecated, by id.
+    pub packages: Vec<AuditPackage>,
+    /// Errors and warnings `dotnet list` reports (projects not restored…).
+    pub problems: Vec<String>,
+}
+
+impl AuditReport {
+    /// Adds another report (one package and version once, with every project).
+    pub fn merge(&mut self, other: AuditReport) {
+        for p in other.packages {
+            match self.packages.iter_mut().find(|q| q.id.eq_ignore_ascii_case(&p.id) && q.version == p.version) {
+                Some(q) => {
+                    for d in p.direct {
+                        if !q.direct.contains(&d) {
+                            q.direct.push(d);
+                        }
+                    }
+                    for t in p.transitive {
+                        if !q.transitive.contains(&t) && !q.direct.contains(&t) {
+                            q.transitive.push(t);
+                        }
+                    }
+                    for a in p.advisories {
+                        if !q.advisories.contains(&a) {
+                            q.advisories.push(a);
+                        }
+                    }
+                    if q.deprecation.is_none() {
+                        q.deprecation = p.deprecation;
+                    }
+                }
+                None => self.packages.push(p),
+            }
+        }
+        for m in other.problems {
+            if !self.problems.contains(&m) {
+                self.problems.push(m);
+            }
+        }
+        self.packages.sort_by(|a, b| b.severity().cmp(&a.severity()).then_with(|| a.id.to_ascii_lowercase().cmp(&b.id.to_ascii_lowercase())));
+    }
+}
+
+/// Parses `dotnet list package --format json` (`--vulnerable` or `--deprecated`).
+pub fn parse_list_packages(json: &str) -> anyhow::Result<AuditReport> {
+    let start = json.find('{').ok_or_else(|| anyhow::anyhow!("no JSON in dotnet list output"))?;
+    let v: serde_json::Value = serde_json::from_str(&json[start..])?;
+    let s = |x: &serde_json::Value, k: &str| x.get(k).and_then(|y| y.as_str()).unwrap_or("").to_string();
+    let arr = |x: &serde_json::Value, k: &str| x.get(k).and_then(|y| y.as_array()).cloned().unwrap_or_default();
+    let mut report = AuditReport::default();
+    let problem = |p: &serde_json::Value| {
+        let text = s(p, "text");
+        let project = s(p, "project");
+        if project.is_empty() { text } else { format!("{project}: {text}") }
+    };
+    report.problems.extend(arr(&v, "problems").iter().map(problem));
+    let mut found = AuditReport::default();
+    for proj in arr(&v, "projects") {
+        let path = PathBuf::from(s(&proj, "path"));
+        report.problems.extend(arr(&proj, "problems").iter().map(problem));
+        for fw in arr(&proj, "frameworks") {
+            for (key, transitive) in [("topLevelPackages", false), ("transitivePackages", true)] {
+                for p in arr(&fw, key) {
+                    let advisories = arr(&p, "vulnerabilities").iter().map(|a| Advisory { severity: s(a, "severity"), url: s(a, "advisoryurl") }).collect();
+                    let reasons: Vec<String> = arr(&p, "deprecationReasons").iter().filter_map(|r| r.as_str().map(str::to_string)).collect();
+                    let alternative = p.get("alternativePackage").map(|a| (s(a, "id"), s(a, "versionRange"))).filter(|(id, _)| !id.is_empty());
+                    let deprecation = (!reasons.is_empty() || alternative.is_some()).then_some(Deprecation { reasons, alternative });
+                    let (direct, trans) = if transitive { (vec![], vec![path.clone()]) } else { (vec![path.clone()], vec![]) };
+                    found.packages.push(AuditPackage { id: s(&p, "id"), version: s(&p, "resolvedVersion"), direct, transitive: trans, advisories, deprecation });
+                }
+            }
+        }
+    }
+    report.merge(found);
+    Ok(report)
+}
+
+/// `dotnet list <target> package <args> --format json`.
+pub async fn list_packages(dotnet: &Dotnet, target: &Path, args: &[&str]) -> anyhow::Result<AuditReport> {
+    let mut cmd = dotnet.command();
+    cmd.arg("list").arg(target).arg("package").args(args).args(["--format", "json"]).kill_on_drop(true);
+    if let Some(d) = target.parent().filter(|p| !p.as_os_str().is_empty()) {
+        cmd.current_dir(d);
+    }
+    let out = cmd.output().await?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    match parse_list_packages(&stdout) {
+        Ok(r) => Ok(r),
+        Err(_) => anyhow::bail!("dotnet list package failed: {}{}", stdout.trim(), String::from_utf8_lossy(&out.stderr).trim()),
+    }
+}
+
+/// Vulnerable packages (with transitive ones) and deprecated ones of `target` (a solution or
+/// a project). Slow: it asks every source.
+pub async fn audit(dotnet: &Dotnet, target: &Path) -> anyhow::Result<AuditReport> {
+    let mut report = list_packages(dotnet, target, &["--vulnerable", "--include-transitive"]).await?;
+    report.merge(list_packages(dotnet, target, &["--deprecated"]).await?);
+    Ok(report)
+}
+
+/// A version of a package's registration.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RegisteredVersion {
+    pub version: String,
+    pub vulnerable: bool,
+    pub listed: bool,
+}
+
+/// Parses a registration index or page: its versions and the URLs of the pages it does not
+/// inline.
+pub fn parse_registration(json: &str) -> anyhow::Result<(Vec<RegisteredVersion>, Vec<String>)> {
+    let v: serde_json::Value = serde_json::from_str(json)?;
+    let (mut versions, mut pages) = (Vec::new(), Vec::new());
+    let leaf = |it: &serde_json::Value| {
+        let ce = it.get("catalogEntry")?;
+        Some(RegisteredVersion {
+            version: ce.get("version")?.as_str()?.to_string(),
+            vulnerable: ce.get("vulnerabilities").and_then(|x| x.as_array()).is_some_and(|a| !a.is_empty()),
+            listed: ce.get("listed").and_then(|x| x.as_bool()).unwrap_or(true),
+        })
+    };
+    for it in v.get("items").and_then(|x| x.as_array()).into_iter().flatten() {
+        if it.get("catalogEntry").is_some() {
+            // A page: its items are versions.
+            versions.extend(leaf(it));
+        } else if let Some(items) = it.get("items").and_then(|x| x.as_array()) {
+            versions.extend(items.iter().filter_map(leaf));
+        } else if let Some(url) = it.get("@id").and_then(|x| x.as_str()) {
+            pages.push(url.to_string());
+        }
+    }
+    Ok((versions, pages))
+}
+
+/// The lowest listed version above `current` without known vulnerabilities (stable unless
+/// `current` is a prerelease).
+pub fn first_safe_version(versions: &[RegisteredVersion], current: &str) -> Option<String> {
+    let pre = current.contains('-');
+    versions
+        .iter()
+        .filter(|v| v.listed && !v.vulnerable && (pre || !v.version.contains('-')) && compare_versions(&v.version, current).is_gt())
+        .map(|v| v.version.clone())
+        .min_by(|a, b| compare_versions(a, b))
+}
+
+impl NugetClient {
+    /// Every version of `id` with whether it has known vulnerabilities (`RegistrationsBaseUrl`).
+    pub async fn registration(&self, id: &str) -> anyhow::Result<Vec<RegisteredVersion>> {
+        let idx = self.service_index().await?;
+        let base = idx.find("RegistrationsBaseUrl/3.6.0").or_else(|| idx.find("RegistrationsBaseUrl")).ok_or_else(|| anyhow::anyhow!("the source has no RegistrationsBaseUrl"))?.to_string();
+        let url = format!("{}/{}/index.json", base.trim_end_matches('/'), id.to_lowercase());
+        let (mut versions, pages) = parse_registration(&self.get_text(&url).await?)?;
+        for p in pages {
+            versions.extend(parse_registration(&self.get_text(&p).await?)?.0);
+        }
+        Ok(versions)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_vulnerable_packages() {
+        let r = parse_list_packages(include_str!("../tests/data/list-package-vulnerable.json")).unwrap();
+        let (a, b) = (PathBuf::from("/work/Audit/A/A.csproj"), PathBuf::from("/work/Audit/B/B.csproj"));
+        assert_eq!(r.packages.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["Newtonsoft.Json", "System.Net.Http", "System.Text.RegularExpressions"]);
+        let json = &r.packages[0];
+        assert_eq!((json.version.as_str(), json.severity(), json.direct.clone(), json.transitive.len()), ("12.0.1", 3, vec![a.clone(), b.clone()], 0));
+        assert_eq!(json.advisories, [Advisory { severity: "High".into(), url: "https://github.com/advisories/GHSA-5crp-9r3c-p9vr".into() }]);
+        // Direct in B, transitive in A.
+        let http = &r.packages[1];
+        assert_eq!((http.direct.clone(), http.transitive.clone()), (vec![b.clone()], vec![a.clone()]));
+        assert_eq!(r.packages[2].transitive, [a]);
+        assert!(r.problems.is_empty() && r.packages.iter().all(|p| p.deprecation.is_none()));
+    }
+
+    #[test]
+    fn parses_deprecated_packages_and_problems() {
+        let mut r = parse_list_packages(include_str!("../tests/data/list-package-deprecated.json")).unwrap();
+        assert_eq!(r.packages.len(), 1);
+        let p = &r.packages[0];
+        assert_eq!((p.id.as_str(), p.version.as_str(), p.severity()), ("WindowsAzure.Storage", "9.3.3", 0));
+        assert_eq!(p.deprecation, Some(Deprecation { reasons: vec!["Legacy".into()], alternative: Some(("Azure.Storage.Common".into(), ">= 0.0.0".into())) }));
+        // Vulnerable ones sort first after a merge.
+        r.merge(parse_list_packages(include_str!("../tests/data/list-package-vulnerable.json")).unwrap());
+        assert_eq!(r.packages.last().unwrap().id, "WindowsAzure.Storage");
+        let not_restored = r#"{ "version": 1, "problems": [ { "project": "/s/A/A.csproj", "level": "error", "text": "No assets file was found. Please run restore." } ], "projects": [] }"#;
+        assert_eq!(parse_list_packages(not_restored).unwrap().problems, ["/s/A/A.csproj: No assets file was found. Please run restore."]);
+        assert!(parse_list_packages("error: no").is_err());
+    }
+
+    #[test]
+    fn finds_the_first_version_without_vulnerabilities() {
+        let (versions, pages) = parse_registration(include_str!("../tests/data/registration-index.json")).unwrap();
+        assert_eq!(pages, ["https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/page/5.0.0/6.0.0.json"]);
+        assert_eq!(versions.iter().filter(|v| !v.vulnerable).map(|v| v.version.as_str()).collect::<Vec<_>>(), ["4.3.4"]);
+        assert_eq!(first_safe_version(&versions, "4.3.0").as_deref(), Some("4.3.4"));
+        assert_eq!(first_safe_version(&versions, "4.3.4"), None);
+        let more = [RegisteredVersion { version: "5.0.0-beta".into(), vulnerable: false, listed: true }, RegisteredVersion { version: "4.4.0".into(), vulnerable: false, listed: false }];
+        assert_eq!(first_safe_version(&more, "4.3.0"), None);
+        assert_eq!(first_safe_version(&more, "4.3.0-rc").as_deref(), Some("5.0.0-beta"));
+    }
 
     #[test]
     fn versions_sort_like_nuget() {

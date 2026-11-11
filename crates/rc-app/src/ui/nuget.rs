@@ -5,6 +5,8 @@
 //! Projects with Central Package Management (CPM) are edited in their `Directory.Packages.props`
 //! instead of through `dotnet add package`: one version for the whole solution, overrides per
 //! project, and the issues NuGet reports for it (NU1008, NU1010, unused versions) with fixes.
+//! Solutions without CPM can be migrated to it (with a preview of every file), and an audit
+//! lists vulnerable and deprecated packages with fixes.
 
 use crate::app::DotCraftApp;
 use crate::docs::Docs;
@@ -12,8 +14,8 @@ use crate::toolwindow::ToolWindow;
 use crate::ui::kit;
 use egui::{Align2, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_core::{Inbox, Runtime, Waker};
-use rc_dotnet::cpm::{self, CpmCache, CpmIssue, ProjectCpm, SolutionCpm};
-use rc_dotnet::nuget::{PackageSource, compare_versions};
+use rc_dotnet::cpm::{self, CpmCache, CpmIssue, MigrationPlan, MigrationWarning, ProjectCpm, SolutionCpm};
+use rc_dotnet::nuget::{AuditPackage, AuditReport, PackageSource, compare_versions};
 use rc_dotnet::{NugetClient, PackageSummary};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{ico, icons, theme};
@@ -28,6 +30,8 @@ enum Tab {
     Consolidate,
     /// Central Package Management issues (only when the solution uses CPM).
     Central,
+    /// Vulnerable and deprecated packages (`dotnet list package`, run on demand).
+    Audit,
 }
 
 enum Event {
@@ -38,6 +42,10 @@ enum Event {
     Done(Result<String, String>),
     /// MSBuild evaluated CPM for these projects.
     Cpm(u64, Vec<ProjectCpm>),
+    /// `dotnet list package --vulnerable / --deprecated` finished.
+    Audit(u64, Result<AuditReport, String>),
+    /// The first version without known vulnerabilities (lowercase id).
+    Safe(String, Option<String>),
 }
 
 /// A pending `dotnet` command.
@@ -68,6 +76,45 @@ enum CpmEdit {
     AddCentral { file: PathBuf, id: String, version: String },
     /// An unused `PackageVersion`.
     DropCentral { file: PathBuf, id: String },
+    /// A conditional `PackageVersion`.
+    SetConditional { file: PathBuf, id: String, condition: String, version: String },
+    /// Pins a transitive package: its `PackageVersion` plus `CentralPackageTransitivePinningEnabled`.
+    Pin { file: PathBuf, id: String, version: String },
+}
+
+/// A migration to CPM being previewed.
+struct Migration {
+    /// Folder of the new central file.
+    dir: PathBuf,
+    /// The files read, with their text when the preview was made.
+    files: Vec<(PathBuf, String)>,
+    /// Packages whose lower versions stay as `VersionOverride` (lowercase ids).
+    keep_lower: BTreeSet<String>,
+    plan: Result<MigrationPlan, String>,
+    /// The file shown: 0 the central file, then the changed files.
+    shown: usize,
+}
+
+impl Migration {
+    fn replan(&mut self) {
+        self.plan = cpm::plan_migration(&self.dir, &self.files, &self.keep_lower).map_err(|e| format!("{e:#}"));
+    }
+}
+
+/// The audit tab.
+#[derive(Default)]
+struct Audit {
+    /// The running `dotnet list` and when it started.
+    running: Option<(tokio::task::JoinHandle<()>, std::time::Instant)>,
+    generation: u64,
+    report: Option<AuditReport>,
+    error: Option<String>,
+    /// Selected package (id).
+    selected: Option<String>,
+    /// First version without known vulnerabilities, by lowercase id (`None`: none found).
+    safe: HashMap<String, Option<String>>,
+    /// A transitive package to pin, waiting for confirmation.
+    confirm_pin: Option<String>,
 }
 
 pub struct NugetManager {
@@ -109,6 +156,12 @@ pub struct NugetManager {
     edits: Vec<CpmEdit>,
     /// A package no project uses any more: offer to drop its version (central file, id).
     drop_offer: Option<(PathBuf, String)>,
+    /// The solution file (the migration and the audit work on it).
+    solution: Option<PathBuf>,
+    migration: Option<Migration>,
+    /// Migrate when the window opens (from the explorer).
+    migrate_requested: bool,
+    audit: Audit,
 }
 
 fn project_name(p: &Path) -> String {
@@ -150,7 +203,189 @@ impl NugetManager {
             cpm_evaluating: false,
             edits: Vec::new(),
             drop_offer: None,
+            solution: None,
+            migration: None,
+            migrate_requested: false,
+            audit: Audit::default(),
         }
+    }
+
+    /// Opens the migration preview (Migrate to Central Package Management… in the explorer).
+    pub fn request_migration(&mut self) {
+        self.migrate_requested = true;
+    }
+
+    /// Plans the migration of the solution to CPM from the files as the editors see them.
+    fn start_migration(&mut self, docs: &Docs) {
+        let Some(dir) = self.solution.as_ref().and_then(|s| s.parent()).map(Path::to_path_buf).or_else(|| self.root.clone()) else { return };
+        let files: Vec<(PathBuf, String)> = cpm::migration_files(&dir, &self.projects).into_iter().filter_map(|p| current_text(docs, &p).ok().map(|t| (p, t))).collect();
+        let mut m = Migration { dir, files, keep_lower: BTreeSet::new(), plan: Err(String::new()), shown: 0 };
+        m.replan();
+        self.migration = Some(m);
+        self.message = None;
+    }
+
+    /// Writes the previewed migration: the new central file, then every file through its
+    /// editor when open; restores the solution after. Returns the files changed.
+    fn apply_migration(&mut self, docs: &mut Docs) -> Vec<PathBuf> {
+        let Some(Ok(plan)) = self.migration.as_ref().map(|m| m.plan.clone()) else { return Vec::new() };
+        // A file changed since the preview: preview again.
+        if let Some(c) = plan.changes.iter().find(|c| current_text(docs, &c.path).ok().as_deref() != Some(c.old.as_str())) {
+            let keep = self.migration.as_ref().map(|m| m.keep_lower.clone()).unwrap_or_default();
+            self.start_migration(docs);
+            if let Some(m) = &mut self.migration {
+                m.keep_lower = keep;
+                m.replan();
+            }
+            self.message = Some((true, trf("{file} changed since the preview: review the migration again", &[("file", &self.display_path(&c.path))])));
+            return Vec::new();
+        }
+        if let Err(e) = std::fs::OpenOptions::new().write(true).create_new(true).open(&plan.central_file).and_then(|mut f| std::io::Write::write_all(&mut f, plan.central_text.as_bytes())) {
+            self.message = Some((true, format!("{}: {e}", self.display_path(&plan.central_file))));
+            return Vec::new();
+        }
+        self.migration = None;
+        let mut touched = vec![plan.central_file.clone()];
+        let mut unsaved = Vec::new();
+        let mut error = None;
+        for c in &plan.changes {
+            let r = docs.edit_file(&c.path, |t| if t == c.old { Ok(c.edits.iter().map(|e| (e.range.clone(), e.text.clone())).collect()) } else { Err(tr("The file changed since the preview").to_string()) });
+            match r {
+                Ok(saved) => {
+                    touched.push(c.path.clone());
+                    if !saved {
+                        unsaved.push(c.path.clone());
+                    }
+                }
+                Err(e) => {
+                    error = Some(format!("{}: {e}", self.display_path(&c.path)));
+                    break;
+                }
+            }
+        }
+        self.message = Some(match (error, unsaved.first()) {
+            (Some(e), _) => (true, e),
+            (None, Some(f)) => (true, trf("{file} has unsaved changes: save it to apply the change", &[("file", &self.display_path(f))])),
+            (None, None) => (false, trf("Migrated {n} files to Central Package Management", &[("n", &plan.changes.len())])),
+        });
+        if self.message.as_ref().is_some_and(|(err, _)| !err) {
+            self.ops.extend(self.restore_targets().into_iter().map(Op::Restore));
+        }
+        self.cpm_cache.clear();
+        self.reload_installed();
+        self.tab = Tab::Installed;
+        touched
+    }
+
+    /// The solution, or every project when there is none.
+    fn restore_targets(&self) -> Vec<PathBuf> {
+        match &self.solution {
+            Some(s) => vec![s.clone()],
+            None => self.projects.clone(),
+        }
+    }
+
+    /// Runs the audit in the background (`dotnet list package`, slow).
+    fn start_audit(&mut self) {
+        let Some(dotnet) = self.dotnet.clone() else { return };
+        let targets = self.restore_targets();
+        self.cancel_audit();
+        self.audit.error = None;
+        let (out, g) = (self.inbox.sender(), self.audit.generation);
+        let handle = Runtime::spawn(async move {
+            let mut report = AuditReport::default();
+            for t in targets {
+                match rc_dotnet::nuget::audit(&dotnet, &t).await {
+                    Ok(r) => report.merge(r),
+                    Err(e) => {
+                        out.send(Event::Audit(g, Err(format!("{e:#}"))));
+                        return;
+                    }
+                }
+            }
+            out.send(Event::Audit(g, Ok(report)));
+        });
+        self.audit.running = Some((handle, std::time::Instant::now()));
+    }
+
+    /// Stops the audit (dropping the task kills `dotnet list`).
+    fn cancel_audit(&mut self) {
+        if let Some((h, _)) = self.audit.running.take() {
+            h.abort();
+        }
+        self.audit.generation += 1;
+    }
+
+    /// The audit's result: look up versions without known vulnerabilities.
+    fn set_audit(&mut self, report: AuditReport) {
+        let ids: Vec<(String, String)> = report.packages.iter().filter(|p| !p.advisories.is_empty()).map(|p| (p.id.clone(), p.version.clone())).collect();
+        if self.audit.selected.as_ref().is_none_or(|s| !report.packages.iter().any(|p| p.id.eq_ignore_ascii_case(s))) {
+            self.audit.selected = report.packages.first().map(|p| p.id.clone());
+        }
+        self.audit.report = Some(report);
+        let Some(client) = self.client() else { return };
+        for (id, current) in ids {
+            if self.audit.safe.contains_key(&id.to_lowercase()) {
+                continue;
+            }
+            let (client, out) = (client.clone(), self.inbox.sender());
+            Runtime::spawn(async move {
+                let safe = match client.registration(&id).await {
+                    Ok(vs) if !vs.is_empty() => rc_dotnet::nuget::first_safe_version(&vs, &current),
+                    // No registration (some private feeds): the newest stable version.
+                    _ => client.versions(&id).await.ok().and_then(|vs| vs.into_iter().filter(|v| !v.contains('-') && compare_versions(v, &current).is_gt()).max_by(|a, b| compare_versions(a, b))),
+                };
+                out.send(Event::Safe(id.to_lowercase(), safe));
+            });
+        }
+    }
+
+    /// Feeds an audit without running `dotnet list` (tests, captures).
+    #[cfg(test)]
+    pub fn set_audit_for_test(&mut self, report: AuditReport, safe: &[(&str, &str)]) {
+        for (id, v) in safe {
+            self.audit.safe.insert(id.to_lowercase(), Some(v.to_string()));
+        }
+        self.set_audit(report);
+        self.tab = Tab::Audit;
+    }
+
+    /// Opens the migration preview on the changed file whose path ends with `file`.
+    #[cfg(test)]
+    pub fn start_migration_for_test(&mut self, docs: &Docs, file: &str) {
+        self.start_migration(docs);
+        if let Some(m) = &mut self.migration
+            && let Ok(plan) = &m.plan
+        {
+            m.shown = plan.changes.iter().position(|c| c.path.ends_with(file)).map_or(0, |i| i + 1);
+        }
+    }
+
+    /// Selects an audited package, optionally asking to pin it.
+    #[cfg(test)]
+    pub fn select_audit_for_test(&mut self, id: &str, confirm_pin: bool) {
+        self.audit.selected = Some(id.to_string());
+        self.audit.confirm_pin = confirm_pin.then(|| id.to_string());
+    }
+
+    /// The changes that replace a transitive package with `version`: a pin in the central file
+    /// (CPM) or a direct reference (other projects).
+    fn plan_pin(&self, p: &AuditPackage, version: &str) -> (Vec<CpmEdit>, Vec<Op>) {
+        let (mut edits, mut ops) = (Vec::new(), Vec::new());
+        for project in &p.transitive {
+            match self.cpm.project(project).filter(|c| c.enabled) {
+                Some(_) => {
+                    if let Some(file) = self.cpm.file_for(project, &p.id) {
+                        let e = CpmEdit::Pin { file, id: p.id.clone(), version: version.to_string() };
+                        if !edits.contains(&e) {
+                            edits.push(e);
+                        }
+                    }
+                }
+                None => ops.push(Op::Cli(project.clone(), p.id.clone(), Some(version.to_string()))),
+            }
+        }
+        (edits, ops)
     }
 
     /// The solution's projects (re-read when the window opens or after a change).
@@ -372,15 +607,14 @@ impl NugetManager {
 
     /// A central file relative to the solution folder.
     fn display_path(&self, p: &Path) -> String {
-        let base = self.root.as_deref().and_then(|r| r.ancestors().find(|a| p.starts_with(a) && a.parent().is_some()));
-        base.and_then(|b| p.strip_prefix(b).ok()).unwrap_or(p).display().to_string()
+        relative(self.root.as_deref(), p)
     }
 
     fn rows(&self) -> Vec<(String, String, String)> {
         // (id, version shown, description)
         match self.tab {
             Tab::Browse => self.results.iter().map(|r| (r.id.clone(), r.version.clone(), r.description.lines().next().unwrap_or("").to_string())).collect(),
-            Tab::Central => Vec::new(),
+            Tab::Central | Tab::Audit => Vec::new(),
             Tab::Installed | Tab::Updates | Tab::Consolidate => self
                 .installed
                 .iter()
@@ -464,6 +698,7 @@ impl NugetManager {
                 CpmEdit::Install { project, file, .. } | CpmEdit::MoveVersion { project, file, .. } => (vec![project.clone()], vec![file.clone(), project.clone()]),
                 CpmEdit::MoveOverride { project, file, .. } => (readers(file), vec![file.clone(), project.clone()]),
                 CpmEdit::Remove { project, .. } | CpmEdit::Align { project, .. } | CpmEdit::SetOverride { project, .. } => (vec![project.clone()], vec![project.clone()]),
+                CpmEdit::SetConditional { file, .. } | CpmEdit::Pin { file, .. } => (readers(file), vec![file.clone()]),
             };
             let drop_file = match &e {
                 CpmEdit::Remove { project, id } => self.cpm.file_for(project, id).map(|f| (f, id.clone(), project.clone())),
@@ -572,8 +807,70 @@ fn apply_cpm_edit(docs: &mut Docs, e: &CpmEdit) -> Result<(String, Vec<PathBuf>)
             edit_one(docs, file, |t| cpm::remove_central_version(t, id), &mut unsaved)?;
             trf("Removed {id} from {file}", &[("id", id), ("file", &file_name(file))])
         }
+        CpmEdit::SetConditional { file, id, condition, version } => {
+            edit_one(docs, file, |t| cpm::set_central_version(t, id, Some(condition), version), &mut unsaved)?;
+            trf("Central version of {id} set to {version}", &[("id", id), ("version", version)])
+        }
+        CpmEdit::Pin { file, id, version } => {
+            edit_one(
+                docs,
+                file,
+                |t| {
+                    let mut edits = match cpm::CentralFile::parse(file, t)?.unconditional(id) {
+                        Some(_) => cpm::set_central_version(t, id, None, version)?,
+                        None => cpm::add_central_version(t, id, version)?,
+                    };
+                    edits.extend(cpm::set_central_property(t, "CentralPackageTransitivePinningEnabled", "true")?);
+                    Ok(edits)
+                },
+                &mut unsaved,
+            )?;
+            trf("Pinned {id} to {version}", &[("id", id), ("version", version)])
+        }
     };
     Ok((msg, unsaved))
+}
+
+/// The text of `path` as its editor has it, or from disk.
+fn current_text(docs: &Docs, path: &Path) -> Result<String, String> {
+    let canon = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    match docs.list.iter().find(|d| d.path == canon || d.path == path) {
+        Some(d) => Ok(d.editor.buffer.rope().to_string()),
+        None => crate::docs::read_text(path).map(|(t, _, _)| t),
+    }
+}
+
+/// A unified diff of two texts: (`' '`, `'+'` or `'-'`, line), three lines of context around
+/// each change and `None` between distant changes.
+fn unified_diff(old: &str, new: &str) -> Vec<Option<(char, String)>> {
+    let a: Vec<&str> = old.lines().collect();
+    let b: Vec<&str> = new.lines().collect();
+    let changes = rc_vcs::textdiff::diff(&a, &b);
+    let mut out = Vec::new();
+    let mut shown = 0usize; // old lines already shown
+    for (k, c) in changes.iter().enumerate() {
+        let from = c.old.start.saturating_sub(3).max(shown);
+        if from > shown {
+            out.push(None);
+        }
+        out.extend(a[from..c.old.start].iter().map(|l| Some((' ', l.to_string()))));
+        out.extend(a[c.old.clone()].iter().map(|l| Some(('-', l.to_string()))));
+        out.extend(b[c.new.clone()].iter().map(|l| Some(('+', l.to_string()))));
+        let next = changes.get(k + 1).map_or(a.len(), |n| n.old.start);
+        let to = (c.old.end + 3).min(next).min(a.len());
+        out.extend(a[c.old.end..to].iter().map(|l| Some((' ', l.to_string()))));
+        shown = to;
+    }
+    if shown < a.len() && !changes.is_empty() {
+        out.push(None);
+    }
+    out
+}
+
+/// `p` relative to the solution folder `root`.
+fn relative(root: Option<&Path>, p: &Path) -> String {
+    let base = root.and_then(|r| r.ancestors().find(|a| p.starts_with(a) && a.parent().is_some()));
+    base.and_then(|b| p.strip_prefix(b).ok()).unwrap_or(p).display().to_string()
 }
 
 fn common_root(paths: &[PathBuf]) -> Option<PathBuf> {
@@ -591,7 +888,11 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
     if !app.nuget.loaded {
         let projects = app.solution_projects();
         let dotnet = rc_dotnet::Dotnet::locate(Some(&crate::app::dotnet_path(&app.settings)));
+        app.nuget.solution = app.workspace.as_ref().and_then(|w| w.ws.solution()).map(Path::to_path_buf);
         app.nuget.set_projects(projects, dotnet);
+    }
+    if std::mem::take(&mut app.nuget.migrate_requested) && !app.nuget.cpm.in_use() {
+        app.nuget.start_migration(&app.docs);
     }
     let mut changed = poll(&mut app.nuget);
     if !app.nuget.edits.is_empty() {
@@ -606,7 +907,7 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
         }
     }
     let m = &mut app.nuget;
-    if m.busy.is_some() || m.searching || m.cpm_evaluating {
+    if m.busy.is_some() || m.searching || m.cpm_evaluating || m.audit.running.is_some() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(150));
     }
     // Search as you type in Browse (debounced); empty shows the most downloaded.
@@ -665,36 +966,82 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
         if m.cpm.in_use() {
             tabs.push((Tab::Central, trf("Central issues ({n})", &[("n", &issues)])));
         }
+        tabs.push((
+            Tab::Audit,
+            match &m.audit.report {
+                Some(r) => trf("Audit ({n})", &[("n", &r.packages.len())]),
+                None => tr("Audit").to_string(),
+            },
+        ));
         for (tab, label) in tabs {
-            if theme::tab(ui, m.tab == tab, None, &label, false).0.clicked() {
+            if theme::tab(ui, m.tab == tab && m.migration.is_none(), None, &label, false).0.clicked() {
                 m.tab = tab;
+                m.migration = None;
+            }
+        }
+        // Solutions without CPM: move every version to a Directory.Packages.props.
+        if !m.cpm.in_use() && !m.cpm_evaluating && !m.projects.is_empty() && m.migration.is_none() {
+            ui.add_space(8.0);
+            if kit::button(ui, Some(ico::FILE_XML), tr("Migrate to Central Package Management…"), m.busy.is_none()).clicked() {
+                m.migrate_requested = true;
+                ui.ctx().request_repaint();
             }
         }
     });
     ui.add_space(4.0);
     let avail = ui.available_rect_before_wrap();
+    if m.migration.is_some() {
+        let action = migration_view(ui, m, avail);
+        ui.advance_cursor_after_rect(avail);
+        match action {
+            Some(true) => {
+                for f in app.nuget.apply_migration(&mut app.docs) {
+                    app.explorer.invalidate(&f);
+                }
+                for p in app.nuget.projects.clone() {
+                    app.explorer.invalidate(&p);
+                }
+            }
+            Some(false) => app.nuget.migration = None,
+            None => {}
+        }
+        let m = &mut app.nuget;
+        if m.busy.is_none() && !m.ops.is_empty() {
+            m.run_next();
+        }
+        return;
+    }
     let left = Rect::from_min_size(avail.min, vec2((avail.width() * 0.42).clamp(300.0, 520.0), avail.height()));
     let right = Rect::from_min_max(pos2(left.right() + 1.0, avail.top()), avail.max);
     ui.painter().vline(left.right() + 0.5, avail.y_range(), egui::Stroke::new(1.0, p.island_border));
     // Left: search and list.
     let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left.shrink2(vec2(8.0, 0.0))));
-    let hint = if m.tab == Tab::Browse { tr("Search packages") } else { tr("Filter installed packages") };
-    if lu.add(egui::TextEdit::singleline(&mut m.query).hint_text(hint).desired_width(f32::INFINITY)).changed() {
-        m.edited = std::time::Instant::now();
-    }
-    lu.add_space(4.0);
-    let mut pick = None;
-    if m.tab == Tab::Central {
-        issue_list(&mut lu, m, &mut pick);
+    if m.tab == Tab::Audit {
+        audit_list(&mut lu, m);
     } else {
-        package_list(&mut lu, m, &mut pick);
-    }
-    if let Some(id) = pick {
-        m.select(&id);
+        let hint = if m.tab == Tab::Browse { tr("Search packages") } else { tr("Filter installed packages") };
+        if lu.add(egui::TextEdit::singleline(&mut m.query).hint_text(hint).desired_width(f32::INFINITY)).changed() {
+            m.edited = std::time::Instant::now();
+        }
+        lu.add_space(4.0);
+        let mut pick = None;
+        if m.tab == Tab::Central {
+            issue_list(&mut lu, m, &mut pick);
+        } else {
+            package_list(&mut lu, m, &mut pick);
+        }
+        if let Some(id) = pick {
+            m.select(&id);
+        }
     }
     // Right: details and projects.
     let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right.shrink2(vec2(12.0, 0.0))));
-    let open = details(&mut ru, m);
+    let open = if m.tab == Tab::Audit {
+        audit_details(&mut ru, m);
+        None
+    } else {
+        details(&mut ru, m)
+    };
     ui.advance_cursor_after_rect(avail);
     if m.busy.is_none() && !m.ops.is_empty() {
         m.run_next();
@@ -714,7 +1061,7 @@ fn package_list(ui: &mut Ui, m: &NugetManager, pick: &mut Option<String>) {
             let msg = match m.tab {
                 Tab::Browse if m.searching => tr("Searching…"),
                 Tab::Browse => tr("No packages found"),
-                Tab::Installed | Tab::Central => tr("The solution has no package references"),
+                Tab::Installed | Tab::Central | Tab::Audit => tr("The solution has no package references"),
                 Tab::Updates => tr("Every package is up to date"),
                 Tab::Consolidate => tr("Every project uses the same versions"),
             };
@@ -730,7 +1077,14 @@ fn package_list(ui: &mut Ui, m: &NugetManager, pick: &mut Option<String>) {
             icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 16.0, r.top() + 14.0), vec2(16.0, 16.0)), ico::PACKAGE, &p, true);
             let t = ui.painter().text(pos2(r.left() + 32.0, r.top() + 14.0), Align2::LEFT_CENTER, id, theme::bold(13.0), p.text);
             if m.tab != Tab::Browse && m.is_central(id) {
-                theme::paint_badge(ui, pos2(t.right() + 8.0, r.top() + 14.0), tr("Central"));
+                let mut x = t.right() + 8.0;
+                // Global references and conditional versions are told apart.
+                let global = m.cpm.users(id).iter().any(|u| u.global(id).is_some());
+                let badge = if global { tr("Global") } else { tr("Central") };
+                x = theme::paint_badge(ui, pos2(x, r.top() + 14.0), badge).right() + 6.0;
+                if m.central_versions(id).iter().any(|(_, _, c, _)| c.is_some()) {
+                    theme::paint_badge(ui, pos2(x, r.top() + 14.0), tr("Conditional"));
+                }
             }
             let installed = !m.installed_versions(id).is_empty();
             ui.painter().text(pos2(r.right() - 8.0, r.top() + 14.0), Align2::RIGHT_CENTER, version, FontId::proportional(12.0), if installed { p.ok } else { p.muted });
@@ -890,7 +1244,13 @@ fn details(ui: &mut Ui, m: &mut NugetManager) -> Option<PathBuf> {
                         theme::paint_badge(ui, pos2(r.left(), r.center().y), tr("Global"));
                     }
                     match condition {
-                        Some(c) => kit::note(ui, &trf("when {condition}", &[("condition", c)])),
+                        // A conditional version is only updated on its own.
+                        Some(c) => {
+                            kit::note(ui, &trf("when {condition}", &[("condition", c)]));
+                            if !m.version.is_empty() && *version != m.version && kit::button(ui, Some(ico::UP), &trf("Update to {version}", &[("version", &m.version)]), !busy).on_hover_text(tr("Updates only this conditional version")).clicked() {
+                                edits.push(CpmEdit::SetConditional { file: file.clone(), id: id.clone(), condition: c.clone(), version: m.version.clone() });
+                            }
+                        }
                         None if !m.version.is_empty() && *version != m.version && kit::button(ui, Some(ico::UP), &trf("Update to {version}", &[("version", &m.version)]), !busy).clicked() => {
                             edits.push(CpmEdit::SetCentral { file: file.clone(), id: id.clone(), version: m.version.clone() });
                         }
@@ -1055,6 +1415,402 @@ fn drop_offer(ui: &mut Ui, m: &mut NugetManager) {
     });
 }
 
+/// A migration warning as text.
+fn warning_text(root: Option<&Path>, w: &MigrationWarning) -> String {
+    match w {
+        MigrationWarning::Conditional { file, id, condition } => trf("{file}: {id} is conditional ({condition}); kept with its condition", &[("file", &relative(root, file)), ("id", id), ("condition", condition)]),
+        MigrationWarning::Floating { file, id, version } => trf("{file}: {id} {version} is a floating version or a range; kept as written", &[("file", &relative(root, file)), ("id", id), ("version", version)]),
+        MigrationWarning::Property { file, id, version } => trf("{file}: {id} uses {version}, which that file does not define; kept as VersionOverride", &[("file", &relative(root, file)), ("id", id), ("version", version)]),
+        MigrationWarning::NoVersion { file, id } => trf("{file}: {id} has no version; add a PackageVersion for it after migrating", &[("file", &relative(root, file)), ("id", id)]),
+        MigrationWarning::Outside { file } => trf("{file} is outside the solution folder; left unchanged", &[("file", &relative(root, file))]),
+    }
+}
+
+/// The migration preview: files, conflicts and warnings on the left, the shown file's diff on
+/// the right, Apply / Cancel below. `Some(true)` applies, `Some(false)` cancels.
+fn migration_view(ui: &mut Ui, m: &mut NugetManager, avail: Rect) -> Option<bool> {
+    let p = rc_kit::pal(ui);
+    let left = Rect::from_min_size(avail.min, vec2((avail.width() * 0.42).clamp(300.0, 520.0), avail.height()));
+    let right = Rect::from_min_max(pos2(left.right() + 1.0, avail.top()), avail.max);
+    ui.painter().vline(left.right() + 0.5, avail.y_range(), egui::Stroke::new(1.0, p.island_border));
+    let root = m.root.clone();
+    let busy = m.busy.is_some();
+    let message = m.message.clone();
+    let mig = m.migration.as_mut()?;
+    let mut action = None;
+    let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left.shrink2(vec2(8.0, 0.0))));
+    lu.label(egui::RichText::new(tr("Migrate to Central Package Management")).font(theme::bold(13.0)));
+    lu.add_space(2.0);
+    let list_h = (lu.available_height() - 64.0).max(80.0);
+    egui::ScrollArea::vertical().id_salt("nuget_migration").max_height(list_h).auto_shrink([false, false]).show(&mut lu, |ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        let plan = match &mig.plan {
+            Ok(plan) => plan.clone(),
+            Err(e) => {
+                kit::message(ui, e, true);
+                return;
+            }
+        };
+        kit::note(ui, &trf("Creates {file} with {n} package versions and removes the versions from {m} files.", &[("file", &relative(root.as_deref(), &plan.central_file)), ("n", &plan.versions.len()), ("m", &plan.changes.len())]));
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new(tr("Files")).font(theme::bold(12.5)));
+        if kit::row(ui, 0, Some(ico::FILE_XML), &relative(root.as_deref(), &plan.central_file), tr("new file"), mig.shown == 0).clicked() {
+            mig.shown = 0;
+        }
+        for (i, c) in plan.changes.iter().enumerate() {
+            let lines = unified_diff(&c.old, &c.new);
+            let (add, del) = (lines.iter().flatten().filter(|(k, _)| *k == '+').count(), lines.iter().flatten().filter(|(k, _)| *k == '-').count());
+            let icon = if c.path.extension().is_some_and(|e| e.to_string_lossy().ends_with("proj")) { ico::PROJECT } else { ico::FILE_XML };
+            let name = c.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            if kit::row(ui, 0, Some(icon), &name, &format!("+{add} −{del}"), mig.shown == i + 1).on_hover_text(relative(root.as_deref(), &c.path)).clicked() {
+                mig.shown = i + 1;
+            }
+        }
+        if !plan.conflicts.is_empty() {
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(trf("Version conflicts ({n})", &[("n", &plan.conflicts.len())])).font(theme::bold(12.5)));
+            kit::note(ui, tr("Projects reference different versions. The highest becomes the central version."));
+            for c in &plan.conflicts {
+                let key = c.id.to_ascii_lowercase();
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    icons::image(ui, ico::PACKAGE, 16.0);
+                    ui.label(egui::RichText::new(&c.id).font(theme::bold(12.5)));
+                });
+                let uses: Vec<String> = c.uses.iter().map(|(f, v)| format!("{} {v}", f.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default())).collect();
+                kit::note(ui, &uses.join(" · "));
+                ui.horizontal(|ui| {
+                    let options = vec![trf("Use {version} everywhere", &[("version", &c.chosen)]), tr("Keep lower versions as VersionOverride").to_string()];
+                    let keep = mig.keep_lower.contains(&key);
+                    if let Some(i) = kit::dropdown(ui, ("nuget_conflict", &key), &options[usize::from(keep)], &options, true)
+                        && (i == 1) != keep
+                    {
+                        if i == 1 {
+                            mig.keep_lower.insert(key.clone());
+                        } else {
+                            mig.keep_lower.remove(&key);
+                        }
+                        mig.replan();
+                    }
+                });
+            }
+        }
+        if !plan.warnings.is_empty() {
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(trf("Warnings ({n})", &[("n", &plan.warnings.len())])).font(theme::bold(12.5)));
+            for w in &plan.warnings {
+                kit::message(ui, &warning_text(root.as_deref(), w), false);
+            }
+        }
+    });
+    lu.add_space(6.0);
+    if let Some((err, msg)) = &message {
+        lu.label(egui::RichText::new(msg).size(12.5).color(if *err { p.error } else { p.ok }));
+    }
+    lu.horizontal(|ui| {
+        if ui.add_enabled_ui(mig.plan.is_ok() && !busy, |ui| theme::primary_button(ui, tr("Apply"))).inner.clicked() {
+            action = Some(true);
+        }
+        if theme::secondary_button(ui, tr("Cancel")).clicked() {
+            action = Some(false);
+        }
+    });
+    // Right: the shown file, as a unified diff.
+    let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right.shrink2(vec2(12.0, 0.0))));
+    if let Ok(plan) = &mig.plan {
+        let (path, lines) = match mig.shown.checked_sub(1).and_then(|i| plan.changes.get(i)) {
+            Some(c) => (c.path.clone(), unified_diff(&c.old, &c.new)),
+            None => (plan.central_file.clone(), plan.central_text.lines().map(|l| Some(('+', l.to_string()))).collect()),
+        };
+        ru.horizontal(|ui| {
+            icons::image(ui, ico::FILE_XML, 16.0);
+            ui.label(egui::RichText::new(relative(root.as_deref(), &path)).font(theme::bold(13.0)));
+        });
+        ru.add_space(4.0);
+        diff_lines(&mut ru, &lines);
+    }
+    action
+}
+
+/// Paints a unified diff: added lines green, removed ones red, `⋯` between hunks.
+fn diff_lines(ui: &mut Ui, lines: &[Option<(char, String)>]) {
+    let p = rc_kit::pal(ui);
+    let font = FontId::monospace(12.5);
+    egui::ScrollArea::both().id_salt("nuget_diff").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let width = lines.iter().flatten().map(|(_, l)| ui.painter().layout_no_wrap(l.clone(), font.clone(), p.text).size().x).fold(0.0, f32::max) + 40.0;
+        for line in lines {
+            let (r, _) = ui.allocate_exact_size(vec2(ui.available_width().max(width), 19.0), Sense::hover());
+            let Some((kind, text)) = line else {
+                ui.painter().text(pos2(r.left() + 6.0, r.center().y), Align2::LEFT_CENTER, "⋯", font.clone(), p.muted);
+                continue;
+            };
+            let (bg, sign) = match kind {
+                '+' => (Some(p.ok.gamma_multiply(0.16)), p.ok),
+                '-' => (Some(p.error.gamma_multiply(0.16)), p.error),
+                _ => (None, p.muted),
+            };
+            if let Some(bg) = bg {
+                ui.painter().rect_filled(r, 0.0, bg);
+            }
+            ui.painter().text(pos2(r.left() + 6.0, r.center().y), Align2::LEFT_CENTER, kind.to_string(), font.clone(), sign);
+            ui.painter().text(pos2(r.left() + 24.0, r.center().y), Align2::LEFT_CENTER, text.replace('\t', "    "), font.clone(), p.text);
+        }
+    });
+}
+
+/// "Critical", "High"… for a severity rank.
+fn severity_label(rank: u8) -> &'static str {
+    match rank {
+        4 => tr("Critical"),
+        3 => tr("High"),
+        2 => tr("Moderate"),
+        1 => tr("Low"),
+        _ => "",
+    }
+}
+
+/// The audit tab's list: run or cancel, then vulnerable and deprecated packages.
+fn audit_list(ui: &mut Ui, m: &mut NugetManager) {
+    let p = rc_kit::pal(ui);
+    ui.horizontal(|ui| {
+        ui.set_min_height(26.0);
+        match &m.audit.running {
+            Some((_, started)) => {
+                let secs = started.elapsed().as_secs();
+                if kit::button(ui, Some(ico::STOP), tr("Cancel audit"), true).clicked() {
+                    m.cancel_audit();
+                }
+                ui.add(egui::Spinner::new().size(12.0));
+                kit::note(ui, &trf("Auditing… {n} s", &[("n", &secs)]));
+            }
+            None => {
+                let label = if m.audit.report.is_some() { tr("Run audit again") } else { tr("Run audit") };
+                if kit::button(ui, Some(ico::RUN), label, m.dotnet.is_some() && !m.projects.is_empty()).clicked() {
+                    m.start_audit();
+                }
+            }
+        }
+    });
+    ui.add_space(4.0);
+    if let Some(e) = &m.audit.error {
+        kit::message(ui, e, true);
+    }
+    let Some(report) = m.audit.report.clone() else {
+        if m.audit.running.is_none() {
+            kit::note(ui, tr("The audit runs dotnet list package --vulnerable and --deprecated on the whole solution. It asks every package source, so it can take a while."));
+        }
+        return;
+    };
+    for problem in &report.problems {
+        kit::message(ui, problem, false);
+    }
+    egui::ScrollArea::vertical().id_salt("nuget_audit").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        if report.packages.is_empty() {
+            ui.add_space(16.0);
+            ui.label(egui::RichText::new(tr("No vulnerable or deprecated packages")).color(p.muted));
+        }
+        for pkg in &report.packages {
+            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), Sense::click());
+            let selected = m.audit.selected.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(&pkg.id));
+            if selected {
+                ui.painter().rect_filled(r, 6.0, p.selection);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(r, 6.0, p.row_hover);
+            }
+            let vulnerable = !pkg.advisories.is_empty();
+            let icon = match pkg.severity() {
+                4 | 3 => ico::ERROR,
+                0 => ico::INFO,
+                _ => ico::WARNING,
+            };
+            icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 16.0, r.top() + 14.0), vec2(16.0, 16.0)), icon, &p, true);
+            let t = ui.painter().text(pos2(r.left() + 32.0, r.top() + 14.0), Align2::LEFT_CENTER, &pkg.id, theme::bold(13.0), p.text);
+            let mut x = t.right() + 8.0;
+            if vulnerable {
+                x = theme::paint_badge(ui, pos2(x, r.top() + 14.0), severity_label(pkg.severity())).right() + 6.0;
+            }
+            if pkg.direct.is_empty() {
+                x = theme::paint_badge(ui, pos2(x, r.top() + 14.0), tr("Transitive")).right() + 6.0;
+            }
+            if pkg.deprecation.is_some() {
+                theme::paint_badge(ui, pos2(x, r.top() + 14.0), tr("Deprecated"));
+            }
+            let n = pkg.direct.len() + pkg.transitive.len();
+            let mut desc = format!("{} · {}", pkg.version, if n == 1 { tr("1 project").to_string() } else { trf("{n} projects", &[("n", &n)]) });
+            for a in &pkg.advisories {
+                desc.push_str(" · ");
+                desc.push_str(a.url.rsplit('/').next().unwrap_or(&a.url));
+            }
+            if let Some(d) = &pkg.deprecation {
+                desc.push_str(" · ");
+                desc.push_str(&d.reasons.join(", "));
+            }
+            let mut job = egui::text::LayoutJob::simple_singleline(desc, FontId::proportional(12.0), p.muted);
+            job.wrap.max_width = r.width() - 40.0;
+            job.wrap.max_rows = 1;
+            job.wrap.overflow_character = Some('…');
+            let g = ui.painter().layout_job(job);
+            ui.painter().galley(pos2(r.left() + 32.0, r.top() + 25.0), g, p.muted);
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &pkg.id));
+            if resp.clicked() {
+                m.audit.selected = Some(pkg.id.clone());
+                m.audit.confirm_pin = None;
+            }
+        }
+    });
+}
+
+/// The selected audit package: advisories, projects, deprecation and fixes.
+fn audit_details(ui: &mut Ui, m: &mut NugetManager) {
+    let p = rc_kit::pal(ui);
+    let pkg = m.audit.selected.as_ref().and_then(|s| m.audit.report.as_ref()?.packages.iter().find(|q| q.id.eq_ignore_ascii_case(s)).cloned());
+    let Some(pkg) = pkg else {
+        ui.add_space(20.0);
+        ui.label(egui::RichText::new(tr("Run the audit and select a package to see its advisories and fixes")).color(p.muted));
+        if let Some((err, msg)) = &m.message {
+            ui.label(egui::RichText::new(msg).size(12.5).color(if *err { p.error } else { p.ok }));
+        }
+        return;
+    };
+    let busy = m.busy.is_some();
+    let mut edits: Vec<CpmEdit> = Vec::new();
+    let mut ops: Vec<Op> = Vec::new();
+    egui::ScrollArea::vertical().id_salt("nuget_audit_details").max_height((ui.available_height() - 28.0).max(60.0)).auto_shrink([false, true]).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            icons::image(ui, ico::PACKAGE, 16.0);
+            ui.label(egui::RichText::new(&pkg.id).font(theme::bold(15.0)));
+            ui.label(egui::RichText::new(&pkg.version).size(13.0).color(if pkg.advisories.is_empty() { p.warn } else { p.error }));
+        });
+        if !pkg.advisories.is_empty() {
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(tr("Vulnerabilities")).font(theme::bold(12.5)));
+            for a in &pkg.advisories {
+                ui.horizontal(|ui| {
+                    let (r, _) = ui.allocate_exact_size(vec2(72.0, 18.0), Sense::hover());
+                    theme::paint_badge(ui, pos2(r.left(), r.center().y), severity_label(rc_dotnet::nuget::severity_rank(&a.severity)));
+                    ui.hyperlink_to(egui::RichText::new(a.url.rsplit('/').next().unwrap_or(&a.url)).size(12.5), &a.url);
+                });
+            }
+        }
+        if let Some(d) = &pkg.deprecation {
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(tr("Deprecated")).font(theme::bold(12.5)));
+            if !d.reasons.is_empty() {
+                kit::note(ui, &trf("Reason: {reasons}", &[("reasons", &d.reasons.join(", "))]));
+            }
+            match &d.alternative {
+                Some((id, range)) => kit::note(ui, &trf("Use {id} {range} instead", &[("id", id), ("range", range)])),
+                None => kit::note(ui, tr("No alternative package suggested")),
+            }
+        }
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new(tr("Projects")).font(theme::bold(12.5)));
+        for (project, transitive) in pkg.direct.iter().map(|x| (x, false)).chain(pkg.transitive.iter().map(|x| (x, true))) {
+            ui.horizontal(|ui| {
+                icons::image(ui, ico::PROJECT, 16.0);
+                ui.label(egui::RichText::new(project_name(project)).size(13.0));
+                let c = m.cpm.project(project).filter(|c| c.enabled && !transitive);
+                let source = match c {
+                    Some(c) if c.reference(&pkg.id).is_some_and(|r| r.version_override.is_some()) => Some(tr("Override")),
+                    Some(c) if c.is_central(&pkg.id) => Some(tr("Central")),
+                    _ => None,
+                };
+                let (r, _) = ui.allocate_exact_size(vec2(90.0, 18.0), Sense::hover());
+                let x = theme::paint_badge(ui, pos2(r.left(), r.center().y), if transitive { tr("Transitive") } else { tr("Direct") }).right() + 6.0;
+                if let Some(s) = source {
+                    theme::paint_badge(ui, pos2(x, r.center().y), s);
+                }
+            });
+        }
+        if pkg.advisories.is_empty() {
+            return;
+        }
+        // Fixes: the first version without known vulnerabilities.
+        ui.add_space(10.0);
+        ui.label(egui::RichText::new(tr("Fix")).font(theme::bold(12.5)));
+        let safe = m.audit.safe.get(&pkg.id.to_lowercase()).cloned();
+        let Some(safe) = safe else {
+            ui.horizontal(|ui| {
+                ui.add(egui::Spinner::new().size(12.0));
+                kit::note(ui, tr("Looking for a version without known vulnerabilities…"));
+            });
+            return;
+        };
+        let Some(version) = safe else {
+            kit::message(ui, tr("No version without known vulnerabilities was found"), false);
+            return;
+        };
+        if !pkg.direct.is_empty() {
+            let central = pkg.direct.iter().any(|d| m.cpm.is_central(d, &pkg.id));
+            ui.horizontal(|ui| {
+                if kit::button(ui, Some(ico::UP), &trf("Update to {version}", &[("version", &version)]), !busy).clicked() {
+                    let (e, o) = m.plan_install(&pkg.direct, &pkg.id, &version);
+                    edits.extend(e);
+                    ops.extend(o);
+                }
+                kit::note(ui, &if central { tr("Updates the central version").to_string() } else { trf("Updates {n} projects", &[("n", &pkg.direct.len())]) });
+            });
+        }
+        let (pins, refs) = m.plan_pin(&pkg, &version);
+        if !pins.is_empty() {
+            ui.horizontal(|ui| {
+                if kit::button(ui, Some(ico::PIN), &trf("Pin version {version}", &[("version", &version)]), !busy && m.audit.confirm_pin.is_none()).clicked() {
+                    m.audit.confirm_pin = Some(pkg.id.clone());
+                }
+                kit::note(ui, tr("For projects that get it through another package"));
+            });
+        }
+        if !refs.is_empty() {
+            ui.horizontal(|ui| {
+                if kit::button(ui, Some(ico::ADD), &trf("Reference {version} directly", &[("version", &version)]), !busy).clicked() {
+                    ops.extend(refs.clone());
+                }
+                kit::note(ui, &trf("In {n} projects without Central Package Management", &[("n", &refs.len())]));
+            });
+        }
+        // Pinning changes how the central file works: explain and ask first.
+        if m.audit.confirm_pin.as_deref() == Some(pkg.id.as_str()) {
+            ui.add_space(6.0);
+            for e in &pins {
+                let CpmEdit::Pin { file, .. } = e else { continue };
+                let on = m.cpm.files.get(file).and_then(|f| f.transitive_pinning).unwrap_or(false);
+                let name = m.display_path(file);
+                let text = if on {
+                    trf("Transitive pinning is already on in {file}: a PackageVersion for {id} {version} raises it wherever projects get it through other packages.", &[("file", &name), ("id", &pkg.id), ("version", &version)])
+                } else {
+                    trf(
+                        "Pinning adds a PackageVersion for {id} {version} to {file} and turns on CentralPackageTransitivePinningEnabled. Then every PackageVersion of the file also sets the version of packages that projects get through other packages, so {id} is raised to {version} there; other transitive packages listed in the file are raised too.",
+                        &[("file", &name), ("id", &pkg.id), ("version", &version)],
+                    )
+                };
+                kit::message(ui, &text, false);
+            }
+            ui.horizontal(|ui| {
+                if theme::primary_button(ui, tr("Pin")).clicked() {
+                    edits.extend(pins.clone());
+                    m.audit.confirm_pin = None;
+                }
+                if theme::secondary_button(ui, tr("Cancel")).clicked() {
+                    m.audit.confirm_pin = None;
+                }
+            });
+        }
+    });
+    if let Some(b) = &m.busy {
+        ui.horizontal(|ui| {
+            ui.add(egui::Spinner::new().size(14.0));
+            ui.label(egui::RichText::new(b).size(12.5).color(p.muted));
+        });
+    } else if let Some((err, msg)) = &m.message {
+        ui.label(egui::RichText::new(msg).size(12.5).color(if *err { p.error } else { p.ok }));
+    }
+    m.edits.extend(edits);
+    m.ops.extend(ops);
+}
+
+
 /// Takes finished work; true when references changed (the explorer reloads them).
 fn poll(m: &mut NugetManager) -> bool {
     let mut changed = false;
@@ -1074,6 +1830,17 @@ fn poll(m: &mut NugetManager) -> bool {
                 }
             }
             Event::Results(..) => {}
+            Event::Audit(g, r) if g == m.audit.generation => {
+                m.audit.running = None;
+                match r {
+                    Ok(report) => m.set_audit(report),
+                    Err(e) => m.audit.error = Some(e),
+                }
+            }
+            Event::Audit(..) => {}
+            Event::Safe(id, v) => {
+                m.audit.safe.insert(id, v);
+            }
             Event::Versions(id, mut v) => {
                 if m.selected.as_deref() == Some(id.as_str()) {
                     v.sort_by(|a, b| compare_versions(b, a));
@@ -1155,9 +1922,13 @@ mod tests {
     }
 
     fn harness(root: &Path, home: &Path) -> Harness<'static, DotCraftApp> {
+        harness_at(&root.join("CentralShop.slnx"), home)
+    }
+
+    fn harness_at(sln: &Path, home: &Path) -> Harness<'static, DotCraftApp> {
         let mut app = test_app(home, true);
         app.settings.roslyn_path = Some("/nonexistent".into());
-        app.open_workspace(&root.join("CentralShop.slnx"));
+        app.open_workspace(sln);
         let mut first = true;
         let mut h = Harness::builder().with_size(vec2(1100.0, 700.0)).build_ui_state(
             move |ui, app: &mut DotCraftApp| {
@@ -1351,5 +2122,147 @@ mod tests {
         assert!(!h.state().docs.active_doc().unwrap().is_modified());
         assert!(std::fs::read_to_string(&proj).unwrap().contains(r#"<PackageReference Include="Newtonsoft.Json" />"#));
         wait(&mut h);
+    }
+
+    /// A copy of Shop (no CPM) where two projects disagree on coverlet.collector.
+    fn shop_with_conflict() -> (tempfile::TempDir, PathBuf) {
+        let tmp = tempfile::Builder::new().prefix("dotcraft-cpm-migrate-ui").tempdir().unwrap();
+        let root = tmp.path().canonicalize().unwrap().join("Shop");
+        copy(&fixtures().join("Shop"), &root);
+        let nunit = root.join("tests/Shop.Core.NunitTests/Shop.Core.NunitTests.csproj");
+        let text = std::fs::read_to_string(&nunit).unwrap().replace(r#""coverlet.collector" Version="6.0.0""#, r#""coverlet.collector" Version="6.0.4""#);
+        std::fs::write(&nunit, text).unwrap();
+        (tmp, root)
+    }
+
+    #[test]
+    fn migration_is_previewed_then_applied_and_restored() {
+        let _lock = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let (_tmp, root) = shop_with_conflict();
+        let mut h = harness_at(&root.join("Shop.sln"), home.path());
+        let api = root.join("src/Shop.Api/Shop.Api.csproj");
+        // An open editor is edited (and saved) rather than overwritten.
+        h.state_mut().open_file(&api);
+        h.get_by_label("Migrate to Central Package Management…").click();
+        h.run_steps(3);
+        let central = root.join("Directory.Packages.props");
+        {
+            let m = &h.state().nuget;
+            let plan = m.migration.as_ref().unwrap().plan.as_ref().unwrap();
+            assert_eq!(plan.conflicts.len(), 1);
+            assert_eq!(plan.changes.len(), 4);
+        }
+        // Nothing is written before Apply.
+        assert!(!central.exists());
+        // The new file is listed and shown first.
+        assert_eq!(h.get_all_by_label("Directory.Packages.props").count(), 2);
+        h.get_by_label("Shop.Core.XunitTests.csproj").click();
+        h.run_steps(2);
+        {
+            let mig = h.state().nuget.migration.as_ref().unwrap();
+            let shown = &mig.plan.as_ref().unwrap().changes[mig.shown - 1];
+            assert!(shown.path.ends_with("Shop.Core.XunitTests.csproj"));
+        }
+        // Keep the lower version in the xunit project.
+        h.get_by_label("Use 6.0.4 everywhere").click();
+        h.run_steps(2);
+        h.get_by_label("Keep lower versions as VersionOverride").click();
+        h.run_steps(2);
+        assert!(h.state().nuget.migration.as_ref().unwrap().keep_lower.contains("coverlet.collector"));
+        h.get_by_label("Apply").click();
+        h.run_steps(2);
+        let text = std::fs::read_to_string(&central).unwrap();
+        assert!(text.contains(r#"<PackageVersion Include="coverlet.collector" Version="6.0.4" />"#), "{text}");
+        assert!(text.contains("<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>"));
+        let xunit = std::fs::read_to_string(root.join("tests/Shop.Core.XunitTests/Shop.Core.XunitTests.csproj")).unwrap();
+        assert!(xunit.contains(r#"<PackageReference Include="coverlet.collector" VersionOverride="6.0.0" />"#), "{xunit}");
+        assert!(xunit.contains(r#"<PackageReference Include="xunit" />"#));
+        assert!(std::fs::read_to_string(&api).unwrap().contains(r#"<PackageReference Include="Swashbuckle.AspNetCore" />"#));
+        assert!(!h.state().docs.active_doc().unwrap().is_modified());
+        assert!(h.state().nuget.migration.is_none());
+        wait(&mut h);
+        let m = &h.state().nuget;
+        assert!(m.message.as_ref().is_some_and(|(err, msg)| !err && msg.contains("restored")), "{:?}", m.message);
+        assert!(m.cpm.in_use() && m.cpm.issues().is_empty(), "{:?}", m.cpm.issues());
+        assert!(m.is_central("xunit"));
+    }
+
+    #[test]
+    fn cancelling_a_migration_writes_nothing() {
+        let _lock = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let (_tmp, root) = shop_with_conflict();
+        let before = std::fs::read_to_string(root.join("src/Shop.Api/Shop.Api.csproj")).unwrap();
+        let mut h = harness_at(&root.join("Shop.sln"), home.path());
+        h.get_by_label("Migrate to Central Package Management…").click();
+        h.run_steps(3);
+        h.get_by_label("Cancel").click();
+        h.run_steps(2);
+        assert!(h.state().nuget.migration.is_none());
+        assert!(!root.join("Directory.Packages.props").exists());
+        assert_eq!(std::fs::read_to_string(root.join("src/Shop.Api/Shop.Api.csproj")).unwrap(), before);
+    }
+
+    /// The sample `dotnet list package --vulnerable` output, on CentralShop's projects.
+    fn sample_audit(root: &Path) -> AuditReport {
+        let json = include_str!("../../../rc-dotnet/tests/data/list-package-vulnerable.json")
+            .replace("/work/Audit/A/A.csproj", &root.join("src/CentralShop.Core/CentralShop.Core.csproj").display().to_string())
+            .replace("/work/Audit/B/B.csproj", &root.join("src/CentralShop.Cli/CentralShop.Cli.csproj").display().to_string());
+        rc_dotnet::nuget::parse_list_packages(&json).unwrap()
+    }
+
+    #[test]
+    fn audit_updates_direct_packages_and_pins_transitive_ones() {
+        let _lock = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let (_tmp, root) = central_shop();
+        let mut h = harness(&root, home.path());
+        let central = root.join("Directory.Packages.props");
+        let cli = root.join("src/CentralShop.Cli/CentralShop.Cli.csproj");
+        h.state_mut().nuget.set_audit_for_test(sample_audit(&root), &[("Newtonsoft.Json", "13.0.3"), ("System.Net.Http", "4.3.4"), ("System.Text.RegularExpressions", "4.3.1")]);
+        h.run_steps(3);
+        h.get_by_label("Audit (3)");
+        h.get_by_label("GHSA-5crp-9r3c-p9vr");
+        // Newtonsoft.Json: the central version and the CLI's override move to 13.0.3.
+        h.get_by_label("Update to 13.0.3").click();
+        h.run_steps(3);
+        assert!(std::fs::read_to_string(&central).unwrap().contains(r#"<PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />"#));
+        assert!(std::fs::read_to_string(&cli).unwrap().contains(r#"VersionOverride="13.0.3""#));
+        wait(&mut h);
+        // A transitive package: pinning asks first.
+        h.get_by_label("System.Text.RegularExpressions").click();
+        h.run_steps(2);
+        h.get_by_label("Pin version 4.3.1").click();
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("turns on CentralPackageTransitivePinningEnabled").is_some());
+        assert!(!std::fs::read_to_string(&central).unwrap().contains("RegularExpressions"));
+        h.get_by_label("Pin").click();
+        h.run_steps(3);
+        let text = std::fs::read_to_string(&central).unwrap();
+        assert!(text.contains(r#"<PackageVersion Include="System.Text.RegularExpressions" Version="4.3.1" />"#), "{text}");
+        assert!(text.contains("<CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>"), "{text}");
+        wait(&mut h);
+        let m = &h.state().nuget;
+        assert!(m.message.as_ref().is_some_and(|(err, _)| !err), "{:?}", m.message);
+        assert!(m.cpm.projects.iter().all(|p| p.transitive_pinning));
+    }
+
+    #[test]
+    fn audit_runs_only_on_demand_and_can_be_cancelled() {
+        let _lock = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let (_tmp, root) = central_shop();
+        let mut h = harness(&root, home.path());
+        h.get_by_label("Audit").click();
+        h.run_steps(2);
+        assert!(h.state().nuget.audit.running.is_none() && h.state().nuget.audit.report.is_none());
+        h.get_by_label("Run audit").click();
+        h.run_steps(2);
+        assert!(h.state().nuget.audit.running.is_some());
+        h.get_by_label("Cancel audit").click();
+        h.run_steps(2);
+        assert!(h.state().nuget.audit.running.is_none() && h.state().nuget.audit.report.is_none());
+        h.get_by_label("Run audit");
     }
 }

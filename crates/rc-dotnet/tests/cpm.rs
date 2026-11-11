@@ -93,3 +93,49 @@ fn detects_and_edits_central_package_management() {
     restore(&dotnet, &sln);
     assert!(detect(vec![core, cli]).issues().is_empty());
 }
+
+#[test]
+fn migrates_a_solution_to_central_package_management() {
+    let tmp = tempfile::Builder::new().prefix("dotcraft-cpm-migrate-").tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap().join("Shop");
+    copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/Shop"), &root);
+    let sln = root.join("Shop.sln");
+    let projects: Vec<PathBuf> = [
+        "src/Shop.Core/Shop.Core.csproj",
+        "src/Shop.Cli/Shop.Cli.csproj",
+        "src/Shop.Api/Shop.Api.csproj",
+        "tests/Shop.Core.XunitTests/Shop.Core.XunitTests.csproj",
+        "tests/Shop.Core.NunitTests/Shop.Core.NunitTests.csproj",
+        "tests/Shop.Core.MSTests/Shop.Core.MSTests.csproj",
+    ]
+    .iter()
+    .map(|p| root.join(p))
+    .collect();
+    // Files are read as the editor reads them (without BOM).
+    let files: Vec<(PathBuf, String)> = cpm::migration_files(&root, &projects)
+        .into_iter()
+        .map(|p| {
+            let t = std::fs::read_to_string(&p).unwrap();
+            (p, t.trim_start_matches('\u{feff}').to_string())
+        })
+        .collect();
+    let plan = cpm::plan_migration(&root, &files, &Default::default()).unwrap();
+    assert!(plan.conflicts.is_empty() && plan.warnings.is_empty(), "{:?} {:?}", plan.conflicts, plan.warnings);
+    assert_eq!(plan.versions.len(), 9, "{:?}", plan.versions);
+    assert_eq!(plan.changes.len(), 4);
+    std::fs::write(&plan.central_file, &plan.central_text).unwrap();
+    for c in &plan.changes {
+        let bom = std::fs::read(&c.path).unwrap().starts_with(&[0xEF, 0xBB, 0xBF]);
+        std::fs::write(&c.path, format!("{}{}", if bom { "\u{feff}" } else { "" }, c.new)).unwrap();
+    }
+    let dotnet = dotnet();
+    restore(&dotnet, &sln);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let list: Vec<_> = rt.block_on(cpm::detect_all(&dotnet, projects.clone(), 3)).into_iter().map(|(_, r)| r.unwrap()).collect();
+    let sol = SolutionCpm::new(list);
+    assert!(sol.projects.iter().all(|p| p.enabled), "every project uses CPM");
+    assert!(sol.issues().is_empty(), "{:?}", sol.issues());
+    let xunit = sol.project(&projects[3]).unwrap();
+    assert_eq!(xunit.effective_version("xunit").as_deref(), Some("2.5.3"));
+    assert!(xunit.is_central("Microsoft.NET.Test.Sdk"));
+}
