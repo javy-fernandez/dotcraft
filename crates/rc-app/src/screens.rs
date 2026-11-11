@@ -1446,3 +1446,50 @@ fn screens_package_insight() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("package-completion-{suffix}.png"))).unwrap();    }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes appsettings.json insight captures to target/snapshots"]
+fn screens_appsettings_insight() {
+    use crate::appsettings_insight_tests::{app_with, settings_workspace, settle};
+    use crate::package_insight_tests::{caret_at, type_text};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let hover_at = |h: &mut Harness<'static, DotCraftApp>, needle: &str| {
+        h.state_mut().docs.active_doc_mut().unwrap().editor.popups.close_all();
+        caret_at(h, needle, false);
+        h.run_steps(2);
+        let screen = h.state().caret_screen.unwrap() - egui::vec2(0.0, 10.0);
+        let pos = h.state().docs.active_doc().unwrap().editor.caret() + 2;
+        let app = h.state_mut();
+        let doc = &mut app.docs.list[app.docs.active.unwrap()];
+        app.appsettings.on_editor_events(doc, &[rc_editor::EditorEvent::HoverAt { pos, screen }]);
+        h.run_steps(4);
+    };
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let (_tmp, root) = settings_workspace();
+        let mut h = app_with(&root, home.path(), dark);
+        settle(&mut h, "problems", |a| !a.docs.active_doc().unwrap().editor.diagnostics.is_empty());
+        // The wrong log level's problem, in its hover.
+        hover_at(&mut h, "\"Warn\"");
+        h.render().unwrap().save(out.join(format!("appsettings-problem-{suffix}.png"))).unwrap();
+        // Hover on a key bound to an options class.
+        hover_at(&mut h, "\"Port\"");
+        h.render().unwrap().save(out.join(format!("appsettings-hover-{suffix}.png"))).unwrap();
+        // Completion of a root key from the schema.
+        h.state_mut().docs.active_doc_mut().unwrap().editor.popups.close_all();
+        caret_at(&mut h, "\"AllowedHosts\": \"*\",", true);
+        type_text(&mut h, "\n\"K");
+        settle(&mut h, "completion", |a| a.docs.active_doc().unwrap().editor.popups.completion.is_some());
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("appsettings-completion-{suffix}.png"))).unwrap();
+        // Values of a log level.
+        h.state_mut().docs.active_doc_mut().unwrap().editor.popups.close_all();
+        caret_at(&mut h, "\"Default\": \"", true);
+        h.state_mut().run_insight_action(rc_editor::Action::Complete, egui::pos2(300.0, 300.0));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("appsettings-values-{suffix}.png"))).unwrap();
+    }
+}

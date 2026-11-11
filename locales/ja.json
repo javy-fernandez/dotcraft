@@ -533,7 +533,19 @@
     "{id} has a central version but no project references it": "{id} には集中バージョンがありますが、参照しているプロジェクトはありません",
     "{id} has no version in Directory.Packages.props": "{id} には Directory.Packages.props にバージョンがありません",
     "{id}: with central package management the version belongs in Directory.Packages.props, not on the reference": "{id}: 集中パッケージ管理では、バージョンは参照ではなく Directory.Packages.props に書きます",
-    "{version} available": "{version} が利用可能"
+    "{version} available": "{version} が利用可能",
+    "or": "または",
+    "default": "既定",
+    "Incorrect type: expected {expected}, found {found}": "型が正しくありません: {expected} が必要ですが {found} です",
+    "Value is not accepted. Valid values: {values}": "この値は使用できません。有効な値: {values}",
+    "Value expected: write {value} in quotes": "値が必要です: {value} を引用符で囲んでください",
+    "Type: {type}": "型: {type}",
+    "Valid values: {values}": "有効な値: {values}",
+    "Default: {value}": "既定値: {value}",
+    "Bound to {property} ({type})": "{property} にバインド ({type})",
+    "Section bound to {class}": "セクションは {class} にバインド",
+    "Go to {name}": "{name} へ移動",
+    "No options class is bound to this key": "このキーにバインドされたオプション クラスはありません"
   },
   "terminal": {
     "Local": "ローカル",

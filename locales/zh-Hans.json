@@ -533,7 +533,19 @@
     "{id} has a central version but no project references it": "{id} 有集中版本，但没有项目引用它",
     "{id} has no version in Directory.Packages.props": "{id} 在 Directory.Packages.props 中没有版本",
     "{id}: with central package management the version belongs in Directory.Packages.props, not on the reference": "{id}：使用集中包管理时，版本应写在 Directory.Packages.props 中，而不是引用上",
-    "{version} available": "{version} 可用"
+    "{version} available": "{version} 可用",
+    "or": "或",
+    "default": "默认",
+    "Incorrect type: expected {expected}, found {found}": "类型不正确：应为 {expected}，实际为 {found}",
+    "Value is not accepted. Valid values: {values}": "不接受该值。有效值：{values}",
+    "Value expected: write {value} in quotes": "需要值：请将 {value} 写在引号中",
+    "Type: {type}": "类型：{type}",
+    "Valid values: {values}": "有效值：{values}",
+    "Default: {value}": "默认值：{value}",
+    "Bound to {property} ({type})": "绑定到 {property} ({type})",
+    "Section bound to {class}": "节已绑定到 {class}",
+    "Go to {name}": "转到 {name}",
+    "No options class is bound to this key": "没有选项类绑定到此键"
   },
   "terminal": {
     "Local": "本地",

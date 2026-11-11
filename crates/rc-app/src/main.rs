@@ -12,6 +12,7 @@ mod debugger;
 mod database;
 mod insight;
 mod package_insight;
+mod appsettings_insight;
 mod item_templates;
 mod runner;
 mod search;
@@ -26,6 +27,8 @@ mod debugger_tests;
 mod insight_tests;
 #[cfg(test)]
 mod package_insight_tests;
+#[cfg(test)]
+mod appsettings_insight_tests;
 #[cfg(test)]
 mod screens;
 mod docs;

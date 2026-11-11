@@ -533,7 +533,19 @@
     "{id} has a central version but no project references it": "{id} hat eine zentrale Version, aber kein Projekt verweist darauf",
     "{id} has no version in Directory.Packages.props": "{id} hat keine Version in Directory.Packages.props",
     "{id}: with central package management the version belongs in Directory.Packages.props, not on the reference": "{id}: Bei zentraler Paketverwaltung gehört die Version in Directory.Packages.props, nicht an die Referenz",
-    "{version} available": "{version} verfügbar"
+    "{version} available": "{version} verfügbar",
+    "or": "oder",
+    "default": "Standard",
+    "Incorrect type: expected {expected}, found {found}": "Falscher Typ: {expected} erwartet, {found} gefunden",
+    "Value is not accepted. Valid values: {values}": "Wert wird nicht akzeptiert. Gültige Werte: {values}",
+    "Value expected: write {value} in quotes": "Wert erwartet: {value} in Anführungszeichen schreiben",
+    "Type: {type}": "Typ: {type}",
+    "Valid values: {values}": "Gültige Werte: {values}",
+    "Default: {value}": "Standard: {value}",
+    "Bound to {property} ({type})": "Gebunden an {property} ({type})",
+    "Section bound to {class}": "Abschnitt gebunden an {class}",
+    "Go to {name}": "Gehe zu {name}",
+    "No options class is bound to this key": "Keine Optionsklasse ist an diesen Schlüssel gebunden"
   },
   "terminal": {
     "Local": "Lokal",

@@ -3650,6 +3650,7 @@ dependencies = [
  "dunce",
  "libc",
  "rc-core",
+ "regex",
  "reqwest",
  "roxmltree",
  "serde",

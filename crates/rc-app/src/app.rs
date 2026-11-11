@@ -76,6 +76,8 @@ pub struct DotCraftApp {
     pub insight: Insight,
     /// Package completion, hover, updates and CPM problems in project files.
     pub packages: crate::package_insight::PackageInsight,
+    /// Completion, hover and problems in `appsettings*.json`.
+    pub appsettings: crate::appsettings_insight::SettingsInsight,
     pub runner: Runner,
     pub debugger: crate::debugger::Debugger,
     window_title: String,
@@ -182,6 +184,7 @@ impl DotCraftApp {
             update: None,
             insight: Insight::new(waker.clone()),
             packages: crate::package_insight::PackageInsight::new(waker.clone()),
+            appsettings: crate::appsettings_insight::SettingsInsight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
@@ -343,6 +346,7 @@ impl DotCraftApp {
         let root = ws.root.clone();
         self.workspace = Some(WorkspaceState { ws, solution });
         self.packages.set_workspace(&root, self.solution_projects());
+        self.appsettings.set_workspace(&root);
         self.refresh_endpoints();
         self.restore_session(session);
     }
@@ -677,6 +681,18 @@ impl DotCraftApp {
         }
     }
 
+    /// Results of the `appsettings*.json` insight.
+    pub fn handle_appsettings(&mut self, outputs: Vec<crate::appsettings_insight::SettingsOutput>) {
+        use crate::appsettings_insight::SettingsOutput;
+        for o in outputs {
+            match o {
+                // ⌘+click records the spot itself; Go to Declaration before calling this.
+                SettingsOutput::Open { path, line, col } => self.open_at(&path, line, col),
+                SettingsOutput::Message(m) => self.notify(m, false),
+            }
+        }
+    }
+
     /// Applies a fix of a project file's package (or shows the package in the NuGet window).
     pub fn apply_package_fix(&mut self, fix: crate::package_insight::PackageFix) {
         if let crate::package_insight::PackageFix::Open { id } = &fix {
@@ -719,6 +735,29 @@ impl DotCraftApp {
                 _ => self.packages.context_actions(doc),
             };
             self.handle_packages(outputs);
+            return;
+        }
+        // appsettings*.json: keys and values from the schema and the bound options classes.
+        if crate::appsettings_insight::is_appsettings(&self.docs.list[i].path) && matches!(action, Action::Complete | Action::QuickDoc | Action::GotoDeclaration) {
+            let doc = &mut self.docs.list[i];
+            let outputs = match action {
+                Action::Complete => {
+                    self.appsettings.complete(doc, true);
+                    Vec::new()
+                }
+                Action::QuickDoc => {
+                    self.appsettings.quick_doc(doc, caret_screen);
+                    Vec::new()
+                }
+                _ => {
+                    let outputs = self.appsettings.declaration(doc, doc.editor.caret());
+                    if matches!(outputs.first(), Some(crate::appsettings_insight::SettingsOutput::Open { .. })) {
+                        self.push_nav();
+                    }
+                    outputs
+                }
+            };
+            self.handle_appsettings(outputs);
             return;
         }
         // JSON and XML are formatted here; C# by the server.
@@ -1161,6 +1200,7 @@ impl DotCraftApp {
             self.insight.problems.insert(file, diags);
         }
         self.packages.republish();
+        self.appsettings.republish();
     }
 
     /// Opens the declaration of a test from its fully qualified name (Tests window).
@@ -1407,7 +1447,9 @@ impl DotCraftApp {
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();
         self.report_fs_to_server(&events);
-        self.packages.files_changed(&events.iter().map(|e| e.path().to_path_buf()).collect::<Vec<_>>());
+        let paths: Vec<PathBuf> = events.iter().map(|e| e.path().to_path_buf()).collect();
+        self.packages.files_changed(&paths);
+        self.appsettings.files_changed(&paths);
         if let Some(index) = &self.files.index
             && !events.is_empty()
         {
@@ -1631,6 +1673,7 @@ impl eframe::App for DotCraftApp {
         self.handle_insight(outputs);
         let outputs = self.packages.update(&mut self.docs, &mut self.insight.problems, self.nuget.selected_source());
         self.handle_packages(outputs);
+        self.appsettings.update(&mut self.docs, &mut self.insight.problems);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
         // Monitoring follows the selected Run tab's process (or the last one started).
