@@ -25,6 +25,7 @@ pub mod new_project;
 pub mod nuget;
 pub mod process;
 pub mod project;
+pub mod project_xml;
 pub mod run;
 pub mod sdk;
 pub mod solution;
