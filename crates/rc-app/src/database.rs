@@ -8,10 +8,15 @@ use rusqlite::{Connection, OpenFlags, config::DbConfig, hooks::{AuthAction, Auth
 use std::{path::{Path, PathBuf}, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::{Duration, Instant}};
 
 mod insight;
+pub mod mssql;
 pub use insight::{Details, Relations, Comparison, ChangeKind, completions, apply_completion};
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum View { #[default] Query, Details, Relations, Comparison }
+
+/// The kind of database the window shows.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum Source { #[default] Sqlite, SqlServer }
 
 pub const MAX_ROWS: usize = 500;
 pub const MAX_BYTES: usize = 2 * 1024 * 1024;
@@ -228,6 +233,8 @@ pub struct Database {
     pub show_suggestions: bool,
     pub cursor: usize,
     pub grid_is_plan: bool,
+    pub source: Source,
+    pub mssql: mssql::SqlServer,
     work: Option<Work>,
     waker: Waker,
 }
@@ -235,8 +242,9 @@ pub struct Database {
 impl Database {
     pub fn new(waker: Waker) -> Self {
         Self { path: String::new(), connected: None, tables: Vec::new(), schema_truncated: false, selected: 0,
-            sql: "SELECT sqlite_version();".into(), grid: None, error: None, work: None, waker,
-            details: None, relations: None, comparison: None, compare_path: String::new(), view: View::Query, show_suggestions: false, cursor: 0, grid_is_plan: false }
+            sql: "SELECT sqlite_version();".into(), grid: None, error: None, work: None, waker: waker.clone(),
+            details: None, relations: None, comparison: None, compare_path: String::new(), view: View::Query, show_suggestions: false, cursor: 0, grid_is_plan: false,
+            source: Source::Sqlite, mssql: mssql::SqlServer::new(waker.clone()) }
     }
 
     pub fn busy(&self) -> bool { self.work.is_some() }
@@ -274,6 +282,7 @@ impl Database {
     }
 
     pub fn update(&mut self) {
+        self.mssql.update();
         let reply = self.work.as_ref().and_then(|work| work.inbox.drain().into_iter().next());
         if let Some(reply) = reply {
             self.work = None;

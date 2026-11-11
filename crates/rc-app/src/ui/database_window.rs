@@ -1,7 +1,8 @@
 //! Native read-only SQLite connection, schema and explicit query controls.
 
-use crate::{app::DotCraftApp, database::{Action, Error, View, MAX_SQL}, toolwindow::ToolWindow, ui::kit};
+use crate::{app::DotCraftApp, database::{Action, Error, Source, View, MAX_SQL}, toolwindow::ToolWindow, ui::kit};
 mod insight;
+mod mssql;
 
 use egui::{FontId, RichText, Ui};
 use rc_kit::i18n::{tr, trf};
@@ -17,13 +18,21 @@ fn views() -> [(Ico, &'static str, View); 4] {
     ]
 }
 
+/// The database kinds, shown as header tabs while nothing is connected.
+const SOURCES: [Source; 2] = [Source::Sqlite, Source::SqlServer];
+
+fn source_tabs(selected: Source) -> Vec<(Ico, &'static str, bool)> {
+    vec![(ico::DATA_TABLE, "SQLite", selected == Source::Sqlite), (ico::TW_DATABASE, "SQL Server", selected == Source::SqlServer)]
+}
+
 pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
+    if app.database.source == Source::SqlServer { return mssql::show(app, ui); }
     let db = &app.database;
     let connected = db.connected.is_some();
     let busy = db.busy();
     let status = db.connected.as_ref().and_then(|path| path.file_name()).map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     let views = views();
-    let tabs: Vec<(Ico, &str, bool)> = if connected { views.iter().map(|(icon, label, view)| (*icon, *label, db.view == *view)).collect() } else { Vec::new() };
+    let tabs: Vec<(Ico, &str, bool)> = if connected { views.iter().map(|(icon, label, view)| (*icon, *label, db.view == *view)).collect() } else if busy { Vec::new() } else { source_tabs(Source::Sqlite) };
     // The tabs move to a toolbar row when the header is too narrow for them.
     let p = rc_kit::pal(ui);
     let tabs_w: f32 = tabs.iter().map(|(_, label, _)| ui.painter().layout_no_wrap(label.to_string(), FontId::proportional(12.5), p.text).size().x + 38.0).sum();
@@ -37,10 +46,19 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         Some(2) => app.database.disconnect(),
         _ => {}
     }
-    if let Some(tab) = click.tab { app.database.view = views[tab].2; }
+    if let Some(tab) = click.tab {
+        if connected { app.database.view = views[tab].2; } else { app.database.source = SOURCES[tab]; }
+    }
     // The connection, schema, console and results are taller than a docked panel.
     egui::ScrollArea::vertical().id_salt("database_window").auto_shrink([false, false]).show(ui, |ui| {
-        if !in_header && !tabs.is_empty() {
+        if !in_header && !connected && !busy {
+            kit::toolbar(ui, |ui| {
+                for (i, (icon, label, selected)) in source_tabs(Source::Sqlite).into_iter().enumerate() {
+                    if theme::tool_button(ui, icon, label, selected).clicked() { app.database.source = SOURCES[i]; }
+                }
+            });
+        }
+        if !in_header && connected {
             kit::toolbar(ui, |ui| {
                 for (icon, label, view) in views {
                     if theme::tool_button(ui, icon, label, app.database.view == view).clicked() { app.database.view = view; }
@@ -166,7 +184,7 @@ pub(super) fn field_row<R>(ui: &mut Ui, caption: &str, text: &mut String, width:
 }
 
 /// Fixed-height virtual rows keep large results from creating every cell each frame.
-fn result_table(ui: &mut Ui, grid: &crate::database::Grid, scroll_to: Option<usize>) -> usize {
+pub(super) fn result_table(ui: &mut Ui, grid: &crate::database::Grid, scroll_to: Option<usize>) -> usize {
     let p = rc_kit::pal(ui);
     let mut rendered = 0;
     let height = ui.available_height().max(40.0);
