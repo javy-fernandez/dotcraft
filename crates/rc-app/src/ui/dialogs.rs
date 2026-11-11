@@ -37,7 +37,15 @@ pub enum Dialog {
     RenameSymbol { doc: u64, pos: usize, original: String, name: String, focus: bool },
     /// Confirm rolling back files to HEAD.
     Rollback { paths: Vec<String> },
-    NewBranch { name: String },
+    /// A new branch at `start` (default HEAD), checked out when `checkout`.
+    NewBranch { name: String, start: Option<String>, checkout: bool },
+    RenameBranch { old: String, name: String },
+    /// Delete a local branch; `force` is the second confirmation for an unmerged one.
+    DeleteBranch { name: String, force: bool },
+    /// Delete a branch on its remote (`origin/feature`).
+    DeleteRemoteBranch { name: String },
+    /// The commits that differ between a branch and the current one.
+    CompareBranch { branch: String },
     /// ⇧⌘E: the places the caret jumped from.
     RecentLocations { selected: usize },
     /// ⌘F12 file structure popup.
@@ -86,7 +94,11 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::RenameSymbol { doc, pos, original, name, focus } => rename_symbol(app, ctx, *doc, *pos, original, name, focus),
         Dialog::FileStructure { filter, selected } => file_structure(app, ctx, filter, selected),
         Dialog::Rollback { paths } => rollback(app, ctx, paths),
-        Dialog::NewBranch { name } => new_branch(app, ctx, name),
+        Dialog::NewBranch { name, start, checkout } => new_branch(app, ctx, name, start.as_deref(), checkout),
+        Dialog::RenameBranch { old, name } => rename_branch(app, ctx, old, name),
+        Dialog::DeleteBranch { name, force } => delete_branch(app, ctx, name, *force),
+        Dialog::DeleteRemoteBranch { name } => delete_remote_branch(app, ctx, name),
+        Dialog::CompareBranch { branch } => compare_branch(app, ctx, branch),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, enabled, focus),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
@@ -1101,22 +1113,150 @@ fn rollback(app: &mut DotCraftApp, ctx: &Context, paths: &mut Vec<String>) -> Ou
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn new_branch(app: &mut DotCraftApp, ctx: &Context, name: &mut String) -> Outcome {
-    let valid = !name.trim().is_empty() && !name.contains(' ') && !name.contains("..");
-    let ((ok, cancel), esc) = modal(ctx, "new_branch", 380.0, |ui| {
-        title(ui, tr("New Branch"));
+/// A branch name git may accept (git itself validates it when the branch is created).
+fn plausible_branch_name(name: &str) -> bool {
+    let name = name.trim();
+    !name.is_empty() && !name.starts_with('-') && !name.contains(char::is_whitespace) && !name.contains("..")
+}
+
+fn new_branch(app: &mut DotCraftApp, ctx: &Context, name: &mut String, start: Option<&str>, checkout: &mut bool) -> Outcome {
+    let valid = plausible_branch_name(name);
+    let ((ok, cancel), esc) = modal(ctx, "new_branch", 400.0, |ui| {
+        match start {
+            Some(start) => title(ui, &trf("New Branch from '{branch}'", &[("branch", &start)])),
+            None => title(ui, tr("New Branch")),
+        }
         let resp = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY));
         resp.request_focus();
-        ui.label(egui::RichText::new(tr("The new branch is checked out.")).size(12.0).color(rc_kit::pal(ui).muted));
+        ui.add_space(6.0);
+        ui.checkbox(checkout, tr("Checkout branch"));
         let enter = ui.input(|i| i.key_pressed(Key::Enter));
         let (ok, cancel) = buttons(ui, tr("Create"), valid);
         (ok || enter && valid, cancel)
     });
     if ok {
-        app.vcs.new_branch(name.trim());
+        if *checkout && !crate::ui::git::save_before_branch_change(app) {
+            return Outcome::Close;
+        }
+        app.vcs.new_branch_from(name.trim(), start, *checkout);
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn rename_branch(app: &mut DotCraftApp, ctx: &Context, old: &str, name: &mut String) -> Outcome {
+    let valid = plausible_branch_name(name) && name.trim() != old;
+    let ((ok, cancel), esc) = modal(ctx, "rename_branch", 400.0, |ui| {
+        title(ui, &trf("Rename '{branch}'", &[("branch", &old)]));
+        let resp = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY));
+        resp.request_focus();
+        let enter = ui.input(|i| i.key_pressed(Key::Enter));
+        let (ok, cancel) = buttons(ui, tr("Rename"), valid);
+        (ok || enter && valid, cancel)
+    });
+    if ok {
+        app.vcs.rename_branch(old, name.trim());
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// A confirmation with a warning icon, a question and a grey detail.
+fn confirm(ctx: &Context, id: &str, question: &str, detail: &str, ok: &str) -> ((bool, bool), bool) {
+    modal(ctx, id, 440.0, |ui| {
+        ui.horizontal(|ui| {
+            icons::image(ui, rc_kit::ico::DIALOG_WARNING, 20.0);
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(question).font(theme::bold(14.0)));
+        });
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new(detail).size(12.5).color(rc_kit::pal(ui).muted));
+        buttons(ui, ok, true)
+    })
+}
+
+fn delete_branch(app: &mut DotCraftApp, ctx: &Context, name: &str, force: bool) -> Outcome {
+    let ((ok, cancel), esc) = if force {
+        confirm(ctx, "force_delete_branch", &trf("'{branch}' is not fully merged", &[("branch", &name)]), tr("Its commits are not in the current branch or its upstream and will be lost. Delete it anyway?"), tr("Force Delete"))
+    } else {
+        confirm(ctx, "delete_branch", &trf("Delete branch '{branch}'?", &[("branch", &name)]), tr("The local branch is deleted; its remote branch is kept."), tr("Delete"))
+    };
+    if ok {
+        app.vcs.delete_branch(name, force);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn delete_remote_branch(app: &mut DotCraftApp, ctx: &Context, name: &str) -> Outcome {
+    let remote = name.split_once('/').map_or(name, |(r, _)| r);
+    let ((ok, cancel), esc) = confirm(
+        ctx,
+        "delete_remote_branch",
+        &trf("Delete '{branch}' on the remote?", &[("branch", &name)]),
+        &trf("The branch is deleted on the server ({remote}) for everyone who uses it. This cannot be undone from DotCraft.", &[("remote", &remote)]),
+        tr("Delete on Remote"),
+    );
+    if ok {
+        app.vcs.delete_remote_branch(name);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The commits that differ between `branch` and the current branch; clicking one shows it in
+/// the Git window.
+fn compare_branch(app: &mut DotCraftApp, ctx: &Context, branch: &str) -> Outcome {
+    let current = app.vcs.branch_name().unwrap_or_else(|| "HEAD".into());
+    let compare = app.vcs.compare.clone().filter(|c| c.branch == branch);
+    let mut open = None;
+    let mut close = false;
+    let (_, esc) = modal(ctx, "compare_branch", 620.0, |ui| {
+        title(ui, &trf("Compare '{branch}' with '{current}'", &[("branch", &branch), ("current", &current)]));
+        let p = rc_kit::pal(ui);
+        match &compare {
+            None => crate::ui::kit::note(ui, tr("Loading…")),
+            Some(c) if c.loading => crate::ui::kit::note(ui, tr("Loading…")),
+            Some(c) if c.error.is_some() => crate::ui::kit::message(ui, c.error.as_deref().unwrap_or_default(), true),
+            Some(c) => {
+                egui::ScrollArea::vertical().max_height(420.0).auto_shrink([false, true]).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    for (heading, commits) in [
+                        (trf("In '{branch}' but not in '{current}' ({n})", &[("branch", &branch), ("current", &current), ("n", &c.incoming.len())]), &c.incoming),
+                        (trf("In '{current}' but not in '{branch}' ({n})", &[("branch", &branch), ("current", &current), ("n", &c.outgoing.len())]), &c.outgoing),
+                    ] {
+                        ui.add_space(6.0);
+                        ui.label(egui::RichText::new(heading).font(theme::bold(12.5)));
+                        ui.add_space(4.0);
+                        if commits.is_empty() {
+                            ui.label(egui::RichText::new(tr("No commits")).size(12.0).color(p.muted));
+                        }
+                        for commit in commits.iter() {
+                            let secondary = format!("{}  {}  {}", commit.short_hash(), commit.author_name, crate::vcs::format_date(commit.author_time));
+                            if crate::ui::kit::row(ui, 0, Some(rc_kit::ico::COMMIT), &commit.subject, &secondary, false).clicked() {
+                                open = Some(commit.hash.clone());
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        ui.add_space(12.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            close = theme::primary_button(ui, tr("Close")).clicked();
+        });
+    });
+    if let Some(hash) = open {
+        app.dock.show(crate::toolwindow::ToolWindow::Git);
+        app.vcs.select_commit(&hash);
+        app.vcs.compare = None;
+        return Outcome::Close;
+    }
+    if close || esc {
+        app.vcs.compare = None;
+        return Outcome::Close;
+    }
+    Outcome::Keep
 }
 
 /// ⌘F12: the members of the active file, filtered by typing.

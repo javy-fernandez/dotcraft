@@ -96,7 +96,12 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                     if app.vcs.repo.is_some() {
                         let name = app.vcs.branch_name().unwrap_or_else(|| "…".into());
                         let resp = theme::flat_button(ui, Some(ico::VCS), &name, FontId::proportional(13.0), true, true).on_hover_text(tr("Git branches and actions"));
-                        egui::Popup::menu(&resp).show(|ui| crate::ui::git::branches_menu(app, ui));
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr("Git branches and actions")));
+                        if resp.clicked() {
+                            crate::ui::git::reset_branches_menu(ui.ctx());
+                        }
+                        // Clicks inside (filter, branch pages) keep it open; actions close it.
+                        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| crate::ui::git::branches_menu(app, ui));
                     }
                 }
             }

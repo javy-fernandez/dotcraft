@@ -73,7 +73,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     app.vcs.commit(false);
     pump(&mut app, "commit", |a| a.vcs.busy.is_none() && a.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Committed")));
     pump(&mut app, "clean status", |a| a.vcs.status.as_ref().is_some_and(|s| s.entries.is_empty()));
-    app.vcs.new_branch("feature/x");
+    app.vcs.new_branch_from("feature/x", None, true);
     pump(&mut app, "branch", |a| a.vcs.branch_name().as_deref() == Some("feature/x"));
     pump(&mut app, "log", |a| a.vcs.log.iter().any(|c| c.subject == "Second"));
 
@@ -170,4 +170,82 @@ fn stash_actions_refresh_and_keep_the_selected_entry() {
     harness.get_by_label(rc_kit::i18n::tr("Confirm Pop"));
     assert!(harness.state().vcs.busy.is_none());
     assert!(harness.state().vcs.stash_confirmation.as_ref().is_some_and(|(_, drop)| !drop));
+}
+
+#[test]
+fn branch_merge_rebase_push_and_conflict_guard() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().canonicalize().unwrap();
+    let (remote, root) = (base.join("remote.git"), base.join("repo"));
+    std::fs::create_dir(&remote).unwrap();
+    std::fs::create_dir(&root).unwrap();
+    git(&remote, &["init", "-q", "--bare", "-b", "main"]);
+    git(&root, &["init", "-q", "-b", "main"]);
+    for (key, value) in [("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")] {
+        git(&root, &["config", key, value]);
+    }
+    git(&root, &["remote", "add", "origin", &format!("file://{}", remote.display())]);
+    std::fs::write(root.join("a.txt"), "base\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "base"]);
+    git(&root, &["checkout", "-qb", "topic"]);
+    std::fs::write(root.join("t.txt"), "t\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "topic"]);
+    git(&root, &["checkout", "-q", "main"]);
+    std::fs::write(root.join("m.txt"), "m\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "main"]);
+
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&root);
+    pump(&mut app, "repository", |a| a.vcs.status.is_some() && !a.vcs.branches.is_empty());
+    let has = |a: &DotCraftApp, text: &str| a.notices.iter().any(|n| n.text == text);
+    let branch = |a: &DotCraftApp, name: &str| a.vcs.branches.iter().find(|b| b.name == name).unwrap().clone();
+
+    // Push sets the upstream on origin.
+    app.vcs.push_branch("main");
+    pump(&mut app, "push", |a| has(a, "Pushed main"));
+    pump(&mut app, "upstream", |a| a.vcs.branches.iter().any(|b| b.name == "main" && b.upstream.as_deref() == Some("origin/main")));
+
+    // Rebase topic onto main, then merge topic into main (fast-forward).
+    app.vcs.checkout(&branch(&app, "topic"));
+    pump(&mut app, "checkout", |a| a.vcs.busy.is_none() && a.vcs.branch_name().as_deref() == Some("topic"));
+    app.vcs.rebase_onto("main");
+    pump(&mut app, "rebase", |a| has(a, "Rebased onto main"));
+    assert!(root.join("m.txt").exists());
+    app.vcs.checkout(&branch(&app, "main"));
+    pump(&mut app, "checkout main", |a| a.vcs.busy.is_none() && a.vcs.branch_name().as_deref() == Some("main"));
+    app.vcs.merge_branch("topic");
+    pump(&mut app, "merge", |a| has(a, "Merged topic"));
+    assert!(root.join("t.txt").exists());
+
+    // A conflicting merge leaves the repository merging: branch changes are refused until
+    // the merge is aborted.
+    git(&root, &["checkout", "-qb", "other"]);
+    std::fs::write(root.join("a.txt"), "other\n").unwrap();
+    git(&root, &["commit", "-qam", "other"]);
+    git(&root, &["checkout", "-q", "main"]);
+    std::fs::write(root.join("a.txt"), "main\n").unwrap();
+    git(&root, &["commit", "-qam", "main change"]);
+    app.vcs.refresh();
+    pump(&mut app, "branches", |a| a.vcs.branches.iter().any(|b| b.name == "other"));
+    app.vcs.merge_branch("other");
+    pump(&mut app, "conflict", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+    pump(&mut app, "merging state", |a| a.vcs.state == rc_vcs::RepoState::Merging);
+    app.vcs.checkout(&branch(&app, "topic"));
+    pump(&mut app, "refused checkout", |a| a.vcs.busy.is_none() && a.vcs.error.as_deref() == Some(rc_kit::i18n::tr("Resolve the merge conflicts first")));
+    assert_eq!(app.vcs.branch_name().as_deref(), Some("main"));
+    app.vcs.delete_branch("other", true);
+    pump(&mut app, "refused delete", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+    assert!(app.vcs.branches.iter().any(|b| b.name == "other"));
+    app.vcs.abort_operation();
+    pump(&mut app, "abort", |a| has(a, "Merge aborted"));
+    pump(&mut app, "clean state", |a| a.vcs.state == rc_vcs::RepoState::Clean);
+    assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "main\n");
 }
