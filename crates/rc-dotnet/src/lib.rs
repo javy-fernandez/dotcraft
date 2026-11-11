@@ -7,6 +7,7 @@
 //! process tree) on `cancel()`/`stop()` or when dropped. The `async fn` variants take a
 //! [`CancelToken`] and a callback instead.
 
+pub mod appsettings;
 pub mod build;
 pub mod counters;
 pub mod cpu_profile;

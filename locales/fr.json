@@ -709,7 +709,19 @@
     "Wait for the current build to finish": "Attendez la fin de la compilation en cours",
     "{title} cancelled": "{title} : annulé",
     "{title} succeeded in {secs} s": "{title} : réussi en {secs} s",
-    "{title} failed (exit code {code})": "{title} : échec (code de sortie {code})"
+    "{title} failed (exit code {code})": "{title} : échec (code de sortie {code})",
+    "or": "ou",
+    "default": "par défaut",
+    "Incorrect type: expected {expected}, found {found}": "Type incorrect : {expected} attendu, {found} trouvé",
+    "Value is not accepted. Valid values: {values}": "Valeur non acceptée. Valeurs valides : {values}",
+    "Value expected: write {value} in quotes": "Valeur attendue : écrivez {value} entre guillemets",
+    "Type: {type}": "Type : {type}",
+    "Valid values: {values}": "Valeurs valides : {values}",
+    "Default: {value}": "Par défaut : {value}",
+    "Bound to {property} ({type})": "Lié à {property} ({type})",
+    "Section bound to {class}": "Section liée à {class}",
+    "Go to {name}": "Aller à {name}",
+    "No options class is bound to this key": "Aucune classe d'options n'est liée à cette clé"
   },
   "terminal": {
     "Local": "Local",
@@ -1220,7 +1232,8 @@
     "Submodules": "Submodules",
     "Track LFS pattern": "Track LFS pattern",
     "Worktree absolute path": "Worktree absolute path",
-    "Worktrees": "Worktrees"
+    "Worktrees": "Worktrees",
+    "en": "fr"
   },
   "batch2-database": {
     "Added in other file": "Added in other file",

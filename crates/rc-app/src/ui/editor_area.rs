@@ -228,8 +228,15 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     // Project files: package completion, hover, updates and fixes.
     let package_file = rc_dotnet::project_xml::is_package_file(&doc.path);
     let package_outputs = if package_file { app.packages.on_editor_events(doc, &out.events) } else { Vec::new() };
+    // appsettings*.json: schema and options completion, hover and navigation.
+    let settings_file = crate::appsettings_insight::is_appsettings(&doc.path);
+    let settings_outputs = if settings_file { app.appsettings.on_editor_events(doc, &out.events) } else { Vec::new() };
+    if settings_file && out.accepted_completion.is_some() {
+        app.appsettings.accepted(doc);
+    }
     if let Some(data) = out.accepted_completion
         && !package_file
+        && !settings_file
     {
         app.insight.completion_accepted(doc, data);
     }
@@ -351,6 +358,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         app.run_test_at(line);
     }
     app.handle_packages(package_outputs);
+    app.handle_appsettings(settings_outputs);
     if let Some((path, pos)) = navigated_from {
         app.push_nav_at(path, pos);
     }

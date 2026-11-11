@@ -1,0 +1,14 @@
+# appsettings*.json insight (schema completion, hover, problems, options classes). Import: python3 scripts/i18n_tsv.py app scripts/i18n/appsettings-insight.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+or	o	ou	ou	oder	lub	或	または
+default	predeterminado	par défaut	padrão	Standard	domyślna	默认	既定
+Incorrect type: expected {expected}, found {found}	Tipo incorrecto: se esperaba {expected} y se encontró {found}	Type incorrect : {expected} attendu, {found} trouvé	Tipo incorreto: esperado {expected}, encontrado {found}	Falscher Typ: {expected} erwartet, {found} gefunden	Nieprawidłowy typ: oczekiwano {expected}, znaleziono {found}	类型不正确：应为 {expected}，实际为 {found}	型が正しくありません: {expected} が必要ですが {found} です
+Value is not accepted. Valid values: {values}	Valor no admitido. Valores válidos: {values}	Valeur non acceptée. Valeurs valides : {values}	Valor não aceito. Valores válidos: {values}	Wert wird nicht akzeptiert. Gültige Werte: {values}	Wartość nieakceptowana. Prawidłowe wartości: {values}	不接受该值。有效值：{values}	この値は使用できません。有効な値: {values}
+Value expected: write {value} in quotes	Se esperaba un valor: escribe {value} entre comillas	Valeur attendue : écrivez {value} entre guillemets	Valor esperado: escreva {value} entre aspas	Wert erwartet: {value} in Anführungszeichen schreiben	Oczekiwano wartości: zapisz {value} w cudzysłowie	需要值：请将 {value} 写在引号中	値が必要です: {value} を引用符で囲んでください
+Type: {type}	Tipo: {type}	Type : {type}	Tipo: {type}	Typ: {type}	Typ: {type}	类型：{type}	型: {type}
+Valid values: {values}	Valores válidos: {values}	Valeurs valides : {values}	Valores válidos: {values}	Gültige Werte: {values}	Prawidłowe wartości: {values}	有效值：{values}	有効な値: {values}
+Default: {value}	Predeterminado: {value}	Par défaut : {value}	Padrão: {value}	Standard: {value}	Domyślnie: {value}	默认值：{value}	既定値: {value}
+Bound to {property} ({type})	Enlazado a {property} ({type})	Lié à {property} ({type})	Vinculado a {property} ({type})	Gebunden an {property} ({type})	Powiązano z {property} ({type})	绑定到 {property} ({type})	{property} にバインド ({type})
+Section bound to {class}	Sección enlazada a {class}	Section liée à {class}	Seção vinculada a {class}	Abschnitt gebunden an {class}	Sekcja powiązana z {class}	节已绑定到 {class}	セクションは {class} にバインド
+Go to {name}	Ir a {name}	Aller à {name}	Ir para {name}	Gehe zu {name}	Przejdź do {name}	转到 {name}	{name} へ移動
+No options class is bound to this key	Ninguna clase de opciones está enlazada a esta clave	Aucune classe d'options n'est liée à cette clé	Nenhuma classe de opções está vinculada a esta chave	Keine Optionsklasse ist an diesen Schlüssel gebunden	Żadna klasa opcji nie jest powiązana z tym kluczem	没有选项类绑定到此键	このキーにバインドされたオプション クラスはありません
