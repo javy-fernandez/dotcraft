@@ -95,6 +95,20 @@ pub struct Session {
     pub compounds: Vec<(String, Vec<String>)>,
     /// Edited application configurations, by name.
     pub run_options: BTreeMap<String, RunOptions>,
+    /// Entity Framework Core: the projects and DbContext last used.
+    pub ef: EfOptions,
+}
+
+/// Entity Framework Core choices remembered per solution.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EfOptions {
+    /// The project with the DbContext and the migrations.
+    pub project: Option<PathBuf>,
+    /// The project built and run to create the DbContext.
+    pub startup: Option<PathBuf>,
+    /// The DbContext type (full name).
+    pub context: Option<String>,
 }
 
 impl Session {

@@ -6,6 +6,7 @@ pub mod database_window;
 pub mod dialogs;
 pub mod sdk_selection;
 pub mod editor_area;
+pub mod ef_core;
 pub mod explorer;
 pub mod git;
 pub mod main_menu;
@@ -75,6 +76,12 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         && new_project::show(app, &ctx, &mut d)
     {
         app.new_project = Some(d);
+    }
+    if let Some(mut d) = app.ef.take()
+        && ef_core::show(app, &ctx, &mut d)
+        && app.ef.is_none()
+    {
+        app.ef = Some(d);
     }
     if cfg!(target_os = "windows") {
         rc_kit::window_chrome::resize_edges(&ctx);

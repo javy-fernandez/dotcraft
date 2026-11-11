@@ -15,6 +15,7 @@ pub mod gcdump;
 pub mod coverage;
 pub mod cpm;
 pub mod diagnostics;
+pub mod ef;
 pub mod global_json;
 pub mod endpoints;
 pub mod http_file;
