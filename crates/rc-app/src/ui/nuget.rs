@@ -136,7 +136,7 @@ impl NugetManager {
         if let Some(c) = self.clients.get(&src.url) {
             return Some(c.clone());
         }
-        let c = NugetClient::with_credentials(&src.url, src.credentials.clone()).ok()?;
+        let c = NugetClient::with_credentials(&src.url, src.credentials.clone().map(|(u, p)| rc_dotnet::nuget_auth::Credential::basic(u, p))).ok()?;
         self.clients.insert(src.url.clone(), c.clone());
         Some(c)
     }
