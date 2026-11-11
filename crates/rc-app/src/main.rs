@@ -11,6 +11,7 @@ mod convert;
 mod debugger;
 mod database;
 mod insight;
+mod package_insight;
 mod item_templates;
 mod runner;
 mod search;
@@ -23,6 +24,8 @@ mod runner_tests;
 mod debugger_tests;
 #[cfg(test)]
 mod insight_tests;
+#[cfg(test)]
+mod package_insight_tests;
 #[cfg(test)]
 mod screens;
 mod docs;

@@ -342,6 +342,48 @@ impl Docs {
         Ok(())
     }
 
+    /// Applies byte-range edits that `f` computes from the file's current text: through its
+    /// editor when it is open (one undo step; saved unless it already had unsaved changes),
+    /// otherwise on disk keeping the BOM. Returns whether the disk is up to date.
+    pub fn edit_file(&mut self, path: &Path, f: impl FnOnce(&str) -> Result<Vec<(std::ops::Range<usize>, String)>, String>) -> Result<bool, String> {
+        let path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        if let Some(i) = self.index_of(&path) {
+            let doc = &mut self.list[i];
+            let text = doc.editor.buffer.rope().to_string();
+            let edits = f(&text)?;
+            let had_changes = doc.is_modified();
+            if edits.is_empty() {
+                return Ok(!had_changes);
+            }
+            let chars = |b: usize| text[..b].chars().count();
+            let changes = edits.into_iter().map(|(r, t)| rc_text::Change::new(chars(r.start), chars(r.end), t.replace("\r\n", "\n"))).collect();
+            doc.editor.apply_text_edits(changes);
+            doc.editor.request_parse(&self.pool);
+            if had_changes {
+                return Ok(false);
+            }
+            self.save(i)?;
+            return Ok(true);
+        }
+        let (text, bom, _) = read_text(&path)?;
+        let mut edits = f(&text)?;
+        if edits.is_empty() {
+            return Ok(true);
+        }
+        edits.sort_by_key(|(r, _)| std::cmp::Reverse(r.start));
+        let mut out = text;
+        for (r, t) in edits {
+            out.replace_range(r, &t);
+        }
+        let mut bytes = Vec::new();
+        if bom {
+            bytes.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
+        }
+        bytes.extend_from_slice(out.as_bytes());
+        rc_core::paths::write_atomic(&path, &bytes).map_err(|e| trf("Could not save {file}: {error}", &[("file", &path.display()), ("error", &e)]))?;
+        Ok(true)
+    }
+
     /// Saves every modified document; returns the errors.
     pub fn save_all(&mut self) -> Vec<String> {
         let modified: Vec<usize> = (0..self.list.len()).filter(|&i| self.list[i].is_modified()).collect();

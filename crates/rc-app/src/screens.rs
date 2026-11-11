@@ -1185,6 +1185,34 @@ fn screens_contributed_windows() {
 }
 
 #[test]
+#[ignore = "Requires a GPU, the .NET SDK and nuget.org; writes NuGet CPM captures to target/snapshots"]
+fn screens_nuget_cpm() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&fixtures().join("CentralShop/CentralShop.slnx"));
+        app.dock.show(crate::toolwindow::ToolWindow::Nuget);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 440.0);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        run_frames(&mut h, "CPM evaluation", |a| a.nuget.cpm_ready_for_test());
+        // A central package with an override in one project.
+        h.state_mut().nuget.select_for_test("Newtonsoft.Json");
+        run_frames(&mut h, "versions", |a| a.nuget.ready_for_test());
+        h.render().unwrap().save(out.join(format!("nuget-cpm-{suffix}.png"))).unwrap();
+        // The issues tab: Dapper's version is not used.
+        h.state_mut().nuget.show_central_for_test();
+        h.state_mut().nuget.select_for_test("Dapper");
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("nuget-cpm-issues-{suffix}.png"))).unwrap();
+    }
+}
+
+#[test]
 #[ignore = "Requires a GPU; writes branch management captures to target/snapshots"]
 fn screens_branches() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -1252,4 +1280,122 @@ fn screens_branches() {
         h.run_steps(4);
         h.render().unwrap().save(out.join("branches-new-dark.png")).unwrap();
     }
+}
+
+
+/// Copies a folder without `bin/` and `obj/`.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap().flatten() {
+        if e.file_name() == "bin" || e.file_name() == "obj" {
+            continue;
+        }
+        if e.file_type().unwrap().is_dir() {
+            copy_tree(&e.path(), &to.join(e.file_name()));
+        } else {
+            std::fs::copy(e.path(), to.join(e.file_name())).unwrap();
+        }
+    }
+}
+
+#[test]
+#[ignore = "Requires a GPU and the .NET SDK; writes NuGet CPM migration and audit captures to target/snapshots"]
+fn screens_nuget_migrate_and_audit() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    // Shop with a version conflict and a conditional reference.
+    let tmp = tempfile::Builder::new().prefix("dotcraft-screens-cpm").tempdir().unwrap();
+    let shop = tmp.path().canonicalize().unwrap().join("Shop");
+    copy_tree(&fixtures().join("Shop"), &shop);
+    let nunit = shop.join("tests/Shop.Core.NunitTests/Shop.Core.NunitTests.csproj");
+    let text = std::fs::read_to_string(&nunit).unwrap().replace(r#""coverlet.collector" Version="6.0.0""#, r#""coverlet.collector" Version="6.0.4""#);
+    std::fs::write(&nunit, text).unwrap();
+    let api = shop.join("src/Shop.Api/Shop.Api.csproj");
+    let text = std::fs::read_to_string(&api).unwrap().replace(
+        "  <ItemGroup>\n    <ProjectReference",
+        "  <ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">\n    <PackageReference Include=\"Swashbuckle.AspNetCore\" Version=\"6.5.0\" />\n  </ItemGroup>\n\n  <ItemGroup>\n    <ProjectReference",
+    );
+    std::fs::write(&api, text).unwrap();
+    let central = fixtures().join("CentralShop");
+    let path = |rel: &str| central.join(rel).display().to_string();
+    let json = include_str!("../../rc-dotnet/tests/data/list-package-vulnerable.json").replace("/work/Audit/A/A.csproj", &path("src/CentralShop.Core/CentralShop.Core.csproj")).replace("/work/Audit/B/B.csproj", &path("src/CentralShop.Cli/CentralShop.Cli.csproj"));
+    let deprecated = include_str!("../../rc-dotnet/tests/data/list-package-deprecated.json").replace("/work/Audit/A/A.csproj", &path("src/CentralShop.Core/CentralShop.Core.csproj")).replace("/work/Audit/B/B.csproj", &path("src/CentralShop.Cli/CentralShop.Cli.csproj"));
+    let mut report = rc_dotnet::nuget::parse_list_packages(&json).unwrap();
+    report.merge(rc_dotnet::nuget::parse_list_packages(&deprecated).unwrap());
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        // The migration preview.
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&shop.join("Shop.sln"));
+        app.dock.show(crate::toolwindow::ToolWindow::Nuget);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 500.0);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        run_frames(&mut h, "NuGet", |a| a.nuget.cpm_ready_for_test());
+        let app = h.state_mut();
+        app.nuget.start_migration_for_test(&app.docs, "Shop.Core.XunitTests.csproj");
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("nuget-migrate-{suffix}.png"))).unwrap();
+        // The audit, fed with sample results.
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&central.join("CentralShop.slnx"));
+        app.dock.show(crate::toolwindow::ToolWindow::Nuget);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 500.0);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        run_frames(&mut h, "CPM evaluation", |a| a.nuget.cpm_ready_for_test());
+        h.state_mut().nuget.set_audit_for_test(report.clone(), &[("Newtonsoft.Json", "13.0.3"), ("System.Net.Http", "4.3.4"), ("System.Text.RegularExpressions", "4.3.1")]);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("nuget-audit-{suffix}.png"))).unwrap();
+        h.state_mut().nuget.select_audit_for_test("System.Text.RegularExpressions", true);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("nuget-audit-pin-{suffix}.png"))).unwrap();
+        h.state_mut().nuget.select_audit_for_test("WindowsAzure.Storage", false);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("nuget-audit-deprecated-{suffix}.png"))).unwrap();
+    }
+}
+
+
+#[test]
+#[ignore = "Requires a GPU; writes package insight captures (local feed) to target/snapshots"]
+fn screens_package_insight() {
+    use crate::package_insight_tests::{app_with, caret_at, central_shop, fake_feed, settle, text, type_text};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let feed = fake_feed();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let (_tmp, root) = central_shop(&feed);
+        let core = root.join("src/CentralShop.Core/CentralShop.Core.csproj");
+        let mut h = app_with(&root, home.path(), dark, &core);
+        // Update markers: gutter icon and inline hint.
+        let line = text(h.state()).lines().position(|l| l.contains("Humanizer.Core")).unwrap();
+        settle(&mut h, "markers", |a| a.docs.active_doc().unwrap().editor.gutter_icons.contains_key(&line));
+        h.render().unwrap().save(out.join(format!("package-update-{suffix}.png"))).unwrap();
+        // Hover on the package id.
+        caret_at(&mut h, "Humanizer", false);
+        h.run_steps(2);
+        let screen = h.state().caret_screen.unwrap() - egui::vec2(0.0, 10.0);
+        let pos = h.state().docs.active_doc().unwrap().editor.caret() + 3;
+        {
+            let app = h.state_mut();
+            let doc = &mut app.docs.list[app.docs.active.unwrap()];
+            app.packages.on_editor_events(doc, &[rc_editor::EditorEvent::HoverAt { pos, screen }]);
+        }
+        settle(&mut h, "hover", |a| a.docs.active_doc().unwrap().editor.popups.hover.is_some());
+        h.render().unwrap().save(out.join(format!("package-hover-{suffix}.png"))).unwrap();
+        // Completion of a new reference's id.
+        h.state_mut().docs.active_doc_mut().unwrap().editor.popups.hover = None;
+        caret_at(&mut h, "<PackageReference Include=\"Newtonsoft.Json\" />", true);
+        type_text(&mut h, "\n<PackageReference Include=");
+        type_text(&mut h, "Seri");
+        settle(&mut h, "completion", |a| a.docs.active_doc().unwrap().editor.popups.completion.as_ref().is_some_and(|c| !c.loading && !c.items.is_empty()));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("package-completion-{suffix}.png"))).unwrap();    }
 }

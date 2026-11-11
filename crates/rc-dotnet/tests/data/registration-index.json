@@ -1,0 +1,104 @@
+{
+  "count": 2,
+  "items": [
+    {
+      "@id": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/index.json#page/2.0.20126.16343/4.3.4",
+      "count": 5,
+      "lower": "4.3.0",
+      "upper": "4.3.4",
+      "items": [
+        {
+          "@id": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/4.3.0.json",
+          "catalogEntry": {
+            "@id": "https://api.nuget.org/v3/catalog0/data/2021.04.21.19.16.20/system.net.http.4.3.0.json",
+            "id": "System.Net.Http",
+            "version": "4.3.0",
+            "listed": true,
+            "vulnerabilities": [
+              {
+                "advisoryUrl": "https://github.com/advisories/GHSA-7jgj-8wvc-jh57",
+                "severity": "2"
+              }
+            ]
+          }
+        },
+        {
+          "@id": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/4.3.1.json",
+          "catalogEntry": {
+            "@id": "https://api.nuget.org/v3/catalog0/data/2021.07.01.21.45.03/system.net.http.4.3.1.json",
+            "id": "System.Net.Http",
+            "version": "4.3.1",
+            "listed": true,
+            "vulnerabilities": [
+              {
+                "advisoryUrl": "https://github.com/advisories/GHSA-ch6p-4jcm-h8vh",
+                "severity": "1"
+              },
+              {
+                "advisoryUrl": "https://github.com/advisories/GHSA-6xh7-4v2w-36q6",
+                "severity": "2"
+              },
+              {
+                "advisoryUrl": "https://github.com/advisories/GHSA-qhqf-ghgh-x2m4",
+                "severity": "2"
+              },
+              {
+                "advisoryUrl": "https://github.com/advisories/GHSA-j8f4-2w4p-mhjc",
+                "severity": "1"
+              },
+              {
+                "advisoryUrl": "https://github.com/advisories/GHSA-7jgj-8wvc-jh57",
+                "severity": "2"
+              }
+            ]
+          }
+        },
+        {
+          "@id": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/4.3.2.json",
+          "catalogEntry": {
+            "@id": "https://api.nuget.org/v3/catalog0/data/2021.04.21.19.16.20/system.net.http.4.3.2.json",
+            "id": "System.Net.Http",
+            "version": "4.3.2",
+            "listed": true,
+            "vulnerabilities": [
+              {
+                "advisoryUrl": "https://github.com/advisories/GHSA-7jgj-8wvc-jh57",
+                "severity": "2"
+              }
+            ]
+          }
+        },
+        {
+          "@id": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/4.3.3.json",
+          "catalogEntry": {
+            "@id": "https://api.nuget.org/v3/catalog0/data/2021.04.21.19.16.20/system.net.http.4.3.3.json",
+            "id": "System.Net.Http",
+            "version": "4.3.3",
+            "listed": true,
+            "vulnerabilities": [
+              {
+                "advisoryUrl": "https://github.com/advisories/GHSA-7jgj-8wvc-jh57",
+                "severity": "2"
+              }
+            ]
+          }
+        },
+        {
+          "@id": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/4.3.4.json",
+          "catalogEntry": {
+            "@id": "https://api.nuget.org/v3/catalog0/data/2026.04.10.00.15.59/system.net.http.4.3.4.json",
+            "id": "System.Net.Http",
+            "version": "4.3.4",
+            "listed": true
+          }
+        }
+      ]
+    },
+    {
+      "@id": "https://api.nuget.org/v3/registration5-gz-semver2/system.net.http/page/5.0.0/6.0.0.json",
+      "count": 3,
+      "lower": "5.0.0",
+      "upper": "6.0.0"
+    }
+  ]
+}
