@@ -453,53 +453,233 @@ fn save_before_stash(app: &mut DotCraftApp) -> bool {
     !app.docs.list.iter().any(|doc| doc.is_modified())
 }
 
-/// The branches popup of the toolbar's VCS widget.
-pub fn branches_menu(app: &mut DotCraftApp, ui: &mut Ui) {
-    ui.set_min_width(280.0);
-    let busy = app.vcs.busy.is_some();
-    if ui.add_enabled(!busy, egui::Button::new(tr("Update Project…"))).clicked() {
-        app.vcs.pull();
-        ui.close();
+/// What the branches popup shows: the list, or the actions of one branch.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+enum BranchPage {
+    #[default]
+    List,
+    Branch(rc_vcs::BranchKind, String),
+}
+
+#[derive(Clone, Debug, Default)]
+struct BranchMenuState {
+    page: BranchPage,
+    filter: String,
+    /// The filter got the keyboard focus once (on opening).
+    focused: bool,
+}
+
+fn branches_menu_id() -> egui::Id {
+    egui::Id::new("branches_menu")
+}
+
+/// Opens the branches popup on its list with an empty filter.
+pub fn reset_branches_menu(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.insert_temp(branches_menu_id(), BranchMenuState::default()));
+}
+
+/// Saves the editors before a checkout, merge or rebase rewrites files; refuses while some
+/// stay modified.
+pub fn save_before_branch_change(app: &mut DotCraftApp) -> bool {
+    app.save_all_docs();
+    if app.docs.list.iter().any(|doc| doc.is_modified()) {
+        app.notify(tr("Save or close modified documents before changing the repository"), true);
+        return false;
     }
-    if theme::menu_item(ui, Some(ico::COMMIT), tr("Commit…"), false).clicked() {
-        app.dock.show(ToolWindow::Commit);
-        ui.close();
-    }
-    if ui.add_enabled(!busy, egui::Button::new(tr("Push…"))).clicked() {
-        app.vcs.push();
-        ui.close();
-    }
-    if ui.add_enabled(!busy, egui::Button::new(tr("Fetch"))).clicked() {
-        app.vcs.fetch();
-        ui.close();
-    }
-    ui.separator();
-    if theme::menu_item(ui, Some(ico::ADD), tr("New Branch…"), false).clicked() {
-        app.dialog = Some(crate::ui::dialogs::Dialog::NewBranch { name: String::new() });
-        ui.close();
-    }
+    true
+}
+
+/// A merge, rebase… is in progress or files are conflicted.
+fn has_conflicts(app: &DotCraftApp) -> bool {
+    app.vcs.state != rc_vcs::RepoState::Clean || app.vcs.status.as_ref().is_some_and(|s| s.entries.iter().any(|e| e.conflict.is_some()))
+}
+
+/// A muted group title (Local, Remote) inside the popup.
+fn group_title(ui: &mut Ui, text: &str) {
     let p = rc_kit::pal(ui);
-    for (title, kind) in [(tr("Local"), rc_vcs::BranchKind::Local), (tr("Remote"), rc_vcs::BranchKind::Remote)] {
-        let list: Vec<rc_vcs::Branch> = app.vcs.branches.iter().filter(|b| b.kind == kind).cloned().collect();
-        if list.is_empty() {
-            continue;
+    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
+    ui.painter().text(pos2(r.left() + 10.0, r.center().y), Align2::LEFT_CENTER, text, theme::bold(11.5), p.muted);
+}
+
+/// The branches popup of the toolbar's VCS widget: actions, a filter and the local and
+/// remote branches; clicking a branch shows its actions.
+pub fn branches_menu(app: &mut DotCraftApp, ui: &mut Ui) {
+    let id = branches_menu_id();
+    let mut state = ui.ctx().data_mut(|d| d.get_temp::<BranchMenuState>(id)).unwrap_or_default();
+    let viewport = ui.ctx().content_rect();
+    ui.set_width(320.0_f32.min((viewport.width() - 32.0).max(120.0)));
+    let max_height = (viewport.height() - 140.0).max(120.0);
+    match state.page.clone() {
+        BranchPage::List => branch_list(app, ui, &mut state, max_height),
+        BranchPage::Branch(kind, name) => {
+            if theme::menu_entry(ui, Some(ico::CHEVRON_LEFT), tr("Branches"), None, false, true).clicked() {
+                state.page = BranchPage::List;
+            }
+            ui.separator();
+            branch_actions(app, ui, kind, &name);
         }
-        ui.separator();
-        ui.label(egui::RichText::new(title).size(11.5).color(p.muted));
-        for b in list.into_iter().take(30) {
-            let mut text = b.name.clone();
-            if b.ahead > 0 {
-                text.push_str(&format!("  ↑{}", b.ahead));
-            }
-            if b.behind > 0 {
-                text.push_str(&format!("  ↓{}", b.behind));
-            }
-            let resp = ui.add_enabled(!busy, egui::Button::selectable(b.is_head, text));
-            if resp.clicked() && !b.is_head {
-                app.vcs.checkout(&b);
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(id, state));
+}
+
+fn branch_list(app: &mut DotCraftApp, ui: &mut Ui, state: &mut BranchMenuState, max_height: f32) {
+    let busy = app.vcs.busy.is_some();
+    let w = ui.available_width();
+    ui.horizontal(|ui| {
+        ui.add_space(4.0);
+        let search = kit::search(ui, &mut state.filter, tr("Search branches"), w - 8.0);
+        if !std::mem::replace(&mut state.focused, true) {
+            search.request_focus();
+        }
+    });
+    ui.add_space(2.0);
+    if state.filter.is_empty() {
+        if app.vcs.state != rc_vcs::RepoState::Clean {
+            let rebase = app.vcs.state == rc_vcs::RepoState::Rebasing;
+            if theme::menu_entry(ui, Some(ico::ABORT), if rebase { tr("Abort Rebase") } else { tr("Abort Merge") }, None, false, !busy).clicked() {
+                app.vcs.abort_operation();
                 ui.close();
             }
         }
+        if theme::menu_entry(ui, Some(ico::UPDATE), tr("Update Project…"), None, false, !busy).clicked() {
+            app.vcs.pull();
+            ui.close();
+        }
+        if theme::menu_item(ui, Some(ico::COMMIT), tr("Commit…"), false).clicked() {
+            app.dock.show(ToolWindow::Commit);
+            ui.close();
+        }
+        if theme::menu_entry(ui, Some(ico::PUSH), tr("Push…"), None, false, !busy).clicked() {
+            app.vcs.push();
+            ui.close();
+        }
+        if theme::menu_entry(ui, Some(ico::FETCH), tr("Fetch"), None, false, !busy).clicked() {
+            app.vcs.fetch();
+            ui.close();
+        }
+        ui.separator();
+        if theme::menu_entry(ui, Some(ico::ADD), tr("New Branch…"), None, false, !busy).clicked() {
+            app.dialog = Some(crate::ui::dialogs::Dialog::NewBranch { name: String::new(), start: None, checkout: true });
+            ui.close();
+        }
+    }
+    let needle = state.filter.trim().to_lowercase();
+    let mut open = None;
+    // Show every row up to the screen's height (a popup's scroll area would start short).
+    let rows = app.vcs.branches.iter().filter(|b| needle.is_empty() || b.name.to_lowercase().contains(&needle)).count();
+    let spacing = ui.spacing().item_spacing.y;
+    let want = rows as f32 * (24.0 + spacing) + 2.0 * (30.0 + 3.0 * spacing);
+    egui::ScrollArea::vertical().id_salt("branches_menu_list").max_height(max_height).min_scrolled_height(want.min(max_height)).show(ui, |ui| {
+        let mut any = false;
+        for (title, kind) in [(tr("Local"), rc_vcs::BranchKind::Local), (tr("Remote"), rc_vcs::BranchKind::Remote)] {
+            let list: Vec<&rc_vcs::Branch> = app.vcs.branches.iter().filter(|b| b.kind == kind && (needle.is_empty() || b.name.to_lowercase().contains(&needle))).collect();
+            if list.is_empty() {
+                continue;
+            }
+            any = true;
+            ui.separator();
+            group_title(ui, title);
+            for b in list {
+                let mut trail = String::new();
+                if b.ahead > 0 {
+                    trail.push_str(&format!("↑{} ", b.ahead));
+                }
+                if b.behind > 0 {
+                    trail.push_str(&format!("↓{} ", b.behind));
+                }
+                trail.push('›');
+                if theme::menu_entry(ui, Some(ico::VCS), &b.name, Some(&trail), b.is_head, true).clicked() {
+                    open = Some(BranchPage::Branch(b.kind, b.name.clone()));
+                }
+            }
+        }
+        if !any && !needle.is_empty() {
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.add_space(10.0);
+                kit::note(ui, tr("No matching branches"));
+            });
+        }
+    });
+    if let Some(page) = open {
+        state.page = page;
+    }
+}
+
+/// The actions of one branch (Rider's branch submenu).
+fn branch_actions(app: &mut DotCraftApp, ui: &mut Ui, kind: rc_vcs::BranchKind, name: &str) {
+    use crate::ui::dialogs::Dialog;
+    let Some(branch) = app.vcs.branches.iter().find(|b| b.kind == kind && b.name == name).cloned() else {
+        ui.horizontal(|ui| {
+            ui.add_space(10.0);
+            kit::note(ui, tr("The branch no longer exists"));
+        });
+        return;
+    };
+    let p = rc_kit::pal(ui);
+    let current = app.vcs.status.as_ref().and_then(|s| s.branch.head.clone());
+    let current_text = current.clone().unwrap_or_else(|| "HEAD".into());
+    let enabled = app.vcs.busy.is_none();
+    let safe = enabled && !has_conflicts(app);
+    // Title: the branch and its upstream.
+    ui.horizontal(|ui| {
+        ui.add_space(10.0);
+        ui.label(egui::RichText::new(&branch.name).font(theme::bold(13.0)));
+        if let Some(up) = &branch.upstream {
+            ui.label(egui::RichText::new(format!("→ {up}")).size(12.0).color(p.muted));
+        }
+    });
+    if !branch.subject.is_empty() {
+        ui.horizontal(|ui| {
+            ui.add_space(10.0);
+            kit::note(ui, &branch.subject);
+        });
+    }
+    ui.add_space(2.0);
+    let entry = |ui: &mut Ui, icon: Option<rc_kit::Ico>, text: &str, on: bool| {
+        let clicked = theme::menu_entry(ui, icon, text, None, false, on).clicked();
+        if clicked {
+            ui.close();
+        }
+        clicked
+    };
+    let remote = kind == rc_vcs::BranchKind::Remote;
+    let head = branch.is_head;
+    if !head && entry(ui, Some(ico::VCS), tr("Checkout"), safe) && save_before_branch_change(app) {
+        app.vcs.checkout(&branch);
+    }
+    if entry(ui, Some(ico::ADD), &trf("New Branch from '{branch}'…", &[("branch", &branch.name)]), enabled) {
+        app.dialog = Some(Dialog::NewBranch { name: String::new(), start: Some(branch.name.clone()), checkout: true });
+    }
+    if !head {
+        ui.separator();
+        if entry(ui, Some(ico::DIFF), &trf("Compare with '{current}'", &[("current", &current_text)]), true) {
+            app.vcs.compare_with_current(&branch.name);
+            app.dialog = Some(Dialog::CompareBranch { branch: branch.name.clone() });
+        }
+        let has_current = current.is_some();
+        if entry(ui, Some(ico::MERGE), &trf("Merge '{branch}' into '{current}'", &[("branch", &branch.name), ("current", &current_text)]), safe && has_current) && save_before_branch_change(app) {
+            app.vcs.merge_branch(&branch.name);
+        }
+        if !remote && entry(ui, Some(ico::ARROW_RIGHT), &trf("Rebase '{current}' onto '{branch}'", &[("branch", &branch.name), ("current", &current_text)]), safe && has_current) && save_before_branch_change(app) {
+            app.vcs.rebase_onto(&branch.name);
+        }
+    }
+    ui.separator();
+    if remote {
+        if entry(ui, Some(ico::DELETE), tr("Delete on Remote…"), safe) {
+            app.dialog = Some(Dialog::DeleteRemoteBranch { name: branch.name.clone() });
+        }
+        return;
+    }
+    if entry(ui, Some(ico::PUSH), tr("Push…"), enabled) {
+        app.vcs.push_branch(&branch.name);
+    }
+    if entry(ui, Some(ico::EDIT), tr("Rename…"), safe) {
+        app.dialog = Some(Dialog::RenameBranch { old: branch.name.clone(), name: branch.name.clone() });
+    }
+    if !head && entry(ui, Some(ico::DELETE), tr("Delete…"), safe) {
+        app.dialog = Some(Dialog::DeleteBranch { name: branch.name.clone(), force: false });
     }
 }
 
@@ -791,5 +971,212 @@ mod repository_tools_tests {
         assert!(h.state().vcs.tools.confirmation.is_none());
         assert!(h.state().vcs.busy.is_none());
         assert!(home.path().exists());
+    }
+}
+
+#[cfg(test)]
+mod branches_tests {
+    use crate::app::DotCraftApp;
+    use crate::ui::dialogs::Dialog;
+    use egui::accesskit::Role;
+    use egui_kittest::{Harness, kittest::Queryable};
+    use rc_kit::i18n::tr;
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant};
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git").current_dir(dir).args(args).env("LC_ALL", "C").output().unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    /// A clone of a bare remote: `main` and `feature` pushed, `topic` local and unmerged.
+    fn repos(base: &Path) -> (PathBuf, PathBuf) {
+        let remote = base.join("remote.git");
+        std::fs::create_dir(&remote).unwrap();
+        git(&remote, &["init", "-q", "--bare", "-b", "main"]);
+        let root = base.join("repo");
+        std::fs::create_dir(&root).unwrap();
+        git(&root, &["init", "-q", "-b", "main"]);
+        for (k, v) in [("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")] {
+            git(&root, &["config", k, v]);
+        }
+        git(&root, &["remote", "add", "origin", &format!("file://{}", remote.display())]);
+        std::fs::write(root.join("a.txt"), "a\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "init"]);
+        git(&root, &["push", "-q", "-u", "origin", "main"]);
+        git(&root, &["branch", "feature"]);
+        git(&root, &["push", "-q", "origin", "feature"]);
+        git(&root, &["branch", "-q", "-D", "feature"]);
+        git(&root, &["checkout", "-qb", "topic"]);
+        std::fs::write(root.join("t.txt"), "t\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "topic work"]);
+        git(&root, &["checkout", "-q", "main"]);
+        (root, remote)
+    }
+
+    fn open(home: &Path, root: &Path) -> Harness<'static, DotCraftApp> {
+        let mut app = crate::screens::test_app(home, true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(root);
+        let mut h = crate::screens::harness(app, egui::vec2(1200.0, 800.0));
+        frames(&mut h, "branches", |a| a.vcs.branches.iter().any(|b| b.name == "origin/feature"));
+        h
+    }
+
+    fn frames(h: &mut Harness<'static, DotCraftApp>, what: &str, mut done: impl FnMut(&DotCraftApp) -> bool) {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(30) {
+            h.run_steps(1);
+            if done(h.state()) {
+                h.run_steps(2);
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        panic!("timed out waiting for {what}; error {:?}", h.state().vcs.error);
+    }
+
+    fn open_popup(h: &mut Harness<'static, DotCraftApp>) {
+        h.get_by_role_and_label(Role::Button, tr("Git branches and actions")).click();
+        h.run_steps(3);
+    }
+
+    fn open_branch(h: &mut Harness<'static, DotCraftApp>, name: &str) {
+        open_popup(h);
+        h.get_by_role_and_label(Role::Button, name).click();
+        h.run_steps(3);
+    }
+
+    #[test]
+    fn branches_popup_filters_and_shows_branch_actions() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let base = home.path().canonicalize().unwrap();
+        let (root, _remote) = repos(&base);
+        let mut h = open(&base.join("home"), &root);
+        open_popup(&mut h);
+        for name in ["main", "topic", "origin/main", "origin/feature"] {
+            assert!(h.query_by_role_and_label(Role::Button, name).is_some(), "{name}");
+        }
+        assert!(h.query_by_role_and_label(Role::Button, tr("Fetch")).is_some());
+        let search = h.get_by_role(Role::TextInput);
+        search.focus();
+        search.type_text("feat");
+        h.run_steps(3);
+        assert!(h.query_by_role_and_label(Role::Button, "topic").is_none());
+        assert!(h.query_by_role_and_label(Role::Button, tr("Fetch")).is_none());
+        h.get_by_role_and_label(Role::Button, "origin/feature").click();
+        h.run_steps(3);
+        // A remote branch: checkout, new branch, compare, merge, delete on the remote.
+        assert!(h.query_by_role_and_label(Role::Button, tr("Checkout")).is_some());
+        assert!(h.query_by_role_and_label(Role::Button, "Merge 'origin/feature' into 'main'").is_some());
+        assert!(h.query_by_role_and_label(Role::Button, tr("Rename…")).is_none());
+        h.get_by_role_and_label(Role::Button, tr("Branches")).click();
+        h.run_steps(3);
+        assert!(h.query_by_role(Role::TextInput).is_some());
+
+        // The current branch has no checkout, merge or delete (clicking the widget closes the
+        // popup; opening it again starts on the list).
+        h.get_by_role_and_label(Role::Button, tr("Git branches and actions")).click();
+        h.run_steps(3);
+        open_branch(&mut h, "main");
+        assert!(h.query_by_role_and_label(Role::Button, tr("Rename…")).is_some());
+        assert!(h.query_by_role_and_label(Role::Button, tr("Delete…")).is_none());
+        assert!(h.query_by_role_and_label(Role::Button, tr("Checkout")).is_none());
+    }
+
+    #[test]
+    fn deleting_an_unmerged_branch_asks_twice_and_checkout_works() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let base = home.path().canonicalize().unwrap();
+        let (root, _remote) = repos(&base);
+        let mut h = open(&base.join("home"), &root);
+
+        // Checkout from the popup, then back.
+        open_branch(&mut h, "topic");
+        h.get_by_role_and_label(Role::Button, tr("Checkout")).click();
+        frames(&mut h, "checkout", |a| a.vcs.branch_name().as_deref() == Some("topic"));
+        assert!(h.state().notices.iter().any(|n| n.text == "Checked out topic"));
+        open_branch(&mut h, "main");
+        h.get_by_role_and_label(Role::Button, tr("Checkout")).click();
+        frames(&mut h, "checkout main", |a| a.vcs.branch_name().as_deref() == Some("main"));
+
+        // Delete: confirm, then the not-fully-merged confirmation, then force.
+        open_branch(&mut h, "topic");
+        h.get_by_role_and_label(Role::Button, tr("Delete…")).click();
+        h.run_steps(3);
+        assert!(matches!(&h.state().dialog, Some(Dialog::DeleteBranch { name, force: false }) if name == "topic"));
+        h.get_by_role_and_label(Role::Button, tr("Delete")).click();
+        frames(&mut h, "force confirmation", |a| matches!(&a.dialog, Some(Dialog::DeleteBranch { force: true, .. })));
+        assert!(git(&root, &["branch", "--list", "topic"]).contains("topic"));
+        assert!(h.state().vcs.error.is_none());
+        h.get_by_role_and_label(Role::Button, tr("Force Delete")).click();
+        frames(&mut h, "forced delete", |a| a.vcs.busy.is_none() && !a.vcs.branches.iter().any(|b| b.name == "topic"));
+        assert!(h.state().notices.iter().any(|n| n.text == "Deleted branch topic"));
+        assert!(git(&root, &["branch", "--list", "topic"]).trim().is_empty());
+    }
+
+    #[test]
+    fn deleting_a_remote_branch_is_confirmed_and_can_be_cancelled() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let base = home.path().canonicalize().unwrap();
+        let (root, remote) = repos(&base);
+        let mut h = open(&base.join("home"), &root);
+        for confirm in [false, true] {
+            open_branch(&mut h, "origin/feature");
+            h.get_by_role_and_label(Role::Button, tr("Delete on Remote…")).click();
+            h.run_steps(3);
+            assert!(matches!(&h.state().dialog, Some(Dialog::DeleteRemoteBranch { name }) if name == "origin/feature"));
+            assert!(h.query_by_label_contains("for everyone who uses it").is_some());
+            h.get_by_role_and_label(Role::Button, if confirm { tr("Delete on Remote") } else { tr("Cancel") }).click();
+            h.run_steps(3);
+            assert!(h.state().dialog.is_none());
+            if !confirm {
+                assert!(h.state().vcs.busy.is_none());
+                assert!(git(&remote, &["branch", "--list", "feature"]).contains("feature"));
+            }
+        }
+        frames(&mut h, "remote delete", |a| a.vcs.busy.is_none() && !a.vcs.branches.iter().any(|b| b.name == "origin/feature"));
+        assert!(git(&remote, &["branch", "--list", "feature"]).trim().is_empty());
+        assert!(h.state().notices.iter().any(|n| n.text == "Deleted remote branch origin/feature"));
+    }
+
+    #[test]
+    fn compare_rename_and_new_branch_dialogs() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let base = home.path().canonicalize().unwrap();
+        let (root, _remote) = repos(&base);
+        let mut h = open(&base.join("home"), &root);
+
+        open_branch(&mut h, "topic");
+        h.get_by_role_and_label(Role::Button, "Compare with 'main'").click();
+        frames(&mut h, "compare", |a| a.vcs.compare.as_ref().is_some_and(|c| !c.loading));
+        assert!(h.query_by_role_and_label(Role::Button, "topic work").is_some());
+        h.get_by_role_and_label(Role::Button, tr("Close")).click();
+        h.run_steps(3);
+        assert!(h.state().dialog.is_none());
+
+        open_branch(&mut h, "topic");
+        h.get_by_role_and_label(Role::Button, tr("Rename…")).click();
+        h.run_steps(3);
+        h.get_by_role(Role::TextInput).type_text("-renamed");
+        h.run_steps(2);
+        h.get_by_role_and_label(Role::Button, tr("Rename")).click();
+        frames(&mut h, "rename", |a| a.vcs.branches.iter().any(|b| b.name == "topic-renamed"));
+
+        open_branch(&mut h, "topic-renamed");
+        h.get_by_role_and_label(Role::Button, "New Branch from 'topic-renamed'…").click();
+        h.run_steps(3);
+        h.get_by_role(Role::TextInput).type_text("from-topic");
+        h.run_steps(2);
+        h.get_by_role_and_label(Role::Button, tr("Create")).click();
+        frames(&mut h, "new branch", |a| a.vcs.branch_name().as_deref() == Some("from-topic"));
+        assert!(root.join("t.txt").exists());
     }
 }

@@ -27,6 +27,22 @@ enum VcsEvent {
     CommitFiles(String, Vec<rc_vcs::ChangedFile>),
     /// Texts for the diff viewer: (title, path, left, right).
     Diff(String, PathBuf, String, String),
+    State(rc_vcs::RepoState),
+    /// A branch delete was refused because the branch is not fully merged.
+    Unmerged(String),
+    Compare(String, Result<(Vec<Commit>, Vec<Commit>), String>),
+}
+
+/// The commits that differ between a branch and the current one.
+#[derive(Clone, Debug, Default)]
+pub struct BranchCompare {
+    pub branch: String,
+    /// In `branch` but not in the current branch.
+    pub incoming: Vec<Commit>,
+    /// In the current branch but not in `branch`.
+    pub outgoing: Vec<Commit>,
+    pub loading: bool,
+    pub error: Option<String>,
 }
 
 /// The changed files of the work tree, as shown by the Commit window.
@@ -66,6 +82,13 @@ pub struct Vcs {
     pub excluded: BTreeSet<String>,
     pub busy: Option<&'static str>,
     operation: Option<tokio::task::AbortHandle>,
+    /// Shown as a notification when the running operation succeeds.
+    success: Option<String>,
+    /// Merge, rebase… in progress.
+    pub state: rc_vcs::RepoState,
+    /// A local branch whose delete needs a second, forced confirmation.
+    pub unmerged: Option<String>,
+    pub compare: Option<BranchCompare>,
     pub error: Option<String>,
     inbox: Inbox<VcsEvent>,
     waker: Waker,
@@ -101,6 +124,10 @@ impl Vcs {
             excluded: BTreeSet::new(),
             busy: None,
             operation: None,
+            success: None,
+            state: rc_vcs::RepoState::Clean,
+            unmerged: None,
+            compare: None,
             error: None,
             inbox: Inbox::new(waker.clone()),
             waker,
@@ -175,6 +202,7 @@ impl Vcs {
         let out = self.inbox.sender();
         Runtime::spawn(async move {
             let st = repo.status(&StatusOptions::default()).await.map_err(|e| e.to_string());
+            out.send(VcsEvent::State(repo.state().await));
             out.send(VcsEvent::Status(st));
             if let Ok(b) = repo.branches().await {
                 out.send(VcsEvent::Branches(b));
@@ -227,14 +255,7 @@ impl Vcs {
                 Err(error) if error.is_cancelled() => Err(rc_vcs::GitError::Cancelled),
                 Err(error) => Err(rc_vcs::GitError::Parse(error.to_string())),
             };
-            out.send(VcsEvent::Done(
-                what,
-                r.err().map(|e| {
-                    let (tpl, args) = e.user_message();
-                    let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
-                    trf(tpl, &args)
-                }),
-            ));
+            out.send(VcsEvent::Done(what, r.err().map(|e| error_text(&e))));
         });
     }
 
@@ -305,28 +326,146 @@ impl Vcs {
         self.op("pull", async move { repo.pull(&PullOptions::default(), None, None).await });
     }
 
+    /// Fetches every remote, pruning remote-tracking branches deleted on the remote.
     pub fn fetch(&mut self) {
         let Some(repo) = self.repo.clone() else { return };
-        self.op("fetch", async move { repo.fetch(&rc_vcs::FetchOptions { prune: true, ..Default::default() }, None, None).await });
+        self.op_notice("fetch", tr("Fetched").to_string(), async move { repo.fetch(&rc_vcs::FetchOptions { prune: true, ..Default::default() }, None, None).await });
     }
 
+    /// [`Vcs::op`] that shows `notice` when it succeeds.
+    fn op_notice<F>(&mut self, what: &'static str, notice: String, f: F)
+    where
+        F: std::future::Future<Output = Result<(), rc_vcs::GitError>> + Send + 'static,
+    {
+        if self.busy.is_some() {
+            return;
+        }
+        self.op(what, f);
+        self.success = Some(notice);
+    }
+
+    /// Checks out a local branch, or a remote one as a local tracking branch.
     pub fn checkout(&mut self, branch: &Branch) {
         let Some(repo) = self.repo.clone() else { return };
         let b = branch.clone();
-        self.op("checkout", async move {
-            if b.kind == rc_vcs::BranchKind::Remote {
-                let local = b.name.split_once('/').map_or(b.name.clone(), |(_, n)| n.to_string());
-                repo.checkout_remote_branch(&b.name, Some(&local)).await
-            } else {
-                repo.checkout_branch(&b.name).await
+        let local = if b.kind == rc_vcs::BranchKind::Remote { b.remote_parts().map_or(b.name.as_str(), |(_, n)| n) } else { b.name.as_str() };
+        let notice = trf("Checked out {branch}", &[("branch", &local)]);
+        self.op_notice("checkout", notice, async move {
+            repo.ensure_no_conflicts().await?;
+            if b.kind == rc_vcs::BranchKind::Remote { repo.checkout_tracking(&b.name).await } else { repo.checkout_branch(&b.name).await }
+        });
+    }
+
+    /// Creates a branch at `start` (default HEAD), optionally checking it out.
+    pub fn new_branch_from(&mut self, name: &str, start: Option<&str>, checkout: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        let (n, start) = (name.trim().to_string(), start.map(str::to_string));
+        let notice = trf("Created branch {branch}", &[("branch", &n)]);
+        self.op_notice("branch", notice, async move {
+            repo.check_branch_name(&n).await?;
+            if checkout {
+                repo.ensure_no_conflicts().await?;
+            }
+            repo.create_branch(&n, start.as_deref(), checkout).await
+        });
+    }
+
+    pub fn rename_branch(&mut self, old: &str, new: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let (old, new) = (old.to_string(), new.trim().to_string());
+        let notice = trf("Renamed {old} to {new}", &[("old", &old), ("new", &new)]);
+        self.op_notice("branch_rename", notice, async move {
+            repo.check_branch_name(&new).await?;
+            repo.ensure_no_conflicts().await?;
+            repo.rename_branch(&old, &new).await
+        });
+    }
+
+    /// Deletes a local branch. Without `force`, a branch that is not fully merged is kept and
+    /// [`Vcs::unmerged`] asks for a forced delete.
+    pub fn delete_branch(&mut self, name: &str, force: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        let n = name.to_string();
+        let out = self.inbox.sender();
+        let notice = trf("Deleted branch {branch}", &[("branch", &n)]);
+        self.op_notice("branch_delete", notice, async move {
+            repo.ensure_no_conflicts().await?;
+            match repo.delete_branch(&n, force).await {
+                Err(rc_vcs::GitError::BranchNotFullyMerged(_)) if !force => {
+                    out.send(VcsEvent::Unmerged(n));
+                    Ok(())
+                }
+                r => r,
             }
         });
     }
 
-    pub fn new_branch(&mut self, name: &str) {
+    /// Deletes a branch on its remote (`origin/feature`): affects the server.
+    pub fn delete_remote_branch(&mut self, remote_branch: &str) {
         let Some(repo) = self.repo.clone() else { return };
-        let n = name.to_string();
-        self.op("branch", async move { repo.create_branch(&n, None, true).await });
+        let n = remote_branch.to_string();
+        let notice = trf("Deleted remote branch {branch}", &[("branch", &n)]);
+        self.op_notice("remote_delete", notice, async move {
+            repo.ensure_no_conflicts().await?;
+            repo.delete_remote_branch(&n, None).await
+        });
+    }
+
+    /// Merges `branch` into the current branch.
+    pub fn merge_branch(&mut self, branch: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let n = branch.to_string();
+        let notice = trf("Merged {branch}", &[("branch", &n)]);
+        self.op_notice("merge", notice, async move {
+            repo.ensure_no_conflicts().await?;
+            repo.merge(&n, false).await
+        });
+    }
+
+    /// Rebases the current branch onto `branch`.
+    pub fn rebase_onto(&mut self, branch: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let n = branch.to_string();
+        let notice = trf("Rebased onto {branch}", &[("branch", &n)]);
+        self.op_notice("rebase", notice, async move {
+            repo.ensure_no_conflicts().await?;
+            repo.rebase(&n).await
+        });
+    }
+
+    /// Pushes a local branch to its upstream, or sets one on the default remote.
+    pub fn push_branch(&mut self, branch: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let n = branch.to_string();
+        let notice = trf("Pushed {branch}", &[("branch", &n)]);
+        self.op_notice("push_branch", notice, async move { repo.push_branch(&n, None, None).await.map(drop) });
+    }
+
+    /// Aborts the merge or rebase in progress.
+    pub fn abort_operation(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        let rebase = self.state == rc_vcs::RepoState::Rebasing;
+        self.op_notice("abort", if rebase { tr("Rebase aborted") } else { tr("Merge aborted") }.to_string(), async move {
+            if rebase { repo.abort_rebase().await } else { repo.abort_merge().await }
+        });
+    }
+
+    /// Loads the commits that differ between `branch` and the current branch.
+    pub fn compare_with_current(&mut self, branch: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let n = branch.to_string();
+        self.compare = Some(BranchCompare { branch: n.clone(), loading: true, ..Default::default() });
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            let r = async {
+                let incoming = repo.commits_between("HEAD", &n, 200).await?;
+                let outgoing = repo.commits_between(&n, "HEAD", 200).await?;
+                Ok::<_, rc_vcs::GitError>((incoming, outgoing))
+            }
+            .await
+            .map_err(|e| error_text(&e));
+            out.send(VcsEvent::Compare(n, r));
+        });
     }
 
     /// Rollback: restores files from HEAD (new files are only unstaged).
@@ -466,14 +605,30 @@ impl Vcs {
                     self.blame_for = None;
                     notices.push(e);
                 }
+                VcsEvent::State(st) => self.state = st,
+                VcsEvent::Unmerged(name) => {
+                    self.success = None;
+                    self.unmerged = Some(name);
+                }
+                VcsEvent::Compare(branch, r) => {
+                    if let Some(c) = self.compare.as_mut().filter(|c| c.branch == branch) {
+                        c.loading = false;
+                        match r {
+                            Ok((incoming, outgoing)) => (c.incoming, c.outgoing) = (incoming, outgoing),
+                            Err(e) => c.error = Some(e),
+                        }
+                    }
+                }
                 VcsEvent::Done(what, err) => {
                     self.busy = None;
                     self.operation = None;
+                    let success = self.success.take();
                     match err {
                         Some(e) => {
                             self.error = Some(e.clone());
                             notices.push(e);
-                            if what.starts_with("stash_") {
+                            // A failed merge, rebase or stash can leave conflicts behind.
+                            if what.starts_with("stash_") || matches!(what, "merge" | "rebase" | "checkout" | "pull") {
                                 self.refresh();
                             }
                         }
@@ -489,6 +644,8 @@ impl Vcs {
                                 notices.push(tr("Pushed").to_string());
                             } else if what == "pull" {
                                 notices.push(tr("Project updated").to_string());
+                            } else if let Some(n) = success {
+                                notices.push(n);
                             }
                             self.refresh();
                         }
@@ -621,6 +778,13 @@ impl Drop for Vcs {
     fn drop(&mut self) {
         self.cancel_operation();
     }
+}
+
+/// The translated message of a Git error.
+fn error_text(e: &rc_vcs::GitError) -> String {
+    let (tpl, args) = e.user_message();
+    let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
+    trf(tpl, &args)
 }
 
 fn short_author(a: &str) -> String {

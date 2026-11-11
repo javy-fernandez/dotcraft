@@ -33,6 +33,10 @@ pub enum GitError {
     BranchNotFullyMerged(String),
     #[error("The current branch has no upstream branch")]
     NoUpstream,
+    #[error("No remote is configured")]
+    NoRemote,
+    #[error("{0} is not a valid branch name")]
+    InvalidBranchName(String),
     #[error("The push was rejected (fetch first)")]
     PushRejected(String),
     #[error("The patch does not apply")]
@@ -73,6 +77,8 @@ impl GitError {
             BranchExists(b) => ("A branch named {branch} already exists", vec![("branch", b.clone())]),
             BranchNotFullyMerged(b) => ("The branch {branch} is not fully merged", vec![("branch", b.clone())]),
             NoUpstream => ("The current branch has no upstream branch", vec![]),
+            NoRemote => ("No remote is configured", vec![]),
+            InvalidBranchName(b) => ("{branch} is not a valid branch name", vec![("branch", b.clone())]),
             PushRejected(_) => ("The push was rejected (fetch first)", vec![]),
             PatchFailed(_) => ("The patch does not apply", vec![]),
             NotFound(what) => ("Not found: {what}", vec![("what", what.clone())]),

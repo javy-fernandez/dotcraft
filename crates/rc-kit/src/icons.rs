@@ -432,6 +432,7 @@ pub mod ico {
         BACK = "actions/back",
         FORWARD = "actions/forward",
         ARROW_RIGHT = "vcs/arrowRight",
+        ABORT = "vcs/abort",
         DIFF_SIDE_BY_SIDE = "diff/sideBySide",
         DIFF_UNIFIED = "diff/unified",
         // windows caption

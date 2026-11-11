@@ -1211,3 +1211,73 @@ fn screens_nuget_cpm() {
         h.render().unwrap().save(out.join(format!("nuget-cpm-issues-{suffix}.png"))).unwrap();
     }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes branch management captures to target/snapshots"]
+fn screens_branches() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let base = home.path().canonicalize().unwrap();
+        let (remote, root) = (base.join("remote.git"), base.join("Shop"));
+        std::fs::create_dir(&remote).unwrap();
+        let copy = std::process::Command::new("cp").args(["-R", fixtures().join("Shop").to_str().unwrap(), root.to_str().unwrap()]).status().unwrap();
+        assert!(copy.success());
+        let git = |dir: &Path, args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(dir).output().unwrap().status.success(), "{args:?}");
+        git(&remote, &["init", "-q", "--bare", "-b", "main"]);
+        git(&root, &["init", "-q", "-b", "main"]);
+        git(&root, &["config", "user.name", "Ada Lovelace"]);
+        git(&root, &["config", "user.email", "ada@example.com"]);
+        git(&root, &["remote", "add", "origin", &format!("file://{}", remote.display())]);
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "Initial shop"]);
+        git(&root, &["push", "-q", "-u", "origin", "main"]);
+        for (branch, file, subject) in [("feature/coupons", "Coupon.cs", "Add coupons"), ("feature/gift-cards", "GiftCard.cs", "Add gift cards"), ("bugfix/rounding", "Rounding.cs", "Fix rounding of discounts")] {
+            git(&root, &["checkout", "-q", "-b", branch, "main"]);
+            std::fs::write(root.join("src/Shop.Core").join(file), "namespace Shop.Core;\n").unwrap();
+            git(&root, &["add", "."]);
+            git(&root, &["commit", "-q", "-m", subject]);
+        }
+        git(&root, &["push", "-q", "-u", "origin", "feature/coupons"]);
+        git(&root, &["checkout", "-q", "main"]);
+        git(&root, &["push", "-q", "origin", "main:release/1.0"]);
+        git(&root, &["fetch", "-q", "origin"]);
+        std::fs::write(root.join("README.md"), "# Shop\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "Add a readme"]);
+
+        let mut app = test_app(&base.join("home"), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root.join("Shop.sln"));
+        let mut h = harness(app, vec2(1440.0, 900.0));
+        run_frames(&mut h, "branches", |a| a.vcs.branches.iter().any(|b| b.name == "origin/release/1.0"));
+        let label = rc_kit::i18n::tr("Git branches and actions");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, label).click();
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("branches-popup-{suffix}.png"))).unwrap();
+        h.get_by_role_and_label(egui::accesskit::Role::Button, "feature/coupons").click();
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("branches-actions-{suffix}.png"))).unwrap();
+        if !dark {
+            continue;
+        }
+        h.get_by_role_and_label(egui::accesskit::Role::Button, label).click();
+        h.run_steps(2);
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::DeleteBranch { name: "feature/gift-cards".into(), force: true });
+        h.run_steps(4);
+        h.render().unwrap().save(out.join("branches-force-delete-dark.png")).unwrap();
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::DeleteRemoteBranch { name: "origin/release/1.0".into() });
+        h.run_steps(4);
+        h.render().unwrap().save(out.join("branches-delete-remote-dark.png")).unwrap();
+        h.state_mut().vcs.compare_with_current("feature/coupons");
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::CompareBranch { branch: "feature/coupons".into() });
+        run_frames(&mut h, "compare", |a| a.vcs.compare.as_ref().is_some_and(|c| !c.loading));
+        h.render().unwrap().save(out.join("branches-compare-dark.png")).unwrap();
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewBranch { name: "feature/vouchers".into(), start: Some("feature/coupons".into()), checkout: true });
+        h.run_steps(4);
+        h.render().unwrap().save(out.join("branches-new-dark.png")).unwrap();
+    }
+}
