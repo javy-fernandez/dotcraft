@@ -73,7 +73,7 @@ impl LineLayout {
                     return 0;
                 }
                 let (a, b) = (self.col_to_char[col - 1], self.col_to_char[col]);
-                if c - a <= b - c { col - 1 } else { col }
+                if c.saturating_sub(a) <= b.saturating_sub(c) { col - 1 } else { col }
             }
         }
     }
