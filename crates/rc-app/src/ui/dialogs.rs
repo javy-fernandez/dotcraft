@@ -993,6 +993,11 @@ fn code_actions(app: &mut DotCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp
     }
     if let Some(i) = chosen {
         let action = list.swap_remove(i);
+        // Package fixes of project files are applied here, not by the language server.
+        if let Some(fix) = crate::package_insight::fix_of(&action) {
+            app.apply_package_fix(fix);
+            return Outcome::Close;
+        }
         let mut out = Vec::new();
         app.insight.run_code_action(&mut app.docs, action, &mut out);
         app.handle_insight(out);

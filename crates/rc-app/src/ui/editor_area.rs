@@ -221,7 +221,12 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     } else {
         app.insight.on_editor_events(doc, &out.events);
     }
-    if let Some(data) = out.accepted_completion {
+    // Project files: package completion, hover, updates and fixes.
+    let package_file = rc_dotnet::project_xml::is_package_file(&doc.path);
+    let package_outputs = if package_file { app.packages.on_editor_events(doc, &out.events) } else { Vec::new() };
+    if let Some(data) = out.accepted_completion
+        && !package_file
+    {
         app.insight.completion_accepted(doc, data);
     }
     let mut run_test_line = None;
@@ -341,6 +346,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     if let Some(line) = run_test_line {
         app.run_test_at(line);
     }
+    app.handle_packages(package_outputs);
     if let Some((path, pos)) = navigated_from {
         app.push_nav_at(path, pos);
     }

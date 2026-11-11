@@ -587,7 +587,7 @@ impl Insight {
                 let text = r.ok().flatten().map(|h| convert::markup_text(&h.contents)).unwrap_or_default();
                 let problem = d.editor.diagnostic_at(pos).map(|x| (x.severity, x.message.clone()));
                 if !text.trim().is_empty() || problem.is_some() {
-                    d.editor.popups.hover = Some(Hover { pos, text: clean_hover(&text), problem, screen });
+                    d.editor.popups.hover = Some(Hover { pos, text: clean_hover(&text), problem, screen, actions: Vec::new() });
                 }
             }
         }
