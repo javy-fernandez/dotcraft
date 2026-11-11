@@ -1283,8 +1283,7 @@
     "Submodules": "Submodules",
     "Track LFS pattern": "Track LFS pattern",
     "Worktree absolute path": "Worktree absolute path",
-    "Worktrees": "Worktrees",
-    "en": "de"
+    "Worktrees": "Worktrees"
   },
   "batch2-database": {
     "Added in other file": "Added in other file",
@@ -1359,7 +1358,6 @@
     "{n} route conflicts": "{n} route conflicts"
   },
   "pull-requests": {
-    "en": "de",
     "Approve": "Genehmigen",
     "Approved": "Genehmigt",
     "Approved #{id}": "#{id} genehmigt",
@@ -1370,7 +1368,6 @@
     "Comment": "Kommentieren",
     "Commented": "Kommentiert",
     "Complete": "Abschließen",
-    "Conflicts": "Konflikte",
     "Conversations": "Unterhaltungen",
     "Could not remove the token from the keychain: {reason}": "Das Token konnte nicht aus dem Schlüsselbund entfernt werden: {reason}",
     "Could not save the token in the keychain: {reason}": "Das Token konnte nicht im Schlüsselbund gespeichert werden: {reason}",
@@ -1383,7 +1380,6 @@
     "Draft": "Entwurf",
     "Drafts can't be merged.": "Entwürfe können nicht gemergt werden.",
     "Filter by number, title, author or branch": "Nach Nummer, Titel, Autor oder Branch filtern",
-    "From": "Von",
     "Leave a comment": "Kommentar schreiben",
     "Looking for GitHub or Azure DevOps remotes…": "Suche nach GitHub- oder Azure-DevOps-Remotes…",
     "Markdown is supported": "Markdown wird unterstützt",
