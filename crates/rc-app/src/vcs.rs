@@ -36,6 +36,12 @@ enum VcsEvent {
     Compare(String, Result<(Vec<Commit>, Vec<Commit>), String>),
     /// Paths left conflicted by a failed merge, rebase, pull…
     Conflicts(Vec<String>),
+    /// The rebase in progress (none when the repository is not rebasing).
+    Rebase(Option<rc_vcs::RebaseStatus>),
+    /// The plan of an interactive rebase from a commit.
+    RebasePlan(String, Result<rc_vcs::RebasePlan, String>),
+    /// A rebase step stopped (conflicts, edit…): replaces the success notice.
+    RebaseStopped(rc_vcs::RebaseStatus),
 }
 
 /// The commits that differ between a branch and the current one.
@@ -94,6 +100,10 @@ pub struct Vcs {
     /// A local branch whose delete needs a second, forced confirmation.
     pub unmerged: Option<String>,
     pub compare: Option<BranchCompare>,
+    /// The rebase in progress, while [`Vcs::state`] is rebasing.
+    pub rebase: Option<rc_vcs::RebaseStatus>,
+    /// The loaded plan of the interactive rebase dialog: (start commit, plan or error).
+    pub rebase_plan: Option<(String, Result<rc_vcs::RebasePlan, String>)>,
     pub error: Option<String>,
     inbox: Inbox<VcsEvent>,
     waker: Waker,
@@ -135,6 +145,8 @@ impl Vcs {
             state: rc_vcs::RepoState::Clean,
             unmerged: None,
             compare: None,
+            rebase: None,
+            rebase_plan: None,
             error: None,
             inbox: Inbox::new(waker.clone()),
             waker,
@@ -210,12 +222,15 @@ impl Vcs {
         let out = self.inbox.sender();
         Runtime::spawn(async move {
             let st = repo.status(&StatusOptions::default()).await.map_err(|e| e.to_string());
-            out.send(VcsEvent::State(repo.state().await));
+            let state = repo.state().await;
+            out.send(VcsEvent::State(state));
             out.send(VcsEvent::Status(st));
             if let Ok(b) = repo.branches().await {
                 out.send(VcsEvent::Branches(b));
             }
             out.send(VcsEvent::Stashes(repo.stashes().await.map_err(|e| e.to_string())));
+            let rebase = if state == rc_vcs::RepoState::Rebasing { repo.rebase_status().await.ok().flatten() } else { None };
+            out.send(VcsEvent::Rebase(rebase));
         });
     }
 
@@ -476,6 +491,67 @@ impl Vcs {
         }
     }
 
+    /// Loads the plan of an interactive rebase from `from` (included) up to HEAD.
+    pub fn load_rebase_plan(&mut self, from: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let from = from.to_string();
+        self.rebase_plan = None;
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            let plan = repo.interactive_rebase_plan(&from).await.map_err(|e| error_text(&e));
+            out.send(VcsEvent::RebasePlan(from, plan));
+        });
+    }
+
+    /// Runs an interactive rebase; it may stop for conflicts or edits ([`Vcs::rebase`]).
+    pub fn interactive_rebase(&mut self, plan: rc_vcs::RebasePlan) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.rebase_op("rebase_interactive", async move {
+            repo.ensure_no_conflicts().await?;
+            repo.interactive_rebase(&plan).await
+        });
+    }
+
+    /// Continues the stopped rebase (after resolving conflicts or editing a commit).
+    pub fn continue_rebase(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.rebase_op("rebase_continue", async move { repo.continue_rebase().await });
+    }
+
+    /// Skips the commit the rebase stopped at.
+    pub fn skip_rebase(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.rebase_op("rebase_skip", async move { repo.skip_rebase().await });
+    }
+
+    fn rebase_op<F>(&mut self, what: &'static str, f: F)
+    where
+        F: std::future::Future<Output = Result<rc_vcs::RebaseOutcome, rc_vcs::GitError>> + Send + 'static,
+    {
+        let out = self.inbox.sender();
+        self.op_notice(what, tr("Rebase finished").to_string(), async move {
+            if let rc_vcs::RebaseOutcome::Stopped(st) = f.await? {
+                out.send(VcsEvent::RebaseStopped(st));
+            }
+            Ok(())
+        });
+    }
+
+    /// Resolves a conflicted file by taking one side whole (`theirs`: the commit being
+    /// applied; otherwise the result rebased so far, or the current branch in a merge).
+    pub fn resolve_conflict(&mut self, path: &str, theirs: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        let paths = vec![path.to_string()];
+        self.op("resolve", async move { repo.resolve_with(&paths, theirs).await });
+    }
+
+    /// Marks a conflicted file resolved with its current content.
+    pub fn mark_resolved(&mut self, path: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let paths = vec![path.to_string()];
+        self.op("resolve", async move { repo.mark_resolved(&paths).await });
+    }
+
     /// Loads the commits that differ between `branch` and the current branch.
     pub fn compare_with_current(&mut self, branch: &str) {
         let Some(repo) = self.repo.clone() else { return };
@@ -632,6 +708,12 @@ impl Vcs {
                     notices.push(e);
                 }
                 VcsEvent::State(st) => self.state = st,
+                VcsEvent::Rebase(r) => self.rebase = r,
+                VcsEvent::RebasePlan(from, plan) => self.rebase_plan = Some((from, plan)),
+                VcsEvent::RebaseStopped(st) => {
+                    self.success = Some(rebase_stop_notice(&st));
+                    self.rebase = Some(st);
+                }
                 VcsEvent::Unmerged(name) => {
                     self.success = None;
                     self.unmerged = Some(name);
@@ -657,7 +739,7 @@ impl Vcs {
                             self.error = Some(e.clone());
                             notices.push(e);
                             // A failed merge, rebase or stash can leave conflicts behind.
-                            if what.starts_with("stash_") || matches!(what, "merge" | "rebase" | "checkout" | "pull" | "repository_tool") {
+                            if what.starts_with("stash_") || matches!(what, "merge" | "checkout" | "pull" | "repository_tool") || what.starts_with("rebase") {
                                 self.refresh();
                                 self.check_conflicts();
                             }
@@ -834,6 +916,16 @@ impl Drop for Vcs {
 }
 
 /// The translated message of a Git error.
+/// The notice shown when a rebase step stops.
+pub fn rebase_stop_notice(st: &rc_vcs::RebaseStatus) -> String {
+    let commit = st.commit.as_ref().map(|(h, s)| format!("{} {s}", &h[..h.len().min(8)])).unwrap_or_default();
+    match st.stop {
+        rc_vcs::RebaseStop::Conflicts => tr("Rebase stopped: resolve the conflicts, then continue").to_string(),
+        rc_vcs::RebaseStop::Edit => trf("Rebase stopped to edit {commit}", &[("commit", &commit)]),
+        _ => tr("Rebase stopped").to_string(),
+    }
+}
+
 pub(crate) fn error_text(e: &rc_vcs::GitError) -> String {
     let (tpl, args) = e.user_message();
     let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();

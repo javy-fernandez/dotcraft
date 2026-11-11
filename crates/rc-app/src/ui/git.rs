@@ -56,6 +56,7 @@ pub fn commit_window(app: &mut DotCraftApp, ui: &mut Ui) {
             app.vcs.open_merge_tool();
         }
     });
+    crate::ui::rebase::paused_banner(app, ui);
     let conflicted = |path: &str| app.vcs.status.as_ref().and_then(|s| s.entry(path)).is_some_and(|e| e.conflict.is_some());
     let list_h = (ui.available_height() - 170.0).max(80.0);
     let mut open_diff = None;
@@ -218,12 +219,14 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
         stashes_view(app, ui);
         return;
     }
+    crate::ui::rebase::paused_banner(app, ui);
     let p = rc_kit::pal(ui);
     let avail = ui.available_rect_before_wrap();
     let left = Rect::from_min_size(avail.min, vec2((avail.width() * 0.62).max(300.0), avail.height()));
     let right = Rect::from_min_max(pos2(left.right() + 1.0, avail.top()), avail.max);
     ui.painter().vline(left.right() + 0.5, avail.y_range(), egui::Stroke::new(1.0, p.island_border));
     let mut select = None;
+    let mut rebase_from = None;
     let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left));
     lu.set_clip_rect(left.intersect(ui.clip_rect()));
     let log = app.vcs.log.clone();
@@ -265,10 +268,20 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
             if resp.clicked() {
                 select = Some(c.hash.clone());
             }
+            let can_rebase = app.vcs.busy.is_none() && !has_conflicts(app);
+            resp.context_menu(|ui| {
+                if theme::menu_entry(ui, Some(ico::EDIT), tr("Interactively Rebase from Here…"), None, false, can_rebase).clicked() {
+                    rebase_from = Some(c.hash.clone());
+                    ui.close();
+                }
+            });
         }
     });
     if let Some(h) = select {
         app.vcs.select_commit(&h);
+    }
+    if let Some(h) = rebase_from {
+        crate::ui::rebase::open(app, &h);
     }
     // Details of the selected commit.
     let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right.shrink2(vec2(10.0, 4.0))));

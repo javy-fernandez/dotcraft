@@ -1504,3 +1504,96 @@ fn screens_merge_tool() {
         }
     }
 }
+
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/rebase-*.png"]
+fn screens_interactive_rebase() {
+    use crate::ui::dialogs::Dialog;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let base = home.path().canonicalize().unwrap();
+        let root = base.join("Shop");
+        let copy = std::process::Command::new("cp").args(["-R", fixtures().join("Shop").to_str().unwrap(), root.to_str().unwrap()]).status().unwrap();
+        assert!(copy.success());
+        let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.name", "Ada Lovelace"]);
+        git(&["config", "user.email", "ada@example.com"]);
+        git(&["config", "core.hooksPath", "no-hooks"]);
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "Initial shop"]);
+        git(&["checkout", "-q", "-b", "feature/coupons"]);
+        let calc = root.join("src/Shop.Core/PriceCalculator.cs");
+        let calc_text = std::fs::read_to_string(&calc).unwrap();
+        let commits: [(&str, String, &str); 6] = [
+            ("src/Shop.Core/Coupon.cs", "namespace Shop.Core;\n\npublic record Copuon(string Code, decimal Percent);\n".into(), "Add coupon record"),
+            ("src/Shop.Core/Coupon.cs", "namespace Shop.Core;\n\npublic record Coupon(string Code, decimal Percent);\n".into(), "Fix typo in coupon"),
+            ("src/Shop.Core/PriceCalculator.cs", format!("{calc_text}// Coupons are applied before taxes.\n"), "Apply coupons in the price calculator"),
+            ("src/Shop.Core/GiftCard.cs", "namespace Shop.Core;\n\npublic record GiftCard(string Number, decimal Balance);\n".into(), "Add gift cards"),
+            ("src/Shop.Core/PriceCalculator.cs", format!("{calc_text}// Coupons are applied before taxes, rounded to cents.\n"), "Round discounts to cents"),
+            ("src/Shop.Core/Debug.cs", "// TODO remove\n".into(), "WIP debug logging"),
+        ];
+        for (file, text, subject) in &commits {
+            std::fs::write(root.join(file), text).unwrap();
+            git(&["add", "."]);
+            git(&["commit", "-q", "-m", subject]);
+        }
+
+        let mut app = test_app(&base.join("home"), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root.join("Shop.sln"));
+        app.dock.show(crate::toolwindow::ToolWindow::Commit);
+        app.dock.show(crate::toolwindow::ToolWindow::Git);
+        let mut h = harness(app, vec2(1440.0, 900.0));
+        run_frames(&mut h, "log", |a| a.vcs.log.len() == 7);
+        let first = h.state().vcs.log.iter().find(|c| c.subject == "Add coupon record").unwrap().hash.clone();
+        crate::ui::rebase::open(h.state_mut(), &first);
+        run_frames(&mut h, "plan", |a| matches!(&a.dialog, Some(Dialog::InteractiveRebase(d)) if d.plan().is_some()));
+        if let Some(Dialog::InteractiveRebase(d)) = &mut h.state_mut().dialog {
+            d.set_action(1, rc_vcs::RebaseAction::Fixup);
+            d.set_action(5, rc_vcs::RebaseAction::Drop);
+            d.set_action(3, rc_vcs::RebaseAction::Reword);
+            d.selected = 3;
+        }
+        h.run_steps(2);
+        let gift = h.state().vcs.log.iter().find(|c| c.subject == "Add gift cards").unwrap().short_hash().to_string();
+        let label = rc_kit::i18n::trf("New message of {commit}", &[("commit", &gift)]);
+        h.get_by_label(&label).focus();
+        h.run_steps(1);
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        h.get_by_label(&label).type_text("Add gift cards with an expiry date");
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("rebase-dialog-{suffix}.png"))).unwrap();
+        if !dark {
+            continue;
+        }
+        // Drag "Round discounts to cents" above "Apply coupons in the price calculator".
+        let from = h.get_by_label("Round discounts to cents").rect();
+        let to = h.get_by_label("Apply coupons in the price calculator").rect();
+        h.drag_at(from.center());
+        h.run_steps(1);
+        for y in [from.center().y - 10.0, from.top(), to.center().y, to.top() + 4.0] {
+            h.hover_at(egui::pos2(from.center().x, y));
+            h.run_steps(1);
+        }
+        h.run_steps(2);
+        h.render().unwrap().save(out.join("rebase-drag-dark.png")).unwrap();
+        h.drop_at(egui::pos2(from.center().x, to.top() + 4.0));
+        h.run_steps(2);
+        let order: Vec<String> = match &h.state().dialog {
+            Some(Dialog::InteractiveRebase(d)) => d.plan().unwrap().steps.iter().map(|s| s.commit.subject.clone()).collect(),
+            _ => panic!("dialog closed"),
+        };
+        assert_eq!(order[2], "Round discounts to cents", "{order:?}");
+        h.get_by_label(rc_kit::i18n::tr("Start Rebasing")).click();
+        run_frames(&mut h, "paused", |a| a.dialog.is_none() && a.vcs.busy.is_none() && a.vcs.rebase.as_ref().is_some_and(|r| !r.conflicts.is_empty()) && !a.vcs.changes().is_empty());
+        h.render().unwrap().save(out.join("rebase-paused-dark.png")).unwrap();
+        h.state_mut().vcs.abort_operation();
+        run_frames(&mut h, "aborted", |a| a.vcs.busy.is_none() && a.vcs.state == rc_vcs::RepoState::Clean);
+    }
+}

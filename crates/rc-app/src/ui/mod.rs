@@ -13,6 +13,7 @@ pub mod markdown;
 pub mod merge;
 pub mod monitoring;
 pub mod new_project;
+pub mod rebase;
 pub mod nuget;
 pub mod header;
 pub mod kit;

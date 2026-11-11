@@ -1,0 +1,38 @@
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+# Interactive rebase dialog and the banner of a stopped rebase (#124)
+Interactively Rebase from Here…	Rebase interactivo desde aquí…	Rebase interactif à partir d'ici…	Rebase interativo a partir daqui…	Interaktives Rebase ab hier…	Interaktywny rebase od tego miejsca…	从此处交互式变基…	ここからインタラクティブにリベース…
+Interactive Rebase	Rebase interactivo	Rebase interactif	Rebase interativo	Interaktives Rebase	Interaktywny rebase	交互式变基	インタラクティブリベース
+Rebasing {n} commits onto {base}	Rebase de {n} commits sobre {base}	Rebase de {n} commits sur {base}	Rebase de {n} commits sobre {base}	Rebase von {n} Commits auf {base}	Rebase {n} commitów na {base}	将 {n} 个提交变基到 {base}	{n} 件のコミットを {base} にリベース
+the root	la raíz	la racine	a raiz	die Wurzel	korzeń	根提交	ルート
+Pick	Pick	Pick	Pick	Pick	Pick	拣选	Pick
+Reword	Reformular	Reformuler	Reescrever	Umformulieren	Zmień opis	改写消息	メッセージ変更
+Squash	Squash	Squash	Squash	Squash	Squash	压缩	Squash
+Fixup	Fixup	Fixup	Fixup	Fixup	Fixup	修正	Fixup
+Move Up (Alt+Up)	Subir (Alt+Arriba)	Monter (Alt+Haut)	Mover para cima (Alt+Cima)	Nach oben (Alt+Oben)	W górę (Alt+Góra)	上移 (Alt+上)	上へ移動 (Alt+上)
+Move Down (Alt+Down)	Bajar (Alt+Abajo)	Descendre (Alt+Bas)	Mover para baixo (Alt+Baixo)	Nach unten (Alt+Unten)	W dół (Alt+Dół)	下移 (Alt+下)	下へ移動 (Alt+下)
+Start Rebasing	Iniciar rebase	Lancer le rebase	Iniciar rebase	Rebase starten	Rozpocznij rebase	开始变基	リベースを開始
+Drag commits to reorder them; P E R S F D set the action of the selected one.	Arrastra los commits para reordenarlos; P E R S F D cambian la acción del seleccionado.	Faites glisser les commits pour les réordonner ; P E R S F D définissent l'action du commit sélectionné.	Arraste os commits para reordená-los; P E R S F D definem a ação do selecionado.	Commits zum Umordnen ziehen; P E R S F D setzen die Aktion des ausgewählten.	Przeciągnij commity, aby zmienić kolejność; P E R S F D ustawiają akcję zaznaczonego.	拖动提交以重新排序；P E R S F D 设置所选提交的操作。	コミットをドラッグして並べ替え。P E R S F D で選択中のコミットの操作を設定します。
+Every commit is dropped: keep at least one	Se descartan todos los commits: conserva al menos uno	Tous les commits sont supprimés : gardez-en au moins un	Todos os commits são descartados: mantenha pelo menos um	Alle Commits werden verworfen: mindestens einen behalten	Wszystkie commity są odrzucone: zachowaj co najmniej jeden	所有提交都被丢弃：至少保留一个	すべてのコミットが破棄されます。少なくとも 1 つ残してください
+The first kept commit cannot be squashed or fixed up	El primer commit conservado no puede hacer squash ni fixup	Le premier commit conservé ne peut pas être fusionné (squash ou fixup)	O primeiro commit mantido não pode ser squash nem fixup	Der erste behaltene Commit kann nicht gesquasht oder gefixupt werden	Pierwszy zachowany commit nie może być połączony (squash ani fixup)	第一个保留的提交不能压缩或修正	最初に残すコミットは squash も fixup もできません
+A reworded commit needs a message	Un commit reformulado necesita un mensaje	Un commit reformulé a besoin d'un message	Um commit reescrito precisa de uma mensagem	Ein umformulierter Commit braucht eine Nachricht	Commit ze zmienionym opisem musi mieć wiadomość	改写的提交需要消息	メッセージを変更するコミットにはメッセージが必要です
+New message of {commit}	Nuevo mensaje de {commit}	Nouveau message de {commit}	Nova mensagem de {commit}	Neue Nachricht von {commit}	Nowa wiadomość dla {commit}	{commit} 的新消息	{commit} の新しいメッセージ
+Rebasing '{branch}'	Rebase de '{branch}'	Rebase de '{branch}'	Rebase de '{branch}'	Rebase von '{branch}'	Rebase '{branch}'	正在变基 '{branch}'	'{branch}' をリベース中
+Rebasing	Rebase en curso	Rebase en cours	Rebase em andamento	Rebase läuft	Trwa rebase	正在变基	リベース中
+step {step} of {total}	paso {step} de {total}	étape {step} sur {total}	passo {step} de {total}	Schritt {step} von {total}	krok {step} z {total}	第 {step} 步，共 {total} 步	ステップ {step} / {total}
+Stopped at {commit}: resolve the conflicts, then continue	Detenido en {commit}: resuelve los conflictos y continúa	Arrêté à {commit} : résolvez les conflits, puis continuez	Parado em {commit}: resolva os conflitos e continue	Angehalten bei {commit}: Konflikte lösen, dann fortsetzen	Zatrzymano na {commit}: rozwiąż konflikty, a potem kontynuuj	在 {commit} 处停止：请解决冲突后继续	{commit} で停止しました。競合を解決してから続行してください
+Stopped to edit {commit}: amend it in the Commit window, then continue	Detenido para editar {commit}: modifícalo (amend) en la ventana Commit y continúa	Arrêté pour modifier {commit} : modifiez-le (amend) dans la fenêtre Commit, puis continuez	Parado para editar {commit}: faça amend na janela Commit e continue	Angehalten zum Bearbeiten von {commit}: im Commit-Fenster ändern (Amend), dann fortsetzen	Zatrzymano do edycji {commit}: popraw go (amend) w oknie Commit, a potem kontynuuj	已停止以编辑 {commit}：在“提交”窗口中修改 (amend) 后继续	{commit} を編集するため停止しました。コミットウィンドウで amend してから続行してください
+A step of the rebase failed; fix it, then continue	Un paso del rebase falló; corrígelo y continúa	Une étape du rebase a échoué ; corrigez-la, puis continuez	Um passo do rebase falhou; corrija e continue	Ein Schritt des Rebase ist fehlgeschlagen; beheben, dann fortsetzen	Krok rebase nie powiódł się; napraw go, a potem kontynuuj	变基的某一步失败；修复后继续	リベースのステップが失敗しました。修正してから続行してください
+Stopped at {commit}	Detenido en {commit}	Arrêté à {commit}	Parado em {commit}	Angehalten bei {commit}	Zatrzymano na {commit}	在 {commit} 处停止	{commit} で停止しました
+Mark Resolved	Marcar como resuelto	Marquer comme résolu	Marcar como resolvido	Als gelöst markieren	Oznacz jako rozwiązane	标记为已解决	解決済みにする
+Accept Commit	Aceptar el commit	Accepter le commit	Aceitar o commit	Commit übernehmen	Przyjmij commit	接受提交版本	コミット側を採用
+Accept Rebased	Aceptar lo rebasado	Accepter la version rebasée	Aceitar o rebaseado	Rebase-Stand übernehmen	Przyjmij wersję po rebase	接受变基结果	リベース側を採用
+Merge…	Fusionar…	Fusionner…	Mesclar…	Zusammenführen…	Scal…	合并…	マージ…
+Continue Rebase	Continuar rebase	Continuer le rebase	Continuar rebase	Rebase fortsetzen	Kontynuuj rebase	继续变基	リベースを続行
+Skip Commit	Omitir commit	Ignorer le commit	Pular commit	Commit überspringen	Pomiń commit	跳过提交	コミットをスキップ
+Rebase finished	Rebase terminado	Rebase terminé	Rebase concluído	Rebase abgeschlossen	Rebase zakończony	变基完成	リベースが完了しました
+Rebase stopped: resolve the conflicts, then continue	Rebase detenido: resuelve los conflictos y continúa	Rebase arrêté : résolvez les conflits, puis continuez	Rebase parado: resolva os conflitos e continue	Rebase angehalten: Konflikte lösen, dann fortsetzen	Rebase zatrzymany: rozwiąż konflikty, a potem kontynuuj	变基已停止：请解决冲突后继续	リベースが停止しました。競合を解決してから続行してください
+Rebase stopped to edit {commit}	Rebase detenido para editar {commit}	Rebase arrêté pour modifier {commit}	Rebase parado para editar {commit}	Rebase angehalten zum Bearbeiten von {commit}	Rebase zatrzymany do edycji {commit}	变基已停止以编辑 {commit}	{commit} を編集するためリベースが停止しました
+Rebase stopped	Rebase detenido	Rebase arrêté	Rebase parado	Rebase angehalten	Rebase zatrzymany	变基已停止	リベースが停止しました
+Interactive rebase cannot rewrite merge commits	El rebase interactivo no puede reescribir commits de merge	Le rebase interactif ne peut pas réécrire les commits de fusion	O rebase interativo não pode reescrever commits de merge	Interaktives Rebase kann keine Merge-Commits umschreiben	Interaktywny rebase nie może przepisać commitów scalających	交互式变基无法改写合并提交	インタラクティブリベースではマージコミットを書き換えられません
+The rebase plan is not valid	El plan de rebase no es válido	Le plan de rebase n'est pas valide	O plano de rebase não é válido	Der Rebase-Plan ist ungültig	Plan rebase jest nieprawidłowy	变基计划无效	リベース計画が無効です
+Message of {commit}	Mensaje de {commit}	Message de {commit}	Mensagem de {commit}	Nachricht von {commit}	Wiadomość {commit}	{commit} 的消息	{commit} のメッセージ

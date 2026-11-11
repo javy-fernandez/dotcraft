@@ -125,7 +125,7 @@ impl Git {
 
     /// A git command run in `cwd`.
     pub fn command(&self, cwd: &Path) -> GitCommand<'_> {
-        GitCommand { git: self, cwd: cwd.to_path_buf(), args: Vec::new(), stdin: None, cancel: None, ok_codes: vec![0] }
+        GitCommand { git: self, cwd: cwd.to_path_buf(), args: Vec::new(), envs: Vec::new(), stdin: None, cancel: None, ok_codes: vec![0] }
     }
 }
 
@@ -148,6 +148,8 @@ pub struct GitCommand<'a> {
     git: &'a Git,
     cwd: PathBuf,
     args: Vec<OsString>,
+    /// Extra environment, applied after the defaults (so it can override `GIT_EDITOR`).
+    envs: Vec<(OsString, OsString)>,
     stdin: Option<Vec<u8>>,
     cancel: Option<CancelToken>,
     ok_codes: Vec<i32>,
@@ -182,6 +184,12 @@ impl GitCommand<'_> {
         self
     }
 
+    /// Sets an environment variable for this run (overrides the defaults, e.g. `GIT_EDITOR`).
+    pub fn env(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
+        self.envs.push((key.as_ref().to_owned(), value.as_ref().to_owned()));
+        self
+    }
+
     /// Bytes written to git's stdin.
     pub fn stdin(mut self, bytes: impl Into<Vec<u8>>) -> Self {
         self.stdin = Some(bytes.into());
@@ -210,6 +218,7 @@ impl GitCommand<'_> {
             .env("GIT_OPTIONAL_LOCKS", "0")
             .env("GIT_PAGER", "cat")
             .env("GIT_EDITOR", ":")
+            .envs(self.envs.iter().map(|(k, v)| (k, v)))
             .stdin(if self.stdin.is_some() { Stdio::piped() } else { Stdio::null() })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
