@@ -316,12 +316,17 @@ pub fn settings_page(ui: &mut Ui, draft: &mut rc_core::Settings, app: &crate::ap
     let mut remove = None;
     for (i, link) in draft.issue_links.iter_mut().enumerate() {
         ui.push_id(("issue_link", i), |ui| {
-            ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut link.pattern).hint_text(tr("Issue ID (regex)")).desired_width(field_w).margin(vec2(6.0, 4.0)).font(egui::TextStyle::Monospace));
-                ui.add(egui::TextEdit::singleline(&mut link.url).hint_text(tr("Issue link")).desired_width(field_w).margin(vec2(6.0, 4.0)));
-                if rc_kit::theme::icon_button(ui, rc_kit::ico::DELETE, true, tr("Remove")).clicked() {
-                    remove = Some(i);
-                }
+            // Fields with their caption above; the delete button lines up with the inputs.
+            ui.horizontal_top(|ui| {
+                let field = crate::ui::kit::field(ui, tr("Issue ID (regex)"), &mut link.pattern, r"\b[A-Z]+-\d+\b", field_w, true);
+                crate::ui::kit::field(ui, tr("Issue link"), &mut link.url, "https://jira.example.com/browse/$0", field_w, true);
+                let top = ui.min_rect().top();
+                ui.vertical(|ui| {
+                    ui.add_space((field.rect.center().y - top - 12.0).max(0.0));
+                    if rc_kit::theme::icon_button(ui, rc_kit::ico::DELETE, true, tr("Remove")).clicked() {
+                        remove = Some(i);
+                    }
+                });
             });
         });
         ui.add_space(4.0);
