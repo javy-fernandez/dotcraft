@@ -327,6 +327,7 @@ pub fn parse_evaluation(project: &Path, json: &str) -> anyhow::Result<ProjectCpm
     let meta = |i: &serde_json::Value, k: &str| i.get(k).and_then(|x| x.as_str()).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
     let canon = |p: String| dunce::canonicalize(&p).unwrap_or_else(|_| PathBuf::from(p));
     let central = prop("DirectoryPackagesPropsPath");
+    let me = dunce::canonicalize(project).unwrap_or_else(|_| project.to_path_buf());
     let mut cpm = ProjectCpm {
         project: project.to_path_buf(),
         enabled: prop("ManagePackageVersionsCentrally").eq_ignore_ascii_case("true"),
@@ -355,7 +356,10 @@ pub fn parse_evaluation(project: &Path, json: &str) -> anyhow::Result<ProjectCpm
         if is_sdk_file(&file) && cpm.global(&id).is_some() {
             continue;
         }
-        cpm.references.push(PackageUse { id, version: meta(&i, "Version"), version_override: meta(&i, "VersionOverride"), defined_in: canon(file) });
+        // The project file under the caller's spelling of its path.
+        let file = canon(file);
+        let defined_in = if file == me { project.to_path_buf() } else { file };
+        cpm.references.push(PackageUse { id, version: meta(&i, "Version"), version_override: meta(&i, "VersionOverride"), defined_in });
     }
     Ok(cpm)
 }

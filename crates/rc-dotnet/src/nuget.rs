@@ -238,6 +238,11 @@ pub async fn remove_package(dotnet: &Dotnet, project: &Path, id: &str) -> anyhow
     run_cli(dotnet, project, &["remove".to_string(), project.to_string_lossy().into_owned(), "package".into(), id.to_string()]).await
 }
 
+/// `dotnet restore <project>` (after editing central package versions).
+pub async fn restore(dotnet: &Dotnet, project: &Path) -> anyhow::Result<CommandOutput> {
+    run_cli(dotnet, project, &["restore".to_string(), project.to_string_lossy().into_owned()]).await
+}
+
 async fn run_cli(dotnet: &Dotnet, project: &Path, args: &[String]) -> anyhow::Result<CommandOutput> {
     let mut cmd = dotnet.command();
     cmd.args(args).kill_on_drop(true);
