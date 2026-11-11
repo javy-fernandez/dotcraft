@@ -52,10 +52,15 @@ pub fn commit_window(app: &mut DotCraftApp, ui: &mut Ui) {
         {
             app.vcs.open_diff(&c.path);
         }
+        if has_conflicts(app) && theme::icon_button(ui, ico::MERGE, true, tr("Resolve Conflicts…")).clicked() {
+            app.vcs.open_merge_tool();
+        }
     });
+    let conflicted = |path: &str| app.vcs.status.as_ref().and_then(|s| s.entry(path)).is_some_and(|e| e.conflict.is_some());
     let list_h = (ui.available_height() - 170.0).max(80.0);
     let mut open_diff = None;
     let mut open_file = None;
+    let mut open_merge = None;
     egui::ScrollArea::vertical().id_salt("commit_changes").max_height(list_h).auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         if changes.is_empty() {
@@ -99,14 +104,21 @@ pub fn commit_window(app: &mut DotCraftApp, ui: &mut Ui) {
                         app.vcs.excluded.remove(&c.path);
                     }
                 }
+                let is_conflict = conflicted(&c.path);
                 if resp.double_clicked() {
-                    if c.untracked || c.state == FileState::Added {
+                    if is_conflict {
+                        open_merge = Some(c.path.clone());
+                    } else if c.untracked || c.state == FileState::Added {
                         open_file = Some(root.join(&c.path));
                     } else {
                         open_diff = Some(c.path.clone());
                     }
                 }
                 resp.context_menu(|ui| {
+                    if is_conflict && theme::menu_item(ui, Some(ico::MERGE), tr("Resolve Conflicts…"), false).clicked() {
+                        open_merge = Some(c.path.clone());
+                        ui.close();
+                    }
                     if theme::menu_item(ui, Some(ico::DIFF), tr("Show Diff"), false).clicked() {
                         open_diff = Some(c.path.clone());
                         ui.close();
@@ -155,6 +167,9 @@ pub fn commit_window(app: &mut DotCraftApp, ui: &mut Ui) {
     if let Some(path) = open_file {
         app.open_file(&path);
     }
+    if let Some(path) = open_merge {
+        app.vcs.open_merge_file(&path);
+    }
 }
 
 pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
@@ -170,6 +185,10 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
     if busy.is_some() {
         actions.push((ico::STOP, tr("Cancel"), true));
     }
+    let resolve = has_conflicts(app);
+    if resolve {
+        actions.push((ico::MERGE, tr("Resolve Conflicts…"), true));
+    }
     let click = kit::header(ui, tr("Git"), &tabs, busy.map(tr).unwrap_or(""), &actions);
     match click.tab {
         Some(0) => (app.vcs.tools.visible, app.vcs.show_stashes) = (false, false),
@@ -183,6 +202,7 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
             return;
         }
         Some(1) => app.vcs.refresh(),
+        Some(i) if resolve && i == actions.len() - 1 => app.vcs.open_merge_tool(),
         Some(2) => app.vcs.cancel_operation(),
         _ => {}
     }
@@ -538,6 +558,10 @@ fn branch_list(app: &mut DotCraftApp, ui: &mut Ui, state: &mut BranchMenuState, 
             let rebase = app.vcs.state == rc_vcs::RepoState::Rebasing;
             if theme::menu_entry(ui, Some(ico::ABORT), if rebase { tr("Abort Rebase") } else { tr("Abort Merge") }, None, false, !busy).clicked() {
                 app.vcs.abort_operation();
+                ui.close();
+            }
+            if theme::menu_item(ui, Some(ico::MERGE), tr("Resolve Conflicts…"), false).clicked() {
+                app.vcs.open_merge_tool();
                 ui.close();
             }
         }

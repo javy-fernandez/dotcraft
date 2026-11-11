@@ -29,6 +29,10 @@ enum TabCommand {
 
 pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     let p = rc_kit::pal(ui);
+    if app.vcs.merge.is_some() {
+        crate::ui::merge::show(app, ui);
+        return;
+    }
     if app.vcs.diff.is_some() {
         crate::ui::git::diff_view(app, ui);
         return;

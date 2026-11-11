@@ -1,0 +1,50 @@
+# Three-way merge tool (#115)
+Conflicts	Conflictos	Conflits	Conflitos	Konflikte	Konflikty	冲突	コンフリクト
+Result	Resultado	Résultat	Resultado	Ergebnis	Wynik	结果	結果
+Accept Yours	Aceptar los tuyos	Accepter les vôtres	Aceitar os seus	Ihre übernehmen	Akceptuj swoje	接受您的	自分の変更を適用
+Accept Theirs	Aceptar los suyos	Accepter les leurs	Aceitar os deles	Deren übernehmen	Akceptuj ich	接受他们的	相手の変更を適用
+Merge…	Fusionar…	Fusionner…	Mesclar…	Zusammenführen…	Scal…	合并…	マージ…
+Accept Left	Aceptar izquierda	Accepter la gauche	Aceitar esquerda	Links übernehmen	Akceptuj lewą	接受左侧	左側を適用
+Accept Right	Aceptar derecha	Accepter la droite	Aceitar direita	Rechts übernehmen	Akceptuj prawą	接受右侧	右側を適用
+Accept Left Change	Aceptar cambio de la izquierda	Accepter la modification de gauche	Aceitar alteração da esquerda	Linke Änderung übernehmen	Akceptuj zmianę z lewej	接受左侧更改	左側の変更を適用
+Accept Right Change	Aceptar cambio de la derecha	Accepter la modification de droite	Aceitar alteração da direita	Rechte Änderung übernehmen	Akceptuj zmianę z prawej	接受右侧更改	右側の変更を適用
+Append Left Change	Añadir cambio de la izquierda	Ajouter la modification de gauche	Acrescentar alteração da esquerda	Linke Änderung anhängen	Dołącz zmianę z lewej	追加左侧更改	左側の変更を追加
+Append Right Change	Añadir cambio de la derecha	Ajouter la modification de droite	Acrescentar alteração da direita	Rechte Änderung anhängen	Dołącz zmianę z prawej	追加右侧更改	右側の変更を追加
+Ignore Change	Ignorar cambio	Ignorer la modification	Ignorar alteração	Änderung ignorieren	Ignoruj zmianę	忽略更改	変更を無視
+Apply Non-Conflicting Changes from the Left Side	Aplicar cambios sin conflicto del lado izquierdo	Appliquer les modifications sans conflit du côté gauche	Aplicar alterações sem conflito do lado esquerdo	Konfliktfreie Änderungen der linken Seite anwenden	Zastosuj niekonfliktowe zmiany z lewej strony	应用左侧的无冲突更改	左側の競合しない変更を適用
+Apply Non-Conflicting Changes from the Right Side	Aplicar cambios sin conflicto del lado derecho	Appliquer les modifications sans conflit du côté droit	Aplicar alterações sem conflito do lado direito	Konfliktfreie Änderungen der rechten Seite anwenden	Zastosuj niekonfliktowe zmiany z prawej strony	应用右侧的无冲突更改	右側の競合しない変更を適用
+Apply All Non-Conflicting Changes	Aplicar todos los cambios sin conflicto	Appliquer toutes les modifications sans conflit	Aplicar todas as alterações sem conflito	Alle konfliktfreien Änderungen anwenden	Zastosuj wszystkie niekonfliktowe zmiany	应用所有无冲突更改	競合しない変更をすべて適用
+Previous Change	Cambio anterior	Modification précédente	Alteração anterior	Vorherige Änderung	Poprzednia zmiana	上一个更改	前の変更
+Next Change	Cambio siguiente	Modification suivante	Próxima alteração	Nächste Änderung	Następna zmiana	下一个更改	次の変更
+Back to Conflicts	Volver a conflictos	Retour aux conflits	Voltar aos conflitos	Zurück zu den Konflikten	Wróć do konfliktów	返回冲突列表	コンフリクト一覧に戻る
+Close Merge Tool	Cerrar herramienta de fusión	Fermer l'outil de fusion	Fechar ferramenta de mesclagem	Merge-Werkzeug schließen	Zamknij narzędzie scalania	关闭合并工具	マージツールを閉じる
+Resolve Conflicts…	Resolver conflictos…	Résoudre les conflits…	Resolver conflitos…	Konflikte lösen…	Rozwiąż konflikty…	解决冲突…	コンフリクトを解決…
+Yours: {name}	Tuyos: {name}	Les vôtres : {name}	Seus: {name}	Ihre: {name}	Twoje: {name}	您的：{name}	自分：{name}
+Theirs: {name}	Suyos: {name}	Les leurs : {name}	Deles: {name}	Deren: {name}	Ich: {name}	他们的：{name}	相手：{name}
+Merging {theirs} into {ours}	Fusionando {theirs} en {ours}	Fusion de {theirs} dans {ours}	Mesclando {theirs} em {ours}	{theirs} wird in {ours} zusammengeführt	Scalanie {theirs} do {ours}	正在将 {theirs} 合并到 {ours}	{theirs} を {ours} にマージ中
+Rebasing {theirs} onto {ours}	Haciendo rebase de {theirs} sobre {ours}	Rebase de {theirs} sur {ours}	Fazendo rebase de {theirs} sobre {ours}	Rebase von {theirs} auf {ours}	Rebase {theirs} na {ours}	正在将 {theirs} 变基到 {ours}	{theirs} を {ours} にリベース中
+Cherry-picking {theirs} onto {ours}	Aplicando cherry-pick de {theirs} sobre {ours}	Cherry-pick de {theirs} sur {ours}	Aplicando cherry-pick de {theirs} sobre {ours}	Cherry-Pick von {theirs} auf {ours}	Cherry-pick {theirs} na {ours}	正在将 {theirs} 拣选到 {ours}	{theirs} を {ours} にチェリーピック中
+Reverting {theirs} on {ours}	Revirtiendo {theirs} en {ours}	Annulation de {theirs} sur {ours}	Revertendo {theirs} em {ours}	{theirs} wird auf {ours} rückgängig gemacht	Cofanie {theirs} na {ours}	正在 {ours} 上还原 {theirs}	{ours} で {theirs} をリバート中
+Continue Merge	Continuar fusión	Continuer la fusion	Continuar mesclagem	Merge fortsetzen	Kontynuuj scalanie	继续合并	マージを続行
+Continue Rebase	Continuar rebase	Continuer le rebase	Continuar rebase	Rebase fortsetzen	Kontynuuj rebase	继续变基	リベースを続行
+Continue Cherry-Pick	Continuar cherry-pick	Continuer le cherry-pick	Continuar cherry-pick	Cherry-Pick fortsetzen	Kontynuuj cherry-pick	继续拣选	チェリーピックを続行
+Continue Revert	Continuar reversión	Continuer l'annulation	Continuar reversão	Revert fortsetzen	Kontynuuj cofanie	继续还原	リバートを続行
+Abort Cherry-Pick	Abortar cherry-pick	Abandonner le cherry-pick	Abortar cherry-pick	Cherry-Pick abbrechen	Przerwij cherry-pick	中止拣选	チェリーピックを中止
+Abort Revert	Abortar reversión	Abandonner l'annulation	Abortar reversão	Revert abbrechen	Przerwij cofanie	中止还原	リバートを中止
+Both modified	Modificado en ambos	Modifié des deux côtés	Modificado em ambos	Beidseitig geändert	Zmieniony po obu stronach	双方均已修改	両方で変更
+Both added	Añadido en ambos	Ajouté des deux côtés	Adicionado em ambos	Beidseitig hinzugefügt	Dodany po obu stronach	双方均已添加	両方で追加
+Both deleted	Eliminado en ambos	Supprimé des deux côtés	Excluído em ambos	Beidseitig gelöscht	Usunięty po obu stronach	双方均已删除	両方で削除
+Added by you	Añadido por ti	Ajouté par vous	Adicionado por você	Von Ihnen hinzugefügt	Dodany przez ciebie	由您添加	自分が追加
+Added by them	Añadido por ellos	Ajouté par eux	Adicionado por eles	Von ihnen hinzugefügt	Dodany przez nich	由他们添加	相手が追加
+Deleted by you	Eliminado por ti	Supprimé par vous	Excluído por você	Von Ihnen gelöscht	Usunięty przez ciebie	由您删除	自分が削除
+Deleted by them	Eliminado por ellos	Supprimé par eux	Excluído por eles	Von ihnen gelöscht	Usunięty przez nich	由他们删除	相手が削除
+No conflicts	Sin conflictos	Aucun conflit	Sem conflitos	Keine Konflikte	Brak konfliktów	没有冲突	コンフリクトはありません
+All conflicts are resolved. Continue to finish the operation.	Todos los conflictos están resueltos. Continúa para terminar la operación.	Tous les conflits sont résolus. Continuez pour terminer l'opération.	Todos os conflitos foram resolvidos. Continue para concluir a operação.	Alle Konflikte sind gelöst. Fahren Sie fort, um den Vorgang abzuschließen.	Wszystkie konflikty rozwiązane. Kontynuuj, aby zakończyć operację.	所有冲突均已解决。继续以完成操作。	すべてのコンフリクトが解決されました。続行して操作を完了してください。
+All changes processed	Todos los cambios procesados	Toutes les modifications traitées	Todas as alterações processadas	Alle Änderungen verarbeitet	Wszystkie zmiany przetworzone	所有更改均已处理	すべての変更を処理しました
+Unresolved changes: {changes} · conflicts: {conflicts}	Cambios sin resolver: {changes} · conflictos: {conflicts}	Modifications non résolues : {changes} · conflits : {conflicts}	Alterações não resolvidas: {changes} · conflitos: {conflicts}	Ungelöste Änderungen: {changes} · Konflikte: {conflicts}	Nierozwiązane zmiany: {changes} · konflikty: {conflicts}	未解决的更改：{changes} · 冲突：{conflicts}	未解決の変更：{changes} · コンフリクト：{conflicts}
+{n} changes are not resolved. Click Apply again to save the result as it is.	{n} cambios sin resolver. Pulsa Aplicar otra vez para guardar el resultado tal cual.	{n} modifications ne sont pas résolues. Cliquez de nouveau sur Appliquer pour enregistrer le résultat tel quel.	{n} alterações não resolvidas. Clique em Aplicar novamente para salvar o resultado como está.	{n} Änderungen sind nicht gelöst. Klicken Sie erneut auf Anwenden, um das Ergebnis so zu speichern.	Nierozwiązane zmiany: {n}. Kliknij ponownie Zastosuj, aby zapisać wynik bez zmian.	{n} 个更改尚未解决。再次点击“应用”以按原样保存结果。	{n} 件の変更が未解決です。もう一度［適用］をクリックすると、結果をそのまま保存します。
+Resolved {path}	Resuelto {path}	{path} résolu	{path} resolvido	{path} gelöst	Rozwiązano {path}	已解决 {path}	{path} を解決しました
+Operation continued	Operación continuada	Opération poursuivie	Operação continuada	Vorgang fortgesetzt	Operacja kontynuowana	操作已继续	操作を続行しました
+Operation aborted	Operación abortada	Opération abandonnée	Operação abortada	Vorgang abgebrochen	Operacja przerwana	操作已中止	操作を中止しました
+The file was deleted on one side: accept yours or theirs	El archivo se eliminó en un lado: acepta los tuyos o los suyos	Le fichier a été supprimé d'un côté : acceptez les vôtres ou les leurs	O arquivo foi excluído de um lado: aceite os seus ou os deles	Die Datei wurde auf einer Seite gelöscht: Ihre oder deren übernehmen	Plik usunięto po jednej stronie: akceptuj swoje lub ich	文件已在一侧被删除：请接受您的或他们的版本	ファイルが一方で削除されています：自分か相手の変更を適用してください
+Binary files cannot be merged here: accept yours or theirs	Los archivos binarios no se pueden fusionar aquí: acepta los tuyos o los suyos	Les fichiers binaires ne peuvent pas être fusionnés ici : acceptez les vôtres ou les leurs	Arquivos binários não podem ser mesclados aqui: aceite os seus ou os deles	Binärdateien können hier nicht zusammengeführt werden: Ihre oder deren übernehmen	Plików binarnych nie można tu scalić: akceptuj swoje lub ich	此处无法合并二进制文件：请接受您的或他们的版本	バイナリファイルはここではマージできません：自分か相手の変更を適用してください

@@ -435,6 +435,12 @@ pub mod ico {
         ABORT = "vcs/abort",
         DIFF_SIDE_BY_SIDE = "diff/sideBySide",
         DIFF_UNIFIED = "diff/unified",
+        APPLY_NON_CONFLICTS = "diff/applyNotConflicts",
+        APPLY_NON_CONFLICTS_LEFT = "diff/applyNotConflictsLeft",
+        APPLY_NON_CONFLICTS_RIGHT = "diff/applyNotConflictsRight",
+        APPEND_LEFT = "diff/arrowRightDown@14x14",
+        APPEND_RIGHT = "diff/arrowLeftDown@14x14",
+        IGNORE_CHANGE = "diff/remove@14x14",
         // windows caption
         WIN_CLOSE = "windows/close",
         WIN_MAXIMIZE = "windows/maximize",

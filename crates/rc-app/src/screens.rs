@@ -1446,3 +1446,61 @@ fn screens_package_insight() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("package-completion-{suffix}.png"))).unwrap();    }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes merge tool captures to target/snapshots"]
+fn screens_merge_tool() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let base = "namespace Shop.Core;\n\npublic class PriceCalculator\n{\n    private const decimal TaxRate = 0.21m;\n\n    public decimal Total(Order order)\n    {\n        var subtotal = order.Lines.Sum(l => l.Price * l.Quantity);\n        return subtotal * (1 + TaxRate);\n    }\n\n    public decimal Shipping(Order order) => 4.99m;\n}\n";
+    let ours = base
+        .replace("    private const decimal TaxRate = 0.21m;\n", "    private const decimal TaxRate = 0.21m;\n    private const decimal FreeShippingFrom = 50m;\n")
+        .replace("return subtotal * (1 + TaxRate);", "return Math.Round(subtotal * (1 + TaxRate), 2);")
+        .replace("=> 4.99m;", "=> Total(order) >= FreeShippingFrom ? 0m : 4.99m;");
+    let theirs = base
+        .replace("namespace Shop.Core;\n", "using Shop.Core.Discounts;\n\nnamespace Shop.Core;\n")
+        .replace("return subtotal * (1 + TaxRate);", "var discounted = subtotal - Coupon.Discount(order);\n        return discounted * (1 + TaxRate);");
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let root = home.path().canonicalize().unwrap().join("Shop");
+        std::fs::create_dir_all(&root).unwrap();
+        let run = |args: &[&str]| std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success();
+        assert!(run(&["init", "-q", "-b", "main"]));
+        for (k, v) in [("user.name", "Ada Lovelace"), ("user.email", "ada@example.com"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")] {
+            assert!(run(&["config", k, v]));
+        }
+        let file = root.join("PriceCalculator.cs");
+        let commit = |text: &str, msg: &str| {
+            std::fs::write(&file, text).unwrap();
+            std::fs::write(root.join("Order.cs"), format!("namespace Shop.Core;\n// {msg}\n")).unwrap();
+            assert!(run(&["add", "."]) && run(&["commit", "-qm", msg]));
+        };
+        commit(base, "Add the price calculator");
+        assert!(run(&["switch", "-qc", "feature/coupons"]));
+        commit(&theirs, "Apply coupons");
+        assert!(run(&["switch", "-q", "main"]));
+        commit(&ours, "Free shipping");
+        assert!(!run(&["merge", "-q", "feature/coupons"]));
+
+        let mut app = test_app(&home.path().join("home"), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root);
+        app.dock.show(crate::toolwindow::ToolWindow::Commit);
+        let mut h = harness(app, vec2(1440.0, 900.0));
+        run_frames(&mut h, "status", |a| a.vcs.status.as_ref().is_some_and(|s| s.conflicts().count() == 2));
+        h.state_mut().vcs.open_merge_tool();
+        run_frames(&mut h, "conflicts", |a| a.vcs.merge.as_ref().is_some_and(|m| !m.loading && m.files.len() == 2));
+        h.render().unwrap().save(out.join(format!("merge-conflicts-{suffix}.png"))).unwrap();
+        h.state_mut().vcs.merge.as_mut().unwrap().open_file("PriceCalculator.cs");
+        run_frames(&mut h, "panes", |a| a.vcs.merge.as_ref().is_some_and(|m| m.open.is_some()));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("merge-tool-{suffix}.png"))).unwrap();
+        if dark {
+            h.get_by_role_and_label(egui::accesskit::Role::Button, rc_kit::i18n::tr("Apply All Non-Conflicting Changes")).click();
+            h.run_steps(4);
+            h.render().unwrap().save(out.join("merge-tool-applied-dark.png")).unwrap();
+        }
+    }
+}

@@ -298,6 +298,11 @@ impl EditorState {
         if self.row_h <= 0.0 { 0.0 } else { (self.scroll.y / self.row_h / lines).clamp(0.0, 1.0) }
     }
 
+    /// Height of one display row in points, as laid out by the last frame (0 before it).
+    pub fn row_height(&self) -> f32 {
+        self.row_h
+    }
+
     /// Scroll offset in points (persisted with the session).
     pub fn scroll_offset(&self) -> egui::Vec2 {
         self.scroll

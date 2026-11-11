@@ -10,6 +10,7 @@ pub mod explorer;
 pub mod git;
 pub mod main_menu;
 pub mod markdown;
+pub mod merge;
 pub mod monitoring;
 pub mod new_project;
 pub mod nuget;

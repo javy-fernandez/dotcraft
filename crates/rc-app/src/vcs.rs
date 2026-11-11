@@ -13,6 +13,9 @@ use std::time::{Duration, Instant};
 #[path = "git_tools.rs"]
 pub mod tools;
 
+#[path = "merge_tool.rs"]
+pub mod merge;
+
 enum VcsEvent {
     ToolReport(String, Option<PathBuf>),
     Repo(Option<Repository>),
@@ -31,6 +34,8 @@ enum VcsEvent {
     /// A branch delete was refused because the branch is not fully merged.
     Unmerged(String),
     Compare(String, Result<(Vec<Commit>, Vec<Commit>), String>),
+    /// Paths left conflicted by a failed merge, rebase, pull…
+    Conflicts(Vec<String>),
 }
 
 /// The commits that differ between a branch and the current one.
@@ -99,6 +104,8 @@ pub struct Vcs {
     status_dirty: bool,
     pub blame_for: Option<PathBuf>,
     pub diff: Option<DiffView>,
+    /// The merge tool (conflicted files and the three-way merge), shown in the editor area.
+    pub merge: Option<merge::MergeTool>,
     next_doc_id: u64,
 }
 
@@ -138,6 +145,7 @@ impl Vcs {
             status_dirty: false,
             blame_for: None,
             diff: None,
+            merge: None,
             next_doc_id: 1 << 40,
         }
     }
@@ -450,6 +458,24 @@ impl Vcs {
         });
     }
 
+    /// Opens the merge tool on the conflicted files of the repository (the operation in
+    /// progress can then be continued or aborted from it).
+    pub fn open_merge_tool(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.diff = None;
+        self.merge = Some(merge::MergeTool::new(repo, self.waker.clone()));
+    }
+
+    /// Opens the merge tool straight on the three-way merge of one conflicted path.
+    pub fn open_merge_file(&mut self, path: &str) {
+        if self.merge.is_none() {
+            self.open_merge_tool();
+        }
+        if let Some(m) = &mut self.merge {
+            m.open_file(path);
+        }
+    }
+
     /// Loads the commits that differ between `branch` and the current branch.
     pub fn compare_with_current(&mut self, branch: &str) {
         let Some(repo) = self.repo.clone() else { return };
@@ -620,6 +646,9 @@ impl Vcs {
                     }
                 }
                 VcsEvent::Done(what, err) => {
+                    if let Some(m) = &mut self.merge {
+                        m.reload();
+                    }
                     self.busy = None;
                     self.operation = None;
                     let success = self.success.take();
@@ -628,8 +657,9 @@ impl Vcs {
                             self.error = Some(e.clone());
                             notices.push(e);
                             // A failed merge, rebase or stash can leave conflicts behind.
-                            if what.starts_with("stash_") || matches!(what, "merge" | "rebase" | "checkout" | "pull") {
+                            if what.starts_with("stash_") || matches!(what, "merge" | "rebase" | "checkout" | "pull" | "repository_tool") {
                                 self.refresh();
+                                self.check_conflicts();
                             }
                         }
                         None => {
@@ -656,14 +686,37 @@ impl Vcs {
                         self.commit_files = f;
                     }
                 }
+                VcsEvent::Conflicts(paths) => {
+                    if !paths.is_empty() && self.merge.is_none() {
+                        self.open_merge_tool();
+                    }
+                }
                 VcsEvent::Diff(title, path, left, right) => self.diff = Some(self.make_diff(title, path, &left, &right, dark)),
             }
         }
         if self.repo.is_some() && self.status_dirty && self.status_requested.is_none_or(|t| t.elapsed() > Duration::from_millis(700)) {
             self.request_status();
         }
+        if let Some(m) = &mut self.merge {
+            notices.extend(m.update(dark));
+            if m.finished {
+                self.merge = None;
+                self.refresh();
+            }
+        }
         self.update_marks(docs);
         notices
+    }
+
+    /// Opens the merge tool when the last operation left conflicted files.
+    fn check_conflicts(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            if let Ok(paths) = repo.conflicted_paths().await {
+                out.send(VcsEvent::Conflicts(paths));
+            }
+        });
     }
 
     /// Gutter marks of the active document against its HEAD version.
@@ -781,7 +834,7 @@ impl Drop for Vcs {
 }
 
 /// The translated message of a Git error.
-fn error_text(e: &rc_vcs::GitError) -> String {
+pub(crate) fn error_text(e: &rc_vcs::GitError) -> String {
     let (tpl, args) = e.user_message();
     let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
     trf(tpl, &args)
