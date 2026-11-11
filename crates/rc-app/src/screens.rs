@@ -1183,3 +1183,31 @@ fn screens_contributed_windows() {
     h.state_mut().dialog = None;
     h.run_steps(2);
 }
+
+#[test]
+#[ignore = "Requires a GPU, the .NET SDK and nuget.org; writes NuGet CPM captures to target/snapshots"]
+fn screens_nuget_cpm() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&fixtures().join("CentralShop/CentralShop.slnx"));
+        app.dock.show(crate::toolwindow::ToolWindow::Nuget);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 440.0);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        run_frames(&mut h, "CPM evaluation", |a| a.nuget.cpm_ready_for_test());
+        // A central package with an override in one project.
+        h.state_mut().nuget.select_for_test("Newtonsoft.Json");
+        run_frames(&mut h, "versions", |a| a.nuget.ready_for_test());
+        h.render().unwrap().save(out.join(format!("nuget-cpm-{suffix}.png"))).unwrap();
+        // The issues tab: Dapper's version is not used.
+        h.state_mut().nuget.show_central_for_test();
+        h.state_mut().nuget.select_for_test("Dapper");
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("nuget-cpm-issues-{suffix}.png"))).unwrap();
+    }
+}
