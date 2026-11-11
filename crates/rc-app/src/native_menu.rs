@@ -37,6 +37,7 @@ pub enum MenuCommand {
     ReloadFromDisk,
     ShowHistory,
     RunCoverage,
+    EfCore,
     /// An entry of File › Open Recent (index into [`NativeMenu::recent_path`]).
     OpenRecent(usize),
     ClearRecent,
@@ -66,6 +67,7 @@ impl MenuCommand {
             MenuCommand::ReloadFromDisk => ico::REFRESH,
             MenuCommand::ShowHistory => ico::HISTORY,
             MenuCommand::RunCoverage => ico::RUN_COVERAGE,
+            MenuCommand::EfCore => ico::TW_DATABASE,
             MenuCommand::EditRunConfig => ico::SETTINGS,
             MenuCommand::AddUsings => ico::NAMESPACE,
             MenuCommand::Undo => ico::UNDO,
@@ -559,7 +561,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &item(MenuCommand::AddUsings, || tr("Add Missing Usings"), None),
         ],
     )?;
-    let build_menu = submenu(|| tr("Build"), &[&act(Action::Build, || tr("Build Solution"))])?;
+    let build_menu = submenu(|| tr("Build"), &[&act(Action::Build, || tr("Build Solution")), &sep(), &item(MenuCommand::EfCore, || tr("Entity Framework Core…"), None)])?;
     let run_menu = submenu(
         || tr("Run"),
         &[

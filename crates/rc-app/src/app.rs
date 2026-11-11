@@ -89,6 +89,10 @@ pub struct DotCraftApp {
     /// The last document of the main pane (when the active one is in another window).
     pub last_main: Option<u64>,
     pub new_project: Option<crate::ui::new_project::NewProjectDialog>,
+    /// The Entity Framework Core dialog.
+    pub ef: Option<crate::ui::ef_core::EfDialog>,
+    /// Entity Framework Core projects and DbContext of this solution (kept in the session).
+    pub ef_options: rc_core::session::EfOptions,
     pub search_everywhere: Option<crate::search::SearchEverywhere>,
     pub find_bar: Option<crate::search::FindBar>,
     pub find_in_files: Option<crate::search::FindInFiles>,
@@ -193,6 +197,8 @@ impl DotCraftApp {
             floating: Vec::new(),
             last_main: None,
             new_project: None,
+            ef: None,
+            ef_options: Default::default(),
             search_everywhere: None,
             find_bar: None,
             find_in_files: None,
@@ -339,6 +345,8 @@ impl DotCraftApp {
         self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         self.runner.compounds = session.compounds.clone();
         self.runner.options = session.run_options.clone();
+        self.ef_options = session.ef.clone();
+        self.ef = None;
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         let root = ws.root.clone();
         self.workspace = Some(WorkspaceState { ws, solution });
@@ -445,6 +453,15 @@ impl DotCraftApp {
     }
 
     /// New Solution, or Add New Project when `solution` is given.
+    /// Opens the Entity Framework Core dialog on `op` (for `project` when given).
+    pub fn ef_dialog(&mut self, op: crate::ui::ef_core::EfOp, project: Option<PathBuf>) {
+        if self.workspace.is_none() {
+            self.notify(tr("Open a solution to use Entity Framework Core"), true);
+            return;
+        }
+        self.ef = Some(crate::ui::ef_core::EfDialog::new(self, op, project.as_deref(), self.waker.clone()));
+    }
+
     pub fn new_project_dialog(&mut self, solution: Option<PathBuf>) {
         self.new_project = Some(crate::ui::new_project::NewProjectDialog::new(self, solution, self.waker.clone()));
     }
@@ -590,6 +607,7 @@ impl DotCraftApp {
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
+            ef: self.ef_options.clone(),
             breakpoints,
             disabled_breakpoints: self
                 .docs
@@ -1385,6 +1403,7 @@ impl DotCraftApp {
                     self.nuget.request_migration();
                     self.dock.show(ToolWindow::Nuget);
                 }
+                ExplorerAction::EfCore(project, op) => self.ef_dialog(op, Some(project)),
                 ExplorerAction::ManagePackages(project) => {
                     self.nuget.focus_project(&project);
                     self.dock.show(ToolWindow::Nuget);
@@ -1569,6 +1588,7 @@ impl eframe::App for DotCraftApp {
                     MenuCommand::ReloadFromDisk => self.reload_active_from_disk(),
                     MenuCommand::ShowHistory => self.show_local_history(None),
                     MenuCommand::RunCoverage => self.run_coverage(),
+                    MenuCommand::EfCore => self.ef_dialog(crate::ui::ef_core::EfOp::AddMigration, None),
                     MenuCommand::OpenRecent(n) => {
                         if let Some(p) = self.native_menu.as_ref().and_then(|m| m.recent_path(n)) {
                             self.open_path(&p);

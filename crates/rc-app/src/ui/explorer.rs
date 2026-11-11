@@ -73,6 +73,8 @@ pub enum ExplorerAction {
     CopyPath(PathBuf),
     OpenInTerminal(PathBuf),
     ManagePackages(PathBuf),
+    /// Entity Framework Core › operation, for this project.
+    EfCore(PathBuf, crate::ui::ef_core::EfOp),
     /// Migrate this solution to Central Package Management (NuGet window).
     MigrateToCpm,
     /// Add New Project to this solution.
@@ -431,6 +433,9 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
     let rows = state.rows(solution, root, root_name);
     let selected_index = state.selected.as_ref().and_then(|k| rows.iter().position(|r| &r.key == k));
     let tree_id = Id::new("explorer_tree");
+    // The tree takes the keyboard focus: give it an AccessKit node, or the focused id is
+    // missing from the accessibility tree.
+    ui.interact(ui.available_rect_before_wrap(), tree_id, Sense::hover()).widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Explorer tree"));
     let mut open_row: Option<usize> = None;
     let mut toggle_row: Option<usize> = None;
     let mut select_row: Option<usize> = None;
@@ -490,8 +495,9 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             if resp.secondary_clicked() {
                 context = Some((i, resp.clone()));
             }
+            let ef = matches!(&rows[i].kind, NodeKind::Project(p) if state.projects.get(p).is_some_and(rc_dotnet::ef::uses_ef));
             resp.context_menu(|ui| {
-                context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), &mut actions);
+                context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), ef, &mut actions);
             });
         }
         // Empty space below the rows clears focus to the tree too.
@@ -584,7 +590,7 @@ fn row_path(r: &Row) -> Option<PathBuf> {
     }
 }
 
-fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, actions: &mut Vec<ExplorerAction>) {
+fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
     if let (NodeKind::Solution, Some(sln)) = (&row.kind, solution) {
         if theme::menu_item(ui, Some(ico::ADD), tr("Add New Project…"), false).clicked() {
@@ -618,6 +624,18 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, actions: &mut V
     {
         actions.push(ExplorerAction::ManagePackages(p.clone()));
         ui.close();
+    }
+    // Entity Framework Core › (Rider), for projects that reference EF Core.
+    if let (NodeKind::Project(p), true) = (&row.kind, ef) {
+        ui.menu_button(tr("Entity Framework Core"), |ui| {
+            ui.set_min_width(220.0);
+            for op in crate::ui::ef_core::EfOp::ALL {
+                if theme::menu_item(ui, Some(op.icon()), &format!("{}…", tr(op.title())), false).clicked() {
+                    actions.push(ExplorerAction::EfCore(p.clone(), op));
+                    ui.close();
+                }
+            }
+        });
     }
     let (path, is_dir) = match &row.kind {
         NodeKind::File(p) => (p.clone(), false),

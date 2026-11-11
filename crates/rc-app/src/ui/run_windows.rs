@@ -46,6 +46,7 @@ pub fn handle_outputs(app: &mut DotCraftApp, outputs: Vec<RunnerOutput>) {
             RunnerOutput::ShowTool(tw) => app.dock.show(tw),
             RunnerOutput::Notify(m, err) => app.notify(m, err),
             RunnerOutput::BuildDiagnostics(list) => app.set_build_problems(list),
+            RunnerOutput::ToolFinished { followup, success, lines } => crate::ui::ef_core::tool_finished(app, followup, success, &lines),
         }
     }
 }
@@ -98,6 +99,7 @@ pub fn build(app: &mut DotCraftApp, ui: &mut Ui) {
     // Summary line.
     let (icon, text) = match (&b.result, &b.failed) {
         (_, Some(e)) => (ico::ERROR, e.clone()),
+        (Some(r), _) if b.tool.is_some() => (if r.cancelled { ico::WARNING } else if r.success { ico::SUCCESS } else { ico::ERROR }, b.summary().unwrap_or_default()),
         (Some(r), _) if r.cancelled => (ico::WARNING, tr("Build cancelled").to_string()),
         (Some(r), _) if r.success => (ico::SUCCESS, trf("Build succeeded with {warnings} warnings in {secs} s", &[("warnings", &r.warnings), ("secs", &format!("{:.1}", r.duration.as_secs_f32()))])),
         (Some(r), _) => (ico::ERROR, trf("Build failed: {errors} errors, {warnings} warnings", &[("errors", &r.errors), ("warnings", &r.warnings)])),

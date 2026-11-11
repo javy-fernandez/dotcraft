@@ -81,6 +81,34 @@ pub struct BuildState {
     pub failed: Option<String>,
     pub started: Instant,
     pub title: String,
+    /// A command that is not a build (`dotnet ef`, a tool install): its own summary text and
+    /// what to do once it succeeds.
+    pub tool: Option<ToolFollowup>,
+    /// Output lines kept for the follow-up (tool commands only).
+    lines: Vec<String>,
+}
+
+/// What happens after a tool command run in the Build window finishes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ToolFollowup {
+    Nothing,
+    /// `migrations add --json`: open the new migration.
+    OpenAddedMigration,
+    /// Open this file (a generated SQL script).
+    OpenFile(PathBuf),
+    /// `dotnet tool install dotnet-ef`: check the tool again.
+    RecheckEfTool,
+}
+
+impl BuildState {
+    /// The summary line of a finished build or tool command.
+    pub fn summary(&self) -> Option<String> {
+        let r = self.result.as_ref()?;
+        Some(match &self.tool {
+            None => build_summary(r),
+            Some(_) => tool_summary(&self.title, r),
+        })
+    }
 }
 
 pub struct RunTab {
@@ -130,6 +158,8 @@ pub enum RunnerOutput {
     Notify(String, bool),
     /// A build finished: its diagnostics for the Problems window.
     BuildDiagnostics(Vec<rc_dotnet::Diagnostic>),
+    /// A tool command finished (with its output lines).
+    ToolFinished { followup: ToolFollowup, success: bool, lines: Vec<String> },
 }
 
 pub struct Runner {
@@ -236,7 +266,24 @@ impl Runner {
         }
         .to_string();
         let handle = rc_dotnet::start_build(&dotnet, BuildRequest::new(target, action), inbox.sender());
-        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title });
+        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, tool: None, lines: Vec::new() });
+        vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Build)]
+    }
+
+    /// Runs `dotnet <args>` (an EF command, a tool install) in the Build window, replacing the
+    /// last build output. Refused while a build runs.
+    pub fn run_tool(&mut self, title: String, args: Vec<String>, dir: Option<PathBuf>, followup: ToolFollowup) -> Vec<RunnerOutput> {
+        if self.build.as_ref().is_some_and(|b| b.handle.is_some()) {
+            return vec![RunnerOutput::Notify(tr("Wait for the current build to finish").into(), true)];
+        }
+        let dotnet = match self.dotnet() {
+            Ok(d) => d,
+            Err(e) => return vec![RunnerOutput::Notify(e, true)],
+        };
+        let inbox = Inbox::new(self.waker.clone());
+        let console = Console::new(&self.waker);
+        let handle = rc_dotnet::ef::start(&dotnet, args, dir, inbox.sender());
+        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, tool: Some(followup), lines: Vec::new() });
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Build)]
     }
 
@@ -506,14 +553,25 @@ impl Runner {
             for ev in b.inbox.drain() {
                 match ev {
                     BuildEvent::Started { command } => b.console.note(&command),
-                    BuildEvent::Output(line) => b.console.line(&line),
+                    BuildEvent::Output(line) => {
+                        b.console.line(&line);
+                        if b.tool.is_some() {
+                            b.lines.push(rc_dotnet::strip_ansi(&line.text));
+                        }
+                    }
                     BuildEvent::Diagnostic(d) => b.diagnostics.push(d),
                     BuildEvent::Finished(r) => {
                         b.handle = None;
-                        let msg = build_summary(&r);
+                        let msg = match &b.tool {
+                            None => build_summary(&r),
+                            Some(_) => tool_summary(&b.title, &r),
+                        };
                         b.console.note(&msg);
                         out.push(RunnerOutput::Notify(msg, !r.success && !r.cancelled));
-                        out.push(RunnerOutput::BuildDiagnostics(r.diagnostics.clone()));
+                        match &b.tool {
+                            None => out.push(RunnerOutput::BuildDiagnostics(r.diagnostics.clone())),
+                            Some(f) => out.push(RunnerOutput::ToolFinished { followup: f.clone(), success: r.success, lines: std::mem::take(&mut b.lines) }),
+                        }
                         b.diagnostics = r.diagnostics.clone();
                         b.result = Some(r);
                     }
@@ -647,6 +705,17 @@ fn build_summary(r: &BuildResult) -> String {
         trf("Build succeeded with {warnings} warnings in {secs} s", &[("warnings", &r.warnings), ("secs", &secs)])
     } else {
         trf("Build failed: {errors} errors, {warnings} warnings", &[("errors", &r.errors), ("warnings", &r.warnings)])
+    }
+}
+
+fn tool_summary(title: &str, r: &BuildResult) -> String {
+    let secs = format!("{:.1}", r.duration.as_secs_f32());
+    if r.cancelled {
+        trf("{title} cancelled", &[("title", &title)])
+    } else if r.success {
+        trf("{title} succeeded in {secs} s", &[("title", &title), ("secs", &secs)])
+    } else {
+        trf("{title} failed (exit code {code})", &[("title", &title), ("code", &r.exit_code.map_or_else(|| "-".to_string(), |c| c.to_string()))])
     }
 }
 

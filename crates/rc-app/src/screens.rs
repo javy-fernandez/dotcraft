@@ -1446,3 +1446,93 @@ fn screens_package_insight() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("package-completion-{suffix}.png"))).unwrap();    }
 }
+
+/// A solution with an EF Core data project and a web API that references it (never built:
+/// the dialog's lists are set by the test).
+#[cfg(test)]
+pub fn ef_solution() -> (tempfile::TempDir, PathBuf) {
+    let tmp = tempfile::Builder::new().prefix("dotcraft-ef").tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    std::fs::create_dir_all(root.join("Shop.Data")).unwrap();
+    std::fs::create_dir_all(root.join("Shop.Api")).unwrap();
+    std::fs::write(
+        root.join("Shop.Data/Shop.Data.csproj"),
+        "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"Microsoft.EntityFrameworkCore.SqlServer\" Version=\"10.0.0\" />\n  </ItemGroup>\n</Project>\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("Shop.Data/ShopContext.cs"), "using Microsoft.EntityFrameworkCore;\n\nnamespace Shop.Data;\n\npublic class ShopContext(DbContextOptions<ShopContext> options) : DbContext(options)\n{\n    public DbSet<Order> Orders => Set<Order>();\n}\n\npublic class Order\n{\n    public int Id { get; set; }\n    public string Customer { get; set; } = \"\";\n}\n").unwrap();
+    std::fs::write(
+        root.join("Shop.Api/Shop.Api.csproj"),
+        "<Project Sdk=\"Microsoft.NET.Sdk.Web\">\n  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"Microsoft.EntityFrameworkCore.Design\" Version=\"10.0.0\" />\n    <ProjectReference Include=\"../Shop.Data/Shop.Data.csproj\" />\n  </ItemGroup>\n</Project>\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("Shop.Api/Program.cs"), "var app = WebApplication.CreateBuilder(args).Build();\napp.Run();\n").unwrap();
+    std::fs::write(root.join("Shop.slnx"), "<Solution>\n  <Project Path=\"Shop.Api/Shop.Api.csproj\" />\n  <Project Path=\"Shop.Data/Shop.Data.csproj\" />\n</Solution>\n").unwrap();
+    (tmp, root)
+}
+
+#[cfg(test)]
+pub fn ef_samples() -> (Vec<rc_dotnet::ef::DbContextInfo>, Vec<rc_dotnet::ef::Migration>) {
+    let contexts = rc_dotnet::ef::parse_contexts(r#"[{"fullName":"Shop.Data.ShopContext","safeName":"ShopContext","name":"ShopContext"},{"fullName":"Shop.Data.AuditContext","safeName":"AuditContext","name":"AuditContext"}]"#).unwrap();
+    let migrations = rc_dotnet::ef::parse_migrations(
+        r#"[{"id":"20260903101500_Initial","name":"Initial","safeName":"Initial","applied":true},{"id":"20261002094512_AddCustomers","name":"AddCustomers","safeName":"AddCustomers","applied":true},{"id":"20261108170230_AddOrderLines","name":"AddOrderLines","safeName":"AddOrderLines","applied":false}]"#,
+    )
+    .unwrap();
+    (contexts, migrations)
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes Entity Framework Core captures to target/snapshots"]
+fn screens_ef_core() {
+    use crate::ui::ef_core::{EfDialog, EfOp};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let (_tmp, root) = ef_solution();
+    let (contexts, migrations) = ef_samples();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root.join("Shop.slnx"));
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        h.run_steps(4);
+        // Explorer › right-click on the data project › Entity Framework Core.
+        let at = h.get_by_label("Shop.Data").rect().center();
+        h.event(egui::Event::PointerMoved(at));
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(3);
+        // The submenu button sits right under Manage NuGet Packages (egui's submenu buttons
+        // expose no label to AccessKit).
+        let ef = h.get_by_label(rc_kit::i18n::tr("Manage NuGet Packages…")).rect().center() + vec2(0.0, 28.0);
+        h.event(egui::Event::PointerMoved(ef));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("ef-menu-{suffix}.png"))).unwrap();
+        let add = h.get_by_label(&format!("{}…", rc_kit::i18n::tr("Add Migration"))).rect().center();
+        h.event(egui::Event::PointerMoved(add));
+        h.event(egui::Event::PointerButton { pos: add, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: add, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+        assert_eq!(h.state().ef.as_ref().map(|d| d.op), Some(EfOp::AddMigration));
+        // The dialog on each operation, with sample DbContexts and migrations.
+        h.state_mut().ef.as_mut().unwrap().set_offline(Some("10.0.8"), contexts.clone(), migrations.clone());
+        h.run_steps(2);
+        h.get_by_label(rc_kit::i18n::tr("Migration name")).type_text("AddInvoices");
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("ef-add-migration-{suffix}.png"))).unwrap();
+        for (op, name) in [(EfOp::RemoveMigration, "remove-migration"), (EfOp::UpdateDatabase, "update-database"), (EfOp::Script, "script"), (EfOp::Scaffold, "scaffold")] {
+            h.get_by_label(rc_kit::i18n::tr(op.title())).click();
+            h.run_steps(4);
+            assert_eq!(h.state().ef.as_ref().map(|d| d.op), Some(op));
+            h.render().unwrap().save(out.join(format!("ef-{name}-{suffix}.png"))).unwrap();
+        }
+        // Without the dotnet-ef tool: the install offer.
+        let mut d = EfDialog::new(h.state(), EfOp::UpdateDatabase, None, Waker::noop());
+        d.set_offline(None, Vec::new(), Vec::new());
+        h.state_mut().ef = Some(d);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("ef-no-tool-{suffix}.png"))).unwrap();
+    }
+}
