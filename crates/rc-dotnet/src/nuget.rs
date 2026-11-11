@@ -62,8 +62,8 @@ pub struct NugetClient {
     http: reqwest::Client,
     index_url: String,
     index: std::sync::Arc<OnceCell<ServiceIndex>>,
-    /// Basic credentials for a private feed (user, password or token).
-    auth: Option<(String, String)>,
+    /// Credentials for a private feed, sent to its own host only (see `nuget_auth`).
+    auth: Option<crate::nuget_auth::Credential>,
 }
 
 impl NugetClient {
@@ -77,12 +77,14 @@ impl NugetClient {
             .user_agent(concat!("DotCraft/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(30))
+            // Redirects are followed by `nuget_auth::get`, which drops credentials on other hosts.
+            .redirect(reqwest::redirect::Policy::none())
             .build()?;
         Ok(NugetClient { http, index_url: index_url.to_string(), index: Default::default(), auth: None })
     }
 
-    /// A client for a private feed with the credentials of its `nuget.config` entry.
-    pub fn with_credentials(index_url: &str, auth: Option<(String, String)>) -> anyhow::Result<Self> {
+    /// A client for a private feed with its credentials (see `nuget_auth`).
+    pub fn with_credentials(index_url: &str, auth: Option<crate::nuget_auth::Credential>) -> anyhow::Result<Self> {
         let mut c = Self::with_source(index_url)?;
         c.auth = auth;
         Ok(c)
@@ -120,15 +122,8 @@ impl NugetClient {
     }
 
     async fn get_text(&self, url: &str) -> anyhow::Result<String> {
-        let mut req = self.http.get(url);
-        if let Some((user, pass)) = &self.auth {
-            req = req.basic_auth(user, Some(pass));
-        }
-        let resp = req.send().await?;
+        let resp = crate::nuget_auth::get(&self.http, &self.index_url, self.auth.as_ref(), url).await?;
         let status = resp.status();
-        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-            anyhow::bail!("the source needs credentials (add them to nuget.config as packageSourceCredentials)");
-        }
         anyhow::ensure!(status.is_success(), "GET {url}: {status}");
         Ok(resp.text().await?)
     }

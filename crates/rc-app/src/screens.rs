@@ -1185,6 +1185,53 @@ fn screens_contributed_windows() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes target/snapshots/nuget-sign-in-*.png"]
+fn screens_nuget_private_feeds() {
+    use rc_dotnet::nuget::PackageSource;
+    use rc_dotnet::nuget_auth::SourceStatus;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let azure = "https://pkgs.dev.azure.com/contoso/_packaging/internal/nuget/v3/index.json";
+    let source = |name: &str, url: &str| PackageSource { name: name.into(), url: url.into(), enabled: true, credentials: None };
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+        app.dock.show(crate::toolwindow::ToolWindow::Nuget);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 420.0);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        h.run_steps(3);
+        h.state_mut().nuget.set_sources_for_test(
+            vec![
+                (source("nuget.org", rc_dotnet::nuget::NUGET_ORG), SourceStatus::Ok),
+                (source("Contoso", azure), SourceStatus::NeedsSignIn("the source needs credentials (401)".into())),
+                (source("GitHub", "https://nuget.pkg.github.com/contoso/index.json"), SourceStatus::Failed("nuget.config: the password is encrypted with Windows DPAPI".into())),
+            ],
+            1,
+        );
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("nuget-sign-in-needed-{suffix}.png"))).unwrap();
+        // The source picker with each source's status.
+        h.get_by_label("Contoso").click();
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("nuget-sources-{suffix}.png"))).unwrap();
+        h.key_press(egui::Key::Escape);
+        h.run_steps(2);
+        // Device flow: the provider's page and code.
+        let device = "[CredentialProvider]To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code HXQ7K2LMB to authenticate.";
+        h.state_mut().nuget.sign_in_for_test("Contoso", azure, &[device], None);
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("nuget-sign-in-{suffix}.png"))).unwrap();
+        h.state_mut().nuget.sign_in_for_test("Contoso", azure, &[], Some("CredentialProvider.Microsoft: the device code expired"));
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("nuget-sign-in-error-{suffix}.png"))).unwrap();
+    }
+}
+
+
+#[test]
 #[ignore = "Requires a GPU, the .NET SDK and nuget.org; writes NuGet CPM captures to target/snapshots"]
 fn screens_nuget_cpm() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
