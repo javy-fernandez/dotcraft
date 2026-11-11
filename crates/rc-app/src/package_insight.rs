@@ -461,6 +461,7 @@ impl PackageInsight {
         if self.client.as_ref().is_some_and(|c| c.source() == url) {
             return;
         }
+        let creds = creds.map(|(username, password)| rc_dotnet::nuget_auth::Credential::Basic { username, password });
         self.client = NugetClient::with_credentials(&url, creds).ok();
         self.versions.clear();
         self.details.clear();
