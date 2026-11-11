@@ -3781,6 +3781,7 @@ dependencies = [
  "libc",
  "proptest",
  "rc-core",
+ "regex",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",

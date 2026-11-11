@@ -9,6 +9,7 @@ dunce.workspace = true
 rc-core = { path = "../rc-core" }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "process", "io-util"] }
 thiserror = "2"
+regex = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

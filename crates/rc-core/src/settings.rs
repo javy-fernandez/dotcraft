@@ -65,6 +65,17 @@ pub struct Settings {
     pub check_updates: bool,
     /// The release the user chose to skip in the update notice.
     pub skipped_version: Option<String>,
+    /// Custom work item links in commit messages (Rider's Issue Navigation).
+    pub issue_links: Vec<IssueLink>,
+}
+
+/// A custom link in commit messages: text matching `pattern` opens `url`, where `$1`… are
+/// replaced by the groups of the match.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct IssueLink {
+    pub pattern: String,
+    pub url: String,
 }
 
 impl Default for Settings {
@@ -94,6 +105,7 @@ impl Default for Settings {
             last_workspace: None,
             check_updates: true,
             skipped_version: None,
+            issue_links: Vec::new(),
         }
     }
 }
