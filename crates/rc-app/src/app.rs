@@ -133,6 +133,7 @@ pub struct DotCraftApp {
     /// Completion, hover and problems in `appsettings*.json`.
     pub appsettings: crate::appsettings_insight::SettingsInsight,
     pub runner: Runner,
+    pub xaml_preview: crate::xaml_preview::XamlPreview,
     pub debugger: crate::debugger::Debugger,
     window_title: String,
     pub files: crate::search::Files,
@@ -248,6 +249,7 @@ impl DotCraftApp {
             packages: crate::package_insight::PackageInsight::new(waker.clone()),
             appsettings: crate::appsettings_insight::SettingsInsight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
+            xaml_preview: crate::xaml_preview::XamlPreview::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
             files: crate::search::Files::new(),
@@ -550,6 +552,7 @@ impl DotCraftApp {
         self._watcher = None;
         self._filter_watcher = None;
         self.insight.stop();
+        self.xaml_preview.clear();
         self.debugger.stop();
         self.runner.stop_all();
         self.runner.clear();
