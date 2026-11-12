@@ -190,7 +190,7 @@ mod tests {
         harness.get_by_role_and_label(egui::accesskit::Role::Button, "1:1").click();
         harness.run_steps(2);
         assert_eq!(harness.state().pending, vec![rc_editor::Action::GotoLine]);
-    use egui_kittest::kittest::Queryable;
+    }
 
     #[test]
     fn dotnet_workspace_notifications_show_and_expire_by_severity() {

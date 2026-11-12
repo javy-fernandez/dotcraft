@@ -346,9 +346,8 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
             let maxw = (r.right() - mg.size().x - 16.0 - x).max(40.0);
             let link = crate::ui::work_item_links::linked_line(ui, &linker, resp.id.with("links"), &c.subject, pos2(x, r.center().y), maxw, p.text);
             ui.painter().galley(pos2(r.right() - mg.size().x - 10.0, (r.center().y - mg.size().y / 2.0).round()), mg, p.muted);
-            if resp.clicked() && !link {
             resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &c.subject));
-            if resp.clicked() {
+            if resp.clicked() && !link {
                 select = Some(c.hash.clone());
             }
             let can_rebase = app.vcs.busy.is_none() && !has_conflicts(app);

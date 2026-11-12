@@ -811,11 +811,6 @@ mod tab_tests {
 
     #[test]
     fn dotnet_editor_tabs_activate_and_close_with_accessible_controls() {
-mod split_tests {
-    use egui_kittest::kittest::Queryable;
-
-    #[test]
-    fn split_dotnet_editors_render_and_unsplit_in_both_orientations() {
         let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
         let fixtures = crate::screens::fixtures().join("Shop");
@@ -837,6 +832,21 @@ mod split_tests {
         harness.run_steps(3);
         assert_eq!(harness.state().docs.list.len(), 1);
         assert_eq!(harness.state().docs.active_doc().unwrap().path, program);
+    }
+}
+
+#[cfg(test)]
+mod split_tests {
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn split_dotnet_editors_render_and_unsplit_in_both_orientations() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let fixtures = crate::screens::fixtures().join("Shop");
+        let solution = fixtures.join("Shop.sln");
+        let order = fixtures.join("src/Shop.Core/Order.cs");
+        let program = fixtures.join("src/Shop.Cli/Program.cs");
         for vertical in [true, false] {
             let mut app = crate::screens::test_app(home.path(), true);
             app.workspace = Some(crate::app::WorkspaceState {

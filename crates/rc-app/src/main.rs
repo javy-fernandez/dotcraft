@@ -33,17 +33,25 @@ mod insight_tests;
 mod package_insight_tests;
 #[cfg(test)]
 mod appsettings_insight_tests;
+#[cfg(test)]
 mod reload_acceptance_tests;
+#[cfg(test)]
 mod navigation_history_acceptance_tests;
+#[cfg(test)]
 mod localization_acceptance_tests;
+#[cfg(test)]
 mod native_workspace_acceptance_tests;
+#[cfg(test)]
 mod keyboard_navigation_acceptance_tests;
+#[cfg(test)]
 mod find_in_files_acceptance_tests;
+#[cfg(test)]
 mod go_to_file_acceptance_tests;
 #[cfg(test)]
 mod screens;
 #[cfg(test)]
 mod standalone_project_tests;
+#[cfg(test)]
 mod workspace_open_tests;
 mod docs;
 mod native_menu;

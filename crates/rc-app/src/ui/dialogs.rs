@@ -1350,10 +1350,8 @@ fn file_structure(app: &mut DotCraftApp, ctx: &Context, filter: &mut String, sel
 mod tests {
     use super::*;
     use egui_kittest::kittest::Queryable;
-
     #[test]
     fn recent_files_filter_clamps_selection_and_opens_a_dotnet_file() {
-    fn recent_locations_selects_and_opens_a_dotnet_source_position() {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
         let fixtures = crate::screens::fixtures().join("Shop");
@@ -1361,11 +1359,6 @@ mod tests {
         let order = fixtures.join("src/Shop.Core/Order.cs");
         let program = fixtures.join("src/Shop.Cli/Program.cs");
         let weather = fixtures.join("src/Shop.Api/WeatherForecast.cs");
-        let file = fixtures.join("src/Shop.Core/Order.cs");
-    fn settings_apply_and_cancel_with_shop_solution_open() {
-        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
-        let home = tempfile::tempdir().unwrap();
-        let solution = crate::screens::fixtures().join("Shop/Shop.sln");
         let mut app = crate::screens::test_app(home.path(), true);
         app.workspace = Some(crate::app::WorkspaceState {
             ws: rc_core::Workspace::open(&solution).unwrap(),
@@ -1382,6 +1375,21 @@ mod tests {
         harness.key_press(Key::Enter);
         harness.run_steps(3);
         assert_eq!(harness.state().docs.active_doc().unwrap().path, order);
+        assert!(harness.state().dialog.is_none());
+    }
+
+    #[test]
+    fn recent_locations_selects_and_opens_a_dotnet_source_position() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let fixtures = crate::screens::fixtures().join("Shop");
+        let solution = fixtures.join("Shop.sln");
+        let file = fixtures.join("src/Shop.Core/Order.cs");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState {
+            ws: rc_core::Workspace::open(&solution).unwrap(),
+            solution: Some(rc_dotnet::Solution::load(&solution).unwrap()),
+        });
         app.open_file(&file);
         let pos = app.docs.active_doc().unwrap().editor.buffer.rope().line_to_char(3);
         app.nav_back = vec![(file.clone(), pos)];
@@ -1393,6 +1401,18 @@ mod tests {
         harness.run_steps(3);
         assert_eq!(harness.state().docs.active_doc().unwrap().editor.caret_line_col().0, 3);
         assert!(harness.state().dialog.is_none());
+    }
+
+    #[test]
+    fn settings_apply_and_cancel_with_shop_solution_open() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let solution = crate::screens::fixtures().join("Shop/Shop.sln");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState {
+            ws: rc_core::Workspace::open(&solution).unwrap(),
+            solution: Some(rc_dotnet::Solution::load(&solution).unwrap()),
+        });
         let original = app.settings.tab_colors;
         let mut harness = crate::screens::harness(app, vec2(1000.0, 700.0));
         let draft = Dialog::settings(&harness.state().settings);
