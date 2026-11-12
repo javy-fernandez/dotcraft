@@ -125,6 +125,27 @@ mod tests {
     use egui_kittest::{Harness, kittest::Queryable};
 
     #[test]
+    fn shop_workspace_stripes_open_bottom_and_right_windows() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let solution = crate::screens::fixtures().join("Shop/Shop.sln");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState {
+            ws: rc_core::Workspace::open(&solution).unwrap(),
+            solution: Some(rc_dotnet::Solution::load(&solution).unwrap()),
+        });
+        let mut harness = crate::screens::harness(app, vec2(1100.0, 700.0));
+        for (tool, side) in [(ToolWindow::Problems, Side::Bottom), (ToolWindow::Notifications, Side::Right)] {
+            harness.get_by_role_and_label(egui::accesskit::Role::Button, tool.title()).click();
+            harness.run_steps(2);
+            assert_eq!(harness.state().dock.open_on(side), Some(tool));
+            harness.get_by_role_and_label(egui::accesskit::Role::Button, tool.title()).click();
+            harness.run_steps(2);
+            assert_eq!(harness.state().dock.open_on(side), None);
+        }
+    }
+
+    #[test]
     fn overflowing_stripes_scroll_to_and_toggle_the_last_tool() {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
