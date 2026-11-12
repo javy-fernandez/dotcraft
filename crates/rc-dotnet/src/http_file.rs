@@ -259,24 +259,25 @@ fn parse_block(lines: &[&str], range: Range<usize>, mut name: Option<String>, fi
 // Environments
 // ---------------------------------------------------------------------------------------------
 
-/// The directory holding the environment files for `http_path`: the `.http` file's directory
-/// or the nearest parent that has one, stopping at a repository / solution root.
-fn env_dir(http_path: &Path) -> Option<PathBuf> {
-    let mut dir = http_path.parent()?.to_path_buf();
+/// Directories from the workspace root to the `.http` file that hold environment files.
+fn env_dirs(http_path: &Path) -> Vec<PathBuf> {
+    let Some(mut dir) = http_path.parent().map(Path::to_path_buf) else { return Vec::new() };
     if dir.as_os_str().is_empty() {
         dir = PathBuf::from(".");
     }
+    let mut dirs = Vec::new();
     let mut cur = Some(dir.as_path());
     while let Some(d) = cur {
         if [ENV_FILE, PRIVATE_ENV_FILE, USER_ENV_FILE].iter().any(|f| d.join(f).is_file()) {
-            return Some(d.to_path_buf());
+            dirs.push(d.to_path_buf());
         }
         if is_root(d) {
-            return None;
+            break;
         }
         cur = d.parent();
     }
-    None
+    dirs.reverse();
+    dirs
 }
 
 fn is_root(dir: &Path) -> bool {
@@ -311,9 +312,13 @@ fn read_env_json(path: &Path) -> Option<serde_json::Map<String, serde_json::Valu
 }
 
 /// Env files in increasing priority: public, private (Rider), `.user` (Visual Studio).
+/// Within each kind, a file nearer to the request overrides values from a parent.
 fn env_files(http_path: &Path) -> Vec<serde_json::Map<String, serde_json::Value>> {
-    let Some(dir) = env_dir(http_path) else { return Vec::new() };
-    [ENV_FILE, PRIVATE_ENV_FILE, USER_ENV_FILE].iter().filter_map(|f| read_env_json(&dir.join(f))).collect()
+    let dirs = env_dirs(http_path);
+    [ENV_FILE, PRIVATE_ENV_FILE, USER_ENV_FILE]
+        .iter()
+        .flat_map(|name| dirs.iter().filter_map(move |dir| read_env_json(&dir.join(name))))
+        .collect()
 }
 
 /// Environment names available for `http_path` (`$shared` excluded), in file order.
