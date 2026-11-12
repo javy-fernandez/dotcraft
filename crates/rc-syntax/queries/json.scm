@@ -1,4 +1,3 @@
-(pair key: (string) @field)
 (string) @string
 (pair key: (string) @field)
 (number) @number
