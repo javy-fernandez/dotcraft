@@ -214,6 +214,8 @@ pub struct CommandOutput {
 /// `dotnet add <project> package <id> [--version v] [--prerelease]`; also updates an
 /// existing reference to `version`.
 pub async fn add_package(dotnet: &Dotnet, project: &Path, id: &str, version: Option<&str>, prerelease: bool) -> anyhow::Result<CommandOutput> {
+    validate_package_command(project, id)?;
+    if let Some(version) = version { validate_package_version(version)?; }
     let mut args = vec!["add".to_string(), project.to_string_lossy().into_owned(), "package".into(), id.to_string()];
     if let Some(v) = version {
         args.extend(["--version".into(), v.to_string()]);
@@ -230,7 +232,19 @@ pub async fn update_package(dotnet: &Dotnet, project: &Path, id: &str, version: 
 
 /// `dotnet remove <project> package <id>`.
 pub async fn remove_package(dotnet: &Dotnet, project: &Path, id: &str) -> anyhow::Result<CommandOutput> {
+    validate_package_command(project, id)?;
     run_cli(dotnet, project, &["remove".to_string(), project.to_string_lossy().into_owned(), "package".into(), id.to_string()]).await
+}
+
+fn validate_package_command(project: &Path, id: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(project.is_file() && project.extension().is_some_and(|e| ["csproj", "fsproj", "vbproj"].iter().any(|ext| e.eq_ignore_ascii_case(ext))), "A .NET project file is required for package changes");
+    anyhow::ensure!(!id.is_empty() && id.len() <= 100 && id.split(['.', '-']).all(|part| part.chars().next().is_some_and(char::is_alphanumeric) && part.chars().all(|c| c.is_alphanumeric() || c == '_')), "Invalid NuGet package ID");
+    Ok(())
+}
+
+fn validate_package_version(version: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(!version.is_empty() && version.len() <= 256 && version.trim() == version && !version.starts_with(['-', '/']) && !version.chars().any(char::is_control), "Invalid or option-like NuGet package version");
+    Ok(())
 }
 
 /// `dotnet restore <project>` (after editing central package versions).
