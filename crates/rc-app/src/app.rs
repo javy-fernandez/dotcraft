@@ -106,6 +106,7 @@ pub struct DotCraftApp {
     /// Whether the window was already full screen when a full-screen focus mode began.
     pub fullscreen_before_focus: bool,
     pub explorer: ExplorerState,
+    pub remote: crate::ui::remote_explorer::RemoteExplorer,
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
     /// Monitoring: CPU and memory of the program in the selected Run tab.
@@ -232,6 +233,7 @@ impl DotCraftApp {
             focus_mode: FocusMode::Normal,
             fullscreen_before_focus: false,
             explorer: ExplorerState::default(),
+            remote: crate::ui::remote_explorer::RemoteExplorer::new(waker.clone()),
             dialog: None,
             notices: Vec::new(),
             monitor: crate::monitor::Monitor::new(waker.clone()),
@@ -540,6 +542,7 @@ impl DotCraftApp {
     }
 
     pub fn close_workspace(&mut self) {
+        self.remote.disconnect();
         if self.workspace.is_some() {
             self.save_all_docs();
             self.save_session();
