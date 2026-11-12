@@ -122,6 +122,46 @@ impl ProjectInfo {
     }
 }
 
+/// Changes an explicit, unconditional target framework property in an SDK-style project.
+/// The returned XML retains all content outside that property.
+pub fn set_target_frameworks(text: &str, frameworks: &[&str]) -> anyhow::Result<String> {
+    anyhow::ensure!(!frameworks.is_empty() && frameworks.len() <= 16, "Provide 1 to 16 target frameworks");
+    let mut seen: Vec<&str> = Vec::new();
+    for framework in frameworks {
+        anyhow::ensure!(
+            !framework.is_empty()
+                && framework.len() <= 64
+                && framework.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-')),
+            "Invalid target framework: {framework}"
+        );
+        anyhow::ensure!(!seen.iter().any(|s| s.eq_ignore_ascii_case(framework)), "Duplicate target framework: {framework}");
+        seen.push(framework);
+    }
+
+    let source = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let offset = text.len() - source.len();
+    let doc = roxmltree::Document::parse(source)?;
+    let root = doc.root_element();
+    anyhow::ensure!(root.has_tag_name("Project") && (root.attribute("Sdk").is_some() || root.children().any(|n| n.has_tag_name("Sdk"))), "An SDK-style project is required");
+    let properties: Vec<_> = root.descendants().filter(|n| n.has_tag_name("TargetFramework") || n.has_tag_name("TargetFrameworks")).collect();
+    anyhow::ensure!(properties.len() == 1, "Exactly one explicit target framework property is required");
+    let property = properties[0];
+    let group = property.parent_element().ok_or_else(|| anyhow::anyhow!("Target framework must be in a PropertyGroup"))?;
+    anyhow::ensure!(group.has_tag_name("PropertyGroup") && group.parent_element() == Some(root), "Target framework must be in a top-level PropertyGroup");
+    anyhow::ensure!(property.attribute("Condition").is_none() && group.attribute("Condition").is_none(), "Conditional target frameworks require MSBuild evaluation");
+    anyhow::ensure!(property.attributes().next().is_none() && property.children().all(|n| n.is_text()), "Target framework property has unsupported metadata");
+
+    let tag = if frameworks.len() == 1 { "TargetFramework" } else { "TargetFrameworks" };
+    let inner = property.first_child().map(|n| n.text().unwrap_or("")).unwrap_or("");
+    let prefix = &inner[..inner.len() - inner.trim_start().len()];
+    let suffix = if inner.trim().is_empty() { "" } else { &inner[inner.trim_end().len()..] };
+    let replacement = format!("<{tag}>{prefix}{}{suffix}</{tag}>", frameworks.join(";"));
+    let range = property.range();
+    let mut edited = text.to_string();
+    edited.replace_range(range.start + offset..range.end + offset, &replacement);
+    Ok(edited)
+}
+
 /// Packages that make a project a test project (test SDK, frameworks, adapters, the testing
 /// platform).
 fn is_test_package(name: &str) -> bool {
