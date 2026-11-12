@@ -133,3 +133,52 @@ fn a_new_solution_starts_with_the_last_layout() {
     assert_eq!(app.dock.side_of(crate::toolwindow::ToolWindow::Explorer), crate::toolwindow::Side::Right);
     assert_eq!(app.dock.right, Some(crate::toolwindow::ToolWindow::Explorer));
 }
+
+#[test]
+fn shop_launch_profiles_can_be_selected_from_the_toolbar() {
+    use egui_kittest::kittest::Queryable;
+
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let project_dir = home.path().join("Shop.Api");
+    let properties = project_dir.join("Properties");
+    std::fs::create_dir_all(&properties).unwrap();
+    let fixture = crate::screens::fixtures().join("Shop/src/Shop.Api");
+    let project = project_dir.join("Shop.Api.csproj");
+    std::fs::copy(fixture.join("Shop.Api.csproj"), &project).unwrap();
+    let source = std::fs::read_to_string(fixture.join("Properties/launchSettings.json")).unwrap();
+    let original: serde_json::Value = serde_json::from_str(source.trim_start_matches('\u{feff}')).unwrap();
+    let mut settings_json = original;
+    settings_json["profiles"]["alternate"] = serde_json::json!({
+        "commandName": "Project",
+        "applicationUrl": "http://localhost:5123",
+        "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Staging" }
+    });
+    std::fs::write(properties.join("launchSettings.json"), serde_json::to_vec(&settings_json).unwrap()).unwrap();
+
+    let mut app = crate::screens::test_app(home.path(), false);
+    app.open_workspace(&project);
+    let names: Vec<_> = app.runner.configs.iter().map(|c| c.name.as_str()).collect();
+    assert!(names.contains(&"Shop.Api: http"), "{names:?}");
+    assert!(names.contains(&"Shop.Api: alternate"), "{names:?}");
+    assert!(!names.iter().any(|name| name.contains("IIS Express")), "{names:?}");
+
+    let mut harness = crate::screens::harness(app, egui::vec2(1200.0, 800.0));
+    let initial = harness.state().runner.selected_config().unwrap().name.clone();
+    harness.get_by_label(&format!("Run configuration: {initial}")).click();
+    harness.run_steps(2);
+    harness.get_by_label("Shop.Api: http").click();
+    harness.run_steps(2);
+    let selected = harness.state().runner.selected_config().unwrap();
+    assert_eq!(selected.name, "Shop.Api: http");
+    let request = harness.state().runner.request_for(selected).unwrap();
+    assert_eq!(request.launch_profile.as_deref(), Some("http"));
+    assert!(request.use_launch_profile);
+    harness.get_by_label("Run configuration: Shop.Api: http").click();
+    harness.run_steps(2);
+    harness.get_by_label("Shop.Api: alternate").click();
+    harness.run_steps(2);
+    let selected = harness.state().runner.selected_config().unwrap();
+    assert_eq!(selected.name, "Shop.Api: alternate");
+    assert_eq!(harness.state().runner.request_for(selected).unwrap().launch_profile.as_deref(), Some("alternate"));
+}
