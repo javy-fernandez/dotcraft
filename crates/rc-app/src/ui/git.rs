@@ -816,6 +816,23 @@ fn repository_tools(app: &mut DotCraftApp, ui: &mut Ui) {
                 }
             });
         });
+        section(ui, "partial_commit", ico::COMMIT, tr("Partial Commit"), &mut |ui| {
+            kit::note(ui, tr("Commit staged includes every staged change in the Git index; unstaged edits remain in the worktree."));
+            kit::field(ui, tr("Repository-relative file path"), &mut tools.partial_path, "", w, repo_on);
+            kit::field(ui, tr("Hunk number"), &mut tools.partial_hunk, "", w, repo_on);
+            kit::field(ui, tr("Staged commit message"), &mut tools.partial_message, "", w, repo_on);
+            ui.horizontal_wrapped(|ui| {
+                if kit::button(ui, None, tr("List unstaged hunks"), repo_on).clicked() {
+                    action = Some(ToolAction::ListUnstagedHunks(tools.partial_path.clone()));
+                }
+                if kit::button(ui, Some(ico::ADD), tr("Stage hunk"), repo_on).clicked() {
+                    action = Some(ToolAction::StageHunk { path: tools.partial_path.clone(), number: tools.partial_hunk.clone() });
+                }
+                if kit::button(ui, Some(ico::COMMIT), tr("Commit staged"), repo_on).clicked() {
+                    action = Some(ToolAction::CommitStaged(tools.partial_message.clone()));
+                }
+            });
+        });
         section(ui, "submodules", ico::PROJECT, tr("Submodules"), &mut |ui| {
             ui.horizontal_wrapped(|ui| {
                 if kit::button(ui, None, tr("Submodule status"), repo_on).clicked() {
@@ -862,11 +879,128 @@ fn repository_tools(app: &mut DotCraftApp, ui: &mut Ui) {
 mod repository_tools_tests {
     use super::*;
     use egui_kittest::{Harness, kittest::Queryable};
+    use std::path::Path;
     use std::time::{Duration, Instant};
 
     fn git(path: &std::path::Path, args: &[&str]) {
         let output = std::process::Command::new("git").current_dir(path).args(args).output().unwrap();
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    fn git_text(path: &Path, args: &[&str]) -> String {
+        let output = std::process::Command::new("git").current_dir(path).args(args).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+
+    fn copy_tree(source: &Path, target: &Path) {
+        std::fs::create_dir_all(target).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let source = entry.path();
+            let target = target.join(entry.file_name());
+            if source.is_dir() {
+                copy_tree(&source, &target);
+            } else {
+                std::fs::copy(source, target).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn repository_tools_commit_only_selected_shop_csharp_hunk() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = home.path().join("Shop");
+        copy_tree(&crate::screens::fixtures().join("Shop"), &root);
+        git(&root, &["init", "-q", "-b", "main"]);
+        for (key, value) in [("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")] {
+            git(&root, &["config", key, value]);
+        }
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "Shop fixture"]);
+        let rel = "src/Shop.Core/Order.cs";
+        let order = root.join(rel);
+        let base = std::fs::read_to_string(&order).unwrap();
+        std::fs::write(&order, format!("// selected hunk\n{base}// remaining hunk\n")).unwrap();
+        let price = root.join("src/Shop.Core/PriceCalculator.cs");
+        let base_price = std::fs::read_to_string(&price).unwrap();
+        let original_head = git_text(&root, &["rev-parse", "HEAD"]);
+
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_workspace(&root.join("Shop.sln"));
+        app.vcs.tools.visible = true;
+        app.vcs.tools.partial_path = rel.into();
+        app.vcs.tools.partial_hunk = "1".into();
+        app.vcs.tools.partial_message = "Commit selected Order hunk".into();
+        let mut first = true;
+        let mut h = Harness::builder().with_size(egui::vec2(1000.0, 1500.0)).build_ui_state(
+            move |ui, app: &mut DotCraftApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                app.vcs.update(&mut app.docs, true);
+                git_window(app, ui);
+            },
+            app,
+        );
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while h.state().vcs.repo.is_none() && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(h.state().vcs.repo.is_some());
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("List unstaged hunks")).click();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !(h.state().vcs.busy.is_none() && h.state().vcs.tools.report.contains("2: @@")) && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(h.state().vcs.tools.report.contains("1: @@"), "{}", h.state().vcs.tools.report);
+        assert!(h.state().vcs.tools.report.contains("2: @@"), "{}", h.state().vcs.tools.report);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Stage hunk")).click();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !(h.state().vcs.busy.is_none() && h.state().vcs.tools.report.contains("Staged hunk 1")) && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(h.state().vcs.tools.report.contains("Staged hunk 1"), "{:?}", h.state().vcs.error);
+        assert_eq!(git_text(&root, &["show", &format!(":{rel}")]), format!("// selected hunk\n{base}"));
+
+        h.state_mut().open_file(&price);
+        h.state_mut().docs.active_doc_mut().unwrap().editor.replace(0, 0, "// unsaved editor buffer\n");
+        h.run_steps(2);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Commit staged")).click();
+        h.run_steps(2);
+        assert_eq!(h.state().vcs.error.as_deref(), Some(tr("Save or close modified documents before changing the repository")));
+        assert_eq!(git_text(&root, &["rev-parse", "HEAD"]), original_head);
+        assert_eq!(std::fs::read_to_string(&price).unwrap(), base_price);
+
+        h.state_mut().save_all_docs();
+        h.run_steps(2);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Commit staged")).click();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !(h.state().vcs.busy.is_none() && h.state().vcs.tools.report.len() == 40) && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(h.state().vcs.error.is_none(), "{:?}", h.state().vcs.error);
+        assert_eq!(git_text(&root, &["rev-list", "--count", "HEAD"]).trim(), "2");
+        assert_eq!(git_text(&root, &["show", &format!("HEAD:{rel}")]), format!("// selected hunk\n{base}"));
+        assert_eq!(git_text(&root, &["show", "HEAD:src/Shop.Core/PriceCalculator.cs"]), base_price);
+        assert!(std::fs::read_to_string(&order).unwrap().ends_with("// remaining hunk\n"));
+        assert!(std::fs::read_to_string(&price).unwrap().starts_with("// unsaved editor buffer\n"));
+
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Commit staged")).click();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !(h.state().vcs.busy.is_none() && h.state().vcs.error.is_some()) && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(h.state().vcs.error.is_some());
+        assert_eq!(git_text(&root, &["rev-list", "--count", "HEAD"]).trim(), "2");
+        h.state_mut().close_workspace();
     }
 
     #[test]
