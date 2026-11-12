@@ -315,6 +315,7 @@ additional scope is pending.
 | C# live-template context guard (C-23, partial) | [Original PR 218](https://github.com/javy-fernandez/dotcraft/pull/218) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/218/files) |
 | NuGet command preflight (B-13, partial) | [Original PR 219](https://github.com/javy-fernandez/dotcraft/pull/219) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/219/files) |
 | Shop navigation history with removed source (D-10) | [Original PR 220](https://github.com/javy-fernandez/dotcraft/pull/220) | [Navigation evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/navigation-history-missing-files/docs/implementation/navigation-history-shop.md) |
+| Bounded NuGet search (B-12, partial) | [Original PR 221](https://github.com/javy-fernandez/dotcraft/pull/221) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/221/files) |
 
 ## Completion criteria
 
