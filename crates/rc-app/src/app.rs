@@ -133,6 +133,7 @@ pub struct DotCraftApp {
     /// Completion, hover and problems in `appsettings*.json`.
     pub appsettings: crate::appsettings_insight::SettingsInsight,
     pub runner: Runner,
+    user_secrets: crate::user_secrets::UserSecrets,
     pub debugger: crate::debugger::Debugger,
     window_title: String,
     pub files: crate::search::Files,
@@ -248,6 +249,7 @@ impl DotCraftApp {
             packages: crate::package_insight::PackageInsight::new(waker.clone()),
             appsettings: crate::appsettings_insight::SettingsInsight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
+            user_secrets: crate::user_secrets::UserSecrets::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
             files: crate::search::Files::new(),
@@ -550,6 +552,7 @@ impl DotCraftApp {
         self._watcher = None;
         self._filter_watcher = None;
         self.insight.stop();
+        self.user_secrets.cancel();
         self.debugger.stop();
         self.runner.stop_all();
         self.runner.clear();
@@ -1551,6 +1554,13 @@ impl DotCraftApp {
                     self.nuget.focus_project(&project);
                     self.dock.show(ToolWindow::Nuget);
                 }
+                ExplorerAction::ManageUserSecrets(project) => match self.runner.dotnet() {
+                    Ok(dotnet) => {
+                        self.user_secrets.open(dotnet, project);
+                        self.notify(tr("Opening user secrets…"), false);
+                    }
+                    Err(error) => self.notify(error, true),
+                },
             }
         }
     }
@@ -1566,6 +1576,12 @@ impl DotCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        for result in self.user_secrets.drain() {
+            match result {
+                Ok(path) => self.open_file(&path),
+                Err(error) => self.notify(trf("Could not open user secrets: {error}", &[("error", &error)]), true),
+            }
+        }
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();
         self.report_fs_to_server(&events);
