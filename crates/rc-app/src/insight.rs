@@ -13,7 +13,7 @@ use rc_lsp::lsp_types as lsp;
 use rc_lsp::roslyn::{self, DownloadEvent};
 use rc_lsp::{LanguageSession, LspEvent, Pending, ServerState, path_to_uri, uri_to_path};
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -81,6 +81,27 @@ pub struct SymbolNode {
     pub children: Vec<SymbolNode>,
 }
 
+struct ImplementationLens {
+    doc: u64,
+    version: u64,
+    line: usize,
+    position: usize,
+    kind: rc_editor::CodeVisionKind,
+    origin_uri: String,
+    origin_position: lsp::Position,
+    pending: Pending<Value>,
+}
+
+struct ImplementationCandidate {
+    doc: u64,
+    version: u64,
+    path: PathBuf,
+    line: usize,
+    position: usize,
+    kind: rc_editor::CodeVisionKind,
+    lsp_position: lsp::Position,
+}
+
 struct CompletionRequest {
     doc: u64,
     anchor: usize,
@@ -127,6 +148,12 @@ pub struct Insight {
     auto_usings: HashMap<u64, u64>,
     semantic: HashMap<u64, Versioned<Option<lsp::SemanticTokensResult>>>,
     inlay: HashMap<u64, Versioned<Option<Vec<lsp::InlayHint>>>>,
+    code_lens: HashMap<u64, Versioned<Option<Vec<lsp::CodeLens>>>>,
+    code_lens_resolve: Vec<(u64, u64, Pending<lsp::CodeLens>)>,
+    implementation_lenses: Vec<ImplementationLens>,
+    implementation_queue: VecDeque<ImplementationCandidate>,
+    pending_vision_symbols: HashMap<u64, (u64, Vec<SymbolNode>)>,
+    code_vision_enabled: bool,
     diag_pull: HashMap<u64, (u64, Pending<Value>)>,
     symbols: HashMap<u64, (u64, Pending<Option<lsp::DocumentSymbolResponse>>)>,
     /// Document structure of each open document.
@@ -180,6 +207,12 @@ impl Insight {
             auto_usings: HashMap::new(),
             semantic: HashMap::new(),
             inlay: HashMap::new(),
+            code_lens: HashMap::new(),
+            code_lens_resolve: Vec::new(),
+            implementation_lenses: Vec::new(),
+            implementation_queue: VecDeque::new(),
+            pending_vision_symbols: HashMap::new(),
+            code_vision_enabled: false,
             diag_pull: HashMap::new(),
             symbols: HashMap::new(),
             structure: HashMap::new(),
@@ -272,6 +305,11 @@ impl Insight {
         self.auto_usings.clear();
         self.semantic.clear();
         self.inlay.clear();
+        self.code_lens.clear();
+        self.code_lens_resolve.clear();
+        self.implementation_lenses.clear();
+        self.implementation_queue.clear();
+        self.pending_vision_symbols.clear();
         self.diag_pull.clear();
         self.symbols.clear();
         self.refreshed.clear();
@@ -281,8 +319,22 @@ impl Insight {
 
     /// Pumps the server, syncs documents and applies finished requests. Returns what the
     /// rest of the UI must show.
-    pub fn update(&mut self, docs: &mut Docs, show_inlays: bool) -> Vec<InsightOutput> {
+    pub fn update(&mut self, docs: &mut Docs, show_inlays: bool, show_code_vision: bool) -> Vec<InsightOutput> {
         let mut out = Vec::new();
+        if self.code_vision_enabled != show_code_vision {
+            self.code_vision_enabled = show_code_vision;
+            self.refreshed.clear();
+            if !show_code_vision {
+                self.code_lens.clear();
+                self.code_lens_resolve.clear();
+                self.implementation_lenses.clear();
+                self.implementation_queue.clear();
+                self.pending_vision_symbols.clear();
+                for doc in &mut docs.list {
+                    doc.editor.code_vision.clear();
+                }
+            }
+        }
         for ev in self.downloads.drain() {
             match ev {
                 DownloadEvent::Progress { done, total } => self.status = InsightStatus::Downloading { done, total },
@@ -357,7 +409,7 @@ impl Insight {
             return out;
         }
         self.sync_documents(docs);
-        self.poll_requests(docs, show_inlays, &mut out);
+        self.poll_requests(docs, show_inlays, show_code_vision, &mut out);
         out
     }
 
@@ -390,12 +442,16 @@ impl Insight {
             if !edits.is_empty() {
                 session.did_change(&d.path, &edits);
                 self.dirty.insert(d.editor.id, now);
+                d.editor.code_vision.clear();
+                self.implementation_lenses.retain(|request| request.doc != d.editor.id);
+                self.implementation_queue.retain(|request| request.doc != d.editor.id);
+                self.pending_vision_symbols.remove(&d.editor.id);
             }
         }
     }
 
     /// Requests colours, hints, diagnostics and structure for `doc` once its edits settled.
-    fn refresh(&mut self, doc: &Doc, show_inlays: bool) {
+    fn refresh(&mut self, doc: &Doc, show_inlays: bool, show_code_vision: bool) {
         let id = doc.editor.id;
         let version = doc.editor.buffer.version();
         if self.refreshed.get(&id) == Some(&version) {
@@ -414,15 +470,18 @@ impl Insight {
             let end = convert::lsp_position(doc.editor.buffer.rope(), doc.editor.buffer.len_chars());
             self.inlay.insert(id, (version, session.client.request_raw("textDocument/inlayHint", json!({ "textDocument": td, "range": { "start": { "line": 0, "character": 0 }, "end": end } }))));
         }
+        if show_code_vision {
+            self.code_lens.insert(id, (version, session.client.request_raw("textDocument/codeLens", json!({ "textDocument": td }))));
+        }
         self.refreshed.insert(id, version);
     }
 
-    fn poll_requests(&mut self, docs: &mut Docs, show_inlays: bool, out: &mut Vec<InsightOutput>) {
+    fn poll_requests(&mut self, docs: &mut Docs, show_inlays: bool, show_code_vision: bool, out: &mut Vec<InsightOutput>) {
         // Refreshes for the visible document (and any other open C# document once).
         if let Some(i) = docs.active
             && is_csharp(&docs.list[i])
         {
-            self.refresh(&docs.list[i], show_inlays);
+            self.refresh(&docs.list[i], show_inlays, show_code_vision);
         }
         // Semantic tokens.
         let legend = self.session.as_ref().map(|s| s.semantic_legend.clone()).unwrap_or_default();
@@ -469,6 +528,64 @@ impl Insight {
         for id in done.drain(..) {
             self.inlay.remove(&id);
         }
+        // Code Vision labels are cached for the exact buffer version that produced them.
+        let mut unresolved = Vec::new();
+        for (&id, (version, p)) in &mut self.code_lens {
+            if let Some(result) = p.poll() {
+                done.push(id);
+                if let (Ok(lenses), Some(doc)) = (result, docs.list.iter_mut().find(|d| d.editor.id == id))
+                    && doc.editor.buffer.version() == *version
+                {
+                    doc.editor.code_vision.clear();
+                    for lens in lenses.unwrap_or_default() {
+                        if let Some(command) = &lens.command {
+                            if !command.title.is_empty() {
+                                let position = convert::char_of(doc.editor.buffer.rope(), lens.range.start);
+                                set_code_vision(&mut doc.editor, rc_editor::CodeVision { line: lens.range.start.line as usize, position, title: command.title.clone(), kind: rc_editor::CodeVisionKind::Usages });
+                            }
+                        } else {
+                            unresolved.push((id, *version, lens));
+                        }
+                    }
+                }
+            }
+        }
+        for id in done.drain(..) {
+            self.code_lens.remove(&id);
+        }
+        if let Some(session) = &self.session {
+            for (id, version, lens) in unresolved {
+                self.code_lens_resolve.push((id, version, session.client.request_raw("codeLens/resolve", serde_json::to_value(lens).unwrap_or(Value::Null))));
+            }
+        }
+        self.code_lens_resolve.retain_mut(|(id, version, pending)| {
+            let Some(result) = pending.poll() else { return true };
+            if let (Ok(lens), Some(doc)) = (result, docs.list.iter_mut().find(|d| d.editor.id == *id))
+                && doc.editor.buffer.version() == *version
+                && let Some(command) = lens.command
+                && !command.title.is_empty()
+            {
+                let position = convert::char_of(doc.editor.buffer.rope(), lens.range.start);
+                set_code_vision(&mut doc.editor, rc_editor::CodeVision { line: lens.range.start.line as usize, position, title: command.title, kind: rc_editor::CodeVisionKind::Usages });
+            }
+            false
+        });
+        self.implementation_lenses.retain_mut(|request| {
+            let Some(result) = request.pending.poll() else { return true };
+            if let (Ok(value), Some(doc)) = (result, docs.list.iter_mut().find(|doc| doc.editor.id == request.doc))
+                && doc.editor.buffer.version() == request.version
+            {
+                let count = implementation_count(&value, &request.origin_uri, request.origin_position);
+                let title = match request.kind {
+                    rc_editor::CodeVisionKind::Overrides if count == 1 => trf("{count} override", &[("count", &count)]),
+                    rc_editor::CodeVisionKind::Overrides => trf("{count} overrides", &[("count", &count)]),
+                    _ if count == 1 => trf("{count} implementation", &[("count", &count)]),
+                    _ => trf("{count} implementations", &[("count", &count)]),
+                };
+                set_code_vision(&mut doc.editor, rc_editor::CodeVision { line: request.line, position: request.position, title, kind: request.kind });
+            }
+            false
+        });
         // Pulled diagnostics.
         let mut reports = Vec::new();
         for (&id, (version, p)) in &mut self.diag_pull {
@@ -494,17 +611,60 @@ impl Insight {
             self.diag_pull.remove(&id);
         }
         // Document symbols.
-        for (&id, (_, p)) in &mut self.symbols {
+        for (&id, (version, p)) in &mut self.symbols {
             if let Some(r) = p.poll() {
                 done.push(id);
-                if let (Ok(Some(resp)), Some(d)) = (r, docs.list.iter().find(|d| d.editor.id == id)) {
+                if let (Ok(Some(resp)), Some(d)) = (r, docs.list.iter().find(|d| d.editor.id == id))
+                    && d.editor.buffer.version() == *version
+                {
                     let rope = d.editor.buffer.rope().clone();
-                    self.structure.insert(id, symbols(&rope, resp));
+                    let nodes = symbols(&rope, resp);
+                    if show_code_vision {
+                        self.pending_vision_symbols.insert(id, (*version, nodes.clone()));
+                    }
+                    self.structure.insert(id, nodes);
                 }
             }
         }
         for id in done.drain(..) {
             self.symbols.remove(&id);
+        }
+        let ready = self.pending_vision_symbols.iter().filter_map(|(&id, (version, _))| {
+            match docs.list.iter().find(|doc| doc.editor.id == id) {
+                None => Some(id),
+                Some(doc) if doc.editor.buffer.version() != *version || doc.editor.syntax.is_current() => Some(id),
+                _ => None,
+            }
+        }).collect::<Vec<_>>();
+        for id in ready {
+            let Some((version, nodes)) = self.pending_vision_symbols.remove(&id) else { continue };
+            let Some(doc) = docs.list.iter().find(|doc| doc.editor.id == id && doc.editor.buffer.version() == version) else { continue };
+            let Some(tree) = doc.editor.syntax.tree() else { continue };
+            let rope = doc.editor.buffer.rope();
+            for (line, position, kind) in implementation_candidates(rope, &nodes, tree) {
+                self.implementation_queue.push_back(ImplementationCandidate {
+                    doc: id, version, path: doc.path.clone(), line, position, kind,
+                    lsp_position: convert::lsp_position(rope, position),
+                });
+            }
+        }
+        if let Some(session) = &self.session {
+            while self.implementation_lenses.len() < 8 {
+                let Some(candidate) = self.implementation_queue.pop_front() else { break };
+                if !docs.list.iter().any(|doc| doc.editor.id == candidate.doc && doc.editor.buffer.version() == candidate.version) {
+                    continue;
+                }
+                let origin_uri = path_to_uri(&candidate.path).to_string();
+                let pending = session.client.request_raw("textDocument/implementation", json!({
+                    "textDocument": { "uri": origin_uri.as_str() },
+                    "position": candidate.lsp_position,
+                }));
+                self.implementation_lenses.push(ImplementationLens {
+                    doc: candidate.doc, version: candidate.version, line: candidate.line,
+                    position: candidate.position, kind: candidate.kind, origin_uri,
+                    origin_position: candidate.lsp_position, pending,
+                });
+            }
         }
         self.poll_completion(docs);
         self.poll_popups(docs);
@@ -1347,6 +1507,109 @@ fn symbols(rope: &rc_text::Rope, resp: lsp::DocumentSymbolResponse) -> Vec<Symbo
                 SymbolNode { name: s.name, detail: s.container_name.unwrap_or_default(), kind: s.kind, line, col: pos - rope.line_to_char(line), children: Vec::new() }
             })
             .collect(),
+    }
+}
+
+fn implementation_candidates(rope: &rc_text::Rope, nodes: &[SymbolNode], tree: &rc_syntax::tree_sitter::Tree) -> Vec<(usize, usize, rc_editor::CodeVisionKind)> {
+    fn collect(rope: &rc_text::Rope, nodes: &[SymbolNode], tree: &rc_syntax::tree_sitter::Tree, out: &mut Vec<(usize, usize, rc_editor::CodeVisionKind)>) {
+        for node in nodes {
+            let position = rope.line_to_char(node.line) + node.col;
+            let kind = if matches!(node.kind, lsp::SymbolKind::CLASS | lsp::SymbolKind::INTERFACE | lsp::SymbolKind::STRUCT) {
+                Some(rc_editor::CodeVisionKind::Implementations)
+            } else if matches!(node.kind, lsp::SymbolKind::METHOD | lsp::SymbolKind::PROPERTY) {
+                if is_override_member(rope, tree, position) {
+                    Some(rc_editor::CodeVisionKind::Overrides)
+                } else {
+                    Some(rc_editor::CodeVisionKind::Implementations)
+                }
+            } else {
+                None
+            };
+            if let Some(kind) = kind {
+                out.push((node.line, position, kind));
+            }
+            collect(rope, &node.children, tree, out);
+        }
+    }
+    let mut out = Vec::new();
+    collect(rope, nodes, tree, &mut out);
+    out
+}
+
+fn is_override_member(rope: &rc_text::Rope, tree: &rc_syntax::tree_sitter::Tree, position: usize) -> bool {
+    let byte = rope.char_to_byte(position);
+    let mut node = tree.root_node().descendant_for_byte_range(byte, (byte + 1).min(rope.len_bytes()));
+    while let Some(current) = node {
+        if matches!(current.kind(), "method_declaration" | "property_declaration" | "indexer_declaration" | "event_declaration") {
+            let mut cursor = current.walk();
+            return current.named_children(&mut cursor).any(|child| {
+                child.kind() == "modifier" && matches!(rope.byte_slice(child.byte_range()).to_string().as_str(), "virtual" | "abstract" | "override")
+            });
+        }
+        node = current.parent();
+    }
+    false
+}
+
+fn implementation_count(value: &Value, origin_uri: &str, origin: lsp::Position) -> usize {
+    let values = match value {
+        Value::Array(items) => items.as_slice(),
+        Value::Null => return 0,
+        item => std::slice::from_ref(item),
+    };
+    values.iter().filter_map(|item| {
+        let uri = item.get("uri").or_else(|| item.get("targetUri"))?.as_str()?;
+        let range = item.get("range").or_else(|| item.get("targetSelectionRange"))?;
+        let start = range.get("start")?;
+        let (line, character) = (start.get("line")?.as_u64()?, start.get("character")?.as_u64()?);
+        (uri != origin_uri || line != u64::from(origin.line) || character != u64::from(origin.character)).then_some((uri, line, character))
+    }).collect::<HashSet<_>>().len()
+}
+
+fn set_code_vision(editor: &mut rc_editor::EditorState, vision: rc_editor::CodeVision) {
+    if let Some(existing) = editor.code_vision.iter_mut().find(|existing| existing.position == vision.position && existing.kind == vision.kind) {
+        *existing = vision;
+    } else {
+        editor.code_vision.push(vision);
+    }
+}
+
+#[cfg(test)]
+mod code_vision_tests {
+    use super::*;
+
+    #[test]
+    fn implementation_locations_are_deduplicated() {
+        let result = json!([
+            { "uri": "file:///A.cs", "range": { "start": { "line": 2, "character": 4 } } },
+            { "uri": "file:///A.cs", "range": { "start": { "line": 2, "character": 4 } } },
+            { "targetUri": "file:///B.cs", "targetSelectionRange": { "start": { "line": 8, "character": 1 } } }
+        ]);
+        let origin = lsp::Position::new(2, 4);
+        assert_eq!(implementation_count(&result, "file:///A.cs", origin), 1);
+        assert_eq!(implementation_count(&Value::Null, "file:///A.cs", origin), 0);
+    }
+
+    #[test]
+    fn virtual_members_get_override_lenses() {
+        let rope = rc_text::Rope::from_str("class A {\n virtual void M() {}\n}\n");
+        let nodes = vec![SymbolNode {
+            name: "M".into(), detail: String::new(), kind: lsp::SymbolKind::METHOD,
+            line: 1, col: 14, children: Vec::new(),
+        }];
+        let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None).unwrap();
+        assert_eq!(implementation_candidates(&rope, &nodes, &tree)[0].2, rc_editor::CodeVisionKind::Overrides);
+
+        let multiline = rc_text::Rope::from_str("class B {\n public\n virtual\n void M() {}\n}\n");
+        let name = multiline.to_string().find("M()").unwrap();
+        let name = multiline.byte_to_char(name);
+        let line = multiline.char_to_line(name);
+        let nested = vec![SymbolNode {
+            name: "M".into(), detail: String::new(), kind: lsp::SymbolKind::METHOD,
+            line, col: name - multiline.line_to_char(line), children: Vec::new(),
+        }];
+        let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &multiline, None).unwrap();
+        assert_eq!(implementation_candidates(&multiline, &nested, &tree)[0].2, rc_editor::CodeVisionKind::Overrides);
     }
 }
 

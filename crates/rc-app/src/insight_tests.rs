@@ -29,7 +29,7 @@ fn demo_solution(dir: &Path) -> PathBuf {
 fn pump(app: &mut DotCraftApp, what: &str, mut done: impl FnMut(&mut DotCraftApp) -> bool) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(120) {
-        let out = app.insight.update(&mut app.docs, true);
+        let out = app.insight.update(&mut app.docs, true, false);
         app.handle_insight(out);
         app.docs.poll_parses();
         if let InsightStatus::Failed(why) = &app.insight.status {
@@ -41,6 +41,122 @@ fn pump(app: &mut DotCraftApp, what: &str, mut done: impl FnMut(&mut DotCraftApp
         std::thread::sleep(Duration::from_millis(20));
     }
     panic!("timed out waiting for {what}; status {:?}", app.insight.status);
+}
+
+#[test]
+#[ignore = "Requires DOTCRAFT_TEST_ROSLYN and DOTCRAFT_TEST_DOTNET for a live Roslyn session"]
+fn live_code_vision_labels_and_navigation() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let roslyn = PathBuf::from(std::env::var_os("DOTCRAFT_TEST_ROSLYN").expect("Roslyn server path"));
+    let dotnet = PathBuf::from(std::env::var_os("DOTCRAFT_TEST_DOTNET").expect("dotnet SDK path"));
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: this test holds HOME_LOCK while the app reads the process-wide override.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let workspace = tempfile::tempdir().unwrap();
+    let root = workspace.path().canonicalize().unwrap();
+    let project = root.join("Vision.csproj");
+    let source = root.join("Vision.cs");
+    write(&project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>\n");
+    write(&source, "public interface IGreeter { string Hello(); }\npublic class Greeter : IGreeter { public virtual string Hello() => \"hello\"; }\npublic class LoudGreeter : Greeter { public override string Hello() => \"LOUD\"; }\npublic class Consumer { public string Read(IGreeter greeter) => greeter.Hello(); }\n");
+    let restored = std::process::Command::new(&dotnet).args(["restore", "--ignore-failed-sources"]).arg(&project).output().unwrap();
+    assert!(restored.status.success(), "{}", String::from_utf8_lossy(&restored.stderr));
+    let mut settings = Settings::default();
+    settings.roslyn_path = Some(roslyn);
+    settings.dotnet_path = Some(dotnet);
+    settings.show_code_vision = true;
+    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&project);
+    app.open_file(&source);
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(120) {
+        let outputs = app.insight.update(&mut app.docs, true, true);
+        app.handle_insight(outputs);
+        app.docs.poll_parses();
+        if let InsightStatus::Failed(why) = &app.insight.status {
+            panic!("server failed: {why}");
+        }
+        let ready = app.docs.active_doc().is_some_and(|doc| {
+            let labels = &doc.editor.code_vision;
+            labels.iter().any(|label| label.kind == rc_editor::CodeVisionKind::Usages)
+                && labels.iter().any(|label| label.kind == rc_editor::CodeVisionKind::Implementations)
+                && labels.iter().any(|label| label.kind == rc_editor::CodeVisionKind::Overrides)
+        });
+        if ready {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let labels = app.docs.active_doc().unwrap().editor.code_vision.clone();
+    assert!(labels.iter().any(|label| label.kind == rc_editor::CodeVisionKind::Usages), "{labels:?}");
+    assert!(labels.iter().any(|label| label.kind == rc_editor::CodeVisionKind::Implementations), "{labels:?}");
+    assert!(labels.iter().any(|label| label.kind == rc_editor::CodeVisionKind::Overrides), "{labels:?}");
+    app.insight.update(&mut app.docs, true, false);
+    assert!(app.docs.active_doc().unwrap().editor.code_vision.is_empty());
+    let enabled = Instant::now();
+    while enabled.elapsed() < Duration::from_secs(30) {
+        app.insight.update(&mut app.docs, true, true);
+        if app.docs.active_doc().unwrap().editor.code_vision.iter().any(|label| label.kind == rc_editor::CodeVisionKind::Overrides && label.title.starts_with('1')) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(app.docs.active_doc().unwrap().editor.code_vision.iter().any(|label| label.kind == rc_editor::CodeVisionKind::Overrides && label.title.starts_with('1')));
+    let doc = app.docs.active_doc_mut().unwrap();
+    let end = doc.editor.buffer.len_chars();
+    doc.editor.replace(end, end, "\n");
+    app.docs.reparse_edited();
+    app.insight.update(&mut app.docs, true, true);
+    assert!(app.docs.active_doc().unwrap().editor.code_vision.is_empty());
+    let edited = Instant::now();
+    while edited.elapsed() < Duration::from_secs(30) {
+        let outputs = app.insight.update(&mut app.docs, true, true);
+        app.handle_insight(outputs);
+        app.docs.poll_parses();
+        if app.docs.active_doc().unwrap().editor.code_vision.iter().any(|label| label.kind == rc_editor::CodeVisionKind::Overrides && label.title.starts_with('1')) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(app.docs.active_doc().unwrap().editor.code_vision.iter().any(|label| label.kind == rc_editor::CodeVisionKind::Overrides && label.title.starts_with('1')));
+    let labels = app.docs.active_doc().unwrap().editor.code_vision.clone();
+    let target = labels.iter().find(|label| label.kind == rc_editor::CodeVisionKind::Overrides && label.title.starts_with('1')).unwrap();
+    let position = target.position;
+    let active = app.docs.active.unwrap();
+    app.insight.navigate(&app.docs.list[active], position, crate::insight::NavKind::Implementation);
+    let navigation_start = Instant::now();
+    while navigation_start.elapsed() < Duration::from_secs(30) {
+        let outputs = app.insight.update(&mut app.docs, true, true);
+        if let Some(target) = outputs.iter().find_map(|output| match output {
+            crate::insight::InsightOutput::Navigate(target) => Some(target),
+            _ => None,
+        }) {
+            assert_eq!(target.path, source);
+            assert_eq!(target.line, 2);
+            if let Some(path) = std::env::var_os("DOTCRAFT_CODE_VISION_SCREENSHOT") {
+                let mut harness = crate::screens::harness(app, egui::vec2(1400.0, 900.0));
+                harness.run_steps(4);
+                harness.render().unwrap().save(path).unwrap();
+                let at = egui::pos2(620.0, 173.0);
+                harness.event(egui::Event::PointerMoved(at));
+                harness.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() });
+                harness.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() });
+                let clicked = Instant::now();
+                while clicked.elapsed() < Duration::from_secs(10) {
+                    harness.run_steps(2);
+                    if harness.state().docs.active_doc().is_some_and(|doc| doc.editor.caret_line_col().0 == 2) {
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                panic!("Code Vision label click did not navigate to the overriding method");
+            } else {
+                app.close_workspace();
+            }
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    panic!("timed out waiting for Code Vision implementation navigation");
 }
 
 #[test]

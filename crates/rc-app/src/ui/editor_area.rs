@@ -237,6 +237,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     }
     let mut run_test_line = None;
     let mut http_line = None;
+    let mut code_vision_target = None;
     // ⌘+click: the clicked spot goes into Back/Forward history.
     let navigated_from = out.events.iter().find_map(|e| matches!(e, EditorEvent::NavigateAt(_)).then(|| (doc.path.clone(), doc.editor.caret())));
     let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
@@ -249,6 +250,11 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
                     app.debugger.conditions.remove(&(doc.path.clone(), line));
                 }
                 app.session_dirty = true;
+            }
+            EditorEvent::CodeVisionClicked { position, kind } => {
+                if position <= doc.editor.buffer.len_chars() {
+                    code_vision_target = Some((doc.path.clone(), position, kind));
+                }
             }
             EditorEvent::GutterSecondaryClicked { line, .. } => {
                 let path = doc.path.clone();
@@ -356,6 +362,14 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     app.handle_appsettings(settings_outputs);
     if let Some((path, pos)) = navigated_from {
         app.push_nav_at(path, pos);
+    }
+    if let Some((path, pos, kind)) = code_vision_target {
+        app.push_nav_at(path, pos);
+        let nav = match kind {
+            rc_editor::CodeVisionKind::Usages => crate::insight::NavKind::Usages,
+            rc_editor::CodeVisionKind::Implementations | rc_editor::CodeVisionKind::Overrides => crate::insight::NavKind::Implementation,
+        };
+        app.insight.navigate(&app.docs.list[active], pos, nav);
     }
     for a in insight_actions {
         app.run_insight_action(a, caret_screen);
