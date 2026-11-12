@@ -16,12 +16,30 @@ pub enum Transport {
 enum Request {
     List(String),
     Read(String),
+    Command(
+        CommandKind,
+        Option<String>,
+        tokio::sync::oneshot::Receiver<()>,
+    ),
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CommandKind {
+    Info,
+    Sdks,
+    Build,
+    Test,
+}
+struct CommandResult {
+    code: Option<i32>,
+    stdout: String,
+    output: String,
 }
 enum Event {
     Connected(Vec<Entry>),
     Listed(String, Vec<Entry>),
     Read(String, String, bool),
     Failed(Option<String>, String),
+    CommandDone(CommandKind, Result<CommandResult, String>),
 }
 
 pub enum Action {
@@ -35,6 +53,7 @@ pub struct RemoteExplorer {
     pub transport: Transport,
     pub host: String,
     pub agent: String,
+    pub dotnet_program: String,
     pub root_input: String,
     root: Option<String>,
     connected: bool,
@@ -46,6 +65,12 @@ pub struct RemoteExplorer {
     preview: Option<String>,
     preview_truncated: bool,
     error: Option<String>,
+    running: Option<CommandKind>,
+    cancel_command: Option<tokio::sync::oneshot::Sender<()>>,
+    sdk_versions: Vec<String>,
+    command_output: Option<String>,
+    command_error: bool,
+    show_output: bool,
     requests: Option<mpsc::UnboundedSender<Request>>,
     worker: Option<tokio::task::JoinHandle<()>>,
     events: Inbox<Event>,
@@ -59,6 +84,7 @@ impl RemoteExplorer {
             transport: Transport::Ssh,
             host: String::new(),
             agent: "dotcraft-remote-agent".into(),
+            dotnet_program: "dotnet".into(),
             root_input: String::new(),
             root: None,
             connected: false,
@@ -70,6 +96,12 @@ impl RemoteExplorer {
             preview: None,
             preview_truncated: false,
             error: None,
+            running: None,
+            cancel_command: None,
+            sdk_versions: Vec::new(),
+            command_output: None,
+            command_error: false,
+            show_output: false,
             requests: None,
             worker: None,
             events: Inbox::new(waker.clone()),
@@ -87,6 +119,7 @@ impl RemoteExplorer {
         if remote_root(&self.root_input).is_none()
             || self.host.trim().is_empty()
             || self.agent.trim().is_empty()
+            || self.dotnet_program.trim().is_empty()
         {
             return false;
         }
@@ -119,6 +152,12 @@ impl RemoteExplorer {
         self.preview = None;
         self.preview_truncated = false;
         self.error = None;
+        self.running = None;
+        self.cancel_command = None;
+        self.sdk_versions.clear();
+        self.command_output = None;
+        self.command_error = false;
+        self.show_output = false;
         self.events = Inbox::new(self.waker.clone());
     }
 
@@ -140,6 +179,7 @@ impl RemoteExplorer {
                 agent: self.agent.trim().into(),
             },
         };
+        let dotnet_program = self.dotnet_program.trim().to_string();
         self.disconnect();
         self.root = Some(root.clone());
         self.connecting = true;
@@ -206,6 +246,18 @@ impl RemoteExplorer {
                             }
                         }
                     }
+                    Request::Command(kind, target, cancel) => {
+                        let result = remote_command(
+                            &mut session,
+                            &root,
+                            &dotnet_program,
+                            kind,
+                            target,
+                            cancel,
+                        )
+                        .await;
+                        out.send(Event::CommandDone(kind, result));
+                    }
                 }
             }
         }));
@@ -223,6 +275,7 @@ impl RemoteExplorer {
                     self.connected = true;
                     self.show_connect = false;
                     self.error = None;
+                    self.start_command(CommandKind::Sdks);
                 }
                 Event::Listed(path, entries) => {
                     self.loading.remove(&path);
@@ -244,6 +297,33 @@ impl RemoteExplorer {
                     }
                     self.error = Some(error);
                 }
+                Event::CommandDone(kind, result) => {
+                    self.running = None;
+                    self.cancel_command = None;
+                    match result {
+                        Ok(result) => {
+                            if kind == CommandKind::Sdks && result.code == Some(0) {
+                                self.sdk_versions = result
+                                    .stdout
+                                    .lines()
+                                    .map(str::trim)
+                                    .filter(|line| !line.is_empty())
+                                    .map(str::to_string)
+                                    .collect();
+                            }
+                            self.command_error = result.code != Some(0);
+                            self.command_output = Some(result.output);
+                        }
+                        Err(error) => {
+                            self.command_error = true;
+                            self.command_output = Some(if error == "remote request cancelled" {
+                                tr("Remote command cancelled").into()
+                            } else {
+                                error
+                            });
+                        }
+                    }
+                }
             }
         }
     }
@@ -259,6 +339,7 @@ impl RemoteExplorer {
 
     fn read_file(&mut self, path: &str) {
         self.selected = Some(path.to_string());
+        self.show_output = false;
         self.preview = None;
         self.preview_truncated = false;
         self.error = None;
@@ -267,6 +348,40 @@ impl RemoteExplorer {
         }
         if let Some(tx) = &self.requests {
             let _ = tx.send(Request::Read(path.to_string()));
+        }
+    }
+
+    fn start_command(&mut self, kind: CommandKind) {
+        if !self.connected || self.running.is_some() {
+            return;
+        }
+        let target = self
+            .selected
+            .as_deref()
+            .filter(|path| is_dotnet_target(path))
+            .map(str::to_string);
+        let (cancel, receiver) = tokio::sync::oneshot::channel();
+        let Some(requests) = &self.requests else {
+            return;
+        };
+        if requests
+            .send(Request::Command(kind, target, receiver))
+            .is_ok()
+        {
+            if kind == CommandKind::Sdks {
+                self.sdk_versions.clear();
+            }
+            self.running = Some(kind);
+            self.cancel_command = Some(cancel);
+            self.command_output = None;
+            self.command_error = false;
+            self.show_output = true;
+        }
+    }
+
+    fn cancel_running(&mut self) {
+        if let Some(cancel) = self.cancel_command.take() {
+            let _ = cancel.send(());
         }
     }
 }
@@ -283,6 +398,91 @@ async fn list(session: &mut RemoteSession, path: &str) -> Result<Vec<Entry>, Str
         Value::Entries { entries } => Ok(entries),
         _ => Err(tr("Unexpected remote directory response").into()),
     }
+}
+
+async fn remote_command(
+    session: &mut RemoteSession,
+    root: &str,
+    dotnet_program: &str,
+    kind: CommandKind,
+    target: Option<String>,
+    cancel: tokio::sync::oneshot::Receiver<()>,
+) -> Result<CommandResult, String> {
+    let args = dotnet_args(kind, target);
+    let timeout_ms = if matches!(kind, CommandKind::Build | CommandKind::Test) {
+        120_000
+    } else {
+        15_000
+    };
+    let value = session
+        .client
+        .request_cancellable(
+            Operation::Run {
+                program: dotnet_program.into(),
+                args,
+                cwd: root.to_string(),
+                env: vec![
+                    ("DOTNET_CLI_UI_LANGUAGE".into(), "en".into()),
+                    ("DOTNET_NOLOGO".into(), "1".into()),
+                    ("DOTNET_CLI_TELEMETRY_OPTOUT".into(), "1".into()),
+                ],
+                timeout_ms,
+            },
+            cancel,
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    let Value::Exit {
+        code,
+        stdout,
+        stderr,
+    } = value
+    else {
+        return Err(tr("Unexpected remote process response").into());
+    };
+    let stdout = rc_remote::decode_data(&stdout).map_err(|error| error.to_string())?;
+    let stderr = rc_remote::decode_data(&stderr).map_err(|error| error.to_string())?;
+    let stdout = String::from_utf8_lossy(&stdout).into_owned();
+    let mut output = stdout.clone();
+    if !stderr.is_empty() {
+        if !output.is_empty() {
+            output.push('\n');
+        }
+        output.push_str(&String::from_utf8_lossy(&stderr));
+    }
+    if output.is_empty() {
+        output = format!(
+            "{}: {}",
+            tr("Exit code"),
+            code.map_or_else(|| "?".into(), |code| code.to_string())
+        );
+    }
+    Ok(CommandResult {
+        code,
+        stdout,
+        output,
+    })
+}
+
+fn dotnet_args(kind: CommandKind, target: Option<String>) -> Vec<String> {
+    let mut args = match kind {
+        CommandKind::Info => vec!["--info".to_string()],
+        CommandKind::Sdks => vec!["--list-sdks".to_string()],
+        CommandKind::Build => vec!["build".to_string()],
+        CommandKind::Test => vec!["test".to_string()],
+    };
+    if matches!(kind, CommandKind::Build | CommandKind::Test) {
+        if let Some(target) = target {
+            args.push(target);
+        }
+    }
+    args
+}
+
+fn is_dotnet_target(path: &str) -> bool {
+    [".sln", ".slnx", ".slnf", ".csproj", ".fsproj", ".vbproj"]
+        .iter()
+        .any(|extension| path.to_ascii_lowercase().ends_with(extension))
 }
 
 pub fn show(ui: &mut Ui, remote: &mut RemoteExplorer) -> Option<Action> {
@@ -304,6 +504,8 @@ pub fn show(ui: &mut Ui, remote: &mut RemoteExplorer) -> Option<Action> {
         ui.text_edit_singleline(&mut remote.host);
         ui.label(tr("Remote agent path"));
         ui.text_edit_singleline(&mut remote.agent);
+        ui.label(tr("Remote dotnet path"));
+        ui.text_edit_singleline(&mut remote.dotnet_program);
         ui.label(tr("Remote folder"));
         ui.text_edit_singleline(&mut remote.root_input);
         if let Some(error) = &remote.error {
@@ -336,6 +538,52 @@ pub fn show(ui: &mut Ui, remote: &mut RemoteExplorer) -> Option<Action> {
     if close {
         return Some(Action::Close);
     }
+    let busy = remote.running.is_some();
+    ui.horizontal_wrapped(|ui| {
+        if ui
+            .add_enabled(!busy, egui::Button::new(tr("SDK Info")))
+            .clicked()
+        {
+            remote.start_command(CommandKind::Info);
+        }
+        if ui
+            .add_enabled(!busy, egui::Button::new(tr("Refresh SDKs")))
+            .clicked()
+        {
+            remote.start_command(CommandKind::Sdks);
+        }
+        if ui
+            .add_enabled(!busy, egui::Button::new(tr("Build")))
+            .clicked()
+        {
+            remote.start_command(CommandKind::Build);
+        }
+        if ui
+            .add_enabled(!busy, egui::Button::new(tr("Test")))
+            .clicked()
+        {
+            remote.start_command(CommandKind::Test);
+        }
+        if busy {
+            ui.spinner();
+            if ui
+                .add_enabled(
+                    remote.cancel_command.is_some(),
+                    egui::Button::new(tr("Cancel")),
+                )
+                .clicked()
+            {
+                remote.cancel_running();
+            }
+        }
+    });
+    if !remote.sdk_versions.is_empty() {
+        ui.collapsing(tr("Installed SDKs"), |ui| {
+            for sdk in &remote.sdk_versions {
+                ui.monospace(sdk);
+            }
+        });
+    }
     if let Some(error) = &remote.error {
         ui.colored_label(rc_kit::pal(ui).error, error);
     }
@@ -349,20 +597,41 @@ pub fn show(ui: &mut Ui, remote: &mut RemoteExplorer) -> Option<Action> {
             tree(ui, remote, &root, 0);
         });
     ui.separator();
-    if let Some(path) = &remote.selected {
-        ui.label(path);
-    }
-    if let Some(text) = &remote.preview {
-        if remote.preview_truncated {
-            ui.label(tr("Preview limited to the first 64 KiB"));
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut remote.show_output, false, tr("Preview"));
+        ui.selectable_value(&mut remote.show_output, true, tr(".NET Output"));
+    });
+    if remote.show_output {
+        if let Some(output) = &remote.command_output {
+            egui::ScrollArea::both()
+                .id_salt("remote_command_output")
+                .show(ui, |ui| {
+                    ui.colored_label(
+                        if remote.command_error {
+                            rc_kit::pal(ui).error
+                        } else {
+                            rc_kit::pal(ui).text
+                        },
+                        egui::RichText::new(output).monospace(),
+                    );
+                });
         }
-        egui::ScrollArea::both()
-            .id_salt("remote_preview")
-            .show(ui, |ui| {
-                ui.monospace(text);
-            });
-    } else if remote.selected.is_some() && remote.error.is_none() {
-        ui.spinner();
+    } else {
+        if let Some(path) = &remote.selected {
+            ui.label(path);
+        }
+        if let Some(text) = &remote.preview {
+            if remote.preview_truncated {
+                ui.label(tr("Preview limited to the first 64 KiB"));
+            }
+            egui::ScrollArea::both()
+                .id_salt("remote_preview")
+                .show(ui, |ui| {
+                    ui.monospace(text);
+                });
+        } else if remote.selected.is_some() && remote.error.is_none() {
+            ui.spinner();
+        }
     }
     None
 }
@@ -450,5 +719,22 @@ mod tests {
             "/home/dev/App.csproj"
         );
         assert_eq!(remote_root("C:\\repo"), None);
+    }
+
+    #[test]
+    fn build_and_test_use_selected_project_without_a_shell() {
+        assert!(is_dotnet_target("/repo/tests/App.Tests.csproj"));
+        assert_eq!(
+            dotnet_args(CommandKind::Build, Some("/repo/App.sln".into())),
+            ["build", "/repo/App.sln"]
+        );
+        assert_eq!(
+            dotnet_args(
+                CommandKind::Test,
+                Some("/repo/tests/App.Tests.csproj".into())
+            ),
+            ["test", "/repo/tests/App.Tests.csproj"]
+        );
+        assert_eq!(dotnet_args(CommandKind::Sdks, None), ["--list-sdks"]);
     }
 }

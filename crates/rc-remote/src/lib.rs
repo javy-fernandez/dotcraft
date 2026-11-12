@@ -13,7 +13,7 @@ use std::{
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, ChildStdout, Command},
-    sync::mpsc,
+    sync::{mpsc, oneshot},
     task::JoinHandle,
 };
 
@@ -586,6 +586,11 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> Client<R, W> {
     }
 
     pub async fn request(&mut self, operation: Operation) -> Result<Value> {
+        let id = self.send(operation).await?;
+        self.receive(id).await
+    }
+
+    async fn send(&mut self, operation: Operation) -> Result<u64> {
         let id = self.next_id;
         self.next_id += 1;
         let request = Request {
@@ -598,16 +603,63 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> Client<R, W> {
             .await?;
         self.write.write_all(b"\n").await?;
         self.write.flush().await?;
+        Ok(id)
+    }
+
+    async fn read_response(&mut self) -> Result<Response> {
         let line = self
             .read
             .next_line()
             .await?
             .context("remote agent disconnected")?;
         let response: Response = serde_json::from_str(&line)?;
-        if response.version != PROTOCOL_VERSION || response.id != id {
+        if response.version != PROTOCOL_VERSION {
+            bail!("unexpected remote protocol version");
+        }
+        Ok(response)
+    }
+
+    async fn receive(&mut self, id: u64) -> Result<Value> {
+        let response = self.read_response().await?;
+        if response.id != id {
             bail!("unexpected remote response");
         }
         response.result.map_err(anyhow::Error::msg)
+    }
+
+    /// Sends a request, then interrupts it when `cancel` fires. Both the target response and
+    /// cancellation acknowledgement are consumed before the next request, keeping the stream in sync.
+    pub async fn request_cancellable(
+        &mut self,
+        operation: Operation,
+        mut cancel: oneshot::Receiver<()>,
+    ) -> Result<Value> {
+        let id = self.send(operation).await?;
+        tokio::select! {
+            line = self.read.next_line() => {
+                let line = line?.context("remote agent disconnected")?;
+                let response: Response = serde_json::from_str(&line)?;
+                if response.version != PROTOCOL_VERSION || response.id != id { bail!("unexpected remote response"); }
+                response.result.map_err(anyhow::Error::msg)
+            }
+            result = &mut cancel => {
+                if result.is_err() { return self.receive(id).await; }
+                let cancel_id = self.send(Operation::Cancel { target_id: id }).await?;
+                let mut target = None;
+                let mut acknowledged = false;
+                while target.is_none() || !acknowledged {
+                    let response = self.read_response().await?;
+                    if response.id == id { target = Some(response.result); }
+                    else if response.id == cancel_id { acknowledged = true; }
+                    else { bail!("unexpected remote response while cancelling"); }
+                }
+                match target.unwrap() {
+                    Ok(Value::Cancelled) => bail!("remote request cancelled"),
+                    Ok(value) => Ok(value),
+                    Err(message) => Err(anyhow::Error::msg(message)),
+                }
+            }
+        }
     }
 
     pub async fn handshake(&mut self) -> Result<()> {
