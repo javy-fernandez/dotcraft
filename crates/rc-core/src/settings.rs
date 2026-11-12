@@ -33,6 +33,7 @@ pub struct Settings {
     pub editor_line_spacing: f32,
     pub ui_zoom: f32,
     pub show_inlay_hints: bool,
+    pub show_code_vision: bool,
     pub show_indent_guides: bool,
     pub right_margin: usize,
     /// Save files when the window loses focus or when switching tabs (IntelliJ autosave).
@@ -88,6 +89,7 @@ impl Default for Settings {
             editor_line_spacing: 1.2,
             ui_zoom: 1.0,
             show_inlay_hints: true,
+            show_code_vision: true,
             show_indent_guides: true,
             right_margin: 120,
             autosave: true,

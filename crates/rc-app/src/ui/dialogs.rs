@@ -260,6 +260,7 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
                         ui.end_row();
                         ui.label("");
                         ui.checkbox(&mut draft.show_inlay_hints, tr("Show inlay hints"));
+                        ui.checkbox(&mut draft.show_code_vision, tr("Show Code Vision"));
                         ui.end_row();
                         ui.label("");
                         ui.checkbox(&mut draft.show_indent_guides, tr("Show indent guides"));

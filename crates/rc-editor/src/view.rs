@@ -144,6 +144,9 @@ impl<'a> EditorView<'a> {
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, CornerRadius::ZERO, pal.editor_bg);
         paint_text_area(ui, state, config, &scheme, &m, text_rect, focused);
+        for position in paint_code_vision(ui, state, config, &m, text_rect) {
+            out.events.push(EditorEvent::CodeVisionClicked { position });
+        }
         paint_gutter(ui, state, &scheme, &pal, &m, rect, text_rect);
         let (vbar, hbar) = paint_scrollbars(ui, state, &scheme, &pal, rect, text_rect, content_h, content_w, &m);
         if let Some(r) = vbar.or(hbar) {
@@ -185,6 +188,44 @@ impl<'a> EditorView<'a> {
         }
         out
     }
+}
+
+fn paint_code_vision(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m: &Metrics, text_rect: Rect) -> Vec<usize> {
+    let pal = rc_kit::pal(ui);
+    let font = egui::FontId::monospace(config.font.size * 0.82);
+    let painter = ui.painter_at(text_rect);
+    let mut clicked = Vec::new();
+    let mut visions = std::collections::BTreeMap::<usize, (String, usize)>::new();
+    for vision in &state.code_vision {
+        let (label, _) = visions.entry(vision.line).or_insert_with(|| (String::new(), vision.position));
+        if !label.is_empty() {
+            label.push_str(" · ");
+        }
+        label.push_str(&vision.title);
+    }
+    for (line, (title, position)) in visions {
+        if line >= state.buffer.len_lines() {
+            continue;
+        }
+        let row = row_of_line(state, line);
+        let y = text_rect.top() + row.saturating_sub(1) as f32 * m.row_h - state.scroll.y;
+        if y + m.row_h < text_rect.top() || y > text_rect.bottom() {
+            continue;
+        }
+        let galley = ui.fonts_mut(|fonts| fonts.layout_no_wrap(title, font.clone(), pal.muted));
+        let width = galley.size().x.min((text_rect.width() - 12.0).max(0.0));
+        let rect = Rect::from_min_size(pos2(text_rect.right() - width - 14.0, y + 1.0), vec2(width + 10.0, m.row_h - 2.0));
+        let response = ui.interact(rect, Id::new(("code_vision", state.id, line)), Sense::click());
+        painter.rect_filled(rect, 3.0, if response.hovered() { pal.row_hover } else { pal.editor_bg });
+        painter.galley(rect.min + vec2(5.0, (rect.height() - galley.size().y) / 2.0), galley, pal.muted);
+        if response.hovered() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+        if response.clicked() {
+            clicked.push(position);
+        }
+    }
+    clicked
 }
 
 pub(crate) fn metrics(ui: &Ui, state: &EditorState, config: &EditorConfig, rect: Rect) -> Metrics {
