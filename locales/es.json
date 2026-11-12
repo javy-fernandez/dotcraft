@@ -1462,6 +1462,13 @@
     "{method}: {title}": "{method}: {title}"
   },
   "rc-app": {
-    "Exit Focus Mode": "Exit Focus Mode"
+    "Exit Focus Mode": "Exit Focus Mode",
+    "XAML Preview": "XAML Preview",
+    "Open a XAML or AXAML file to preview it.": "Open a XAML or AXAML file to preview it.",
+    "Updating preview…": "Updating preview…",
+    "Button": "Button",
+    "Image": "Image",
+    "XAML preview is limited to 256 KB": "XAML preview is limited to 256 KB",
+    "XAML preview has too many nested elements": "XAML preview has too many nested elements"
   }
 }

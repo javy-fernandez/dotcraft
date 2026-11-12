@@ -50,6 +50,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Commit => crate::ui::git::commit_window(app, ui),
         ToolWindow::Git => crate::ui::git::git_window(app, ui),
         ToolWindow::PullRequests => crate::ui::pull_requests::window(app, ui),
+        ToolWindow::XamlPreview => crate::ui::xaml_preview::show(app, ui),
         ToolWindow::Problems => {
             if header(ui, tw.title()) {
                 app.toggle_tool(tw);
@@ -1215,6 +1216,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Bookmarks => (tr("No bookmarks"), tr("Press F3 on a line to bookmark it, or ⌥F3 to give it a letter or digit.")),
         ToolWindow::Explorer => ("", ""),
         ToolWindow::PullRequests => ("", ""),
+        ToolWindow::XamlPreview => ("", ""),
     }
 }
 

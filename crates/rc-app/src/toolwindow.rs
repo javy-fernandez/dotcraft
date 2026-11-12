@@ -30,6 +30,7 @@ pub enum ToolWindow {
     Endpoints,
     Coverage,
     PullRequests,
+    XamlPreview,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,7 +66,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 23] = [
+    pub const ALL: [ToolWindow; 24] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -84,6 +85,7 @@ impl ToolWindow {
         ToolWindow::Terminal,
         ToolWindow::Git,
         ToolWindow::PullRequests,
+        ToolWindow::XamlPreview,
         ToolWindow::Hierarchy,
         ToolWindow::LocalHistory,
         ToolWindow::Nuget,
@@ -116,6 +118,7 @@ impl ToolWindow {
             ToolWindow::Endpoints => "endpoints",
             ToolWindow::Coverage => "coverage",
             ToolWindow::PullRequests => "pull_requests",
+            ToolWindow::XamlPreview => "xaml_preview",
         }
     }
 
@@ -144,6 +147,7 @@ impl ToolWindow {
             ToolWindow::Endpoints => tr("Endpoints"),
             ToolWindow::Coverage => tr("Coverage"),
             ToolWindow::PullRequests => tr("Pull Requests"),
+            ToolWindow::XamlPreview => tr("XAML Preview"),
         }
     }
 
@@ -172,13 +176,14 @@ impl ToolWindow {
             ToolWindow::Endpoints => ico::TW_ENDPOINTS,
             ToolWindow::Coverage => ico::RUN_COVERAGE,
             ToolWindow::PullRequests => ico::TW_PULL_REQUESTS,
+            ToolWindow::XamlPreview => ico::PREVIEW,
         }
     }
 
     pub fn side(self) -> Side {
         match self {
             ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit | ToolWindow::Bookmarks => Side::Left,
-            ToolWindow::Notifications | ToolWindow::Hierarchy => Side::Right,
+            ToolWindow::Notifications | ToolWindow::Hierarchy | ToolWindow::XamlPreview => Side::Right,
             _ => Side::Bottom,
         }
     }
