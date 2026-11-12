@@ -136,6 +136,9 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Zoom Out"), ZoomOut),
         (tr("Reset Zoom"), ZoomReset),
         (tr("Bookmarks"), ShowBookmarks),
+        (tr("Toggle Presentation Mode"), TogglePresentationMode),
+        (tr("Toggle Distraction-free Mode"), ToggleDistractionFreeMode),
+        (tr("Toggle Zen Mode"), ToggleZenMode),
         (tr("Collapse All"), FoldAll),
         (tr("Expand All"), UnfoldAll),
     ]

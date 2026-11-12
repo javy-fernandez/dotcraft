@@ -43,17 +43,54 @@ pub struct WorkspaceState {
     pub solution: Option<Solution>,
 }
 
+/// View › Appearance modes, mutually exclusive like Rider's: Presentation (full screen, larger
+/// editor font, nothing but the editor), Distraction-free (no tool windows) and Zen
+/// (Distraction-free in full screen, without the title and status bars).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FocusMode {
     #[default]
     Normal,
+    Presentation,
     DistractionFree,
     Zen,
 }
 
 impl FocusMode {
+    pub const ALL: [FocusMode; 3] = [FocusMode::Presentation, FocusMode::DistractionFree, FocusMode::Zen];
+
     pub fn toggle(self, requested: Self) -> Self {
         if self == requested { Self::Normal } else { requested }
+    }
+
+    /// Hides the title and status bars.
+    pub fn hides_chrome(self) -> bool {
+        matches!(self, Self::Presentation | Self::Zen)
+    }
+
+    pub fn fullscreen(self) -> bool {
+        matches!(self, Self::Presentation | Self::Zen)
+    }
+
+    pub fn action(self) -> Option<rc_editor::Action> {
+        match self {
+            Self::Normal => None,
+            Self::Presentation => Some(rc_editor::Action::TogglePresentationMode),
+            Self::DistractionFree => Some(rc_editor::Action::ToggleDistractionFreeMode),
+            Self::Zen => Some(rc_editor::Action::ToggleZenMode),
+        }
+    }
+
+    /// The menu label: enter when another mode (or none) is active, exit when this one is.
+    pub fn label(self, active: bool) -> &'static str {
+        match (self, active) {
+            (Self::Presentation, false) => tr("Presentation Mode"),
+            (Self::Presentation, true) => tr("Exit Presentation Mode"),
+            (Self::DistractionFree, false) => tr("Distraction-free Mode"),
+            (Self::DistractionFree, true) => tr("Exit Distraction-free Mode"),
+            (Self::Zen, false) => tr("Zen Mode"),
+            (Self::Zen, true) => tr("Exit Zen Mode"),
+            (Self::Normal, _) => "",
+        }
     }
 }
 
@@ -61,12 +98,13 @@ pub struct DotCraftApp {
     pub settings: Settings,
     pub keymap: Keymap,
     pub editor_config: EditorConfig,
-    pub presentation_mode: bool,
     pub workspace: Option<WorkspaceState>,
     pub docs: Docs,
     pub editor_workflows: crate::ui::editor_workflows::EditorWorkflows,
     pub dock: Dock,
     pub focus_mode: FocusMode,
+    /// Whether the window was already full screen when a full-screen focus mode began.
+    pub fullscreen_before_focus: bool,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
@@ -183,7 +221,6 @@ impl DotCraftApp {
         DotCraftApp {
             keymap,
             editor_config,
-            presentation_mode: false,
             workspace: None,
             docs: {
                 let mut d = Docs::with_waker(pool, waker.clone());
@@ -193,6 +230,7 @@ impl DotCraftApp {
             editor_workflows: Default::default(),
             dock: Dock::default(),
             focus_mode: FocusMode::Normal,
+            fullscreen_before_focus: false,
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
@@ -1157,6 +1195,9 @@ impl DotCraftApp {
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
             Action::ZoomReset => self.set_zoom(ctx, 1.0),
             Action::ShowBookmarks => self.dock.show(ToolWindow::Bookmarks),
+            Action::TogglePresentationMode => self.toggle_focus_mode(ctx, FocusMode::Presentation),
+            Action::ToggleDistractionFreeMode => self.toggle_focus_mode(ctx, FocusMode::DistractionFree),
+            Action::ToggleZenMode => self.toggle_focus_mode(ctx, FocusMode::Zen),
             Action::GotoBookmark(n) => {
                 let c = char::from(b'0' + n);
                 match self.docs.all_bookmarks().into_iter().find(|b| b.mnemonic == Some(c)) {
@@ -1177,9 +1218,7 @@ impl DotCraftApp {
                 }
             }
             Action::Escape => {
-                if self.focus_mode != FocusMode::Normal {
-                    self.focus_mode = FocusMode::Normal;
-                }
+                self.set_focus_mode(ctx, FocusMode::Normal);
                 // Esc in a tool window returns to the editor (IntelliJ).
                 self.focus_editor = true;
             }
@@ -1424,13 +1463,13 @@ impl DotCraftApp {
         let keymap_changed = new.keymap != self.settings.keymap;
         self.settings = new;
         self.editor_config = editor_config(&self.settings);
-        if self.presentation_mode {
+        if self.focus_mode == FocusMode::Presentation {
             self.editor_config.font.size = presentation_font_size(self.settings.editor_font_size);
         }
         if keymap_changed {
             self.keymap = Keymap::new(keymap_kind(self.settings.keymap));
-            if self.native_menu.is_some() {
-                self.native_menu = NativeMenu::install(ctx, &self.keymap);
+            if let Some(menu) = &mut self.native_menu {
+                menu.rebuild(&self.keymap);
             }
         }
         if lang_changed {
@@ -1446,17 +1485,32 @@ impl DotCraftApp {
         ctx.request_repaint();
     }
 
-    /// Enlarges the editor and gives it the full work area while preserving the dock layout.
-    pub fn toggle_presentation_mode(&mut self, ctx: &Context) {
-        self.presentation_mode = !self.presentation_mode;
-        self.editor_config.font.size = if self.presentation_mode {
+    /// Enters `mode` (leaving the active one) or, with `FocusMode::Normal`, returns to the normal
+    /// layout. The dock layout is kept as it is; the modes only hide it.
+    pub fn set_focus_mode(&mut self, ctx: &Context, mode: FocusMode) {
+        let previous = self.focus_mode;
+        if previous == mode {
+            return;
+        }
+        self.focus_mode = mode;
+        self.editor_config.font.size = if mode == FocusMode::Presentation {
             presentation_font_size(self.settings.editor_font_size)
         } else {
             editor_config(&self.settings).font.size
         };
+        if !previous.fullscreen() && mode.fullscreen() {
+            self.fullscreen_before_focus = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+        } else if previous.fullscreen() && !mode.fullscreen() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.fullscreen_before_focus));
+        }
         self.focus_editor = true;
-        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.presentation_mode));
         ctx.request_repaint();
+    }
+
+    /// The View menu entries and their actions: enter `mode`, or leave it when it is active.
+    pub fn toggle_focus_mode(&mut self, ctx: &Context, mode: FocusMode) {
+        self.set_focus_mode(ctx, self.focus_mode.toggle(mode));
     }
 
     // ------------------------------------------------------------------ explorer actions
@@ -1825,7 +1879,7 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
 }
 
 fn presentation_font_size(configured: f32) -> f32 {
-    (configured * 1.5).max(24.0).min(40.0)
+    (configured * 1.5).clamp(24.0, 40.0)
 }
 
 /// The configured `dotnet`, or the default install location, or `dotnet` from PATH.

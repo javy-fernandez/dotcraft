@@ -69,6 +69,8 @@ enum Page {
     Categories,
     Commands(usize),
     ToolWindows,
+    /// View › Appearance: Presentation, Distraction-free and Zen.
+    Appearance,
 }
 
 pub fn reset(ctx: &egui::Context) {
@@ -91,6 +93,17 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                 for (index, (category, _)) in groups().iter().enumerate() {
                     if theme::menu_entry(ui, None, category, Some("›"), false, true).clicked() {
                         page = Page::Commands(index);
+                    }
+                }
+            }
+            Page::Appearance => {
+                // Each entry enters its mode or leaves it.
+                let editor = app.workspace.is_some() || !app.docs.list.is_empty();
+                for mode in FocusMode::ALL {
+                    let shortcut = mode.action().and_then(|a| app.keymap.shortcut_text(a));
+                    if theme::menu_entry(ui, None, mode.label(app.focus_mode == mode), shortcut.as_deref(), false, editor).clicked() {
+                        app.toggle_focus_mode(ui.ctx(), mode);
+                        ui.close();
                     }
                 }
             }
@@ -117,6 +130,12 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
         if command(ui, tr("Close Project"), Some(ico::CLOSE), app.workspace.is_some()) { app.close_project(); }
         ui.separator();
     }
+    // Like Rider, View starts with the Tool Windows and Appearance submenus.
+    if category == tr("View") {
+        if theme::menu_entry(ui, None, tr("Tool Windows"), Some("›"), false, true).clicked() { *page = Page::ToolWindows; }
+        if theme::menu_entry(ui, None, tr("Appearance"), Some("›"), false, true).clicked() { *page = Page::Appearance; }
+        ui.separator();
+    }
     for (label, action) in actions {
         let shortcut = app.keymap.shortcut_text(action);
         if theme::menu_entry(ui, crate::search::action_icon(action), label, shortcut.as_deref(), false, enabled(app, action)).clicked() {
@@ -134,20 +153,6 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
             }
             ui.close();
         }
-    }
-    if category == tr("View") {
-        ui.separator();
-        if command(ui, tr("Distraction-free Mode"), None, true) {
-            app.focus_mode = app.focus_mode.toggle(FocusMode::DistractionFree);
-            app.focus_editor = true;
-        }
-        if command(ui, tr("Zen Mode"), None, true) {
-            app.focus_mode = app.focus_mode.toggle(FocusMode::Zen);
-            app.focus_editor = true;
-        }
-        let label = if app.presentation_mode { tr("Exit Presentation Mode") } else { tr("Presentation Mode") };
-        if command(ui, label, None, app.workspace.is_some() || app.presentation_mode) { app.toggle_presentation_mode(ui.ctx()); }
-        if theme::menu_entry(ui, None, tr("Tool Windows"), Some("›"), false, true).clicked() { *page = Page::ToolWindows; }
     }
     if category == tr("File") {
         let document = app.docs.active_doc().is_some();

@@ -772,7 +772,21 @@
     "Could not reach SQL Server: {error}": "SQL Server に接続できませんでした: {error}",
     "TLS error: {error}. If the server uses a self-signed certificate, enable Trust server certificate.": "TLS エラー: {error}。サーバーが自己署名証明書を使用している場合は「サーバー証明書を信頼する」を有効にしてください。",
     "SQL Server error: {error}": "SQL Server エラー: {error}",
-    "SQL Server did not answer within the time limit.": "SQL Server が制限時間内に応答しませんでした。"
+    "SQL Server did not answer within the time limit.": "SQL Server が制限時間内に応答しませんでした。",
+    "Presentation Mode": "プレゼンテーションモード",
+    "Exit Presentation Mode": "プレゼンテーションモードを終了",
+    "Distraction-free Mode": "集中モード",
+    "Exit Distraction-free Mode": "集中モードを終了",
+    "Zen Mode": "Zen モード",
+    "Exit Zen Mode": "Zen モードを終了",
+    "Toggle Presentation Mode": "プレゼンテーションモードの切り替え",
+    "Toggle Distraction-free Mode": "集中モードの切り替え",
+    "Toggle Zen Mode": "Zen モードの切り替え",
+    "Cancel Replace": "置換をキャンセル",
+    "Replacement cancelled": "置換をキャンセルしました",
+    "Replacing…": "置換中…",
+    "{path}: document closed before replacement": "{path}: 置換前にドキュメントが閉じられました",
+    "Run configuration: {name}": "実行構成: {name}"
   },
   "terminal": {
     "Local": "ローカル",
@@ -1439,8 +1453,5 @@
     "{method}: {title}": "{method}: {title}"
   },
   "rc-app": {
-    "Distraction-free Mode": "Distraction-free Mode",
-    "Zen Mode": "Zen Mode",
-    "Exit Focus Mode": "Exit Focus Mode"
   }
 }

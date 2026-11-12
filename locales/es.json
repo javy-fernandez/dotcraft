@@ -772,7 +772,21 @@
     "Could not reach SQL Server: {error}": "No se pudo conectar con SQL Server: {error}",
     "TLS error: {error}. If the server uses a self-signed certificate, enable Trust server certificate.": "Error de TLS: {error}. Si el servidor usa un certificado autofirmado, activa Confiar en el certificado del servidor.",
     "SQL Server error: {error}": "Error de SQL Server: {error}",
-    "SQL Server did not answer within the time limit.": "SQL Server no respondió dentro del tiempo límite."
+    "SQL Server did not answer within the time limit.": "SQL Server no respondió dentro del tiempo límite.",
+    "Presentation Mode": "Modo presentación",
+    "Exit Presentation Mode": "Salir del modo presentación",
+    "Distraction-free Mode": "Modo sin distracciones",
+    "Exit Distraction-free Mode": "Salir del modo sin distracciones",
+    "Zen Mode": "Modo zen",
+    "Exit Zen Mode": "Salir del modo zen",
+    "Toggle Presentation Mode": "Alternar modo presentación",
+    "Toggle Distraction-free Mode": "Alternar modo sin distracciones",
+    "Toggle Zen Mode": "Alternar modo zen",
+    "Cancel Replace": "Cancelar reemplazo",
+    "Replacement cancelled": "Reemplazo cancelado",
+    "Replacing…": "Reemplazando…",
+    "{path}: document closed before replacement": "{path}: el documento se cerró antes del reemplazo",
+    "Run configuration: {name}": "Configuración de ejecución: {name}"
   },
   "terminal": {
     "Local": "Local",
@@ -1439,8 +1453,5 @@
     "{method}: {title}": "{method}: {title}"
   },
   "rc-app": {
-    "Distraction-free Mode": "Distraction-free Mode",
-    "Zen Mode": "Zen Mode",
-    "Exit Focus Mode": "Exit Focus Mode"
   }
 }

@@ -1942,3 +1942,58 @@ fn screens_sql_server() {
         h.render().unwrap().save(out.join(format!("sqlserver-plan-{suffix}.png"))).unwrap();
     }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/view-mode-*.png"]
+fn screens_view_modes() {
+    use crate::app::FocusMode;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    app.open_file(&fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs"));
+    app.dock.show(crate::toolwindow::ToolWindow::Explorer);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    h.get_by_label("Main Menu").click();
+    h.run_steps(2);
+    h.get_by_label("View").click();
+    h.run_steps(3);
+    h.get_by_label("Appearance").click();
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("view-mode-menu-dark.png")).unwrap();
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    let ctx = h.ctx.clone();
+    for (mode, name) in [(FocusMode::Presentation, "presentation"), (FocusMode::DistractionFree, "distraction-free"), (FocusMode::Zen, "zen")] {
+        h.state_mut().set_focus_mode(&ctx, mode);
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("view-mode-{name}-dark.png"))).unwrap();
+    }
+    h.state_mut().set_focus_mode(&ctx, FocusMode::Normal);
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/find-replace-dark.png"]
+fn screens_find_replace() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    let mut find = crate::search::FindInFiles::new(&app.workspace.as_ref().unwrap().ws.root, rc_core::Waker::noop(), "CouponCode".into());
+    find.show_replace = true;
+    find.replace = "Coupon".into();
+    find.search();
+    app.find_in_files = Some(find);
+    app.dock.show(crate::toolwindow::ToolWindow::Find);
+    let mut h = harness(app, vec2(1200.0, 800.0));
+    run_frames(&mut h, "find results", |a| a.find_in_files.as_ref().is_some_and(|f| f.summary.is_some()));
+    h.run_steps(2);
+    h.render().unwrap().save(out.join("find-replace-dark.png")).unwrap();
+}
