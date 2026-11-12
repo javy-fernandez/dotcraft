@@ -151,6 +151,63 @@ fn valid_size(value: &str) -> bool {
     value.parse::<usize>().is_ok_and(|n| (1..=32).contains(&n))
 }
 
+/// Expand EditorConfig's inclusive integer ranges before handing globs to globset.
+/// A bound prevents a hostile configuration from generating a huge pattern.
+fn expand_numeric_ranges(pattern: &str) -> Option<String> {
+    const MAX_VALUES: i128 = 256;
+    let chars: Vec<char> = pattern.chars().collect();
+    let mut expanded = String::new();
+    let (mut at, mut in_class, mut values) = (0, false, 0i128);
+    while at < chars.len() {
+        let ch = chars[at];
+        if ch == '\\' {
+            expanded.push(ch);
+            at += 1;
+            if let Some(&escaped) = chars.get(at) {
+                expanded.push(escaped);
+                at += 1;
+            }
+            continue;
+        }
+        if ch == '[' {
+            in_class = true;
+        } else if ch == ']' {
+            in_class = false;
+        } else if ch == '{'
+            && !in_class
+            && let Some(close) = chars[at + 1..]
+                .iter()
+                .position(|&c| c == '}')
+                .map(|offset| at + 1 + offset)
+        {
+            let contents: String = chars[at + 1..close].iter().collect();
+            if let Some((first, last)) = contents.split_once("..")
+                && !last.contains("..")
+                && let (Ok(first), Ok(last)) = (first.parse::<i64>(), last.parse::<i64>())
+            {
+                let count = i128::from(last) - i128::from(first) + 1;
+                if first >= last || values + count > MAX_VALUES {
+                    return None;
+                }
+                values += count;
+                expanded.push('{');
+                for number in first..=last {
+                    if number != first {
+                        expanded.push(',');
+                    }
+                    expanded.push_str(&number.to_string());
+                }
+                expanded.push('}');
+                at = close + 1;
+                continue;
+            }
+        }
+        expanded.push(ch);
+        at += 1;
+    }
+    Some(expanded)
+}
+
 fn section_matches(section: &str, relative: &str) -> bool {
     let pattern = section
         .strip_prefix('/')
@@ -162,6 +219,9 @@ fn section_matches(section: &str, relative: &str) -> bool {
                 format!("**/{section}")
             }
         });
+    let Some(pattern) = expand_numeric_ranges(&pattern) else {
+        return false;
+    };
     // Globset handles path-component globstars, but treats embedded ** as two single
     // stars. Protect those tokens while it parses escapes, classes and alternatives.
     let Ok(original) = globset::GlobBuilder::new(&pattern).literal_separator(true).backslash_escape(true).build() else { return false };
@@ -313,6 +373,43 @@ mod tests {
         assert!(section_matches("src/**.cs", "src/nested/App.cs"));
         assert!(section_matches("[AB]?.cs", "A1.cs"));
         assert!(!section_matches("[invalid", "App.cs"));
+    }
+    #[test]
+    fn numeric_ranges_match_inclusive_signed_values_without_expanding_escapes_or_classes() {
+        for name in ["File1.cs", "File2.cs", "File3.cs"] {
+            assert!(section_matches("File{1..3}.cs", name), "{name}");
+        }
+        assert!(!section_matches("File{1..3}.cs", "File0.cs"));
+        assert!(!section_matches("File{1..3}.cs", "File4.cs"));
+        for name in ["Build-2.cs", "Build-1.cs", "Build0.cs", "Build1.cs"] {
+            assert!(section_matches("Build{-2..1}.cs", name), "{name}");
+        }
+        assert!(section_matches("{Core,Build{-1..1}}.cs", "Build0.cs"));
+        assert!(section_matches(r"File\{1..3\}.cs", "File{1..3}.cs"));
+        assert!(!section_matches(r"File\{1..3\}.cs", "File2.cs"));
+        assert!(section_matches("File[{]1..3[}].cs", "File{1..3}.cs"));
+        assert!(!section_matches("File{3..1}.cs", "File2.cs"));
+        assert!(!section_matches("File{-1..-3}.cs", "File-2.cs"));
+        assert!(section_matches("File{1..256}.cs", "File256.cs"));
+        assert!(!section_matches("File{1..257}.cs", "File2.cs"));
+        assert!(!section_matches("File{1..1000}.cs", "File2.cs"));
+    }
+    #[test]
+    fn numeric_ranges_resolve_editorconfig_for_dotnet_sources() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(root, "App.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />\n");
+        write(
+            root,
+            ".editorconfig",
+            "root=true\n[*]\nindent_size=4\n[Generated{1..3}.cs]\nindent_size=2\n[Compat{-2..-1}.cs]\nindent_size=8\n",
+        );
+        write(root, "Generated2.cs", "class Generated2 {}\n");
+        write(root, "Generated4.cs", "class Generated4 {}\n");
+        write(root, "Compat-1.cs", "class Compat {}\n");
+        assert_eq!(resolve(root, "Generated2.cs").size, Some(2));
+        assert_eq!(resolve(root, "Generated4.cs").size, Some(4));
+        assert_eq!(resolve(root, "Compat-1.cs").size, Some(8));
     }
     #[test]
     fn embedded_globstars_preserve_other_glob_tokens() {
