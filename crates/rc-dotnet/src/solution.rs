@@ -122,6 +122,7 @@ fn parse_sln(text: &str, dir: &Path) -> Vec<SolutionItem> {
     let mut nested: Vec<(String, String)> = Vec::new();
     let mut in_nested = false;
     let mut in_items_of: Option<usize> = None;
+    let mut in_solution_items = false;
     for line in text.lines() {
         let t = line.trim();
         if let Some(rest) = t.strip_prefix("Project(\"{") {
@@ -138,19 +139,25 @@ fn parse_sln(text: &str, dir: &Path) -> Vec<SolutionItem> {
                 entries.push(Entry { guid, item });
                 in_items_of = Some(entries.len() - 1);
             }
+            in_solution_items = false;
             continue;
         }
         if t == "EndProject" {
             in_items_of = None;
+            in_solution_items = false;
             continue;
         }
-        if t.starts_with("ProjectSection(SolutionItems)") {
+        if t.starts_with("ProjectSection(") {
+            in_solution_items = t.starts_with("ProjectSection(SolutionItems)");
             continue;
         }
-        if let Some(i) = in_items_of
+        if t == "EndProjectSection" {
+            in_solution_items = false;
+            continue;
+        }
+        if in_solution_items
+            && let Some(i) = in_items_of
             && let Some((a, _)) = t.split_once(" = ")
-            && !t.starts_with("ProjectSection")
-            && !t.starts_with("EndProjectSection")
         {
             let file = SolutionItem::File(resolve(dir, a.trim()));
             if let SolutionItem::Folder { children, .. } = &mut entries[i].item {
