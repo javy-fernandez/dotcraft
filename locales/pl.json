@@ -772,7 +772,17 @@
     "Could not reach SQL Server: {error}": "Nie można połączyć się z SQL Server: {error}",
     "TLS error: {error}. If the server uses a self-signed certificate, enable Trust server certificate.": "Błąd TLS: {error}. Jeśli serwer używa certyfikatu z podpisem własnym, włącz Ufaj certyfikatowi serwera.",
     "SQL Server error: {error}": "Błąd SQL Server: {error}",
-    "SQL Server did not answer within the time limit.": "SQL Server nie odpowiedział w wyznaczonym czasie."
+    "SQL Server did not answer within the time limit.": "SQL Server nie odpowiedział w wyznaczonym czasie.",
+    "Cherry-Pick": "Cherry-pick",
+    "Cherry-picked {commit}": "Wykonano cherry-pick {commit}",
+    "Cherry-pick aborted": "Przerwano cherry-pick",
+    "Revert aborted": "Przerwano cofanie",
+    "Dependency graph": "Graf zależności",
+    "Reload graph": "Przeładuj graf",
+    "Restore the project to view its dependencies": "Przywróć projekt, aby zobaczyć jego zależności",
+    "No projects in the workspace": "Brak projektów w obszarze roboczym",
+    "{packages} packages, {edges} dependencies": "Pakiety: {packages}, zależności: {edges}",
+    "Select an existing .sln or .slnx solution": "Wybierz istniejące rozwiązanie .sln lub .slnx"
   },
   "terminal": {
     "Local": "Lokalny",

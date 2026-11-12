@@ -772,7 +772,17 @@
     "Could not reach SQL Server: {error}": "无法连接到 SQL Server：{error}",
     "TLS error: {error}. If the server uses a self-signed certificate, enable Trust server certificate.": "TLS 错误：{error}。如果服务器使用自签名证书，请启用“信任服务器证书”。",
     "SQL Server error: {error}": "SQL Server 错误：{error}",
-    "SQL Server did not answer within the time limit.": "SQL Server 未在时间限制内响应。"
+    "SQL Server did not answer within the time limit.": "SQL Server 未在时间限制内响应。",
+    "Cherry-Pick": "拣选",
+    "Cherry-picked {commit}": "已拣选 {commit}",
+    "Cherry-pick aborted": "已中止拣选",
+    "Revert aborted": "已中止还原",
+    "Dependency graph": "依赖关系图",
+    "Reload graph": "重新加载依赖关系图",
+    "Restore the project to view its dependencies": "还原项目以查看其依赖项",
+    "No projects in the workspace": "工作区中没有项目",
+    "{packages} packages, {edges} dependencies": "{packages} 个包，{edges} 个依赖项",
+    "Select an existing .sln or .slnx solution": "请选择现有的 .sln 或 .slnx 解决方案"
   },
   "terminal": {
     "Local": "本地",

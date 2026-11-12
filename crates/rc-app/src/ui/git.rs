@@ -314,6 +314,7 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
     ui.painter().vline(left.right() + 0.5, avail.y_range(), egui::Stroke::new(1.0, p.island_border));
     let mut select = None;
     let mut rebase_from = None;
+    let mut cherry_pick = None;
     let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left));
     lu.set_clip_rect(left.intersect(ui.clip_rect()));
     let log = app.vcs.log.clone();
@@ -356,6 +357,10 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
                     rebase_from = Some(c.hash.clone());
                     ui.close();
                 }
+                if theme::menu_entry(ui, Some(ico::COMMIT), tr("Cherry-Pick"), None, false, can_rebase).clicked() {
+                    cherry_pick = Some(c.hash.clone());
+                    ui.close();
+                }
             });
         }
     });
@@ -364,6 +369,11 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
     }
     if let Some(h) = rebase_from {
         crate::ui::rebase::open(app, &h);
+    }
+    if let Some(h) = cherry_pick
+        && save_before_branch_change(app)
+    {
+        app.vcs.cherry_pick(&h);
     }
     // Details of the selected commit.
     let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right.shrink2(vec2(10.0, 4.0))));
@@ -605,6 +615,17 @@ pub fn save_before_branch_change(app: &mut DotCraftApp) -> bool {
     true
 }
 
+/// The branches popup entry that aborts the operation in progress, named after it.
+fn abort_label(state: rc_vcs::RepoState) -> Option<&'static str> {
+    match state {
+        rc_vcs::RepoState::Merging => Some(tr("Abort Merge")),
+        rc_vcs::RepoState::Rebasing => Some(tr("Abort Rebase")),
+        rc_vcs::RepoState::CherryPicking => Some(tr("Abort Cherry-Pick")),
+        rc_vcs::RepoState::Reverting => Some(tr("Abort Revert")),
+        rc_vcs::RepoState::Clean | rc_vcs::RepoState::Bisecting => None,
+    }
+}
+
 /// A merge, rebase… is in progress or files are conflicted.
 fn has_conflicts(app: &DotCraftApp) -> bool {
     app.vcs.state != rc_vcs::RepoState::Clean || app.vcs.status.as_ref().is_some_and(|s| s.entries.iter().any(|e| e.conflict.is_some()))
@@ -650,9 +671,8 @@ fn branch_list(app: &mut DotCraftApp, ui: &mut Ui, state: &mut BranchMenuState, 
     });
     ui.add_space(2.0);
     if state.filter.is_empty() {
-        if app.vcs.state != rc_vcs::RepoState::Clean {
-            let rebase = app.vcs.state == rc_vcs::RepoState::Rebasing;
-            if theme::menu_entry(ui, Some(ico::ABORT), if rebase { tr("Abort Rebase") } else { tr("Abort Merge") }, None, false, !busy).clicked() {
+        if let Some(abort) = abort_label(app.vcs.state) {
+            if theme::menu_entry(ui, Some(ico::ABORT), abort, None, false, !busy).clicked() {
                 app.vcs.abort_operation();
                 ui.close();
             }
@@ -1496,5 +1516,106 @@ mod branches_tests {
         h.get_by_role_and_label(Role::Button, tr("Create")).click();
         frames(&mut h, "new branch", |a| a.vcs.branch_name().as_deref() == Some("from-topic"));
         assert!(root.join("t.txt").exists());
+    }
+
+    /// Right-clicks the log row of `subject` and picks "Cherry-Pick".
+    fn cherry_pick_from_log(h: &mut Harness<'static, DotCraftApp>, subject: &str) {
+        frames(h, subject, |a| a.vcs.log.iter().any(|c| c.subject == subject));
+        h.get_by_label(subject).click_secondary();
+        h.run_steps(3);
+        h.get_by_role_and_label(Role::Button, tr("Cherry-Pick")).click();
+        h.run_steps(2);
+    }
+
+    #[test]
+    fn log_cherry_pick_applies_a_commit_and_the_popup_aborts_a_conflicted_one() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let base = home.path().canonicalize().unwrap();
+        let (root, _remote) = repos(&base);
+        git(&root, &["checkout", "-qb", "clash"]);
+        std::fs::write(root.join("a.txt"), "clash\n").unwrap();
+        git(&root, &["commit", "-qam", "clash work"]);
+        git(&root, &["checkout", "-q", "main"]);
+        std::fs::write(root.join("a.txt"), "main\n").unwrap();
+        git(&root, &["commit", "-qam", "main work"]);
+        let mut h = open(&base.join("home"), &root);
+        h.state_mut().dock.show(crate::toolwindow::ToolWindow::Git);
+        h.run_steps(3);
+
+        cherry_pick_from_log(&mut h, "topic work");
+        let t = root.join("t.txt");
+        frames(&mut h, "cherry-pick", |a| a.vcs.busy.is_none() && t.exists());
+        assert!(h.state().vcs.error.is_none(), "{:?}", h.state().vcs.error);
+        assert_eq!(std::fs::read_to_string(root.join("t.txt")).unwrap(), "t\n");
+        assert_eq!(git(&root, &["branch", "--show-current"]).trim(), "main");
+
+        let before = git(&root, &["rev-parse", "HEAD"]);
+        cherry_pick_from_log(&mut h, "clash work");
+        frames(&mut h, "conflicted cherry-pick", |a| a.vcs.busy.is_none() && a.vcs.state == rc_vcs::RepoState::CherryPicking && a.vcs.merge.is_some());
+        assert!(h.state().vcs.error.is_some());
+        // The popup names the operation and aborts the cherry-pick (not `merge --abort`); the
+        // merge tool, which has its own abort button, is closed first.
+        h.state_mut().vcs.merge = None;
+        h.run_steps(2);
+        open_popup(&mut h);
+        assert!(h.query_by_role_and_label(Role::Button, tr("Abort Merge")).is_none());
+        h.get_by_role_and_label(Role::Button, tr("Abort Cherry-Pick")).click();
+        frames(&mut h, "abort", |a| a.vcs.busy.is_none() && a.vcs.state == rc_vcs::RepoState::Clean);
+        assert!(!root.join(".git/CHERRY_PICK_HEAD").exists());
+        assert_eq!(git(&root, &["rev-parse", "HEAD"]), before);
+        assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "main\n");
+        assert!(git(&root, &["status", "--porcelain"]).is_empty());
+    }
+
+    #[test]
+    fn abort_label_follows_the_operation_in_progress() {
+        use rc_vcs::RepoState::*;
+        assert_eq!(super::abort_label(Merging), Some(tr("Abort Merge")));
+        assert_eq!(super::abort_label(Rebasing), Some(tr("Abort Rebase")));
+        assert_eq!(super::abort_label(CherryPicking), Some(tr("Abort Cherry-Pick")));
+        assert_eq!(super::abort_label(Reverting), Some(tr("Abort Revert")));
+        assert_eq!(super::abort_label(Clean), None);
+        assert_eq!(super::abort_label(Bisecting), None);
+    }
+
+    /// Runs `Vcs::commit` and waits for it to finish.
+    fn commit(h: &mut Harness<'static, DotCraftApp>, message: &str, amend: bool) {
+        let vcs = &mut h.state_mut().vcs;
+        vcs.message = message.into();
+        vcs.amend = amend;
+        vcs.error = None;
+        vcs.commit(false);
+        frames(h, "commit", |a| a.vcs.busy.is_none());
+    }
+
+    #[test]
+    fn commit_needs_a_selected_file_but_a_message_only_amend_does_not() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let base = home.path().canonicalize().unwrap();
+        let (root, _remote) = repos(&base);
+        let mut h = open(&base.join("home"), &root);
+        std::fs::write(root.join("a.txt"), "changed\n").unwrap();
+        h.state_mut().vcs.excluded.insert("a.txt".into());
+        let head = git(&root, &["rev-parse", "HEAD"]);
+
+        commit(&mut h, "nothing selected", false);
+        assert_eq!(h.state().vcs.error.as_deref(), Some(tr("Select the files to commit")));
+        assert_eq!(git(&root, &["rev-parse", "HEAD"]), head);
+
+        commit(&mut h, "reworded", true);
+        assert!(h.state().vcs.error.is_none(), "{:?}", h.state().vcs.error);
+        assert_eq!(git(&root, &["log", "-1", "--format=%s"]).trim(), "reworded");
+        assert_eq!(git(&root, &["rev-list", "--count", "HEAD"]).trim(), "1");
+        assert_eq!(git(&root, &["show", "HEAD:a.txt"]), "a\n");
+        assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "changed\n");
+
+        // A file saved after the cached status was read still reaches the commit.
+        h.state_mut().vcs.excluded.clear();
+        std::fs::write(root.join("new.txt"), "new\n").unwrap();
+        commit(&mut h, "fresh status", false);
+        assert!(h.state().vcs.error.is_none(), "{:?}", h.state().vcs.error);
+        assert_eq!(git(&root, &["show", "HEAD:new.txt"]), "new\n");
     }
 }

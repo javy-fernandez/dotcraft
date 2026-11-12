@@ -772,7 +772,17 @@
     "Could not reach SQL Server: {error}": "SQL Server に接続できませんでした: {error}",
     "TLS error: {error}. If the server uses a self-signed certificate, enable Trust server certificate.": "TLS エラー: {error}。サーバーが自己署名証明書を使用している場合は「サーバー証明書を信頼する」を有効にしてください。",
     "SQL Server error: {error}": "SQL Server エラー: {error}",
-    "SQL Server did not answer within the time limit.": "SQL Server が制限時間内に応答しませんでした。"
+    "SQL Server did not answer within the time limit.": "SQL Server が制限時間内に応答しませんでした。",
+    "Cherry-Pick": "チェリーピック",
+    "Cherry-picked {commit}": "{commit} をチェリーピックしました",
+    "Cherry-pick aborted": "チェリーピックを中止しました",
+    "Revert aborted": "リバートを中止しました",
+    "Dependency graph": "依存関係グラフ",
+    "Reload graph": "グラフを再読み込み",
+    "Restore the project to view its dependencies": "依存関係を表示するにはプロジェクトを復元してください",
+    "No projects in the workspace": "ワークスペースにプロジェクトがありません",
+    "{packages} packages, {edges} dependencies": "{packages} 個のパッケージ、{edges} 個の依存関係",
+    "Select an existing .sln or .slnx solution": "既存の .sln または .slnx ソリューションを選択してください"
   },
   "terminal": {
     "Local": "ローカル",
