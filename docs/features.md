@@ -27,7 +27,7 @@ The issues below were open on 2026-11-12. Every listed PR is open against the or
 | - [ ] [#137](https://github.com/javy-fernandez/dotcraft/issues/137) | Visual `launchSettings.json` editor for profiles, URLs, arguments, browser and environment | Closing PR | [#285](https://github.com/javy-fernandez/dotcraft/pull/285) |
 | - [ ] [#138](https://github.com/javy-fernandez/dotcraft/issues/138) | BenchmarkDotNet gutter run and results table | Closing PR | [#290](https://github.com/javy-fernandez/dotcraft/pull/290) |
 | - [ ] [#140](https://github.com/javy-fernandez/dotcraft/issues/140) | Live MAUI and Avalonia XAML preview while editing | Partial PR | [#307](https://github.com/javy-fernandez/dotcraft/pull/307) |
-| - [ ] [#141](https://github.com/javy-fernandez/dotcraft/issues/141) | Remote WSL/SSH workspaces with .NET, Roslyn and debugger on remote host | Partial PR | [#309](https://github.com/javy-fernandez/dotcraft/pull/309), [#311](https://github.com/javy-fernandez/dotcraft/pull/311) |
+| - [ ] [#141](https://github.com/javy-fernandez/dotcraft/issues/141) | Remote WSL/SSH workspaces with .NET, Roslyn and debugger on remote host | Partial PR | [#309](https://github.com/javy-fernandez/dotcraft/pull/309), [#311](https://github.com/javy-fernandez/dotcraft/pull/311), [#313](https://github.com/javy-fernandez/dotcraft/pull/313) |
 | - [ ] [#142](https://github.com/javy-fernandez/dotcraft/issues/142) | Assembly Explorer | Closing PR | [#303](https://github.com/javy-fernandez/dotcraft/pull/303) |
 
 A closing PR uses `Closes #...` and may close its issue after merge. A partial PR uses `Refs #...` and leaves its issue open. Detailed scope, evidence paths, validation, and limitations are in [FEATURES.md](../FEATURES.md) and the linked PRs.
