@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 85 |
+| ✅ Verified | 86 |
 | 🚧 In progress | 46 |
-| 🟢 Existing | 23 |
+| 🟢 Existing | 22 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -314,7 +314,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/build.rs; crates/rc-app/src/runne
 | F-03 | Clean | ✅ | [PR 235](https://github.com/javy-fernandez/dotcraft/pull/235) verifies Linux Shop.Core project Clean with official .NET SDK 8.0.428 across Debug and Release: each clean removes only its own final/intermediate assemblies, and Debug builds again. Solution/multi-target clean, UI and other platforms remain untested. |
 | F-04 | Cancel build | ✅ | [PR 241](https://github.com/javy-fernandez/dotcraft/pull/241) verifies cancellation of a deliberately slow Shop.Core build with official .NET SDK 8.0.428 on Linux, a cancelled result before the 30-second marker and a successful later build. Direct descendant-exit inspection, UI and other platforms remain untested. |
 | F-05 | Streamed build output | ✅ | [PR 238](https://github.com/javy-fernandez/dotcraft/pull/238) verifies a Shop.Core MSBuild message arrives as a stdout event before process exit and before the successful Finished event with official .NET SDK 8.0.428 on Linux. UI rendering, very large output and other platforms remain untested. |
-| F-06 | Compiler diagnostics links | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| F-06 | Compiler diagnostics links | ✅ | [PR 245](https://github.com/javy-fernandez/dotcraft/pull/245) verifies a real Shop.Core CS0103 file/project/line/column diagnostic with official .NET SDK 8.0.428 on Linux and checks Build-row target conversion plus exact `open_at` caret position. Rendered pointer click, other diagnostic types and platforms remain untested. |
 | F-07 | Run configurations | ✅ | [PR 227](https://github.com/javy-fernandez/dotcraft/pull/227) exposes the toolbar selection to accessibility and verifies choosing Shop.Cli plus session restoration after reopening real Shop.sln in egui on Linux. Launch profiles, SDK execution, compound editing and other platforms remain separate acceptance scope. |
 | F-08 | Launch profile selection | ✅ | [PR 236](https://github.com/javy-fernandez/dotcraft/pull/236) verifies two Project profiles from the real Shop.Api launch settings in the egui toolbar and checks that the selected profile reaches RunRequest; IIS Express is excluded. Live process launch with the alternate profile, session restoration and other platforms remain untested. |
 | F-09 | Stop running processes | ✅ | [PR 231](https://github.com/javy-fernandez/dotcraft/pull/231) verifies live Shop.Api startup on ephemeral loopback, process ID, Stop exit and Run-console report using official .NET SDK 8.0.428 on Linux. Debugger stop, hot reload, other runtimes and platforms remain untested. |
