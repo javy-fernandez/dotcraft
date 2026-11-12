@@ -44,6 +44,22 @@ fn environment_is_set() {
 }
 
 #[test]
+fn dotnet_solution_workspace_is_the_terminal_working_directory() {
+    let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/Shop")
+        .canonicalize()
+        .unwrap();
+    let command = "printf 'dotcraft-cwd:%s\\n' \"$(basename \"$PWD\")\"; test -f Shop.sln && printf 'dotcraft-solution:present\\n'";
+    let spec = SpawnSpec::command("/bin/sh", ["-c", command], Some(workspace.clone())).size(80, 12);
+    let session = TermSession::spawn(&spec, Waker::noop()).unwrap();
+    assert!(session.wait_for_text("dotcraft-solution:present", TIMEOUT), "{:#?}", session.screen_lines());
+    assert!(session.screen_lines().iter().any(|line| line == "dotcraft-cwd:Shop"));
+    assert_eq!(session.cwd(), Some(workspace.as_path()));
+    assert!(session.wait_until(TIMEOUT, |state| state.exit().is_some()));
+    assert!(session.exit_status().unwrap().success());
+}
+
+#[test]
 fn resize_reaches_the_process() {
     let s = interactive(Waker::noop());
     s.resize(50, 10, 8, 16);

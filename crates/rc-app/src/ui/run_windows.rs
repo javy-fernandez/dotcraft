@@ -473,3 +473,40 @@ pub fn terminal(app: &mut DotCraftApp, ui: &mut Ui) {
         }
     }
 }
+
+#[cfg(all(test, unix))]
+mod terminal_workspace_tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+    use std::time::Duration;
+
+    #[test]
+    fn terminal_tool_window_uses_the_dotnet_solution_directory_and_opens_tabs() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let solution = crate::screens::fixtures().join("Shop/Shop.sln");
+        let workspace = solution.parent().unwrap().to_path_buf();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(&solution).unwrap(), solution: None });
+        app.open_terminal(None);
+        assert!(app.dock.is_open(ToolWindow::Terminal));
+        let session = &app.terminals.active().unwrap().session;
+        assert_eq!(session.cwd(), Some(workspace.as_path()));
+        session.write(b"test -f Shop.sln && printf 'dotcraft-solution-ready\\n'\n".to_vec());
+        assert!(session.wait_until(Duration::from_secs(10), |state| (0..24).any(|row| state.row_text(row) == "dotcraft-solution-ready")), "{:#?}", session.screen_lines());
+
+        let mut first = true;
+        let mut harness = Harness::builder().with_size(egui::vec2(900.0, 500.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            terminal(app, ui);
+        }, app);
+        harness.run_steps(3);
+        harness.get_by_label(tr("New Terminal Tab")).click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().terminals.len(), 2);
+        assert_eq!(harness.state().terminals.active().unwrap().session.cwd(), Some(workspace.as_path()));
+    }
+}

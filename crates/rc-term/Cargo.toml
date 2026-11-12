@@ -16,3 +16,8 @@ parking_lot = "0.12"
 [dev-dependencies]
 egui_kittest.workspace = true
 wgpu.workspace = true
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# The workspace disables eframe's default window backends; terminal integration tests
+# still compile its winit dependency through rc-kit and need one Linux backend.
+winit = { version = "0.30", default-features = false, features = ["x11"] }
