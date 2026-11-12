@@ -1,0 +1,7 @@
+# Central package management with .NET 8 on Linux
+
+The B-23 acceptance test copies real CentralShop, evaluates its two projects with official .NET SDK 8.0.428, and checks central and overridden Newtonsoft.Json versions. It then restores each `.csproj` successfully. The existing native NuGet window test passed against the same fixture, showing evaluated central package ownership and editing a version override through the UI. PR #192 separately covers parent imports and PackageVersion Update resolution.
+
+Validation on Linux: `PATH=/path/to/dotnet:$PATH DOTNET_ROOT=/path/to/dotnet CARGO_TARGET_DIR=/path/to/dedicated-target cargo test -p rc-dotnet central_shop_projects_restore_and_evaluate_with_sdk8 -- --nocapture` (1 passed) and `cargo test -p rc-app central_packages_show_where_they_live_and_move_overrides -- --nocapture` (1 passed).
+
+The existing broader `detects_and_edits_central_package_management` test restores `CentralShop.slnx` as a solution and fails under SDK 8.0.428 because that SDK does not recognize `.slnx`; this new test restores the projects directly. This verifies evaluated CPM, project restore and native editing for the tested CentralShop setup. Arbitrary imports, .slnx solution restore on newer SDKs, conflict handling, other project layouts and platforms remain untested. The implementation uses original DotCraft and its fixture; no CrabCraft code or assets were copied.

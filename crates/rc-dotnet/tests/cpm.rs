@@ -41,6 +41,28 @@ fn restore(dotnet: &Dotnet, sln: &Path) {
 }
 
 #[test]
+fn central_shop_projects_restore_and_evaluate_with_sdk8() {
+    let tmp = tempfile::Builder::new().prefix("dotcraft-cpm-sdk8-").tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap().join("CentralShop");
+    copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/CentralShop"), &root);
+    let core = root.join("src/CentralShop.Core/CentralShop.Core.csproj");
+    let cli = root.join("src/CentralShop.Cli/CentralShop.Cli.csproj");
+    let dotnet = dotnet();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let list: Vec<_> = rt.block_on(cpm::detect_all(&dotnet, vec![core.clone(), cli.clone()], 2)).into_iter().map(|(_, result)| result.unwrap()).collect();
+    let solution = SolutionCpm::new(list);
+    let core_cpm = solution.project(&core).unwrap();
+    let cli_cpm = solution.project(&cli).unwrap();
+    assert!(core_cpm.enabled && cli_cpm.enabled && core_cpm.evaluated && cli_cpm.evaluated);
+    assert_eq!(core_cpm.effective_version("Newtonsoft.Json").as_deref(), Some("13.0.1"));
+    assert_eq!(cli_cpm.effective_version("Newtonsoft.Json").as_deref(), Some("13.0.3"));
+    for project in [&core, &cli] {
+        let output = dotnet.std_command().arg("restore").arg(project).arg("--nologo").current_dir(&root).output().unwrap();
+        assert!(output.status.success(), "{}: {}\n{}", project.display(), String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    }
+}
+
+#[test]
 fn detects_and_edits_central_package_management() {
     let tmp = tempfile::Builder::new().prefix("dotcraft-cpm-").tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap().join("CentralShop");
