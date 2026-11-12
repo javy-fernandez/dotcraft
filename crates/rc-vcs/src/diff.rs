@@ -515,7 +515,15 @@ impl Repository {
     /// The content of `path` at `rev`, with checkout filters applied (line endings as in the
     /// work tree). `None` when the path does not exist there (new file, unborn branch).
     pub async fn show_file(&self, rev: &Revision, path: &str) -> Result<Option<FileContent>> {
-        match self.cmd().args(["cat-file", "--filters"]).arg(rev.object(path)).output().await {
+        let object = match rev {
+            Revision::Commit(name) => match self.resolve(name).await {
+                Ok(hash) => format!("{hash}:{path}"),
+                Err(GitError::NotFound(_)) => return Ok(None),
+                Err(error) => return Err(error),
+            },
+            _ => rev.object(path),
+        };
+        match self.cmd().args(["cat-file", "--filters"]).arg(object).output().await {
             Ok(out) => Ok(Some(FileContent::new(out.stdout))),
             Err(GitError::NotFound(_)) => Ok(None),
             Err(GitError::Failed { stderr, .. }) if stderr.contains("Not a valid object name") || stderr.contains("does not exist") => Ok(None),
