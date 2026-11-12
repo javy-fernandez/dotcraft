@@ -1340,6 +1340,9 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
             // The language server may continue a `///` comment on the new line.
             out.events.push(EditorEvent::Typed('\n'));
         }
+        CompleteStatement if !ro => {
+            crate::statement::complete(state);
+        }
         StartNewLine if !ro => {
             let end = commands::move_selection(&rope, &sel, Motion::LineEnd, false, tab);
             let e = commands::newline(&rope, &end, &indent);
