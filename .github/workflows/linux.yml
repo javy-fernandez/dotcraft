@@ -65,7 +65,7 @@ jobs:
           mkdir -p "$dir"
           install -m 755 target/release/dotcraft "$dir/dotcraft"
           install -m 644 assets/icon.png "$dir/dotcraft.png"
-          install -m 644 assets/dotcraft.desktop LICENSE-MIT LICENSE-APACHE "$dir/"
+          install -m 644 assets/dotcraft.desktop LICENSE-MIT LICENSE-APACHE assets/fonts/NotoSansCJK-LICENSE.txt "$dir/"
           archive="DotCraft-$version-linux-${{ matrix.arch }}.tar.gz"
           tar -czf "$archive" "$dir"
           echo "ARCHIVE=$archive" >> "$GITHUB_ENV"

@@ -109,7 +109,7 @@ jobs:
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
           New-Item -ItemType Directory DotCraft | Out-Null
           Copy-Item target/${{ matrix.target }}/release/dotcraft.exe DotCraft/DotCraft.exe
-          Copy-Item LICENSE-MIT, LICENSE-APACHE DotCraft/
+          Copy-Item LICENSE-MIT, LICENSE-APACHE, assets/fonts/NotoSansCJK-LICENSE.txt DotCraft/
           $archive = "DotCraft-$version-windows-${{ matrix.arch }}.zip"
           Compress-Archive -Path DotCraft -DestinationPath $archive
           "ARCHIVE=$archive" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV

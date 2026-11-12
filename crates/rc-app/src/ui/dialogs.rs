@@ -374,6 +374,11 @@ fn about(app: &mut DotCraftApp, ctx: &Context) -> Outcome {
             ui.label(egui::RichText::new(tr("A lightweight IDE for .NET")).color(rc_kit::pal(ui).muted));
             ui.add_space(6.0);
             ui.label(egui::RichText::new(tr("Icons: IntelliJ Platform (Apache 2.0)")).size(11.5).color(rc_kit::pal(ui).muted));
+            ui.collapsing(tr("Font licenses"), |ui| {
+                egui::ScrollArea::vertical().id_salt("font_licenses").max_height(200.0).show(ui, |ui| {
+                    ui.label(rc_kit::theme::FONT_LICENSES);
+                });
+            });
             ui.add_space(12.0);
             ui.horizontal(|ui| {
                 // Centred pair of buttons.
