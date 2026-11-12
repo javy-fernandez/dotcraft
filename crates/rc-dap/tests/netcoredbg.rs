@@ -327,6 +327,32 @@ fn debugs_the_api_through_an_http_request_and_stops_cleanly() {
 }
 
 #[test]
+fn pauses_and_resumes_a_live_shop_api_process() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let port = free_port();
+    let mut run = RunRequest::new(project("Shop.Api"));
+    run.env.push(("ASPNETCORE_URLS".into(), format!("http://127.0.0.1:{port}")));
+    let mut r = Run::start(DebugTarget::Project { dotnet: dotnet(), run }, DebugOptions::default(), Breakpoints::new());
+    r.until("Shop.Api to listen", Duration::from_secs(180), |s| s.state().is_ended() || (s.state() == &SessionState::Running && port_open(port)));
+    assert_eq!(r.s.state(), &SessionState::Running);
+    r.s.pause();
+    r.until_stopped();
+    assert_eq!(r.s.stop_info().unwrap().reason, StopReason::Pause);
+    r.s.continue_();
+    r.until("Shop.Api to resume", Duration::from_secs(20), |s| s.state() == &SessionState::Running && port_open(port));
+    let response = http_get(port, "/orders/sample");
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+    r.s.stop();
+    r.until("Shop.Api to stop", Duration::from_secs(20), |s| s.state().is_ended());
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while port_open(port) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+        r.pump();
+    }
+    assert!(!port_open(port), "Shop.Api is still listening after stop");
+}
+
+#[test]
 fn stops_on_exceptions_with_exception_info() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let order_cs = shop().join("src/Shop.Core/Order.cs");
