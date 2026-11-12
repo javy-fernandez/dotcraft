@@ -568,6 +568,21 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
         }
     }
 
+    // Spelling marks remain separate from compiler diagnostics and the Problems window.
+    for mark in &state.spelling {
+        if mark.end < vis_start || mark.start > vis_end { continue; }
+        for (i, &line) in lines.iter().enumerate() {
+            let start = line_start(line);
+            let layout = &layouts[i];
+            let end = start + layout.len;
+            if mark.end <= start || mark.start >= end { continue; }
+            let left = col_x(layout, mark.start.max(start) - start);
+            let right = col_x(layout, mark.end.min(end) - start);
+            let y = y_of_row(first_row + i) + m.row_h - 3.0;
+            painter.add(wavy(left, right, y, scheme.warning));
+        }
+    }
+
     // Carets.
     let t = ui.input(|i| i.time) - state.blink_epoch;
     let visible_phase = !config.caret_blink || (t % 1.0) < 0.5;

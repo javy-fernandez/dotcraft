@@ -262,6 +262,21 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
                         ui.checkbox(&mut draft.show_inlay_hints, tr("Show inlay hints"));
                         ui.end_row();
                         ui.label("");
+                        ui.checkbox(&mut draft.spellcheck_enabled, tr("Check spelling"));
+                        ui.end_row();
+                        ui.label(tr("Spelling language"));
+                        egui::ComboBox::from_id_salt("spelling_language")
+                            .selected_text(&draft.spelling_language)
+                            .show_ui(ui, |ui| {
+                                for language in &app.spelling_languages {
+                                    ui.selectable_value(&mut draft.spelling_language, language.clone(), language);
+                                }
+                                if app.spelling_languages.is_empty() {
+                                    ui.label(tr("No installed spelling dictionaries"));
+                                }
+                            });
+                        ui.end_row();
+                        ui.label("");
                         ui.checkbox(&mut draft.show_indent_guides, tr("Show indent guides"));
                         ui.end_row();
                         ui.label("");
