@@ -1066,6 +1066,7 @@ fn recent_locations(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize) 
             (path.clone(), line_text.0, line_text.1)
         })
         .collect();
+    *selected = (*selected).min(items.len().saturating_sub(1));
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let mut open = None;
     let (_, esc) = modal(ctx, "recent_locations", 620.0, |ui| {
@@ -1081,6 +1082,8 @@ fn recent_locations(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize) 
         }
         for (i, (path, line, text)) in items.iter().enumerate() {
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), egui::Sense::click());
+            let accessible_location = format!("{}:{}", path.display(), line + 1);
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, i == *selected, &accessible_location));
             if i == *selected {
                 ui.painter().rect_filled(r, 6.0, p.selection);
             } else if resp.hovered() {
@@ -1335,6 +1338,31 @@ fn file_structure(app: &mut DotCraftApp, ctx: &Context, filter: &mut String, sel
 mod tests {
     use super::*;
     use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn recent_locations_selects_and_opens_a_dotnet_source_position() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let fixtures = crate::screens::fixtures().join("Shop");
+        let solution = fixtures.join("Shop.sln");
+        let file = fixtures.join("src/Shop.Core/Order.cs");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState {
+            ws: rc_core::Workspace::open(&solution).unwrap(),
+            solution: Some(rc_dotnet::Solution::load(&solution).unwrap()),
+        });
+        app.open_file(&file);
+        let pos = app.docs.active_doc().unwrap().editor.buffer.rope().line_to_char(3);
+        app.nav_back = vec![(file.clone(), pos)];
+        app.dialog = Some(Dialog::RecentLocations { selected: 99 });
+        let mut harness = crate::screens::harness(app, vec2(1000.0, 700.0));
+        assert!(matches!(harness.state().dialog, Some(Dialog::RecentLocations { selected: 0 })));
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, &format!("{}:4", file.display()));
+        harness.key_press(Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(harness.state().docs.active_doc().unwrap().editor.caret_line_col().0, 3);
+        assert!(harness.state().dialog.is_none());
+    }
 
     #[test]
     fn responsive_settings_keep_pages_and_confirmation_inside_the_viewport() {
