@@ -80,8 +80,16 @@ impl NewProject {
             if location.join(solution_name).exists() {
                 return Some("A folder with that name already exists");
             }
-        } else if self.project_dir().exists() {
-            return Some("A folder with that name already exists");
+        } else if let Target::AddTo { solution } = &self.target {
+            let supported = solution.extension().is_some_and(|extension| {
+                extension.eq_ignore_ascii_case("sln") || extension.eq_ignore_ascii_case("slnx")
+            });
+            if !supported || !solution.is_file() {
+                return Some("Select an existing .sln or .slnx solution");
+            }
+            if self.project_dir().exists() {
+                return Some("A folder with that name already exists");
+            }
         }
         None
     }
