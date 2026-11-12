@@ -101,6 +101,7 @@ pub const HIDDEN_DIRS: &[&str] = &["bin", "obj", ".git", ".vs", ".idea", "node_m
 const HIDDEN_FILES: &[&str] = &[".DS_Store", "Thumbs.db"];
 
 pub fn is_hidden(name: &str, is_dir: bool) -> bool {
+    if name == ".git" { return true; }
     if is_dir { HIDDEN_DIRS.contains(&name) } else { HIDDEN_FILES.contains(&name) || name.ends_with(".user") || name.ends_with(".suo") }
 }
 
@@ -120,12 +121,16 @@ pub fn list_dir(dir: &Path) -> Vec<FileNode> {
 /// [`is_hidden`] hides, except `.git` and the OS's own files.
 pub fn list_dir_with(dir: &Path, all: bool) -> Vec<FileNode> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let canonical_dir = dunce::canonicalize(dir).ok();
     let mut out: Vec<FileNode> = entries
         .flatten()
         .filter_map(|e| {
             let name = e.file_name().to_string_lossy().into_owned();
-            let is_dir = e.file_type().ok()?.is_dir();
-            let shown = if all { !(is_dir && name == ".git") && !HIDDEN_FILES.contains(&name.as_str()) } else { !is_hidden(&name, is_dir) };
+            let file_type = e.file_type().ok()?;
+            let is_dir = file_type.is_dir() || (file_type.is_symlink() && canonical_dir.as_ref().is_some_and(|base| {
+                dunce::canonicalize(e.path()).ok().is_some_and(|target| target != *base && target.starts_with(base) && target.is_dir())
+            }));
+            let shown = if all { name != ".git" && !HIDDEN_FILES.contains(&name.as_str()) } else { !is_hidden(&name, is_dir) };
             shown.then(|| FileNode { path: e.path(), name, is_dir })
         })
         .collect();
