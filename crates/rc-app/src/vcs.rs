@@ -318,17 +318,23 @@ impl Vcs {
     /// Commits the included changes (and pushes when `push`).
     pub fn commit(&mut self, push: bool) {
         let Some(repo) = self.repo.clone() else { return };
-        let only: Vec<String> = self.changes().into_iter().map(|c| c.path).filter(|p| !self.excluded.contains(p)).collect();
-        if only.is_empty() && !self.amend {
-            self.error = Some(tr("Select the files to commit").into());
-            return;
-        }
         if self.message.trim().is_empty() {
             self.error = Some(tr("Write a commit message").into());
             return;
         }
-        let opts = CommitOptions { message: self.message.trim().to_string(), amend: self.amend, only, ..Default::default() };
+        let message = self.message.trim().to_string();
+        let amend = self.amend;
+        let excluded = self.excluded.clone();
         self.op(if push { "commit_push" } else { "commit" }, async move {
+            // Saving editor buffers just before Commit can make the cached UI status stale.
+            // Read status off the UI thread so those newly saved paths reach Git.
+            let status = repo.status(&StatusOptions::default()).await?;
+            let has_changes = status.entries.iter().any(|e| e.worktree != FileState::Ignored);
+            let only: Vec<String> = status.entries.into_iter().filter(|e| e.worktree != FileState::Ignored && !excluded.contains(&e.path)).map(|e| e.path).collect();
+            if only.is_empty() && (!amend || has_changes) {
+                return Err(rc_vcs::GitError::NothingToCommit);
+            }
+            let opts = CommitOptions { message, amend, only, ..Default::default() };
             repo.commit(&opts).await?;
             if push {
                 repo.push(&PushOptions::default(), None, None).await?;

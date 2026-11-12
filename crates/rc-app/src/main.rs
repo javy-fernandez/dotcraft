@@ -56,6 +56,7 @@ mod screens;
 mod standalone_project_tests;
 #[cfg(test)]
 mod workspace_open_tests;
+mod history_tests;
 mod docs;
 mod native_menu;
 mod open_files;
