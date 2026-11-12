@@ -34,6 +34,7 @@ pub const STATUS_H: f32 = 30.0;
 
 pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     let ctx = ui.ctx().clone();
+    status::tick_notices(app, &ctx);
     let p = rc_kit::pal(ui);
     let bar = egui::Frame::NONE.fill(p.main_bg);
     let title_h = TITLE_H.max(32.0 / ctx.zoom_factor().max(0.1));
@@ -168,8 +169,11 @@ mod focus_mode_tests {
         harness.run_steps(3);
         assert_eq!(harness.state().dock, original);
         harness.state_mut().focus_mode = FocusMode::Zen;
+        harness.state_mut().notices.push(crate::app::Notice { text: "Expired".into(), error: false, at: 1.0 });
+        harness.input_mut().time = Some(20.0);
         harness.run_steps(3);
         assert_eq!(harness.state().dock, original);
+        assert!(harness.state().notices.is_empty());
         harness.get_by_label(tr("Exit Focus Mode")).click();
         harness.run_steps(2);
         assert_eq!(harness.state().focus_mode, FocusMode::Normal);
