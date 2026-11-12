@@ -435,7 +435,7 @@ impl EditorState {
     pub fn undo(&mut self) {
         self.snippet = None;
         if let Some((edits, sel)) = self.buffer.undo() {
-            self.after_raw_edits(edits);
+            self.after_history_edits(edits);
             self.selection = sel;
             self.scroll_to_caret = true;
         }
@@ -444,7 +444,7 @@ impl EditorState {
     pub fn redo(&mut self) {
         self.snippet = None;
         if let Some((edits, sel)) = self.buffer.redo() {
-            self.after_raw_edits(edits);
+            self.after_history_edits(edits);
             self.selection = sel;
             self.scroll_to_caret = true;
         }
@@ -466,6 +466,29 @@ impl EditorState {
         }
         for h in &mut self.inlays {
             h.pos = map(h.pos);
+        }
+        self.search_matches.clear();
+        self.current_match = None;
+        self.highlights.clear();
+        self.after_raw_edits(edits);
+    }
+
+    fn after_history_edits(&mut self, edits: Vec<Edit>) {
+        // Undo and redo return edits in application order, including grouped typing.
+        // Map anchored decorations through each edit just as ordinary edits do.
+        for e in &edits {
+            let map = |pos: usize| {
+                if pos <= e.start_char { pos }
+                else if pos < e.old_end_char { e.start_char }
+                else { pos - e.old_end_char + e.new_end_char }
+            };
+            for d in &mut self.diagnostics {
+                d.start = map(d.start);
+                d.end = map(d.end).max(d.start);
+            }
+            for hint in &mut self.inlays {
+                hint.pos = map(hint.pos);
+            }
         }
         self.search_matches.clear();
         self.current_match = None;
