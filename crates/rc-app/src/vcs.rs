@@ -281,7 +281,11 @@ impl Vcs {
                 Err(error) if error.is_cancelled() => Err(rc_vcs::GitError::Cancelled),
                 Err(error) => Err(rc_vcs::GitError::Parse(error.to_string())),
             };
-            out.send(VcsEvent::Done(what, r.err().map(|e| error_text(&e))));
+            out.send(VcsEvent::Done(what, r.err().map(|e| match e {
+                // Commit only fails this way when no file was included (see `Vcs::commit`).
+                rc_vcs::GitError::NothingToCommit if what.starts_with("commit") => tr("Select the files to commit").to_string(),
+                e => error_text(&e),
+            })));
         });
     }
 
@@ -329,9 +333,10 @@ impl Vcs {
             // Saving editor buffers just before Commit can make the cached UI status stale.
             // Read status off the UI thread so those newly saved paths reach Git.
             let status = repo.status(&StatusOptions::default()).await?;
-            let has_changes = status.entries.iter().any(|e| e.worktree != FileState::Ignored);
             let only: Vec<String> = status.entries.into_iter().filter(|e| e.worktree != FileState::Ignored && !excluded.contains(&e.path)).map(|e| e.path).collect();
-            if only.is_empty() && (!amend || has_changes) {
+            // An amend with every change excluded only rewrites the message; a plain commit
+            // needs at least one included file (reported as "Select the files to commit").
+            if only.is_empty() && !amend {
                 return Err(rc_vcs::GitError::NothingToCommit);
             }
             let opts = CommitOptions { message, amend, only, ..Default::default() };
@@ -473,13 +478,26 @@ impl Vcs {
         self.op_notice("push_branch", notice, async move { repo.push_branch(&n, None, None).await.map(drop) });
     }
 
-    /// Aborts the merge or rebase in progress.
+    /// Applies one commit of the log onto the current branch; conflicts open the merge tool.
+    pub fn cherry_pick(&mut self, hash: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let hash = hash.to_string();
+        let short: String = hash.chars().take(8).collect();
+        let notice = trf("Cherry-picked {commit}", &[("commit", &short)]);
+        self.op_notice("cherry_pick", notice, async move { repo.cherry_pick_commit(&hash).await });
+    }
+
+    /// Aborts the merge, rebase, cherry-pick or revert in progress. Git's own state picks the
+    /// command, so a stale cached state cannot run `merge --abort` during a cherry-pick.
     pub fn abort_operation(&mut self) {
         let Some(repo) = self.repo.clone() else { return };
-        let rebase = self.state == rc_vcs::RepoState::Rebasing;
-        self.op_notice("abort", if rebase { tr("Rebase aborted") } else { tr("Merge aborted") }.to_string(), async move {
-            if rebase { repo.abort_rebase().await } else { repo.abort_merge().await }
-        });
+        let notice = match self.state {
+            rc_vcs::RepoState::Rebasing => tr("Rebase aborted"),
+            rc_vcs::RepoState::CherryPicking => tr("Cherry-pick aborted"),
+            rc_vcs::RepoState::Reverting => tr("Revert aborted"),
+            _ => tr("Merge aborted"),
+        };
+        self.op_notice("abort", notice.to_string(), async move { repo.abort_operation().await });
     }
 
     /// Opens the merge tool on the conflicted files of the repository (the operation in
@@ -747,8 +765,8 @@ impl Vcs {
                         Some(e) => {
                             self.error = Some(e.clone());
                             notices.push(e);
-                            // A failed merge, rebase or stash can leave conflicts behind.
-                            if what.starts_with("stash_") || matches!(what, "merge" | "checkout" | "pull" | "repository_tool") || what.starts_with("rebase") {
+                            // A failed merge, rebase, cherry-pick or stash can leave conflicts behind.
+                            if what.starts_with("stash_") || matches!(what, "merge" | "cherry_pick" | "checkout" | "pull" | "repository_tool") || what.starts_with("rebase") {
                                 self.refresh();
                                 self.check_conflicts();
                             }

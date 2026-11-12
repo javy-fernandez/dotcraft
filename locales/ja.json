@@ -786,7 +786,17 @@
     "Replacement cancelled": "置換をキャンセルしました",
     "Replacing…": "置換中…",
     "{path}: document closed before replacement": "{path}: 置換前にドキュメントが閉じられました",
-    "Run configuration: {name}": "実行構成: {name}"
+    "Run configuration: {name}": "実行構成: {name}",
+    "Cherry-Pick": "チェリーピック",
+    "Cherry-picked {commit}": "{commit} をチェリーピックしました",
+    "Cherry-pick aborted": "チェリーピックを中止しました",
+    "Revert aborted": "リバートを中止しました",
+    "Dependency graph": "依存関係グラフ",
+    "Reload graph": "グラフを再読み込み",
+    "Restore the project to view its dependencies": "依存関係を表示するにはプロジェクトを復元してください",
+    "No projects in the workspace": "ワークスペースにプロジェクトがありません",
+    "{packages} packages, {edges} dependencies": "{packages} 個のパッケージ、{edges} 個の依存関係",
+    "Select an existing .sln or .slnx solution": "既存の .sln または .slnx ソリューションを選択してください"
   },
   "terminal": {
     "Local": "ローカル",
@@ -1453,5 +1463,8 @@
     "{method}: {title}": "{method}: {title}"
   },
   "rc-app": {
+    "Distraction-free Mode": "Distraction-free Mode",
+    "Zen Mode": "Zen Mode",
+    "Exit Focus Mode": "Exit Focus Mode"
   }
 }

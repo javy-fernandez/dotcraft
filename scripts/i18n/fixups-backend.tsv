@@ -1,0 +1,11 @@
+# Fix-ups on contributed PRs: Git cherry-pick and abort, NuGet dependency graph, New Project
+Cherry-Pick	Cherry-pick	Cherry-pick	Cherry-pick	Cherry-Pick	Cherry-pick	拣选	チェリーピック
+Cherry-picked {commit}	Cherry-pick de {commit} aplicado	Cherry-pick de {commit} appliqué	Cherry-pick de {commit} aplicado	{commit} per Cherry-Pick übernommen	Wykonano cherry-pick {commit}	已拣选 {commit}	{commit} をチェリーピックしました
+Cherry-pick aborted	Cherry-pick abortado	Cherry-pick annulé	Cherry-pick abortado	Cherry-Pick abgebrochen	Przerwano cherry-pick	已中止拣选	チェリーピックを中止しました
+Revert aborted	Reversión abortada	Annulation abandonnée	Reversão abortada	Revert abgebrochen	Przerwano cofanie	已中止还原	リバートを中止しました
+Dependency graph	Grafo de dependencias	Graphe des dépendances	Grafo de dependências	Abhängigkeitsgraph	Graf zależności	依赖关系图	依存関係グラフ
+Reload graph	Recargar grafo	Recharger le graphe	Recarregar grafo	Graph neu laden	Przeładuj graf	重新加载依赖关系图	グラフを再読み込み
+Restore the project to view its dependencies	Restaura el proyecto para ver sus dependencias	Restaurez le projet pour voir ses dépendances	Restaure o projeto para ver suas dependências	Stellen Sie das Projekt wieder her, um seine Abhängigkeiten zu sehen	Przywróć projekt, aby zobaczyć jego zależności	还原项目以查看其依赖项	依存関係を表示するにはプロジェクトを復元してください
+No projects in the workspace	No hay proyectos en el espacio de trabajo	Aucun projet dans l’espace de travail	Nenhum projeto no espaço de trabalho	Keine Projekte im Arbeitsbereich	Brak projektów w obszarze roboczym	工作区中没有项目	ワークスペースにプロジェクトがありません
+{packages} packages, {edges} dependencies	{packages} paquetes, {edges} dependencias	{packages} paquets, {edges} dépendances	{packages} pacotes, {edges} dependências	{packages} Pakete, {edges} Abhängigkeiten	Pakiety: {packages}, zależności: {edges}	{packages} 个包，{edges} 个依赖项	{packages} 個のパッケージ、{edges} 個の依存関係
+Select an existing .sln or .slnx solution	Selecciona una solución .sln o .slnx existente	Sélectionnez une solution .sln ou .slnx existante	Selecione uma solução .sln ou .slnx existente	Wählen Sie eine vorhandene .sln- oder .slnx-Projektmappe	Wybierz istniejące rozwiązanie .sln lub .slnx	请选择现有的 .sln 或 .slnx 解决方案	既存の .sln または .slnx ソリューションを選択してください

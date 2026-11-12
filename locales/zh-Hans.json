@@ -786,7 +786,17 @@
     "Replacement cancelled": "已取消替换",
     "Replacing…": "正在替换…",
     "{path}: document closed before replacement": "{path}：文档在替换前已关闭",
-    "Run configuration: {name}": "运行配置：{name}"
+    "Run configuration: {name}": "运行配置：{name}",
+    "Cherry-Pick": "拣选",
+    "Cherry-picked {commit}": "已拣选 {commit}",
+    "Cherry-pick aborted": "已中止拣选",
+    "Revert aborted": "已中止还原",
+    "Dependency graph": "依赖关系图",
+    "Reload graph": "重新加载依赖关系图",
+    "Restore the project to view its dependencies": "还原项目以查看其依赖项",
+    "No projects in the workspace": "工作区中没有项目",
+    "{packages} packages, {edges} dependencies": "{packages} 个包，{edges} 个依赖项",
+    "Select an existing .sln or .slnx solution": "请选择现有的 .sln 或 .slnx 解决方案"
   },
   "terminal": {
     "Local": "本地",
@@ -1453,5 +1463,8 @@
     "{method}: {title}": "{method}：{title}"
   },
   "rc-app": {
+    "Distraction-free Mode": "Distraction-free Mode",
+    "Zen Mode": "Zen Mode",
+    "Exit Focus Mode": "Exit Focus Mode"
   }
 }

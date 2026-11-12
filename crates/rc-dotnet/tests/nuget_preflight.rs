@@ -19,7 +19,7 @@ async fn invalid_package_commands_do_not_spawn_and_valid_commands_keep_arguments
     std::fs::set_permissions(&host, mode).unwrap();
     let dotnet = Dotnet::new(&host);
 
-    for id in ["", "--help", "A..B", "A B", "A/Bad", "A-", "_Hidden"] {
+    for id in ["", "--help", "-A", ".A", "A..B", "A B", "A/Bad", "A-"] {
         assert!(add_package(&dotnet, &project, id, None, false).await.is_err(), "{id}");
         assert!(remove_package(&dotnet, &project, id).await.is_err(), "{id}");
     }
@@ -36,4 +36,8 @@ async fn invalid_package_commands_do_not_spawn_and_valid_commands_keep_arguments
     let remove = remove_package(&dotnet, &project, "Newtonsoft.Json").await.unwrap();
     assert!(remove.success);
     assert_eq!(remove.output.lines().collect::<Vec<_>>(), ["remove", project.to_str().unwrap(), "package", "Newtonsoft.Json"]);
+    // NuGet ids may start with an underscore (`\w+([.-]\w+)*`).
+    let underscore = add_package(&dotnet, &project, "_Internal.Tools-Core_2", None, false).await.unwrap();
+    assert!(underscore.success);
+    assert_eq!(underscore.output.lines().nth(3), Some("_Internal.Tools-Core_2"));
 }

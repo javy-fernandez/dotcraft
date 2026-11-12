@@ -786,7 +786,17 @@
     "Replacement cancelled": "Substituição cancelada",
     "Replacing…": "Substituindo…",
     "{path}: document closed before replacement": "{path}: o documento foi fechado antes da substituição",
-    "Run configuration: {name}": "Configuração de execução: {name}"
+    "Run configuration: {name}": "Configuração de execução: {name}",
+    "Cherry-Pick": "Cherry-pick",
+    "Cherry-picked {commit}": "Cherry-pick de {commit} aplicado",
+    "Cherry-pick aborted": "Cherry-pick abortado",
+    "Revert aborted": "Reversão abortada",
+    "Dependency graph": "Grafo de dependências",
+    "Reload graph": "Recarregar grafo",
+    "Restore the project to view its dependencies": "Restaure o projeto para ver suas dependências",
+    "No projects in the workspace": "Nenhum projeto no espaço de trabalho",
+    "{packages} packages, {edges} dependencies": "{packages} pacotes, {edges} dependências",
+    "Select an existing .sln or .slnx solution": "Selecione uma solução .sln ou .slnx existente"
   },
   "terminal": {
     "Local": "Local",
@@ -1453,5 +1463,8 @@
     "{method}: {title}": "{method}: {title}"
   },
   "rc-app": {
+    "Distraction-free Mode": "Distraction-free Mode",
+    "Zen Mode": "Zen Mode",
+    "Exit Focus Mode": "Exit Focus Mode"
   }
 }

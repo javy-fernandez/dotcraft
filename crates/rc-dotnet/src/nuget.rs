@@ -247,8 +247,15 @@ pub async fn remove_package(dotnet: &Dotnet, project: &Path, id: &str) -> anyhow
 
 fn validate_package_command(project: &Path, id: &str) -> anyhow::Result<()> {
     anyhow::ensure!(project.is_file() && project.extension().is_some_and(|e| ["csproj", "fsproj", "vbproj"].iter().any(|ext| e.eq_ignore_ascii_case(ext))), "A .NET project file is required for package changes");
-    anyhow::ensure!(!id.is_empty() && id.len() <= 100 && id.split(['.', '-']).all(|part| part.chars().next().is_some_and(char::is_alphanumeric) && part.chars().all(|c| c.is_alphanumeric() || c == '_')), "Invalid NuGet package ID");
+    anyhow::ensure!(is_valid_package_id(id), "Invalid NuGet package ID");
     Ok(())
+}
+
+/// NuGet's own rule (`PackageIdValidator`): `^\w+([.-]\w+)*$`, at most 100 characters, where
+/// `\w` includes `_` (so `_Private.Package` is valid). A leading `-` can never pass, which keeps
+/// the id from reading as an option of `dotnet add package`.
+fn is_valid_package_id(id: &str) -> bool {
+    id.len() <= 100 && id.split(['.', '-']).all(|part| !part.is_empty() && part.chars().all(|c| c.is_alphanumeric() || c == '_'))
 }
 
 fn validate_package_version(version: &str) -> anyhow::Result<()> {
@@ -683,6 +690,16 @@ impl NugetClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn package_ids_follow_nuget_rules() {
+        for id in ["Newtonsoft.Json", "_Private", "__a._b", "A-B.C_D", "Ünicode.Paket", "x1"] {
+            assert!(is_valid_package_id(id), "{id}");
+        }
+        for id in ["", "-A", "--help", ".A", "A.", "A..B", "A B", "A/B", "A+B", &"a".repeat(101)] {
+            assert!(!is_valid_package_id(id), "{id}");
+        }
+    }
 
     #[test]
     fn parses_vulnerable_packages() {
