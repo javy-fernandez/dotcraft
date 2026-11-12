@@ -333,6 +333,7 @@ additional scope is pending.
 | Shop.Api launch profile selection (F-08) | [Original PR 236](https://github.com/javy-fernandez/dotcraft/pull/236) | [Launch profile evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/launch-profile-shop-selection/docs/implementation/shop-launch-profile-selection.md) |
 | Duplicate Shop Program.cs Search Everywhere results (A-07, partial) | [Original PR 237](https://github.com/javy-fernandez/dotcraft/pull/237) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/237/files) |
 | Linux Shop.Core streamed build output (F-05) | [Original PR 238](https://github.com/javy-fernandez/dotcraft/pull/238) | [Build stream evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-build-stream-live/docs/implementation/build-stream-linux.md) |
+| Shop test discovery across xUnit, NUnit and MSTest (H-04) | [Original PR 239](https://github.com/javy-fernandez/dotcraft/pull/239) | [Discovery evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-test-discovery-live/docs/implementation/shop-test-discovery.md) |
 
 ## Completion criteria
 
