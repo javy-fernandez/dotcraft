@@ -1588,6 +1588,7 @@ fn expand_template(state: &mut EditorState) -> bool {
     if state.lang() != rc_syntax::Lang::CSharp || state.selection.len() != 1 || !state.selection.primary().is_empty() {
         return false;
     }
+    if csharp_template_noncode(state) { return false; }
     let rope = state.buffer.rope();
     let caret = state.caret();
     let mut start = caret;
@@ -1615,4 +1616,45 @@ fn expand_template(state: &mut EditorState) -> bool {
     let body = crate::templates::fill(body, &stem);
     state.insert_snippet(start, caret, &body);
     true
+}
+
+fn csharp_template_noncode(state: &EditorState) -> bool {
+    let rope = state.buffer.rope();
+    let caret = state.caret();
+    if caret == 0 { return false; }
+    if let Some(tree) = state.syntax.tree() {
+        let byte = rope.char_to_byte(caret - 1);
+        let mut node = tree.root_node().descendant_for_byte_range(byte, byte);
+        while let Some(current) = node {
+            if current.kind().contains("comment") || current.kind().contains("string") || current.kind() == "character_literal" {
+                return true;
+            }
+            node = current.parent();
+        }
+    }
+    // The syntax tree may still describe the previous keystroke. Scan the current
+    // line so a newly typed abbreviation in a comment or ordinary string stays literal.
+    let line = rope.char_to_line(caret);
+    let line_start = rope.line_to_char(line);
+    if caret - line_start > 4096 { return true; }
+    let mut chars = rope.slice(line_start..caret).chars().peekable();
+    let mut quote = None;
+    let mut escaped = false;
+    let mut block_comment = false;
+    while let Some(ch) = chars.next() {
+        if block_comment {
+            if ch == '*' && chars.peek() == Some(&'/') { chars.next(); block_comment = false; }
+            continue;
+        }
+        if let Some(delimiter) = quote {
+            if escaped { escaped = false; }
+            else if ch == '\\' { escaped = true; }
+            else if ch == delimiter { quote = None; }
+            continue;
+        }
+        if ch == '/' && chars.peek() == Some(&'/') { return true; }
+        if ch == '/' && chars.peek() == Some(&'*') { chars.next(); block_comment = true; continue; }
+        if ch == '"' || ch == '\'' { quote = Some(ch); }
+    }
+    block_comment || quote.is_some()
 }
