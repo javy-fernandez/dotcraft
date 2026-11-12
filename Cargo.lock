@@ -3664,6 +3664,7 @@ name = "rc-editor"
 version = "0.5.0"
 dependencies = [
  "criterion",
+ "eframe",
  "egui",
  "egui_kittest",
  "rc-kit",
