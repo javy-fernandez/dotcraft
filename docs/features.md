@@ -21,6 +21,7 @@ Reference: [Rider features](https://www.jetbrains.com/rider/features/).
 - [ ] Match delimiters and insert closing braces automatically.
 - [x] Pair C# brackets during typing, respect comments and strings, and preserve undo. Validated through editor input events on a real Shop C# file; broader delimiter behavior remains in the unchecked item above.
 - [x] Toggle selected C# line and block comments with Rider shortcuts and undo. Validated on a real Shop C# file.
+- [x] Type brackets with mixed selected and empty C# carets without losing selected text. Validated through editor events and undo on a real Shop C# file.
 - [ ] Provide live templates and postfix templates.
 - [ ] Support multiple selections and caret editing.
 - [ ] Generate common code constructs and rearrange code.
@@ -209,6 +210,7 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 - [x] Return to a recent C# source location by line number with the keyboard. Validated with `Shop.sln` on Linux.
 - [x] Activate and close C# editor tabs with accessible controls. Validated with `Shop.sln` on Linux.
 - [x] Open a recent .NET solution from Welcome with an accessible full-path row. Validated with `Shop.sln` on Linux.
+- [x] Split two C# editors side by side or vertically, then unsplit without closing either file. Validated with `Shop.sln` on Linux.
 
 ## Implementation progress
 
@@ -255,6 +257,9 @@ additional scope is pending.
 | Accessible C# editor tabs (A-05) | [Original PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) | [Editor tabs evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/accessible-editor-tabs/docs/implementation/editor-tabs-dotnet.md) |
 | Workspace solution/folder symlink tree (B-01, partial) | [Original PR 175](https://github.com/javy-fernandez/dotcraft/pull/175) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/175/files) |
 | Recent solution on Welcome (A-08) | [Original PR 176](https://github.com/javy-fernandez/dotcraft/pull/176) | [Welcome evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/recent-projects-welcome/docs/implementation/recent-projects-shop.md) |
+| Solution folders and loose items (B-05) | [Original PR 177](https://github.com/javy-fernandez/dotcraft/pull/177) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/177/files) |
+| Mixed selection and caret typing (C-07) | [Original PR 178](https://github.com/javy-fernandez/dotcraft/pull/178) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/178/files) |
+| Split C# editors (A-06) | [Original PR 179](https://github.com/javy-fernandez/dotcraft/pull/179) | [Split editor evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/split-editor-dotnet-acceptance/docs/implementation/split-editor-shop.md) |
 
 ## Completion criteria
 

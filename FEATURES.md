@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 43 |
+| ✅ Verified | 46 |
 | 🚧 In progress | 27 |
-| 🟢 Existing | 68 |
+| 🟢 Existing | 65 |
 | 🔁 Reuse candidate | 22 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
@@ -124,7 +124,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-03 | Tool window stripes | 🚧 | Existing stripes plus verified overflow scrolling; PR 7. Wider UI audit remains pending. |
 | A-04 | Docked tool windows | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-05 | Editor tabs | ✅ | [PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) names close controls for accessibility; egui UI harness activates and closes C# tabs from real `Shop.sln` on Linux. Pinned/preview tabs, drag ordering, compact widths and other platforms remain untested. |
-| A-06 | Split editors | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-06 | Split editors | ✅ | [PR 179](https://github.com/javy-fernandez/dotcraft/pull/179) tests tab split commands in both orientations and Unsplit in an egui UI harness with real `Shop.sln` C# files on Linux. Divider drag, context-menu pointer flow, narrow layouts and persistence remain untested. |
 | A-07 | Search Everywhere | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-08 | Recent projects | ✅ | [PR 176](https://github.com/javy-fernandez/dotcraft/pull/176) exposes full recent paths to accessibility; egui UI harness opens real `Shop.sln` from Welcome and verifies recent-history order on Linux. Missing-path removal, compact widths and other platforms remain untested. |
 | A-09 | Recent files | ✅ | [PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) keeps filtered selection valid and exposes file rows to accessibility; egui UI harness opens three real `Shop.sln` C# files and selects one with Enter on Linux. Missing files and native menus remain untested. |
@@ -160,7 +160,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-02 | Classic .sln solutions | ✅ | Live Shop build/run and C# application flows load classic solutions; see live-dotnet.md. |
 | B-03 | XML .slnx solutions | ✅ | Live Roslyn and application flows load a real two-project XML solution; see live-dotnet.md. |
 | B-04 | Standalone .NET projects | 🚧 | [PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) discovers one top-level C#, F#, or VB project when opening a folder without a solution, preserving the folder session key; 13 rc-core tests pass on real fixtures. App opening and SDK build/run remain unverified. |
-| B-05 | Solution folders and items | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| B-05 | Solution folders and items | ✅ | [PR 177](https://github.com/javy-fernandez/dotcraft/pull/177) restricts classic `.sln` loose items to `SolutionItems` sections; Shop `.sln`, TenProjects `.slnx`, and nested-folder fixtures verify parser membership in seven tests. UI and SDK execution remain untested. |
 | B-06 | Project templates | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-07 | File and class templates | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-08 | .NET SDK discovery | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -198,7 +198,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-04 | Signature help | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-05 | Quick documentation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-06 | Automatic brackets | ✅ | [PR 168](https://github.com/javy-fernandez/dotcraft/pull/168) fixes C# comment/string context and verifies pairing, type-over, selection wrapping, and undo through egui editor events on a real Shop C# fixture; 17 rc-editor unit and one fixture test pass. No SDK build or broader Rider parity claim. |
-| C-07 | Multiple carets | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-07 | Multiple carets | ✅ | [PR 178](https://github.com/javy-fernandez/dotcraft/pull/178) fixes data loss with mixed selection and empty caret during bracket typing; 27 rc-text, 17 rc-editor and one real Shop C# editor-event test verify per-range edits and one-step undo. No SDK build or broader input matrix claim. |
 | C-08 | Code folding | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-09 | Inlay hints | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-10 | Line and block comments | ✅ | [PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) fixes repeated block-comment toggle and verifies Rider line/block shortcuts, selection and undo through editor events on a real Shop C# file; 17 unit and two fixture tests pass. No SDK build or broader Rider parity claim. |
