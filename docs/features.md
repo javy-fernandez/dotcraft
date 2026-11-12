@@ -22,6 +22,7 @@ Reference: [Rider features](https://www.jetbrains.com/rider/features/).
 - [x] Pair C# brackets during typing, respect comments and strings, and preserve undo. Validated through editor input events on a real Shop C# file; broader delimiter behavior remains in the unchecked item above.
 - [x] Toggle selected C# line and block comments with Rider shortcuts and undo. Validated on a real Shop C# file.
 - [x] Type brackets with mixed selected and empty C# carets without losing selected text. Validated through editor events and undo on a real Shop C# file.
+- [x] Undo and redo C# edits while restoring caret, diagnostic and inlay positions. Validated through editor events on a real Shop C# file.
 - [ ] Provide live templates and postfix templates.
 - [ ] Support multiple selections and caret editing.
 - [ ] Generate common code constructs and rearrange code.
@@ -264,6 +265,7 @@ additional scope is pending.
 | Local Git clone and open (I-09) | [Original PR 180](https://github.com/javy-fernandez/dotcraft/pull/180) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/180/files) |
 | Launch profile URL classification (B-11, partial) | [Original PR 181](https://github.com/javy-fernandez/dotcraft/pull/181) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/181/files) |
 | Search Everywhere .NET file results (A-07, partial) | [Original PR 182](https://github.com/javy-fernandez/dotcraft/pull/182) | [File search evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/search-everywhere-dotnet-files/docs/implementation/search-everywhere-dotnet-files.md) |
+| C# undo and redo (C-12) | [Original PR 183](https://github.com/javy-fernandez/dotcraft/pull/183) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/183/files) |
 
 ## Completion criteria
 

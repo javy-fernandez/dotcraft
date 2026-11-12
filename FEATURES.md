@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 47 |
+| ✅ Verified | 48 |
 | 🚧 In progress | 29 |
-| 🟢 Existing | 63 |
+| 🟢 Existing | 62 |
 | 🔁 Reuse candidate | 21 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
@@ -203,7 +203,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-09 | Inlay hints | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-10 | Line and block comments | ✅ | [PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) fixes repeated block-comment toggle and verifies Rider line/block shortcuts, selection and undo through editor events on a real Shop C# file; 17 unit and two fixture tests pass. No SDK build or broader Rider parity claim. |
 | C-11 | Indentation | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| C-12 | Undo and redo | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-12 | Undo and redo | ✅ | [PR 183](https://github.com/javy-fernandez/dotcraft/pull/183) restores diagnostic/inlay anchors on history edits and clears stale search highlights; real Shop C# EditorView test verifies text, caret, undo/redo and divergent-edit invalidation. 17 unit and one fixture test pass. No SDK build claim. |
 | C-13 | Code actions and quick fixes | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-14 | Rename symbol | ✅ | Live C# application and Roslyn tests rename symbols across App and Lib projects; see live-dotnet.md. |
 | C-15 | Diagnostics in editor | ✅ | Live application verifies CS0103 ranges; Roslyn regression verifies diagnostics; see live-dotnet.md. |
