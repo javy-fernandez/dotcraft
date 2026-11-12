@@ -1,0 +1,7 @@
+# Side-effect-free Evaluate capability audit (#127)
+
+DotCraft sends DAP `evaluate` requests with `context` set to `repl`, `watch`, or `hover`. It does not offer a side-effect-free mode. The [Debug Adapter Protocol changelog](https://microsoft.github.io/debug-adapter-protocol/changelog) defines `supportsEvaluateForHovers` as the adapter's indication that hover evaluation is side-effect free. The standard `evaluate` request has no general `noSideEffects` switch for the interactive REPL, and changing its context string alone would not establish a safety guarantee.
+
+On 2026-11-12, a direct DAP `initialize` probe of DotCraft's pinned netcoredbg 3.2.0-1092 Linux binary returned success and capabilities for breakpoints, expressions, and termination, but omitted `supportsEvaluateForHovers`. DotCraft's capability model has this field and defaults it to false when absent. The adapter therefore does not advertise even the narrower hover guarantee; it exposes no verified safe option for the interactive Evaluate window. Client-side C# syntax filtering cannot prove that a property getter, operator, indexer, conversion, or method has no side effects.
+
+A truthful option needs adapter-level support or a separate evaluator that can enforce the restriction, followed by a live test against a stopped .NET process with deliberately mutating getters and methods. Until then, #127 remains partial and the UI should not claim that arbitrary Evaluate expressions are side-effect free. This audit does not alter current evaluation behavior.
