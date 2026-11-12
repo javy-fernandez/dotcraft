@@ -35,6 +35,8 @@ mod reload_acceptance_tests;
 mod navigation_history_acceptance_tests;
 #[cfg(test)]
 mod screens;
+#[cfg(test)]
+mod standalone_project_tests;
 mod docs;
 mod native_menu;
 mod open_files;
