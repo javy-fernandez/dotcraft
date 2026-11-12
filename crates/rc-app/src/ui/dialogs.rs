@@ -843,6 +843,7 @@ fn recent_files(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize, filt
         .filter(|p| filter.is_empty() || p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase().contains(&filter.to_lowercase())))
         .cloned()
         .collect();
+    *selected = (*selected).min(items.len().saturating_sub(1));
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let mut open = None;
     let (_, esc) = modal(ctx, "recent_files", 480.0, |ui| {
@@ -865,6 +866,8 @@ fn recent_files(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize, filt
         for (i, path) in items.iter().enumerate().take(20) {
             let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
+            let accessible_path = path.display().to_string();
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, i == *selected, &accessible_path));
             if i == *selected {
                 ui.painter().rect_filled(r, 4.0, p.selection);
             } else if resp.hovered() {
@@ -1344,6 +1347,34 @@ fn file_structure(app: &mut DotCraftApp, ctx: &Context, filter: &mut String, sel
 mod tests {
     use super::*;
     use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn recent_files_filter_clamps_selection_and_opens_a_dotnet_file() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let fixtures = crate::screens::fixtures().join("Shop");
+        let solution = fixtures.join("Shop.sln");
+        let order = fixtures.join("src/Shop.Core/Order.cs");
+        let program = fixtures.join("src/Shop.Cli/Program.cs");
+        let weather = fixtures.join("src/Shop.Api/WeatherForecast.cs");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState {
+            ws: rc_core::Workspace::open(&solution).unwrap(),
+            solution: Some(rc_dotnet::Solution::load(&solution).unwrap()),
+        });
+        for path in [&order, &program, &weather] {
+            app.open_file(path);
+        }
+        assert_eq!(app.docs.active_doc().unwrap().path, weather);
+        app.dialog = Some(Dialog::RecentFiles { selected: 12, filter: "Order.cs".into() });
+        let mut harness = crate::screens::harness(app, vec2(1000.0, 700.0));
+        assert!(matches!(harness.state().dialog, Some(Dialog::RecentFiles { selected: 0, .. })));
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, &order.display().to_string());
+        harness.key_press(Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(harness.state().docs.active_doc().unwrap().path, order);
+        assert!(harness.state().dialog.is_none());
+    }
 
     #[test]
     fn responsive_settings_keep_pages_and_confirmation_inside_the_viewport() {
