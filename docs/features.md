@@ -331,6 +331,8 @@ additional scope is pending.
 | Viewport-safe Shop C# quick documentation (C-05, partial) | [Original PR 234](https://github.com/javy-fernandez/dotcraft/pull/234) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/234/files) |
 | Linux Shop.Core project Clean (F-03) | [Original PR 235](https://github.com/javy-fernandez/dotcraft/pull/235) | [Clean evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-clean-live/docs/implementation/clean-linux.md) |
 | Shop.Api launch profile selection (F-08) | [Original PR 236](https://github.com/javy-fernandez/dotcraft/pull/236) | [Launch profile evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/launch-profile-shop-selection/docs/implementation/shop-launch-profile-selection.md) |
+| Duplicate Shop Program.cs Search Everywhere results (A-07, partial) | [Original PR 237](https://github.com/javy-fernandez/dotcraft/pull/237) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/237/files) |
+| Linux Shop.Core streamed build output (F-05) | [Original PR 238](https://github.com/javy-fernandez/dotcraft/pull/238) | [Build stream evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-build-stream-live/docs/implementation/build-stream-linux.md) |
 
 ## Completion criteria
 

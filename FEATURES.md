@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 79 |
+| ✅ Verified | 80 |
 | 🚧 In progress | 45 |
-| 🟢 Existing | 30 |
+| 🟢 Existing | 29 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -124,7 +124,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-04 | Docked tool windows | ✅ | [PR 193](https://github.com/javy-fernandez/dotcraft/pull/193) verifies Explorer stripe hide/reopen, left-to-right dock move and session-map round-trip in a real `Shop.sln` egui UI harness on Linux. Pointer drag, context-menu Move To and other platforms remain untested. |
 | A-05 | Editor tabs | ✅ | [PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) names close controls for accessibility; egui UI harness activates and closes C# tabs from real `Shop.sln` on Linux. Pinned/preview tabs, drag ordering, compact widths and other platforms remain untested. |
 | A-06 | Split editors | ✅ | [PR 179](https://github.com/javy-fernandez/dotcraft/pull/179) tests tab split commands in both orientations and Unsplit in an egui UI harness with real `Shop.sln` C# files on Linux. Divider drag, context-menu pointer flow, narrow layouts and persistence remain untested. |
-| A-07 | Search Everywhere | 🚧 | [PR 182](https://github.com/javy-fernandez/dotcraft/pull/182) disambiguates accessible file results and verifies `Shop.Cli/Program.cs` selection from a real `Shop.sln` index in egui on Linux. Type/symbol search, live index updates and larger workspaces remain unverified. |
+| A-07 | Search Everywhere | 🚧 | [PR 182](https://github.com/javy-fernandez/dotcraft/pull/182) verifies Shop.Cli file selection; [PR 237](https://github.com/javy-fernandez/dotcraft/pull/237) gives duplicate Shop.Api/Shop.Cli Program.cs results distinct relative-path accessible labels and verifies `Program.cs:12` navigation in egui on Linux. Type/symbol search, live index updates and larger workspaces remain unverified. |
 | A-08 | Recent projects | ✅ | [PR 176](https://github.com/javy-fernandez/dotcraft/pull/176) exposes full recent paths to accessibility; egui UI harness opens real `Shop.sln` from Welcome and verifies recent-history order on Linux. Missing-path removal, compact widths and other platforms remain untested. |
 | A-09 | Recent files | ✅ | [PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) keeps filtered selection valid and exposes file rows to accessibility; egui UI harness opens three real `Shop.sln` C# files and selects one with Enter on Linux. Missing files and native menus remain untested. |
 | A-10 | Recent locations | ✅ | [PR 171](https://github.com/javy-fernandez/dotcraft/pull/171) bounds dialog selection and exposes path/line to accessibility; egui UI harness navigates to line four of real `Shop.sln` C# source on Linux. Closed/deleted files and native menus remain untested. |
@@ -313,7 +313,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/build.rs; crates/rc-app/src/runne
 | F-02 | Rebuild | ✅ | [PR 233](https://github.com/javy-fernandez/dotcraft/pull/233) verifies a Linux Shop.Core project Rebuild with official .NET SDK 8.0.428: deliberately corrupted final and intermediate assemblies are restored, `--no-incremental --no-restore` is issued, and streamed output and success are observed. Solution rebuild, UI, other runtimes and platforms remain untested. |
 | F-03 | Clean | ✅ | [PR 235](https://github.com/javy-fernandez/dotcraft/pull/235) verifies Linux Shop.Core project Clean with official .NET SDK 8.0.428 across Debug and Release: each clean removes only its own final/intermediate assemblies, and Debug builds again. Solution/multi-target clean, UI and other platforms remain untested. |
 | F-04 | Cancel build | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| F-05 | Streamed build output | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| F-05 | Streamed build output | ✅ | [PR 238](https://github.com/javy-fernandez/dotcraft/pull/238) verifies a Shop.Core MSBuild message arrives as a stdout event before process exit and before the successful Finished event with official .NET SDK 8.0.428 on Linux. UI rendering, very large output and other platforms remain untested. |
 | F-06 | Compiler diagnostics links | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-07 | Run configurations | ✅ | [PR 227](https://github.com/javy-fernandez/dotcraft/pull/227) exposes the toolbar selection to accessibility and verifies choosing Shop.Cli plus session restoration after reopening real Shop.sln in egui on Linux. Launch profiles, SDK execution, compound editing and other platforms remain separate acceptance scope. |
 | F-08 | Launch profile selection | ✅ | [PR 236](https://github.com/javy-fernandez/dotcraft/pull/236) verifies two Project profiles from the real Shop.Api launch settings in the egui toolbar and checks that the selected profile reaches RunRequest; IIS Express is excluded. Live process launch with the alternate profile, session restoration and other platforms remain untested. |
