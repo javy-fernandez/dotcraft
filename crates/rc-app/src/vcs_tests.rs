@@ -12,6 +12,77 @@ fn git(dir: &Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
 }
 
+fn copy_fixture_tree(source: &Path, destination: &Path) {
+    std::fs::create_dir_all(destination).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        let target = destination.join(entry.file_name());
+        if path.is_dir() {
+            copy_fixture_tree(&path, &target);
+        } else {
+            std::fs::copy(&path, &target).unwrap();
+        }
+    }
+}
+
+#[test]
+fn clone_shop_solution_from_the_git_tool_window() {
+    use egui_kittest::{Harness, kittest::Queryable};
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let fixture = crate::screens::fixtures().join("Shop");
+    let source = home.path().join("shop-source");
+    copy_fixture_tree(&fixture, &source);
+    git(&source, &["init", "-q", "-b", "main"]);
+    git(&source, &["config", "user.name", "Test"]);
+    git(&source, &["config", "user.email", "test@example.com"]);
+    git(&source, &["add", "."]);
+    git(&source, &["commit", "-qm", "Shop fixture"]);
+    let destination = home.path().canonicalize().unwrap().join("Shop clone");
+
+    let mut app = crate::screens::test_app(home.path(), true);
+    app.vcs.tools.visible = true;
+    app.vcs.tools.source = "--upload-pack=unsafe".into();
+    app.vcs.tools.destination = destination.display().to_string();
+    let mut first = true;
+    let mut harness = Harness::builder().with_size(egui::vec2(900.0, 1000.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+        if std::mem::take(&mut first) {
+            rc_kit::theme::install_fonts(ui.ctx());
+            return;
+        }
+        app.vcs.update(&mut app.docs, true);
+        crate::ui::git::git_window(app, ui);
+    }, app);
+    harness.run_steps(3);
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, rc_kit::i18n::tr("Clone Repository")).click();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while harness.state().vcs.error.is_none() && Instant::now() < deadline {
+        harness.run_steps(2);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(harness.state().vcs.error.is_some());
+    assert!(!destination.exists());
+
+    harness.state_mut().vcs.tools.source = source.display().to_string();
+    harness.run_steps(2);
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, rc_kit::i18n::tr("Clone Repository")).click();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while harness.state().vcs.tools.cloned.is_none() && Instant::now() < deadline {
+        harness.run_steps(2);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(harness.state().vcs.tools.cloned.as_deref(), Some(destination.as_path()));
+    assert_eq!(std::fs::read(destination.join("Shop.sln")).unwrap(), std::fs::read(source.join("Shop.sln")).unwrap());
+    assert!(destination.join("src/Shop.Core/Shop.Core.csproj").is_file());
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, rc_kit::i18n::tr("Open cloned repository")).click();
+    harness.run_steps(3);
+    let workspace = harness.state().workspace.as_ref().unwrap();
+    assert_eq!(workspace.ws.root, destination);
+    assert_eq!(workspace.solution.as_ref().unwrap().projects().len(), 6);
+    harness.state_mut().close_workspace();
+}
+
 fn pump(app: &mut DotCraftApp, what: &str, mut done: impl FnMut(&mut DotCraftApp) -> bool) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(30) {
