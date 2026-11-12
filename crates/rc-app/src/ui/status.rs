@@ -40,6 +40,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                 let e = &doc.editor;
                 let widget = |ui: &mut Ui, text: String, tip: &str| {
                     let r = theme::flat_button(ui, None, &text, FontId::proportional(12.5), false, true);
+                    r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &text));
                     r.on_hover_text(tip)
                 };
                 if e.read_only {
@@ -150,5 +151,44 @@ fn breadcrumbs(app: &mut DotCraftApp, ui: &mut Ui) {
         if i + 1 < n {
             icons::image(ui, ico::CHEVRON_RIGHT, 16.0);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn status_bar_reports_dotnet_document_and_opens_line_navigation() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = crate::screens::fixtures().join("Shop/Shop.sln");
+        let file = crate::screens::fixtures().join("Shop/src/Shop.Cli/Program.cs");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState {
+            ws: rc_core::Workspace::open(&root).unwrap(),
+            solution: Some(rc_dotnet::Solution::load(&root).unwrap()),
+        });
+        app.open_file(&file);
+        assert!(app.docs.active_doc().is_some());
+        let mut first = true;
+        let mut harness = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 50.0)).build_ui_state(
+            move |ui, app: &mut DotCraftApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                show(app, ui);
+            }, app,
+        );
+        harness.run_steps(3);
+        assert!(harness.state().docs.active_doc().is_some());
+        harness.get_by_role_and_label(egui::accesskit::Role::Label, "Program.cs");
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "UTF-8 BOM");
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "LF");
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "1:1").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().pending, vec![rc_editor::Action::GotoLine]);
     }
 }
