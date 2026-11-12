@@ -1,0 +1,5 @@
+# Parallel stacks debugger view
+
+The Debug tool window now lists every reported thread in the **Parallel Stacks** tab. Expanding a thread fetches its stack trace through the existing Debug Adapter Protocol session. The stopped thread opens by default; other threads load on demand so large processes do not issue a stack request for every thread at once. Selecting a frame changes the debugger's current frame and updates the variables and watches shown in **Threads & Variables**. Additional frames can be loaded per thread.
+
+The view uses the thread and stack trace responses already provided by netcoredbg. It does not correlate common stack frames into a shared graph. Data breakpoints, raw memory inspection, debugging a single test, and side-effect-free expression evaluation remain separate work for issue #127. Data breakpoints and memory reads require adapter capabilities that must be confirmed before those controls can be offered. DAP also offers no general guarantee that an evaluated expression has no side effects.
