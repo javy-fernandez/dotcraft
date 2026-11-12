@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 51 |
+| ✅ Verified | 53 |
 | 🚧 In progress | 29 |
-| 🟢 Existing | 60 |
+| 🟢 Existing | 58 |
 | 🔁 Reuse candidate | 20 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
@@ -133,7 +133,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-12 | Rider and Visual Studio keymaps | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-13 | Localization | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-14 | Status bar | ✅ | [PR 167](https://github.com/javy-fernandez/dotcraft/pull/167) exposes custom metadata controls to accessibility; egui harness verifies breadcrumb, UTF-8 BOM, LF, caret and Go to Line dispatch with real `Shop.sln` C# file on Linux. Compact widths and other platforms remain untested. |
-| A-15 | Notifications | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-15 | Notifications | ✅ | [PR 190](https://github.com/javy-fernandez/dotcraft/pull/190) checks visible status messages and 8-second informational / 15-second error expiry in a real `Shop.sln` egui UI harness on Linux; [PR 161](https://github.com/javy-fernandez/dotcraft/pull/161) covers expiry while Zen hides the status bar. History, compact layouts and other platforms remain untested. |
 | A-16 | Responsive settings layout | ✅ | Existing PR 4 preserved; 5 responsive settings tests pass, including TenProjects, scrolling, long paths and Cancel. |
 | A-17 | Scrollable main menu | ✅ | PR 17 verifies compact category/command/tool scrolling, real TenProjects integration, clipboard actions and project-gated attachment. |
 | A-18 | Tab docking previews | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
@@ -202,7 +202,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-08 | Code folding | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-09 | Inlay hints | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-10 | Line and block comments | ✅ | [PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) fixes repeated block-comment toggle and verifies Rider line/block shortcuts, selection and undo through editor events on a real Shop C# file; 17 unit and two fixture tests pass. No SDK build or broader Rider parity claim. |
-| C-11 | Indentation | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-11 | Indentation | ✅ | [PR 189](https://github.com/javy-fernandez/dotcraft/pull/189) indents C# `case`/`default` statements one level on Enter as one undoable edit; real Shop C# EditorView event and guard tests pass (18 unit, one fixture). Other language-specific indentation remains outside this scope. |
 | C-12 | Undo and redo | ✅ | [PR 183](https://github.com/javy-fernandez/dotcraft/pull/183) restores diagnostic/inlay anchors on history edits and clears stale search highlights; real Shop C# EditorView test verifies text, caret, undo/redo and divergent-edit invalidation. 17 unit and one fixture test pass. No SDK build claim. |
 | C-13 | Code actions and quick fixes | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-14 | Rename symbol | ✅ | Live C# application and Roslyn tests rename symbols across App and Lib projects; see live-dotnet.md. |

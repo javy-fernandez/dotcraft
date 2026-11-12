@@ -25,6 +25,7 @@ Reference: [Rider features](https://www.jetbrains.com/rider/features/).
 - [x] Toggle selected C# line and block comments with Rider shortcuts and undo. Validated on a real Shop C# file.
 - [x] Type brackets with mixed selected and empty C# carets without losing selected text. Validated through editor events and undo on a real Shop C# file.
 - [x] Undo and redo C# edits while restoring caret, diagnostic and inlay positions. Validated through editor events on a real Shop C# file.
+- [x] Indent the next C# line after `case` and `default` labels as one undoable edit. Validated through editor events on a real Shop C# file.
 - [ ] Provide live templates and postfix templates.
 - [ ] Support multiple selections and caret editing.
 - [ ] Generate common code constructs and rearrange code.
@@ -216,6 +217,7 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 - [x] Activate and close C# editor tabs with accessible controls. Validated with `Shop.sln` on Linux.
 - [x] Open a recent .NET solution from Welcome with an accessible full-path row. Validated with `Shop.sln` on Linux.
 - [x] Split two C# editors side by side or vertically, then unsplit without closing either file. Validated with `Shop.sln` on Linux.
+- [x] Show status notifications and expire information and errors at their respective intervals. Validated with `Shop.sln` on Linux.
 
 ## Implementation progress
 
@@ -274,6 +276,8 @@ additional scope is pending.
 | Local Shelves push/pop (I-11) | [Original PR 186](https://github.com/javy-fernandez/dotcraft/pull/186) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/186/files) |
 | Project template solution preflight (B-06, partial) | [Original PR 187](https://github.com/javy-fernandez/dotcraft/pull/187) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/187/files) |
 | Folder and solution app opening (B-01) | [Original PR 188](https://github.com/javy-fernandez/dotcraft/pull/188) | [App evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/workspace-open-ui-acceptance/docs/implementation/workspace-open-shop.md) |
+| C# case-label indentation (C-11) | [Original PR 189](https://github.com/javy-fernandez/dotcraft/pull/189) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/189/files) |
+| Status notification expiry (A-15) | [Original PR 190](https://github.com/javy-fernandez/dotcraft/pull/190) | [Notification evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/notifications-dotnet-acceptance/docs/implementation/notifications-shop.md) |
 
 ## Completion criteria
 
