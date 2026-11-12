@@ -24,6 +24,7 @@ pub mod run_windows;
 pub mod search_popup;
 pub mod stripes;
 pub mod toolwindows;
+pub mod resource_editor;
 pub mod welcome;
 pub mod work_item_links;
 
