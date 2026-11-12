@@ -326,6 +326,7 @@ additional scope is pending.
 | Shop C# syntax paint in built-in themes (C-01) | [Original PR 229](https://github.com/javy-fernandez/dotcraft/pull/229) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/229/files) |
 | Linux MSBuild property evaluation (B-10) | [Original PR 230](https://github.com/javy-fernandez/dotcraft/pull/230) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/230/files) |
 | Live Stop of Shop.Api (F-09) | [Original PR 231](https://github.com/javy-fernandez/dotcraft/pull/231) | [Stop evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/stop-shop-api-process/docs/implementation/stop-shop-api.md) |
+| Shop Replace in Files with background writes (D-08) | [Original PR 232](https://github.com/javy-fernandez/dotcraft/pull/232) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/232/files) |
 
 ## Completion criteria
 

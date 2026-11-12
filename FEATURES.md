@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 75 |
+| ✅ Verified | 76 |
 | 🚧 In progress | 44 |
-| 🟢 Existing | 35 |
+| 🟢 Existing | 34 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -246,7 +246,7 @@ Source / reuse boundary: `crates/rc-app/src/search.rs; crates/rc-search; crates/
 | D-05 | Go to implementation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-06 | Find usages | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-07 | Find in files | ✅ | [PR 222](https://github.com/javy-fernandez/dotcraft/pull/222) gives each result an accessible path/line/text label and verifies literal search plus exact C# source navigation in the real Shop.sln egui UI on Linux. Regex, replacement, huge workspaces and other platforms remain untested. |
-| D-08 | Replace in files | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| D-08 | Replace in files | ✅ | [PR 232](https://github.com/javy-fernandez/dotcraft/pull/232) moves closed-file replacement off the egui thread and verifies local Shop C# open-buffer Undo, fresh closed-file disk replacement and invalid UTF-8 refusal on Linux. Regex, mid-file cancellation, concurrency, huge workspaces and other platforms remain untested. |
 | D-09 | File structure | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-10 | Navigation history | ✅ | [PR 220](https://github.com/javy-fernandez/dotcraft/pull/220) skips removed files even when their editor buffer remains open, preserving Back/Forward stacks and exact C# caret locations in the real Shop.sln egui UI on Linux. Renames, remote files and other platforms remain untested. |
 | D-11 | Type hierarchy | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
