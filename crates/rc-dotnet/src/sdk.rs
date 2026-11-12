@@ -119,7 +119,7 @@ fn capture(mut c: std::process::Command) -> anyhow::Result<String> {
 pub fn candidates(explicit: Option<&Path>, dotnet_root: Option<PathBuf>, path_var: Option<std::ffi::OsString>, home: Option<PathBuf>, program_files: Option<PathBuf>) -> Vec<PathBuf> {
     let mut out = Vec::new();
     if let Some(e) = explicit {
-        if e.extension().is_none() && !e.ends_with("dotnet") || e.is_dir() {
+        if e.is_dir() || (!e.is_file() && e.extension().is_none() && !e.ends_with(DOTNET_EXE)) {
             out.push(e.join(DOTNET_EXE));
         } else {
             out.push(e.to_path_buf());
