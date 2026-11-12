@@ -19,6 +19,8 @@
     "Delegate members": "Delegate members",
     "Try Roslyn code actions": "Try Roslyn code actions",
     "No local members found": "No local members found",
+    "Discovering members…": "Discovering members…",
+    "No members found": "No members found",
     "Choose members": "Choose members",
     "Select at least one member": "Select at least one member",
     "A constructor already exists": "A constructor already exists",

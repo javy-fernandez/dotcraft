@@ -6,8 +6,19 @@ use rc_kit::i18n::tr;
 
 pub fn show(app: &mut DotCraftApp, ctx: &egui::Context) {
     let Some(mut dialog) = app.generate.take() else {
+        app.generate_discovery = None;
         return;
     };
+    if app.generate_discovery.is_none()
+        && let Some(doc) = app.docs.active_doc().filter(|doc| doc.editor.id == dialog.doc_id && doc.editor.buffer.version() == dialog.version)
+    {
+        app.generate_discovery = crate::generate_semantic::GenerateDiscovery::start(
+            doc, &dialog, app.insight.session.as_ref(), app.waker.clone(),
+        );
+    }
+    if let Some(discovery) = app.generate_discovery.as_mut() {
+        discovery.update(&mut dialog);
+    }
     let mut keep = true;
     let mut generated = None;
     let mut use_roslyn = false;
@@ -37,10 +48,17 @@ pub fn show(app: &mut DotCraftApp, ctx: &egui::Context) {
                             .iter()
                             .any(|member| member.kind == dialog.kind)
                         {
-                            ui.label(tr("No local members found"));
-                            if ui.button(tr("Try Roslyn code actions")).clicked() {
-                                use_roslyn = true;
-                                keep = false;
+                            if app.generate_discovery.as_ref().is_some_and(|discovery| discovery.busy()) {
+                                ui.horizontal(|ui| {
+                                    ui.spinner();
+                                    ui.label(tr("Discovering members…"));
+                                });
+                            } else {
+                                ui.label(tr("No members found"));
+                                if ui.button(tr("Try Roslyn code actions")).clicked() {
+                                    use_roslyn = true;
+                                    keep = false;
+                                }
                             }
                         }
                         for member in dialog
@@ -103,6 +121,8 @@ pub fn show(app: &mut DotCraftApp, ctx: &egui::Context) {
     }
     if keep {
         app.generate = Some(dialog);
+    } else {
+        app.generate_discovery = None;
     }
 }
 
@@ -111,7 +131,9 @@ pub fn open(app: &mut DotCraftApp) {
         return;
     };
     if let Some(dialog) = Dialog::from_doc(doc) {
+        let discovery = crate::generate_semantic::GenerateDiscovery::start(doc, &dialog, app.insight.session.as_ref(), app.waker.clone());
         app.generate = Some(dialog);
+        app.generate_discovery = discovery;
         app.focus_editor = false;
     } else {
         app.notify(

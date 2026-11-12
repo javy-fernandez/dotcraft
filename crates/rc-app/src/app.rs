@@ -108,6 +108,7 @@ pub struct DotCraftApp {
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
     pub generate: Option<crate::generate::Dialog>,
+    pub generate_discovery: Option<crate::generate_semantic::GenerateDiscovery>,
     pub notices: Vec<Notice>,
     /// Monitoring: CPU and memory of the program in the selected Run tab.
     pub monitor: crate::monitor::Monitor,
@@ -235,6 +236,7 @@ impl DotCraftApp {
             explorer: ExplorerState::default(),
             dialog: None,
             generate: None,
+            generate_discovery: None,
             notices: Vec::new(),
             monitor: crate::monitor::Monitor::new(waker.clone()),
             todos: None,

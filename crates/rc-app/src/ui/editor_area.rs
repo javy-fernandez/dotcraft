@@ -302,8 +302,13 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
                 app.dialog = Some(crate::ui::dialogs::Dialog::Templates { surround: a == Action::SurroundWith, filter: String::new(), selected: 0 });
             }
             Action::Generate => {
-                app.generate = crate::generate::Dialog::from_doc(doc);
-                app.focus_editor = false;
+                if let Some(dialog) = crate::generate::Dialog::from_doc(doc) {
+                    app.generate_discovery = crate::generate_semantic::GenerateDiscovery::start(
+                        doc, &dialog, app.insight.session.as_ref(), app.waker.clone(),
+                    );
+                    app.generate = Some(dialog);
+                    app.focus_editor = false;
+                }
             }
             Action::ToggleBookmarkMnemonic => {
                 let line = doc.editor.caret_line_col().0;
