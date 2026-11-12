@@ -35,7 +35,7 @@ fn enabled(app: &DotCraftApp, action: Action) -> bool {
         Action::AttachProcess => app.workspace.is_some() && !app.debugger.active() && app.debugger.downloading.is_none(),
         Action::Run => app.runner.selected_config().is_some(),
         Action::Debug => app.runner.selected_config().is_some_and(|config| matches!(config.kind, crate::runner::ConfigKind::App { .. })),
-        Action::StopRun => app.runner.busy() || app.debugger.active() || app.debugger.downloading.is_some(),
+        Action::StopRun => app.runner.busy() || app.docker_runs.running || app.debugger.active() || app.debugger.downloading.is_some(),
         Action::StepOver | Action::StepInto | Action::StepOut | Action::Resume | Action::Evaluate => app.debugger.stopped(),
         Action::RunToCursor => app.debugger.stopped() && document,
         Action::Build | Action::RunTests | Action::HideToolWindows | Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => app.workspace.is_some(),

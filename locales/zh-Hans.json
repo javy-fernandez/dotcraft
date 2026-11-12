@@ -1462,6 +1462,13 @@
     "{method}: {title}": "{method}：{title}"
   },
   "rc-app": {
-    "Exit Focus Mode": "Exit Focus Mode"
+    "Exit Focus Mode": "Exit Focus Mode",
+    "Use the Docker run action": "Use the Docker run action",
+    "Docker run finished": "Docker run finished",
+    "Could not start Docker: {error}": "Could not start Docker: {error}",
+    "Docker exited with {status}": "Docker exited with {status}",
+    "Docker": "Docker",
+    "Compose": "Compose",
+    "Docker configurations are derived from their files": "Docker configurations are derived from their files"
   }
 }

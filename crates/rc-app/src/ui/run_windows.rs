@@ -208,6 +208,26 @@ mod build_diagnostic_tests {
 // ---------------------------------------------------------------------------------- Run
 
 pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
+    if app.docker_runs.active {
+        let actions = [
+            (ico::RERUN, tr("Rerun"), !app.docker_runs.running),
+            (ico::STOP, tr("Stop"), app.docker_runs.running),
+        ];
+        match header(ui, &app.docker_runs.title, &actions) {
+            Some(0) => app.docker_runs.rerun(),
+            Some(1) => app.docker_runs.stop(),
+            Some(usize::MAX) => app.toggle_tool(ToolWindow::Run),
+            _ => {}
+        }
+        if app.docker_runs.running { ui.ctx().request_repaint_after(std::time::Duration::from_millis(300)); }
+        if let Some(error) = &app.docker_runs.error { ui.colored_label(ui.visuals().error_fg_color, error); }
+        let cwd = app.docker_runs.current_dir();
+        let events = console(ui, &app.docker_runs.console);
+        for event in events {
+            if let rc_term::ViewEvent::LinkClicked(link) = event { open_link(app, link, cwd.clone()); }
+        }
+        return;
+    }
     let p = rc_kit::pal(ui);
     let active = app.runner.active_run;
     let running = app.runner.runs.get(active).is_some_and(|r| r.running());
