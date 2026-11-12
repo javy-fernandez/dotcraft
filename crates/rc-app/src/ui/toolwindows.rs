@@ -976,6 +976,30 @@ fn find_in_files(app: &mut DotCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     let Some(mut f) = app.find_in_files.take() else { return };
     f.poll();
+    if let Some(done) = f.poll_replace() {
+        let mut files = done.files;
+        let mut errors = done.errors;
+        if !done.cancelled {
+            for path in done.open {
+                if let Some(index) = app.docs.index_of(&path) {
+                    let doc = &mut app.docs.list[index];
+                    let edits = rc_search::compute_edits(&doc.editor.buffer.rope().to_string(), &done.query, &done.replacement);
+                    if !edits.is_empty() {
+                        doc.editor.apply_text_edits(edits.into_iter().map(|edit| rc_text::Change::new(edit.range.start, edit.range.end, edit.text)).collect());
+                        files += 1;
+                    }
+                } else {
+                    errors.push(format!("{}: document closed before replacement", path.display()));
+                }
+            }
+        }
+        f.search();
+        let had_errors = !errors.is_empty();
+        app.notify(if done.cancelled { tr("Replacement cancelled").to_string() } else { rc_kit::i18n::trf("Replaced in {n} files", &[("n", &files)]) }, done.cancelled || had_errors);
+        if !errors.is_empty() {
+            f.error = Some(errors.join("\n"));
+        }
+    }
     if f.searching() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
     }
@@ -1005,14 +1029,21 @@ fn find_in_files(app: &mut DotCraftApp, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.add_space(10.0);
             ui.add(egui::TextEdit::singleline(&mut f.replace).hint_text(tr("Replace with")).desired_width(280.0));
-            replace_all = ui.add_enabled(f.match_count() > 0 && f.summary.is_some(), egui::Button::new(tr("Replace All"))).clicked();
+            replace_all = ui.add_enabled(!f.replace_busy() && f.match_count() > 0 && f.summary.is_some(), egui::Button::new(tr("Replace All"))).clicked();
+            if f.replace_busy() && ui.button(tr("Cancel Replace")).clicked() {
+                f.cancel_replace();
+            }
         });
     }
-    let status = match (&f.error, &f.summary) {
-        (Some(e), _) => e.clone(),
-        (None, Some(s)) => rc_kit::i18n::trf("{n} matches in {files} files", &[("n", &s.matches), ("files", &s.files_matched)]) + if s.truncated { " +" } else { "" },
-        (None, None) if f.query.is_empty() => String::new(),
-        (None, None) => tr("Searching…").to_string(),
+    let status = if f.replace_busy() {
+        tr("Replacing…").to_string()
+    } else {
+        match (&f.error, &f.summary) {
+            (Some(e), _) => e.clone(),
+            (None, Some(s)) => rc_kit::i18n::trf("{n} matches in {files} files", &[("n", &s.matches), ("files", &s.files_matched)]) + if s.truncated { " +" } else { "" },
+            (None, None) if f.query.is_empty() => String::new(),
+            (None, None) => tr("Searching…").to_string(),
+        }
     };
     ui.horizontal(|ui| {
         ui.add_space(12.0);
@@ -1067,21 +1098,17 @@ fn find_in_files(app: &mut DotCraftApp, ui: &mut Ui) {
     }
     if replace_all {
         if let Ok(q) = rc_search::Query::new(f.options()) {
-            let mut files = 0;
+            let mut open = Vec::new();
+            let mut closed = Vec::new();
             for file in &f.results {
-                if let Some(i) = app.docs.index_of(&file.path) {
-                    // Open files change through their editor (undoable).
-                    let doc = &mut app.docs.list[i];
-                    let edits = rc_search::compute_edits(&doc.editor.buffer.rope().to_string(), &q, &f.replace);
-                    doc.editor.apply_text_edits(edits.into_iter().map(|e| rc_text::Change::new(e.range.start, e.range.end, e.text)).collect());
-                    files += 1;
-                } else if rc_search::replace_in_file(&file.path, &q, &f.replace).is_ok() {
-                    files += 1;
+                if app.docs.index_of(&file.path).is_some() {
+                    open.push(file.path.clone());
+                } else {
+                    closed.push(file.path.clone());
                 }
             }
-            app.notify(rc_kit::i18n::trf("Replaced in {n} files", &[("n", &files)]), false);
+            f.begin_replace(open, closed, q, f.replace.clone());
         }
-        f.search();
     }
     let _ = root;
     app.find_in_files = Some(f);
@@ -1152,6 +1179,93 @@ pub fn empty_state_with(ui: &mut Ui, icon: Ico, title: &str, hint: &str, button:
     }
     ui.allocate_rect(rect, Sense::hover());
     clicked
+}
+
+#[cfg(test)]
+mod replace_window_tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+    use std::io::Write;
+    use std::path::Path;
+    use std::time::{Duration, Instant};
+
+    fn copy_tree(source: &Path, target: &Path) {
+        std::fs::create_dir_all(target).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let source = entry.path();
+            let target = target.join(entry.file_name());
+            if source.is_dir() {
+                copy_tree(&source, &target);
+            } else {
+                std::fs::copy(source, target).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn replace_in_shop_csharp_files_keeps_open_editor_undo_and_closed_disk_edits() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = home.path().join("Shop");
+        copy_tree(&crate::screens::fixtures().join("Shop"), &root);
+        let open_file = root.join("src/Shop.Core/Order.cs");
+        let closed_file = root.join("src/Shop.Api/Controllers/OrdersController.cs");
+        let invalid_file = root.join("src/Shop.Core/PriceCalculator.cs");
+        let open_original = std::fs::read_to_string(&open_file).unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root.join("Shop.sln"));
+        app.open_file(&open_file);
+        let mut find = crate::search::FindInFiles::new(&root, rc_core::Waker::noop(), "CouponCode".into());
+        find.show_replace = true;
+        find.replace = "DiscountCode".into();
+        find.mask = "*.cs".into();
+        find.search();
+        app.find_in_files = Some(find);
+        let mut first = true;
+        let mut h = Harness::builder().with_size(vec2(1050.0, 750.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            find_in_files(app, ui);
+        }, app);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !h.state().find_in_files.as_ref().is_some_and(|find| find.summary.is_some() && find.match_count() > 0) && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let find = h.state().find_in_files.as_ref().unwrap();
+        assert!(find.summary.is_some());
+        assert!(find.results.iter().any(|file| file.path == open_file));
+        assert!(find.results.iter().any(|file| file.path == closed_file));
+        assert!(find.results.iter().any(|file| file.path == invalid_file));
+        std::fs::OpenOptions::new().append(true).open(&closed_file).unwrap().write_all(b"// external edit remains\n").unwrap();
+        let invalid_bytes = b"\xff CouponCode\n";
+        std::fs::write(&invalid_file, invalid_bytes).unwrap();
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Replace All")).click();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while (h.state().find_in_files.as_ref().is_some_and(|find| find.replace_busy()) || !std::fs::read_to_string(&closed_file).unwrap().contains("DiscountCode")) && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.run_steps(2);
+        assert!(!h.state().find_in_files.as_ref().unwrap().replace_busy());
+        let closed_text = std::fs::read_to_string(&closed_file).unwrap();
+        assert!(closed_text.contains("DiscountCode"));
+        assert!(closed_text.ends_with("// external edit remains\n"));
+        assert_eq!(std::fs::read(&invalid_file).unwrap(), invalid_bytes);
+        assert!(h.state().find_in_files.as_ref().unwrap().error.as_deref().is_some_and(|error| error.contains("PriceCalculator.cs")));
+        assert_eq!(std::fs::read_to_string(&open_file).unwrap(), open_original);
+        let doc = h.state().docs.active_doc().unwrap();
+        assert!(doc.is_modified());
+        assert!(doc.editor.buffer.rope().to_string().contains("DiscountCode"));
+        assert!(h.state().notices.iter().any(|notice| notice.text.starts_with("Replaced in ")));
+        h.state_mut().docs.active_doc_mut().unwrap().editor.undo();
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), open_original);
+        h.state_mut().close_workspace();
+    }
 }
 
 #[cfg(test)]
