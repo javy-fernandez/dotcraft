@@ -983,11 +983,106 @@ fn repository_tools(app: &mut DotCraftApp, ui: &mut Ui) {
 mod repository_tools_tests {
     use super::*;
     use egui_kittest::{Harness, kittest::Queryable};
+    use std::path::Path;
     use std::time::{Duration, Instant};
 
     fn git(path: &std::path::Path, args: &[&str]) {
         let output = std::process::Command::new("git").current_dir(path).args(args).output().unwrap();
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    fn copy_tree(source: &Path, target: &Path) {
+        std::fs::create_dir_all(target).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let source = entry.path();
+            let target = target.join(entry.file_name());
+            if source.is_dir() {
+                copy_tree(&source, &target);
+            } else {
+                std::fs::copy(source, target).unwrap();
+            }
+        }
+    }
+
+    fn wait_for(h: &mut Harness<'static, DotCraftApp>, what: &str, done: impl Fn(&DotCraftApp) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !done(h.state()) && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(done(h.state()), "timed out waiting for {what}: {:?}", h.state().vcs.error);
+    }
+
+    #[test]
+    fn repository_tools_manage_shop_worktree_and_refuse_dirty_or_active_removal() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = home.path().join("Shop");
+        copy_tree(&crate::screens::fixtures().join("Shop"), &root);
+        git(&root, &["init", "-q", "-b", "main"]);
+        for (key, value) in [("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")] {
+            git(&root, &["config", key, value]);
+        }
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "Shop fixture"]);
+        let linked = home.path().join("Shop feature worktree");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_workspace(&root.join("Shop.sln"));
+        app.vcs.tools.visible = true;
+        app.vcs.tools.branch = "feature/shop".into();
+        app.vcs.tools.worktree_path = linked.display().to_string();
+        let mut first = true;
+        let mut h = Harness::builder().with_size(egui::vec2(1000.0, 1300.0)).build_ui_state(
+            move |ui, app: &mut DotCraftApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                app.vcs.update(&mut app.docs, true);
+                git_window(app, ui);
+            },
+            app,
+        );
+        wait_for(&mut h, "Shop repository", |app| app.vcs.repo.is_some());
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Add worktree")).click();
+        wait_for(&mut h, "linked worktree", |app| app.vcs.busy.is_none() && linked.join("Shop.sln").exists());
+        assert_eq!(std::fs::read_to_string(linked.join("Shop.sln")).unwrap(), std::fs::read_to_string(root.join("Shop.sln")).unwrap());
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("List worktrees")).click();
+        wait_for(&mut h, "worktree list", |app| app.vcs.busy.is_none() && app.vcs.tools.report.contains("feature/shop"));
+        assert!(h.state().vcs.tools.report.contains(&root.display().to_string()));
+        assert!(h.state().vcs.tools.report.contains(&linked.display().to_string()));
+
+        let dirty = linked.join("src/Shop.Core/Unsaved.cs");
+        std::fs::write(&dirty, "namespace Shop.Core; class Unsaved {}\n").unwrap();
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Remove worktree")).click();
+        h.run_steps(2);
+        assert!(h.state().vcs.tools.confirmation.is_some());
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Confirm")).click();
+        h.run_steps(2);
+        wait_for(&mut h, "dirty worktree refusal", |app| app.vcs.busy.is_none() && app.vcs.error.is_some());
+        assert!(dirty.exists());
+        std::fs::remove_file(&dirty).unwrap();
+
+        h.state_mut().vcs.tools.worktree_path = root.display().to_string();
+        h.run_steps(2);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Remove worktree")).click();
+        h.run_steps(2);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Confirm")).click();
+        h.run_steps(2);
+        wait_for(&mut h, "active worktree refusal", |app| app.vcs.busy.is_none() && app.vcs.error.is_some());
+        assert!(root.join("Shop.sln").exists());
+
+        h.state_mut().vcs.tools.worktree_path = linked.display().to_string();
+        h.run_steps(2);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Remove worktree")).click();
+        h.run_steps(2);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("Confirm")).click();
+        h.run_steps(2);
+        wait_for(&mut h, "clean worktree removal", |app| app.vcs.busy.is_none() && !linked.exists());
+        h.get_by_role_and_label(egui::accesskit::Role::Button, tr("List worktrees")).click();
+        wait_for(&mut h, "primary worktree only", |app| app.vcs.busy.is_none() && app.vcs.tools.report.contains(&root.display().to_string()) && !app.vcs.tools.report.contains(&linked.display().to_string()));
+        h.state_mut().close_workspace();
     }
 
     #[test]
