@@ -25,10 +25,10 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 49 |
+| ✅ Verified | 51 |
 | 🚧 In progress | 29 |
-| 🟢 Existing | 61 |
-| 🔁 Reuse candidate | 21 |
+| 🟢 Existing | 60 |
+| 🔁 Reuse candidate | 20 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
@@ -156,12 +156,12 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| B-01 | Open solutions and folders | 🚧 | [PR 175](https://github.com/javy-fernandez/dotcraft/pull/175) verifies solution/folder traversal on real Shop fixture and safely classifies internal directory symlinks on Unix; 13 rc-core tests pass. App UI, SDK execution and other platforms remain unverified. |
+| B-01 | Open solutions and folders | ✅ | [PR 175](https://github.com/javy-fernandez/dotcraft/pull/175) verifies solution/folder traversal and safe internal directory symlinks on Unix; 13 rc-core tests pass. [PR 188](https://github.com/javy-fernandez/dotcraft/pull/188) opens `Shop/src` and six-project `Shop.sln` as distinct egui workspaces on Linux. SDK execution, Explorer symlink UI and other platforms remain untested. |
 | B-02 | Classic .sln solutions | ✅ | Live Shop build/run and C# application flows load classic solutions; see live-dotnet.md. |
 | B-03 | XML .slnx solutions | ✅ | Live Roslyn and application flows load a real two-project XML solution; see live-dotnet.md. |
 | B-04 | Standalone .NET projects | ✅ | [PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) discovers one top-level C#, F#, or VB project in a solution-free folder while preserving the session key; 13 rc-core tests pass. [PR 185](https://github.com/javy-fernandez/dotcraft/pull/185) verifies Shop.Cli folder opening, runnable configuration and egui app rendering on Linux. SDK build/run and other platforms remain untested. |
 | B-05 | Solution folders and items | ✅ | [PR 177](https://github.com/javy-fernandez/dotcraft/pull/177) restricts classic `.sln` loose items to `SolutionItems` sections; Shop `.sln`, TenProjects `.slnx`, and nested-folder fixtures verify parser membership in seven tests. UI and SDK execution remain untested. |
-| B-06 | Project templates | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| B-06 | Project templates | 🚧 | [PR 187](https://github.com/javy-fernandez/dotcraft/pull/187) validates `.sln`/`.slnx` targets before `dotnet new` and rejects missing, directory and `.slnf` targets; Shop/TenProjects plans pass three rc-dotnet tests. Actual SDK creation and UI acceptance remain. |
 | B-07 | File and class templates | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-08 | .NET SDK discovery | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-09 | Runtime discovery | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -428,7 +428,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-08 | Git blame | ✅ | Verified by real-Git backend and app VCS tests; scope is local Git workflows on Linux. |
 | I-09 | Clone repositories | ✅ | [PR 180](https://github.com/javy-fernandez/dotcraft/pull/180) validates local clone and opening a six-project `Shop.sln` from the Git UI, including path-with-spaces and option-shaped source rejection; one rc-app UI and 45 rc-vcs tests pass on Linux. Remote auth, large clones and cancellation remain untested. |
 | I-10 | Git read safety | 🚧 | [PR 160](https://github.com/javy-fernandez/dotcraft/pull/160) resolves caller revisions to verified commit hashes for blame and file reads; 46 rc-vcs tests pass. Other Git read operations still need audit. |
-| I-11 | Shelves | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| I-11 | Shelves | ✅ | [PR 186](https://github.com/javy-fernandez/dotcraft/pull/186) validates local stash/pop from Git UI on real `Shop.sln`, including unsaved C# editor changes, untracked C# file, save-before-stash and confirmation; targeted app and rc-vcs tests pass on Linux. Restore conflicts and other platforms remain untested. |
 | I-12 | History editing | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-13 | Hosting CLI integration | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-14 | Git log and graph | ✅ | [PR 165](https://github.com/javy-fernandez/dotcraft/pull/165) draws real branch and merge lanes and supports commit selection; a real local Git merge fixture and egui UI harness passed on Linux. The local log is limited to 500 commits; pagination, huge histories, and other platforms remain untested. |

@@ -13,6 +13,7 @@ Unchecked items require implementation or validation. They do not necessarily in
 - [ ] Support JSON and SQL editing.
 - [ ] Open and manage .NET solutions, projects, libraries, services, desktop applications, and web applications.
 - [x] Open a standalone executable .NET project folder and discover its run configuration. Validated with Shop.Cli on Linux; other project kinds and SDK execution still need coverage.
+- [x] Open a .NET source folder and a multi-project solution as distinct workspaces. Validated with `Shop/src` and `Shop.sln` on Linux.
 
 Reference: [Rider features](https://www.jetbrains.com/rider/features/).
 
@@ -123,6 +124,7 @@ Rider uses dotCover for its coverage integration. Select a suitable DotCraft cov
 - [ ] Stage changes, commit, push, and manage branches.
 - [x] Clone and open a local Git repository containing `Shop.sln` on Linux. Remote authentication, large clones and cancellation remain untested.
 - [ ] Organize changes into changelists and shelve work.
+- [x] Shelve and restore local changes from the Git UI, including unsaved and untracked C# files. Validated with `Shop.sln` on Linux; changelists and conflict restoration remain in the unchecked item above.
 - [ ] Compare file revisions and resolve merge conflicts visually.
 - [ ] Define optional integrations for Subversion, Mercurial, Perforce, and TFS.
 
@@ -258,7 +260,7 @@ additional scope is pending.
 | C# line and block comments (C-10) | [Original PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/172/files) |
 | Integrated local terminal (L-01) | [Original PR 173](https://github.com/javy-fernandez/dotcraft/pull/173) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/173/files) |
 | Accessible C# editor tabs (A-05) | [Original PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) | [Editor tabs evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/accessible-editor-tabs/docs/implementation/editor-tabs-dotnet.md) |
-| Workspace solution/folder symlink tree (B-01, partial) | [Original PR 175](https://github.com/javy-fernandez/dotcraft/pull/175) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/175/files) |
+| Workspace solution/folder symlink tree (B-01) | [Original PR 175](https://github.com/javy-fernandez/dotcraft/pull/175) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/175/files) |
 | Recent solution on Welcome (A-08) | [Original PR 176](https://github.com/javy-fernandez/dotcraft/pull/176) | [Welcome evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/recent-projects-welcome/docs/implementation/recent-projects-shop.md) |
 | Solution folders and loose items (B-05) | [Original PR 177](https://github.com/javy-fernandez/dotcraft/pull/177) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/177/files) |
 | Mixed selection and caret typing (C-07) | [Original PR 178](https://github.com/javy-fernandez/dotcraft/pull/178) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/178/files) |
@@ -269,6 +271,9 @@ additional scope is pending.
 | C# undo and redo (C-12) | [Original PR 183](https://github.com/javy-fernandez/dotcraft/pull/183) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/183/files) |
 | ASP.NET endpoint project boundaries (J-09, partial) | [Original PR 184](https://github.com/javy-fernandez/dotcraft/pull/184) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/184/files) |
 | Standalone Shop.Cli workspace UI (B-04) | [Original PR 185](https://github.com/javy-fernandez/dotcraft/pull/185) | [App evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/standalone-project-ui-acceptance/docs/implementation/standalone-project-ui.md) |
+| Local Shelves push/pop (I-11) | [Original PR 186](https://github.com/javy-fernandez/dotcraft/pull/186) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/186/files) |
+| Project template solution preflight (B-06, partial) | [Original PR 187](https://github.com/javy-fernandez/dotcraft/pull/187) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/187/files) |
+| Folder and solution app opening (B-01) | [Original PR 188](https://github.com/javy-fernandez/dotcraft/pull/188) | [App evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/workspace-open-ui-acceptance/docs/implementation/workspace-open-shop.md) |
 
 ## Completion criteria
 
