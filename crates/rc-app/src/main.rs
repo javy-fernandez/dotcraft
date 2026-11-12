@@ -35,6 +35,7 @@ mod package_insight_tests;
 mod appsettings_insight_tests;
 mod reload_acceptance_tests;
 mod navigation_history_acceptance_tests;
+mod localization_acceptance_tests;
 #[cfg(test)]
 mod screens;
 #[cfg(test)]
