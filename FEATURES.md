@@ -25,11 +25,11 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 53 |
-| 🚧 In progress | 29 |
-| 🟢 Existing | 58 |
+| ✅ Verified | 54 |
+| 🚧 In progress | 30 |
+| 🟢 Existing | 57 |
 | 🔁 Reuse candidate | 20 |
-| ⬜ Backlog | 213 |
+| ⬜ Backlog | 212 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -120,7 +120,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
 | A-01 | Native desktop workspace | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| A-02 | Light and dark themes | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-02 | Light and dark themes | ✅ | [PR 191](https://github.com/javy-fernandez/dotcraft/pull/191) verifies live light → dark → light egui visual changes while six-project `Shop.sln` remains open on Linux. System-theme notifications, native chrome and other platforms remain untested. |
 | A-03 | Tool window stripes | 🚧 | Existing stripes plus verified overflow scrolling; PR 7. Wider UI audit remains pending. |
 | A-04 | Docked tool windows | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-05 | Editor tabs | ✅ | [PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) names close controls for accessibility; egui UI harness activates and closes C# tabs from real `Shop.sln` on Linux. Pinned/preview tabs, drag ordering, compact widths and other platforms remain untested. |
@@ -178,7 +178,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-20 | global.json SDK management | 🚧 | PR 5 verifies real SDK 8.0.427/10.0.403 selection and builds; ancestor policy display, UI installation and language-service restart remain pending. |
 | B-21 | .NET workload management | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-22 | NuGet dependency graph | ⬜ | Implement with integration and UI acceptance evidence. |
-| B-23 | Central package management | ⬜ | Implement with integration and UI acceptance evidence. |
+| B-23 | Central package management | 🚧 | [PR 192](https://github.com/javy-fernandez/dotcraft/pull/192) resolves parent CPM imports and child `PackageVersion Update` without inventing missing packages; CentralShop fixture and 132 rc-dotnet unit tests pass. SDK/MSBuild evaluation, arbitrary import order and UI acceptance remain. |
 | B-24 | NuGet feed credentials | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-25 | Vulnerable and outdated packages | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-26 | NuGet Package Manager Console | ⬜ | Implement with integration and UI acceptance evidence. |
