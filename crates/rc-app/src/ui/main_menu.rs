@@ -127,7 +127,11 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
         if command(ui, tr("New Solution…"), Some(ico::ADD), true) { app.new_project_dialog(None); }
         if command(ui, tr("New File…"), Some(ico::NEW_FILE), app.workspace.is_some() || app.docs.active_doc().is_some()) { app.new_file_dialog(); }
         if command(ui, tr("Open…"), Some(ico::OPEN), true) { app.pick_and_open(); }
-        if command(ui, tr("Close Project"), Some(ico::CLOSE), app.workspace.is_some()) { app.close_project(); }
+        if command(ui, tr("Open Remote Folder…"), Some(ico::OPEN), true) {
+            app.remote.show_connect = true;
+            app.dock.show(ToolWindow::Explorer);
+        }
+        if command(ui, tr("Close Project"), Some(ico::CLOSE), app.workspace.is_some() || app.remote.connected()) { app.close_project(); }
         ui.separator();
     }
     // Like Rider, View starts with the Tool Windows and Appearance submenus.

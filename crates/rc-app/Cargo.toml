@@ -28,6 +28,7 @@ rc-syntax.workspace = true
 rc-editor.workspace = true
 rc-kit.workspace = true
 rc-core.workspace = true
+rc-remote.workspace = true
 rc-dotnet.workspace = true
 rc-lsp.workspace = true
 rc-term.workspace = true

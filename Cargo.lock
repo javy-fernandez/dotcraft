@@ -3772,6 +3772,7 @@ dependencies = [
  "rc-editor",
  "rc-kit",
  "rc-lsp",
+ "rc-remote",
  "rc-search",
  "rc-syntax",
  "rc-term",
@@ -3897,6 +3898,18 @@ dependencies = [
  "tempfile",
  "tokio",
  "zip",
+]
+
+[[package]]
+name = "rc-remote"
+version = "0.6.1"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
