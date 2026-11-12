@@ -363,6 +363,7 @@ additional scope is pending.
 | Shop Go to Symbol with fixture symbols (D-03, partial) | [Original PR 266](https://github.com/javy-fernandez/dotcraft/pull/266) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/266/files) |
 | Shop file and interface templates (B-07) | [Original PR 267](https://github.com/javy-fernandez/dotcraft/pull/267) | [Template evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-file-and-interface-templates/docs/implementation/shop-file-interface-templates.md) |
 | Shop classlib and console project templates (B-06) | [Original PR 268](https://github.com/javy-fernandez/dotcraft/pull/268) | [Project template evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-project-templates-live/docs/implementation/project-templates-linux.md) |
+| Live NuGet search in Shop workspace (B-12) | [Original PR 269](https://github.com/javy-fernandez/dotcraft/pull/269) | [NuGet evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-nuget-search-live/docs/implementation/shop-nuget-search-live.md) |
 
 ## Completion criteria
 
