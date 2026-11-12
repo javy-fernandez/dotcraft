@@ -68,6 +68,8 @@ pub struct TestRequest {
     pub configuration: String,
     pub target_framework: Option<String>,
     pub filter: Option<TestFilter>,
+    /// Pause the VSTest host until a debugger attaches (one selected test project only).
+    pub debug_host: bool,
     /// Skip the build (the assemblies must be up to date).
     pub no_build: bool,
     /// Where TRX files go (a new temporary folder when `None`).
@@ -83,6 +85,7 @@ impl TestRequest {
             configuration: "Debug".into(),
             target_framework: None,
             filter: None,
+            debug_host: false,
             no_build: false,
             results_dir: None,
             max_parallel: 4,
@@ -264,6 +267,9 @@ async fn run_project(dotnet: &Dotnet, project: &Path, req: &TestRequest, dir: &P
     cmd.arg("--results-directory").arg(dir);
     if let Some(f) = &req.filter {
         cmd.arg("--filter").arg(f.expression());
+    }
+    if req.debug_host {
+        cmd.env("VSTEST_HOST_DEBUG", "1");
     }
     if let Some(d) = project.parent() {
         cmd.current_dir(d);
