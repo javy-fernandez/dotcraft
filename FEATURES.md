@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 35 |
+| ✅ Verified | 36 |
 | 🚧 In progress | 25 |
-| 🟢 Existing | 78 |
+| 🟢 Existing | 77 |
 | 🔁 Reuse candidate | 22 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
@@ -132,7 +132,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-11 | Settings dialog | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-12 | Rider and Visual Studio keymaps | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-13 | Localization | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| A-14 | Status bar | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-14 | Status bar | ✅ | [PR 167](https://github.com/javy-fernandez/dotcraft/pull/167) exposes custom metadata controls to accessibility; egui harness verifies breadcrumb, UTF-8 BOM, LF, caret and Go to Line dispatch with real `Shop.sln` C# file on Linux. Compact widths and other platforms remain untested. |
 | A-15 | Notifications | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-16 | Responsive settings layout | ✅ | Existing PR 4 preserved; 5 responsive settings tests pass, including TenProjects, scrolling, long paths and Cancel. |
 | A-17 | Scrollable main menu | ✅ | PR 17 verifies compact category/command/tool scrolling, real TenProjects integration, clipboard actions and project-gated attachment. |
