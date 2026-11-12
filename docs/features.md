@@ -302,6 +302,9 @@ additional scope is pending.
 | Native Shop workspace lifecycle (A-01) | [Original PR 206](https://github.com/javy-fernandez/dotcraft/pull/206) | [Workspace evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/native-workspace-shop-acceptance/docs/implementation/native-workspace-shop.md) |
 | REST requests from Shop.Api endpoints (J-23, partial) | [Original PR 207](https://github.com/javy-fernandez/dotcraft/pull/207) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/207/files) |
 | Git Cherry-pick and conflict abort (I-17) | [Original PR 208](https://github.com/javy-fernandez/dotcraft/pull/208) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/208/files) |
+| Solution filter editing backend (B-15, partial) | [Original PR 209](https://github.com/javy-fernandez/dotcraft/pull/209) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/209/files) |
+| C# Surround With read-only safety (C-25, partial) | [Original PR 210](https://github.com/javy-fernandez/dotcraft/pull/210) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/210/files) |
+| Presentation mode with Shop (A-23) | [Original PR 211](https://github.com/javy-fernandez/dotcraft/pull/211) | [Presentation evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/presentation-mode-shop/docs/implementation/presentation-mode-shop.md) |
 
 ## Completion criteria
 

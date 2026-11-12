@@ -25,11 +25,11 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 63 |
-| 🚧 In progress | 33 |
-| 🟢 Existing | 50 |
+| ✅ Verified | 64 |
+| 🚧 In progress | 35 |
+| 🟢 Existing | 49 |
 | 🔁 Reuse candidate | 18 |
-| ⬜ Backlog | 209 |
+| ⬜ Backlog | 207 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -140,7 +140,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-20 | Safe reload from disk | ✅ | [PR 205](https://github.com/javy-fernandez/dotcraft/pull/205) routes conflict-banner disk loading through parse/style refresh and verifies both Load from Disk and Keep Mine in the open Shop solution egui UI on Linux. Watcher timing, large/binary files and other platforms remain untested. |
 | A-21 | Accessible keyboard navigation | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | A-22 | Distraction-free and Zen modes | ✅ | [PR 161](https://github.com/javy-fernandez/dotcraft/pull/161) provides View-menu toggles, a visible exit control, and dock-preserving layout changes. Two rc-app UI harness tests passed with `Shop.sln` on Linux. Modes are process-local; native window chrome and other platforms remain untested. |
-| A-23 | Presentation mode | ⬜ | Implement with integration and UI acceptance evidence. |
+| A-23 | Presentation mode | ✅ | [PR 211](https://github.com/javy-fernandez/dotcraft/pull/211) adds View-menu entry/exit, larger editor text, fullscreen request and full editor area while preserving the dock; Shop.sln egui flow passes on Linux, including settings changes and exit after Close Project. OS fullscreen, display scaling and other platforms remain untested. |
 | A-24 | Customizable toolbar | ⬜ | Implement with integration and UI acceptance evidence. |
 | A-25 | Settings synchronization | ⬜ | Implement with integration and UI acceptance evidence. |
 | A-26 | IDE settings import | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -169,7 +169,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-12 | NuGet search | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-13 | NuGet installation and removal | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-14 | JSON .slnf solution filters | 🚧 | Parser, explorer and SDK build are verified in the original baseline; filter-specific Roslyn, test-project selection and actual test execution remain pending. The test-selection [PR 153](https://github.com/javy-fernandez/dotcraft/pull/153) was closed without merge. |
-| B-15 | Interactive filter creation and editing | ⬜ | Implement with integration and UI acceptance evidence. |
+| B-15 | Interactive filter creation and editing | 🚧 | [PR 209](https://github.com/javy-fernandez/dotcraft/pull/209) adds bounded `.slnf` create/update backend API, preserving unknown JSON fields and BOM, tested on TenProjects.slnx. UI workflow, persistence, SDK build and language-service update remain. |
 | B-16 | Unload and reload individual projects | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-17 | Project references editor | 🚧 | [PR 204](https://github.com/javy-fernandez/dotcraft/pull/204) adds bounded backend add/remove with canonical path checks and formatting preservation, tested on Shop projects. UI, disk write, MSBuild evaluation and cycle detection remain. |
 | B-18 | Target frameworks editor | 🚧 | [PR 200](https://github.com/javy-fernandez/dotcraft/pull/200) adds a bounded backend edit for one unconditional SDK-style project property, tested with Shop.Core and Shop.Api; UI integration, disk write, and SDK build acceptance remain. |
@@ -215,7 +215,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-22 | Import completion | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-23 | Live templates editor | 🟢 | Source located in `rc-editor/templates.rs`; repeat application acceptance checks. |
 | C-24 | Postfix templates | 🟢 | Existing C# postfix expansion is in `rc-editor/src/templates.rs` and invoked by Tab in `view.rs`; unit tests cover the supported forms. Live .NET UI acceptance remains. |
-| C-25 | Surround with templates | 🟢 | Source located in `rc-editor/templates.rs`; repeat application acceptance checks. |
+| C-25 | Surround with templates | 🚧 | [PR 210](https://github.com/javy-fernandez/dotcraft/pull/210) verifies Ctrl+Alt+T, built-in `if` surround, indentation, snippet field and undo in Shop C# EditorView; read-only phantom snippets are prevented. App popup and other templates remain untested. |
 | C-26 | Generate constructors and members | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-27 | Override and implement members | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-28 | Code cleanup profiles | ⬜ | Implement with integration and UI acceptance evidence. |
