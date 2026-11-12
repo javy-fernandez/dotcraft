@@ -19,6 +19,7 @@ use tokio::{
 
 pub const PROTOCOL_VERSION: u32 = 1;
 const MAX_BYTES: usize = 1024 * 1024;
+const MAX_LINE_BYTES: usize = 2 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -144,15 +145,15 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut lines = BufReader::new(read).lines();
+    let mut reader = BufReader::new(read);
     let (tx, mut rx) = mpsc::unbounded_channel::<(Response, bool)>();
     let mut running: HashMap<u64, JoinHandle<()>> = HashMap::new();
     let mut cancelled = HashSet::new();
     loop {
         tokio::select! {
-            line = lines.next_line() => {
+            line = read_line_bounded(&mut reader) => {
                 let Some(line) = line? else { break };
-                let req: Request = match serde_json::from_str(&line) {
+                let req: Request = match serde_json::from_slice(&line) {
                     Ok(req) => req,
                     Err(_) => continue,
                 };
@@ -195,6 +196,33 @@ where
         task.abort();
     }
     Ok(())
+}
+
+async fn read_line_bounded<R: AsyncRead + Unpin>(
+    reader: &mut BufReader<R>,
+) -> Result<Option<Vec<u8>>> {
+    let mut line = Vec::new();
+    loop {
+        let chunk = reader.fill_buf().await?;
+        if chunk.is_empty() {
+            if line.is_empty() {
+                return Ok(None);
+            }
+            bail!("truncated remote request");
+        }
+        let count = chunk
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(chunk.len(), |index| index + 1);
+        if line.len() + count > MAX_LINE_BYTES {
+            bail!("remote request exceeds 2 MiB line limit");
+        }
+        line.extend_from_slice(&chunk[..count]);
+        reader.consume(count);
+        if line.last() == Some(&b'\n') {
+            return Ok(Some(line));
+        }
+    }
 }
 
 fn reply(id: u64, result: std::result::Result<Value, String>) -> Response {
@@ -265,30 +293,27 @@ async fn perform(operation: Operation) -> Result<Value> {
                 .stderr(Stdio::piped())
                 .kill_on_drop(true);
             let mut child = cmd.spawn()?;
-            let mut stdout = child
-                .stdout
-                .take()
-                .context("missing stdout")?
-                .take(MAX_BYTES as u64 + 1);
-            let mut stderr = child
-                .stderr
-                .take()
-                .context("missing stderr")?
-                .take(MAX_BYTES as u64 + 1);
+            let stdout = child.stdout.take().context("missing stdout")?;
+            let stderr = child.stderr.take().context("missing stderr")?;
             let output = tokio::time::timeout(Duration::from_millis(timeout_ms), async {
-                let (mut out, mut err) = (Vec::new(), Vec::new());
-                let (_, _, status) = tokio::try_join!(
-                    stdout.read_to_end(&mut out),
-                    stderr.read_to_end(&mut err),
-                    child.wait()
-                )?;
+                let (out, err, status) =
+                    tokio::try_join!(capture_limited(stdout), capture_limited(stderr), async {
+                        Ok::<_, anyhow::Error>(child.wait().await?)
+                    })?;
                 Result::<_>::Ok((out, err, status.code()))
             })
-            .await
-            .context("process timed out")??;
-            if output.0.len() > MAX_BYTES || output.1.len() > MAX_BYTES {
-                bail!("process output exceeds 1 MiB limit");
-            }
+            .await;
+            let output = match output {
+                Ok(Ok(output)) => output,
+                Ok(Err(error)) => {
+                    let _ = child.kill().await;
+                    return Err(error);
+                }
+                Err(_) => {
+                    let _ = child.kill().await;
+                    bail!("process timed out");
+                }
+            };
             Ok(Value::Exit {
                 code: output.2,
                 stdout: STANDARD.encode(output.0),
@@ -296,6 +321,21 @@ async fn perform(operation: Operation) -> Result<Value> {
             })
         }
         Operation::Cancel { .. } => bail!("cancel is handled by the server"),
+    }
+}
+
+async fn capture_limited<R: AsyncRead + Unpin>(mut reader: R) -> Result<Vec<u8>> {
+    let mut output = Vec::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let count = reader.read(&mut buffer).await?;
+        if count == 0 {
+            return Ok(output);
+        }
+        if output.len() + count > MAX_BYTES {
+            bail!("process output exceeds 1 MiB limit");
+        }
+        output.extend_from_slice(&buffer[..count]);
     }
 }
 
@@ -567,5 +607,43 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> Client<R, W> {
             } => Ok(()),
             _ => bail!("remote agent protocol mismatch"),
         }
+    }
+}
+
+#[cfg(test)]
+mod limits_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn rejects_oversized_request_before_parsing() {
+        let (mut writer, reader) = tokio::io::duplex(MAX_LINE_BYTES + 100);
+        writer
+            .write_all(&vec![b'x'; MAX_LINE_BYTES + 1])
+            .await
+            .unwrap();
+        let error = read_line_bounded(&mut BufReader::new(reader))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("line limit"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn oversized_process_output_fails_before_timeout() {
+        let start = std::time::Instant::now();
+        let error = perform(Operation::Run {
+            program: "python3".into(),
+            args: vec![
+                "-c".into(),
+                "import sys; sys.stdout.buffer.write(b'x' * 1048577)".into(),
+            ],
+            cwd: std::env::temp_dir(),
+            env: vec![],
+            timeout_ms: 5_000,
+        })
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("output exceeds"));
+        assert!(start.elapsed() < Duration::from_secs(4));
     }
 }
