@@ -541,7 +541,10 @@
     "Paste": "Einfügen",
     "Select All": "Alles auswählen",
     "Clear Buffer": "Puffer leeren",
-    "Process finished with exit code {code}": "Prozess beendet mit Exit-Code {code}"
+    "Process finished with exit code {code}": "Prozess beendet mit Exit-Code {code}",
+    "Find in Terminal": "Find in Terminal",
+    "Previous match": "Previous match",
+    "Next match": "Next match"
   },
   "vcs": {
     "Git executable not found": "Git-Programm nicht gefunden",

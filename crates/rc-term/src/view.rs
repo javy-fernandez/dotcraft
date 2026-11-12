@@ -5,7 +5,7 @@
 use crate::colors::{TermColors, dim};
 use crate::keys::{self, KeyMode, MouseButton, MouseEncoding};
 use crate::links::{self, Link};
-use crate::session::{TermSession, TermState};
+use crate::session::{SearchMatch, TermSession, TermState};
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
@@ -129,11 +129,13 @@ pub struct TerminalView<'a> {
     config: &'a TermConfig,
     id: Id,
     focus: bool,
+    search_matches: &'a [SearchMatch],
+    active_search_match: Option<usize>,
 }
 
 impl<'a> TerminalView<'a> {
     pub fn new(session: &'a TermSession, config: &'a TermConfig) -> Self {
-        TerminalView { session, config, id: Self::id_for(session.id()), focus: false }
+        TerminalView { session, config, id: Self::id_for(session.id()), focus: false, search_matches: &[], active_search_match: None }
     }
 
     /// Widget id of the view of session `id` (to request focus from outside).
@@ -147,8 +149,15 @@ impl<'a> TerminalView<'a> {
         self
     }
 
+    /// Highlights matches in the visible terminal rows without changing the text selection.
+    pub fn search_matches(mut self, matches: &'a [SearchMatch], active: Option<usize>) -> Self {
+        self.search_matches = matches;
+        self.active_search_match = active;
+        self
+    }
+
     pub fn show(self, ui: &mut Ui) -> TermOutput {
-        let TerminalView { session, config, id, focus } = self;
+        let TerminalView { session, config, id, focus, search_matches, active_search_match } = self;
         let dark = ui.visuals().dark_mode;
         session.set_dark(dark);
         let rect = ui.available_rect_before_wrap();
@@ -207,7 +216,7 @@ impl<'a> TerminalView<'a> {
         let base_bg = colors.resolve(AnsiColor::Named(NamedColor::Background), st.term.colors());
         painter.rect_filled(rect, 0.0, base_bg);
         let blink_on = !config.cursor_blink || ((now - vs.blink_epoch) % (2.0 * BLINK)) < BLINK;
-        paint_grid(ui, &painter, &st, config, &colors, &m, focused, blink_on, hovered_link.as_ref());
+        paint_grid(ui, &painter, &st, config, &colors, &m, focused, blink_on, hovered_link.as_ref(), search_matches, active_search_match);
         paint_scrollbar(ui, &mut st, &m, rect, id, &mut vs);
 
         // IME: candidate window at the cursor, preedit text drawn over it.
@@ -270,7 +279,7 @@ fn fonts(ui: &Ui, size: f32) -> [FontId; 3] {
 // =====================================================================================
 
 #[allow(clippy::too_many_arguments)]
-fn paint_grid(ui: &Ui, painter: &egui::Painter, st: &TermState, config: &TermConfig, colors: &TermColors, m: &Metrics, focused: bool, blink_on: bool, link: Option<&(usize, Range<usize>, Link)>) {
+fn paint_grid(ui: &Ui, painter: &egui::Painter, st: &TermState, config: &TermConfig, colors: &TermColors, m: &Metrics, focused: bool, blink_on: bool, link: Option<&(usize, Range<usize>, Link)>, search_matches: &[SearchMatch], active_search_match: Option<usize>) {
     let term = &st.term;
     let grid = term.grid();
     let offset = grid.display_offset();
@@ -301,6 +310,7 @@ fn paint_grid(ui: &Ui, painter: &egui::Painter, st: &TermState, config: &TermCon
 
     for row in 0..m.rows {
         let line = Line(row as i32 - offset as i32);
+        let row_matches: Vec<_> = search_matches.iter().enumerate().filter(|(_, hit)| hit.line == line.0).collect();
         let cells = &grid[line];
         let y = m.y(row);
         let mut job = LayoutJob { break_on_newline: false, ..Default::default() };
@@ -348,6 +358,10 @@ fn paint_grid(ui: &Ui, painter: &egui::Painter, st: &TermState, config: &TermCon
             }
             if selection.is_some_and(|s| s.contains(point)) {
                 bg = colors.selection;
+            }
+            if let Some((index, _)) = row_matches.iter().find(|(_, hit)| (hit.start_col..hit.end_col).contains(&col)) {
+                bg = if Some(*index) == active_search_match { Color32::from_rgb(240, 170, 40) } else { Color32::from_rgb(180, 140, 65) };
+                fg = Color32::BLACK;
             }
             let in_link = link.is_some_and(|(r, cols, _)| *r == row && cols.contains(&col));
             if in_link {

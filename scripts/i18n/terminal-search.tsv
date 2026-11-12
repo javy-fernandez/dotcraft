@@ -1,0 +1,5 @@
+# Terminal search. Import: python3 scripts/i18n_tsv.py terminal scripts/i18n/terminal-search.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Find in Terminal	Find in Terminal	Find in Terminal	Find in Terminal	Find in Terminal	Find in Terminal	Find in Terminal	Find in Terminal
+Previous match	Previous match	Previous match	Previous match	Previous match	Previous match	Previous match	Previous match
+Next match	Next match	Next match	Next match	Next match	Next match	Next match	Next match

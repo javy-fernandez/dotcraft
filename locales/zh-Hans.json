@@ -541,7 +541,10 @@
     "Paste": "粘贴",
     "Select All": "全选",
     "Clear Buffer": "清除缓冲区",
-    "Process finished with exit code {code}": "进程已结束，退出代码为 {code}"
+    "Process finished with exit code {code}": "进程已结束，退出代码为 {code}",
+    "Find in Terminal": "Find in Terminal",
+    "Previous match": "Previous match",
+    "Next match": "Next match"
   },
   "vcs": {
     "Git executable not found": "未找到 Git 可执行文件",

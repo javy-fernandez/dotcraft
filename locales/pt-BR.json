@@ -541,7 +541,10 @@
     "Paste": "Colar",
     "Select All": "Selecionar tudo",
     "Clear Buffer": "Limpar buffer",
-    "Process finished with exit code {code}": "Processo concluído com código de saída {code}"
+    "Process finished with exit code {code}": "Processo concluído com código de saída {code}",
+    "Find in Terminal": "Find in Terminal",
+    "Previous match": "Previous match",
+    "Next match": "Next match"
   },
   "vcs": {
     "Git executable not found": "Executável do Git não encontrado",

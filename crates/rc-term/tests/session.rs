@@ -4,6 +4,7 @@
 use alacritty_terminal::grid::Dimensions;
 use rc_core::Waker;
 use rc_term::{SelectKind, SessionEvent, SpawnSpec, TermSession};
+use rc_term::session::SearchPoll;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -120,6 +121,72 @@ fn wide_chars_take_two_cells() {
     assert_eq!(row[alacritty_terminal::index::Column(1)].c, '中');
     assert_eq!(row[alacritty_terminal::index::Column(3)].c, 'b');
     assert_eq!(st.row_text(0), "a中b");
+}
+
+#[test]
+fn search_finds_retained_history_and_scrolls_to_matches() {
+    let s = TermSession::output_only(16, 3, Waker::noop());
+    s.feed("Alpha\r\nbeta ALPHA\r\nx中ALPHA\r\nlast alpha".as_bytes());
+
+    let matches = s.search("alpha", 100);
+    assert_eq!(matches.iter().map(|m| (m.line, m.start_col, m.end_col)).collect::<Vec<_>>(), vec![(-1, 0, 5), (0, 5, 10), (1, 3, 8), (2, 5, 10)]);
+    assert_eq!(s.search("alpha", 2), matches[2..]);
+    assert_eq!(s.search("中a", 10).iter().map(|m| (m.line, m.start_col, m.end_col)).collect::<Vec<_>>(), vec![(1, 1, 4)]);
+    assert!(s.search("", 10).is_empty());
+    assert!(s.search("alpha", 0).is_empty());
+
+    let generation = s.lock().generation;
+    s.scroll_to_line(matches[0].line);
+    assert_eq!(s.lock().term.grid().display_offset(), 1);
+    assert_eq!(s.lock().row_text(0), "Alpha");
+    s.scroll_to_line(matches[3].line);
+    assert_eq!(s.lock().term.grid().display_offset(), 0);
+    assert_eq!(s.lock().generation, generation);
+}
+
+#[test]
+fn search_maps_unicode_case_folding_to_terminal_cells() {
+    let s = TermSession::output_only(20, 2, Waker::noop());
+    s.feed("CafÉ and café".as_bytes());
+    let matches = s.search("CAFÉ", 10);
+    assert_eq!(matches.iter().map(|m| (m.start_col, m.end_col)).collect::<Vec<_>>(), vec![(0, 4), (9, 13)]);
+
+    let repeated = TermSession::output_only(20, 2, Waker::noop());
+    repeated.feed(b"aba aba aba");
+    assert_eq!(repeated.search("aba", 2).iter().map(|m| (m.start_col, m.end_col)).collect::<Vec<_>>(), vec![(4, 7), (8, 11)]);
+}
+
+#[test]
+fn search_scans_only_the_newest_four_thousand_lines() {
+    let s = TermSession::output_only(20, 2, Waker::noop());
+    let mut output = String::from("ancient\r\n");
+    output.push_str(&"filler\r\n".repeat(4_005));
+    output.push_str("recent");
+    s.feed(output.as_bytes());
+    assert!(s.search("ancient", 10).is_empty());
+    assert_eq!(s.search("recent", 10).len(), 1);
+}
+
+#[test]
+fn background_search_returns_the_content_generation() {
+    let s = TermSession::output_only(20, 2, Waker::noop());
+    s.feed(b"first\r\nSECOND");
+    let expected_generation = s.lock().generation;
+    let job = s.start_search("second", 10);
+    let clone = job.clone();
+    let deadline = std::time::Instant::now() + TIMEOUT;
+    loop {
+        match clone.poll() {
+            SearchPoll::Pending => assert!(std::time::Instant::now() < deadline, "background search timed out"),
+            SearchPoll::Ready(result) => {
+                assert_eq!(result.generation, expected_generation);
+                assert_eq!(result.matches.iter().map(|m| (m.line, m.start_col, m.end_col)).collect::<Vec<_>>(), vec![(1, 0, 6)]);
+                break;
+            }
+            SearchPoll::Stale => panic!("unchanged terminal should return search results"),
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 #[test]

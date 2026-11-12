@@ -108,6 +108,51 @@ pub enum SelectKind {
     Block,
 }
 
+/// A literal match in the retained terminal grid. Negative lines are scrollback;
+/// columns are cell positions, with `end_col` exclusive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SearchMatch {
+    pub line: i32,
+    pub start_col: usize,
+    pub end_col: usize,
+}
+
+/// Search results for one terminal content generation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SearchResult {
+    pub generation: u64,
+    pub matches: Vec<SearchMatch>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SearchPoll {
+    Pending,
+    Ready(SearchResult),
+    /// The terminal changed during scanning, or the search was cancelled.
+    Stale,
+}
+
+struct SearchJobInner {
+    cancelled: AtomicBool,
+    result: Mutex<SearchPoll>,
+}
+
+/// A background search. Clones share cancellation and completion state.
+#[derive(Clone)]
+pub struct SearchJob {
+    inner: Arc<SearchJobInner>,
+}
+
+impl SearchJob {
+    pub fn poll(&self) -> SearchPoll {
+        self.inner.result.lock().clone()
+    }
+
+    pub fn cancel(&self) {
+        self.inner.cancelled.store(true, Ordering::Relaxed);
+    }
+}
+
 impl SelectKind {
     fn ty(self) -> SelectionType {
         match self {
@@ -248,6 +293,77 @@ fn line_text(term: &Term<EventProxy>, line: Line) -> String {
     s
 }
 
+fn line_matches(term: &Term<EventProxy>, line: Line, needle: &str) -> Vec<SearchMatch> {
+    use alacritty_terminal::term::cell::Flags;
+
+    let grid = term.grid();
+    let mut folded = String::new();
+    let mut columns = Vec::new();
+    for col in 0..grid.columns() {
+        let cell = &grid[line][Column(col)];
+        if cell.flags.intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER) {
+            continue;
+        }
+        let end = col + if cell.flags.contains(Flags::WIDE_CHAR) { 2 } else { 1 };
+        for c in std::iter::once(cell.c).chain(cell.zerowidth().into_iter().flatten().copied()) {
+            for lower in c.to_lowercase() {
+                let size = lower.len_utf8();
+                folded.push(lower);
+                columns.extend(std::iter::repeat_n((col, end), size));
+            }
+        }
+    }
+    let len = folded.trim_end().len();
+    folded.truncate(len);
+    columns.truncate(len);
+    folded
+        .match_indices(needle)
+        .map(|(start, text)| SearchMatch { line: line.0, start_col: columns[start].0, end_col: columns[start + text.len() - 1].1 })
+        .collect()
+}
+
+fn search_chunks(state: &Mutex<TermState>, query: &str, max_matches: usize, cancelled: &AtomicBool) -> Option<SearchResult> {
+    let limit = max_matches.min(1_000);
+    let needle = query.to_lowercase();
+    let (generation, top, bottom) = {
+        let st = state.lock();
+        let bottom = st.term.bottommost_line().0;
+        (st.generation, st.term.topmost_line().0.max(bottom - MAX_SEARCH_LINES + 1), bottom)
+    };
+    let mut matches = Vec::new();
+    if !needle.is_empty() && limit > 0 {
+        let mut line = bottom;
+        loop {
+            if cancelled.load(Ordering::Relaxed) {
+                return None;
+            }
+            let chunk_top = (line - 63).max(top);
+            {
+                let st = state.lock();
+                if st.generation != generation {
+                    return None;
+                }
+                for current in (chunk_top..=line).rev() {
+                    let remaining = limit - matches.len();
+                    matches.extend(line_matches(&st.term, Line(current), &needle).into_iter().rev().take(remaining));
+                    if matches.len() == limit {
+                        break;
+                    }
+                }
+            }
+            if matches.len() == limit || chunk_top == top {
+                break;
+            }
+            line = chunk_top - 1;
+        }
+    }
+    if cancelled.load(Ordering::Relaxed) || state.lock().generation != generation {
+        return None;
+    }
+    matches.reverse();
+    Some(SearchResult { generation, matches })
+}
+
 /// A process running on a pseudo-terminal, or an output-only terminal.
 pub struct TermSession {
     id: u64,
@@ -265,6 +381,7 @@ pub struct TermSession {
 }
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+const MAX_SEARCH_LINES: i32 = 4_000;
 
 fn term_config(scrollback: usize) -> Config {
     Config { scrolling_history: scrollback, default_cursor_style: CursorStyle { shape: CursorShape::Block, blinking: true }, ..Config::default() }
@@ -518,6 +635,68 @@ impl TermSession {
     pub fn screen_lines(&self) -> Vec<String> {
         let st = self.lock();
         (0..st.term.screen_lines()).map(|r| st.row_text(r)).collect()
+    }
+
+    /// Finds case-insensitive literal matches in the newest 4,000 retained grid lines.
+    /// The newest `max_matches` (at most 1,000) are returned in grid order.
+    pub fn search(&self, query: &str, max_matches: usize) -> Vec<SearchMatch> {
+        let limit = max_matches.min(1_000);
+        if query.is_empty() || limit == 0 {
+            return Vec::new();
+        }
+        let needle = query.to_lowercase();
+        let st = self.lock();
+        let mut matches = Vec::new();
+        let bottom = st.term.bottommost_line().0;
+        let top = st.term.topmost_line().0.max(bottom - MAX_SEARCH_LINES + 1);
+        for line in (top..=bottom).rev() {
+            let remaining = limit - matches.len();
+            matches.extend(line_matches(&st.term, Line(line), &needle).into_iter().rev().take(remaining));
+            if matches.len() == limit {
+                break;
+            }
+        }
+        matches.reverse();
+        matches
+    }
+
+    /// Searches on a worker thread, releasing the terminal lock every 64 lines.
+    /// Call [`SearchJob::poll`] from the UI; discard stale results and start again after output settles.
+    pub fn start_search(&self, query: impl Into<String>, max_matches: usize) -> SearchJob {
+        let job = SearchJob { inner: Arc::new(SearchJobInner { cancelled: AtomicBool::new(false), result: Mutex::new(SearchPoll::Pending) }) };
+        let inner = job.inner.clone();
+        let state = self.state.clone();
+        let query = query.into();
+        match std::thread::Builder::new().name("rc-term-search".into()).spawn(move || {
+            let result = search_chunks(&state, &query, max_matches, &inner.cancelled);
+            *inner.result.lock() = result.map_or(SearchPoll::Stale, SearchPoll::Ready);
+        }) {
+            Ok(_) => {}
+            Err(_) => *job.inner.result.lock() = SearchPoll::Stale,
+        }
+        job
+    }
+
+    /// Scrolls only as far as needed to show a grid line from search results.
+    pub fn scroll_to_line(&self, line: i32) {
+        let mut st = self.lock();
+        let top = st.term.topmost_line().0;
+        let bottom = st.term.bottommost_line().0;
+        if !(top..=bottom).contains(&line) {
+            return;
+        }
+        let offset = st.term.grid().display_offset() as i32;
+        let rows = st.term.screen_lines() as i32;
+        let target = if line + offset < 0 {
+            -line
+        } else if line + offset >= rows {
+            rows - 1 - line
+        } else {
+            offset
+        };
+        if target != offset {
+            st.term.scroll_display(Scroll::Delta(target - offset));
+        }
     }
 
     /// Selects from `start` to `end` (grid coordinates: line 0 is the top of the screen,

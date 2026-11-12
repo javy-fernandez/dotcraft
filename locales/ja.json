@@ -541,7 +541,10 @@
     "Paste": "貼り付け",
     "Select All": "すべて選択",
     "Clear Buffer": "バッファーをクリア",
-    "Process finished with exit code {code}": "プロセスは終了コード {code} で終了しました"
+    "Process finished with exit code {code}": "プロセスは終了コード {code} で終了しました",
+    "Find in Terminal": "Find in Terminal",
+    "Previous match": "Previous match",
+    "Next match": "Next match"
   },
   "vcs": {
     "Git executable not found": "Git の実行ファイルが見つかりません",

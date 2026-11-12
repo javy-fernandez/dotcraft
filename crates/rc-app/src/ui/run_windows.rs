@@ -4,7 +4,7 @@ use crate::app::DotCraftApp;
 use crate::runner::{RunnerOutput, TestState};
 use crate::toolwindow::ToolWindow;
 use crate::ui::toolwindows::{HEADER_H, empty_state};
-use egui::{Align2, FontId, Rect, Sense, Ui, pos2, vec2};
+use egui::{Align2, FontId, Id, Key, Rect, Sense, Ui, pos2, vec2};
 use rc_dotnet::TestOutcome;
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{Ico, ico, icons, theme};
@@ -431,13 +431,27 @@ fn row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, select
 
 // ---------------------------------------------------------------------------------- Terminal
 
+#[derive(Clone, Default)]
+struct TerminalSearch {
+    open: bool,
+    query: String,
+    matches: Vec<rc_term::session::SearchMatch>,
+    active: Option<usize>,
+    generation: u64,
+    last_refresh: f64,
+    job: Option<rc_term::session::SearchJob>,
+    jump_when_ready: bool,
+}
+
 pub fn terminal(app: &mut DotCraftApp, ui: &mut Ui) {
     if app.terminals.tabs().is_empty() {
         app.open_terminal(None);
     }
-    let actions = [(ico::ADD, tr("New Terminal Tab"), true)];
+    let actions = [(ico::ADD, tr("New Terminal Tab"), true), (ico::SEARCH, tr("Find in Terminal"), true)];
+    let mut toggle_search = false;
     match header(ui, tr("Terminal"), &actions) {
         Some(0) => app.open_terminal(None),
+        Some(1) => toggle_search = true,
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Terminal),
         _ => {}
     }
@@ -465,8 +479,104 @@ pub fn terminal(app: &mut DotCraftApp, ui: &mut Ui) {
     let cwd = app.terminals.active().and_then(|t| t.session.cwd().map(|p| p.to_path_buf()));
     let focus = std::mem::take(&mut app.focus_terminal);
     let Some(tab) = app.terminals.active() else { return };
+    let search_id = Id::new(("terminal_search", tab.id()));
+    let field_id = search_id.with("query");
+    let mut search: TerminalSearch = ui.data(|d| d.get_temp(search_id)).unwrap_or_default();
+    let generation = tab.session.lock().generation;
+    let now = ui.input(|i| i.time);
+    if toggle_search {
+        search.open = !search.open;
+        if search.open {
+            ui.memory_mut(|m| m.request_focus(field_id));
+        }
+    }
+    if search.open {
+        let mut direction = 0_i32;
+        let mut refresh = false;
+        let mut query_changed = false;
+        ui.horizontal_wrapped(|ui| {
+            ui.add_space(8.0);
+            let field = ui.add(egui::TextEdit::singleline(&mut search.query).id(field_id).hint_text(tr("Find in Terminal")).desired_width(ui.available_width().min(220.0).max(100.0)));
+            if field.changed() {
+                refresh = true;
+                query_changed = true;
+            }
+            if field.has_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+                direction = if ui.input(|i| i.modifiers.shift) { -1 } else { 1 };
+            }
+            let count = if field.changed() || generation != search.generation { "…".to_string() } else { search.active.map_or_else(|| format!("0/{}", search.matches.len()), |index| format!("{}/{}", index + 1, search.matches.len())) };
+            ui.label(count);
+            if ui.button(tr("Refresh")).clicked() { refresh = true; }
+            if ui.button(tr("Previous match")).clicked() { direction = -1; }
+            if ui.button(tr("Next match")).clicked() { direction = 1; }
+            if ui.button(tr("Close")).clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                search.open = false;
+            }
+        });
+        if query_changed {
+            search.jump_when_ready = true;
+            search.matches.clear();
+            search.active = None;
+            search.generation = u64::MAX;
+        }
+        if generation != search.generation && search.job.is_none() && now - search.last_refresh >= 0.25 {
+            refresh = true;
+        }
+        if refresh {
+            if let Some(job) = search.job.take() {
+                job.cancel();
+            }
+            if search.query.is_empty() {
+                search.matches.clear();
+                search.active = None;
+                search.generation = generation;
+                search.jump_when_ready = false;
+            } else {
+                search.job = Some(tab.session.start_search(search.query.clone(), 1_000));
+            }
+            search.last_refresh = now;
+        }
+        if let Some(job) = &search.job {
+            match job.poll() {
+                rc_term::session::SearchPoll::Pending => ui.ctx().request_repaint_after(std::time::Duration::from_millis(50)),
+                rc_term::session::SearchPoll::Ready(result) => {
+                    search.job = None;
+                    if result.generation == generation {
+                        search.matches = result.matches;
+                        search.active = (!search.matches.is_empty()).then_some(search.matches.len() - 1);
+                        search.generation = generation;
+                        if search.jump_when_ready {
+                            if let Some(index) = search.active {
+                                tab.session.scroll_to_line(search.matches[index].line);
+                            }
+                        }
+                        search.jump_when_ready = false;
+                    }
+                }
+                rc_term::session::SearchPoll::Stale => search.job = None,
+            }
+        }
+        if generation != search.generation && search.job.is_none() {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
+        }
+        if direction != 0 && !search.matches.is_empty() && generation == search.generation {
+            let current = search.active.unwrap_or(0);
+            let next = if direction < 0 { (current + search.matches.len() - 1) % search.matches.len() } else { (current + 1) % search.matches.len() };
+            search.active = Some(next);
+            tab.session.scroll_to_line(search.matches[next].line);
+        }
+    }
+    if !search.open {
+        if let Some(job) = search.job.take() {
+            job.cancel();
+        }
+    }
     let config = rc_term::TermConfig::default();
-    let out = rc_term::TerminalView::new(&tab.session, &config).focus(focus).show(ui);
+    let out = rc_term::TerminalView::new(&tab.session, &config)
+        .focus(focus && !search.open)
+        .search_matches(if search.open && generation == search.generation { &search.matches } else { &[] }, search.active)
+        .show(ui);
+    ui.data_mut(|d| d.insert_temp(search_id, search));
     for e in out.events {
         if let rc_term::ViewEvent::LinkClicked(link) = e {
             open_link(app, link, cwd.clone());
