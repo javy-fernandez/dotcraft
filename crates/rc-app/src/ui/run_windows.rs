@@ -73,6 +73,16 @@ pub fn open_url(url: &str) {
     let _ = std::process::Command::new("xdg-open").arg(url).spawn();
 }
 
+fn build_diagnostic_target(d: &rc_dotnet::Diagnostic) -> Option<(std::path::PathBuf, usize, usize)> {
+    d.file.as_ref().map(|file| {
+        (
+            file.clone(),
+            d.line.unwrap_or(1).saturating_sub(1) as usize,
+            d.column.unwrap_or(1).saturating_sub(1) as usize,
+        )
+    })
+}
+
 // ---------------------------------------------------------------------------------- Build
 
 pub fn build(app: &mut DotCraftApp, ui: &mut Ui) {
@@ -135,10 +145,8 @@ pub fn build(app: &mut DotCraftApp, ui: &mut Ui) {
                 let g = ui.painter().layout_no_wrap(format!("{} {}", d.code, d.message), FontId::proportional(13.0), p.text);
                 ui.painter().galley(pos2(rr.left() + 46.0, rr.center().y - g.size().y / 2.0), g.clone(), p.text);
                 ui.painter().text(pos2(rr.left() + 54.0 + g.size().x, rr.center().y), Align2::LEFT_CENTER, loc, FontId::proportional(12.0), p.muted);
-                if resp.clicked()
-                    && let Some(f) = &d.file
-                {
-                    open = Some((f.clone(), d.line.unwrap_or(1).saturating_sub(1) as usize, d.column.unwrap_or(1).saturating_sub(1) as usize));
+                if resp.clicked() {
+                    open = build_diagnostic_target(d);
                 }
             }
         });
@@ -153,6 +161,47 @@ pub fn build(app: &mut DotCraftApp, ui: &mut Ui) {
         if let rc_term::ViewEvent::LinkClicked(link) = e {
             open_link(app, link, cwd.clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod build_diagnostic_tests {
+    use super::build_diagnostic_target;
+
+    #[test]
+    fn compiler_diagnostic_link_uses_zero_based_editor_coordinates() {
+        let diagnostic = rc_dotnet::diagnostics::parse_line(
+            "/w/Shop.Core/PriceCalculator.cs(11,22): error CS0103: The name 'undefinedName' does not exist in the current context [/w/Shop.Core/Shop.Core.csproj]",
+        )
+        .unwrap();
+        assert_eq!(
+            build_diagnostic_target(&diagnostic),
+            Some(("/w/Shop.Core/PriceCalculator.cs".into(), 10, 21))
+        );
+
+        let without_file = rc_dotnet::diagnostics::parse_line("CSC: error CS2001: Source file not found").unwrap();
+        assert_eq!(build_diagnostic_target(&without_file), None);
+    }
+
+    #[test]
+    fn compiler_diagnostic_target_opens_the_editor_at_its_position() {
+        let _home_lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let source = tempfile::tempdir().unwrap();
+        let file = source.path().join("PriceCalculator.cs");
+        std::fs::write(&file, "first line\n0123456789\nthird line\n").unwrap();
+        let diagnostic = rc_dotnet::diagnostics::parse_line(&format!(
+            "{}(2,4): error CS0103: Unknown name",
+            file.display()
+        ))
+        .unwrap();
+        let (path, line, column) = build_diagnostic_target(&diagnostic).unwrap();
+
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_at(&path, line, column);
+        let document = app.docs.active_doc().unwrap();
+        assert_eq!(document.path, file);
+        assert_eq!(document.editor.caret_line_col(), (1, 3));
     }
 }
 
