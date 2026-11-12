@@ -106,7 +106,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                 }
             }
             theme::Side::Right => {
-                if cfg!(target_os = "windows") {
+                if rc_kit::window_chrome::CUSTOM_CAPTION {
                     if let Some(command) = rc_kit::window_chrome::controls(ui) {
                         ui.ctx().send_viewport_cmd(command);
                     }
