@@ -989,6 +989,13 @@ fn code_actions(app: &mut DotCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp
         close = true;
     }
     let area = egui::Area::new(Id::new("code_actions")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+        // The menu holds the keyboard focus while open, so Enter, the arrows and Esc reach it
+        // and not the editor below (which would insert a newline or move the caret).
+        let menu = ui.interact(ui.max_rect(), Id::new("code_actions_menu"), egui::Sense::focusable_noninteractive());
+        if !menu.has_focus() {
+            menu.request_focus();
+        }
+        ui.memory_mut(|m| m.set_focus_lock_filter(menu.id, egui::EventFilter { tab: true, horizontal_arrows: true, vertical_arrows: true, escape: true }));
         egui::Frame::NONE.fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(8).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
             ui.set_min_width(320.0);
             for (i, a) in list.iter().enumerate() {
@@ -1385,6 +1392,35 @@ mod tests {
     }
 
     #[test]
+    fn code_actions_keys_do_not_reach_the_editor() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let file = crate::screens::fixtures().join("Shop/src/Shop.Core/Order.cs");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_file(&file);
+        app.focus_editor = true;
+        let mut harness = crate::screens::harness(app, vec2(1000.0, 700.0));
+        harness.run_steps(2);
+        let editor = rc_editor::EditorView::id_for(harness.state().docs.active_doc().unwrap().editor.id);
+        assert!(harness.ctx.memory(|m| m.has_focus(editor)));
+        let original = harness.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+        let caret = harness.state().docs.active_doc().unwrap().editor.selection.clone();
+        let action = |title: &str| rc_lsp::lsp_types::CodeActionOrCommand::Command(rc_lsp::lsp_types::Command { title: title.into(), command: "noop".into(), arguments: None });
+        harness.state_mut().dialog = Some(Dialog::CodeActions { list: vec![action("First"), action("Second")], selected: 0 });
+        harness.run_steps(2);
+        harness.key_press(Key::ArrowDown);
+        harness.run_steps(1);
+        assert!(matches!(harness.state().dialog, Some(Dialog::CodeActions { selected: 1, .. })));
+        harness.key_press(Key::Enter);
+        harness.run_steps(2);
+        let doc = harness.state().docs.active_doc().unwrap();
+        assert!(harness.state().dialog.is_none());
+        assert_eq!(doc.editor.buffer.rope().to_string(), original, "Enter on the code actions menu edited the document");
+        assert_eq!(doc.editor.selection, caret, "arrow keys on the code actions menu moved the caret");
+        assert!(harness.ctx.memory(|m| m.has_focus(editor)), "editor focus not restored after the menu closed");
+    }
+
+    #[test]
     fn recent_locations_selects_and_opens_a_dotnet_source_position() {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
@@ -1555,7 +1591,7 @@ mod tests {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
-        let root = project.path().join("Shop.Core");
+        let root = project.path().canonicalize().unwrap().join("Shop.Core");
         std::fs::create_dir(&root).unwrap();
         std::fs::copy(crate::screens::fixtures().join("Shop/src/Shop.Core/Shop.Core.csproj"), root.join("Shop.Core.csproj")).unwrap();
         let dir = root.join("Orders");
