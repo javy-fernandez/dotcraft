@@ -307,6 +307,7 @@ additional scope is pending.
 | C# Surround With read-only safety (C-25, partial) | [Original PR 210](https://github.com/javy-fernandez/dotcraft/pull/210) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/210/files) |
 | Presentation mode with Shop (A-23) | [Original PR 211](https://github.com/javy-fernandez/dotcraft/pull/211) | [Presentation evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/presentation-mode-shop/docs/implementation/presentation-mode-shop.md) |
 | Solution dependency graph backend (B-28, partial) | [Original PR 212](https://github.com/javy-fernandez/dotcraft/pull/212) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/212/files) |
+| Shop.Api OpenAPI export backend (J-24, partial) | [Original PR 213](https://github.com/javy-fernandez/dotcraft/pull/213) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/213/files) |
 
 ## Completion criteria
 

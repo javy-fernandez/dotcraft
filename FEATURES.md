@@ -26,10 +26,10 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 64 |
-| 🚧 In progress | 36 |
+| 🚧 In progress | 37 |
 | 🟢 Existing | 49 |
 | 🔁 Reuse candidate | 18 |
-| ⬜ Backlog | 206 |
+| ⬜ Backlog | 205 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -481,7 +481,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-21 | Browser debugging | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-22 | Web test runners | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-23 | REST request generation | 🚧 | [PR 207](https://github.com/javy-fernandez/dotcraft/pull/207) converts four scanned Shop.Api endpoints into bounded parseable `.http` requests with method/route/origin checks. UI, disk write, body/auth inference and live send remain. |
-| J-24 | OpenAPI support | ⬜ | Implement with integration and UI acceptance evidence. |
+| J-24 | OpenAPI support | 🚧 | [PR 213](https://github.com/javy-fernandez/dotcraft/pull/213) exports bounded OpenAPI 3 operations from Shop.Api endpoints and round-trips four requests through the existing importer. Schemas, auth, status inference, UI, file write and live API remain. |
 | J-25 | gRPC client | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-26 | WebSocket client | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-27 | Entity Framework tooling | ⬜ | Implement with integration and UI acceptance evidence. |
