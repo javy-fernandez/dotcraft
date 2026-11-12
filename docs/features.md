@@ -351,6 +351,8 @@ additional scope is pending.
 | Shop C# postfix Tab and Undo (C-24) | [Original PR 254](https://github.com/javy-fernandez/dotcraft/pull/254) | [Postfix evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/postfix-shop-editor/docs/implementation/c24-postfix-shop-editor.md) |
 | Shop.Api debugger Pause and Continue (G-08) | [Original PR 255](https://github.com/javy-fernandez/dotcraft/pull/255) | [Pause evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-debugger-pause-resume-live/docs/implementation/shop-debugger-pause-resume.md) |
 | Shop coverage report in native app (H-18) | [Original PR 256](https://github.com/javy-fernandez/dotcraft/pull/256) | [Report evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-coverage-report-ui/docs/implementation/shop-coverage-report-ui.md) |
+| Shop.Cli exception breakpoint filters (G-14) | [Original PR 257](https://github.com/javy-fernandez/dotcraft/pull/257) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/257/files) |
+| Shop coverage gutter marks and toggle (H-17) | [Original PR 258](https://github.com/javy-fernandez/dotcraft/pull/258) | [Gutter evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/coverage-gutter-live/docs/implementation/coverage-gutter-linux.md) |
 
 ## Completion criteria
 

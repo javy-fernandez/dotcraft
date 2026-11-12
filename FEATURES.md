@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 96 |
+| ✅ Verified | 98 |
 | 🚧 In progress | 47 |
-| 🟢 Existing | 11 |
+| 🟢 Existing | 9 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -352,7 +352,7 @@ Source / reuse boundary: `crates/rc-dap; crates/rc-app/src/debugger.rs`.
 | G-11 | Variables tree | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
 | G-12 | Watches | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
 | G-13 | Evaluate expression | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
-| G-14 | Exception breakpoints | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| G-14 | Exception breakpoints | ✅ | [PR 257](https://github.com/javy-fernandez/dotcraft/pull/257) verifies explicit all-filter first-chance and unhandled Shop.Cli ArgumentException stops, exceptionInfo type/message/source, and default unhandled-only behavior with SDK 8.0.428/netcoredbg on Linux. UI, other filters, attach and other platforms remain untested. |
 | G-15 | Debug hover values | ✅ | Verified live line.Subtotal hover value in the CLI/API debugger regression. |
 | G-16 | Attach and reattach to process | 🚧 | PR 14 verifies live PID attach/detach on .NET 8 Linux; automatic reattach and broader runtime coverage remain pending. |
 | G-17 | Tracepoints | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -400,7 +400,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/test.rs; crates/rc-app/src/ui/run
 | H-14 | Test playlists | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-15 | Test impact analysis | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-16 | Code coverage collection | ✅ | [PR 251](https://github.com/javy-fernandez/dotcraft/pull/251) verifies Shop.Core xUnit Coverlet 6.0.0 collection with official SDK 8.0.428 plus the full Shop Coverage UI test on Linux; the report shows 52/60 covered Shop.Core lines. MSTest lacks a collector and is skipped; MTP v2 and other platforms remain untested. |
-| H-17 | Coverage gutter | 🟢 | Source located in `rc-app/coverage.rs`; repeat application acceptance checks. |
+| H-17 | Coverage gutter | ✅ | [PR 258](https://github.com/javy-fernandez/dotcraft/pull/258) verifies green covered/red uncovered editor bars from real Shop/Coverlet coverage, hide/restore toggle, and an amber partial bar from a controlled branch in the real report at 1440×900 on Linux. Other sizes/themes/platforms and VCS gutter precedence remain untested. |
 | H-18 | Coverage reports | ✅ | [PR 256](https://github.com/javy-fernandez/dotcraft/pull/256) verifies a partially covered Shop.Core assembly and covered PriceCalculator class after a live SDK 8.0.428/Coverlet 6.0.0 run, then collapses and reopens the assembly row in egui on Linux. Branch metrics, exports, multiple assemblies, MTP v2 and other platforms remain untested. |
 | H-19 | Coverage thresholds | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-20 | CPU profiling | 🟢 | Source located in `rc-dotnet/cpu_profile.rs`; repeat real .NET acceptance checks. |
