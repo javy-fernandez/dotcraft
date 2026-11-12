@@ -311,14 +311,13 @@ fn read_env_json(path: &Path) -> Option<serde_json::Map<String, serde_json::Valu
     }
 }
 
-/// Env files in increasing priority: public, private (Rider), `.user` (Visual Studio).
-/// Within each kind, a file nearer to the request overrides values from a parent.
+/// Env files in increasing priority; callers merge them in order, so later files win per key.
+/// Env files of every directory from the root down to the `.http` file are merged and the
+/// nearest directory wins: a value in `api/http-client.env.json` overrides the same key in the
+/// root's private or `.user` file. Within one directory: public, then private (Rider), then
+/// `.user` (Visual Studio). Keys a nearer file does not define keep the parent's value.
 fn env_files(http_path: &Path) -> Vec<serde_json::Map<String, serde_json::Value>> {
-    let dirs = env_dirs(http_path);
-    [ENV_FILE, PRIVATE_ENV_FILE, USER_ENV_FILE]
-        .iter()
-        .flat_map(|name| dirs.iter().filter_map(move |dir| read_env_json(&dir.join(name))))
-        .collect()
+    env_dirs(http_path).iter().flat_map(|dir| [ENV_FILE, PRIVATE_ENV_FILE, USER_ENV_FILE].iter().filter_map(move |name| read_env_json(&dir.join(name)))).collect()
 }
 
 /// Environment names available for `http_path` (`$shared` excluded), in file order.
@@ -836,6 +835,27 @@ Content-Type: application/json
         let f3 = parse("POST http://x/\n\n<@ payload.json\n");
         assert_eq!(resolve(&f3, 0, None, &http).unwrap().body.as_deref(), Some(&b"{\"n\":\"shared\"}"[..]));
         assert!(resolve(&f3, 5, None, &http).is_err());
+    }
+
+    #[test]
+    fn nearest_env_file_wins_per_key() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join(".git")).unwrap();
+        let api = root.path().join("src/api");
+        std::fs::create_dir_all(&api).unwrap();
+        write(root.path(), ENV_FILE, r#"{"$shared":{"region":"eu"},"dev":{"host":"root","token":"root","port":"1"}}"#);
+        write(root.path(), PRIVATE_ENV_FILE, r#"{"dev":{"token":"root-secret","user":"root-user"}}"#);
+        write(&root.path().join("src"), ENV_FILE, r#"{"dev":{"port":"2"}}"#);
+        write(&api, ENV_FILE, r#"{"dev":{"token":"api"}}"#);
+        write(&api, PRIVATE_ENV_FILE, r#"{"dev":{"host":"api-secret"}}"#);
+        let vars = environment_variables(&api.join("a.http"), Some("dev"));
+        // The nearest directory wins even over a parent's private file; in one directory the
+        // private file wins over the public one; keys only a parent defines are kept.
+        assert_eq!(vars["token"], "api");
+        assert_eq!(vars["host"], "api-secret");
+        assert_eq!(vars["port"], "2");
+        assert_eq!(vars["user"], "root-user");
+        assert_eq!(vars["region"], "eu");
     }
 
     #[test]

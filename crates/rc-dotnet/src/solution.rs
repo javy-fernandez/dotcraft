@@ -69,7 +69,7 @@ fn load_filter(path: &Path) -> anyhow::Result<Solution> {
     struct Selection { path: String, projects: Vec<String> }
 
     let text = std::fs::read_to_string(path).with_context(|| format!("Could not read filter {}", path.display()))?;
-    let filter: Filter = serde_json::from_str(&text).context("Invalid solution filter JSON")?;
+    let filter: Filter = serde_json::from_str(text.trim_start_matches('\u{feff}')).context("Invalid solution filter JSON")?;
     let source = resolve(path.parent().unwrap_or(Path::new(".")), &filter.solution.path);
     anyhow::ensure!(source.extension().is_some_and(|e| e.eq_ignore_ascii_case("sln") || e.eq_ignore_ascii_case("slnx")),
         "A solution filter must reference a .sln or .slnx file");
@@ -371,6 +371,16 @@ EndGlobal
         assert_eq!(loaded.projects()[0].name, "B");
         std::fs::write(&path, r#"{"solution":{"path":"App.slnx","projects":[]}}"#).unwrap();
         assert!(Solution::load(&path).unwrap().projects().is_empty());
+    }
+
+    #[test]
+    fn solution_filters_written_with_a_bom_load() {
+        // Visual Studio saves .slnf files as UTF-8 with a byte order mark.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("App.slnx"), r#"<Solution><Project Path="B/B.csproj" /></Solution>"#).unwrap();
+        let path = dir.path().join("Subset.slnf");
+        std::fs::write(&path, "\u{feff}{\"solution\":{\"path\":\"App.slnx\",\"projects\":[\"B/B.csproj\"]}}").unwrap();
+        assert_eq!(Solution::load(&path).unwrap().projects()[0].name, "B");
     }
 
     #[test]
