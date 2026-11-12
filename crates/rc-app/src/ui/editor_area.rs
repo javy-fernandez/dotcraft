@@ -870,6 +870,8 @@ mod split_tests {
             assert!(harness.state().split.is_none());
             assert_eq!(harness.state().docs.list.len(), 2);
         }
+    }
+}
 
 #[cfg(test)]
 mod razor_shop_tests {

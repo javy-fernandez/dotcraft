@@ -47,8 +47,11 @@ mod keyboard_navigation_acceptance_tests;
 mod find_in_files_acceptance_tests;
 #[cfg(test)]
 mod go_to_file_acceptance_tests;
+#[cfg(test)]
 mod keymap_acceptance_tests;
+#[cfg(test)]
 mod file_template_acceptance_tests;
+#[cfg(test)]
 mod run_config_acceptance_tests;
 #[cfg(test)]
 mod screens;
@@ -56,6 +59,7 @@ mod screens;
 mod standalone_project_tests;
 #[cfg(test)]
 mod workspace_open_tests;
+#[cfg(test)]
 mod history_tests;
 mod docs;
 mod native_menu;
