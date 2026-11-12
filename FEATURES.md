@@ -25,11 +25,11 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 62 |
+| ✅ Verified | 63 |
 | 🚧 In progress | 33 |
 | 🟢 Existing | 50 |
 | 🔁 Reuse candidate | 18 |
-| ⬜ Backlog | 210 |
+| ⬜ Backlog | 209 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -80,15 +80,14 @@ source solution root; the filter remains its session identity and command target
 remaining filter-specific Roslyn, test-execution, dependency-closure, and platform checks.
 B-14 remains 🚧 for that broader scope.
 
-The current-upstream follow-up accepts `.slnf` in test-project selection and checks
-that only selected test projects are returned. Actual .NET test execution with a
-filter remains unvalidated; this does not change B-14's partial status.
+The test-project selection follow-up was closed without merge at the contributor's
+request ([PR 153](https://github.com/javy-fernandez/dotcraft/pull/153)). Filter-specific
+test selection and execution therefore remain unverified in the original branch.
 
-L-05: the Terminal tool window searches the newest 4,000 retained lines on a
-cancellable worker, highlights at most 1,000 matches, and navigates to offscreen
-results. `rc-term` unit and session tests cover search behavior; the desktop app
-compiles with the search controls. Split terminal panes remain unimplemented, so
-L-05 remains 🚧. See [terminal search evidence](docs/implementation/terminal-search.md).
+L-05: a terminal search slice was validated on an isolated branch, then closed without
+merge at the contributor's request ([PR 152](https://github.com/javy-fernandez/dotcraft/pull/152)).
+The original branch has neither that search code nor split terminal panes. The
+[historical evidence](docs/implementation/terminal-search.md) does not count as delivery.
 
 D-14: the terminal parser now recognizes canonical `.NET` stack-trace file and line
 locations in Build, Run, and Terminal output. Parser and terminal tests pass, and the
@@ -169,7 +168,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-11 | Launch settings profiles | 🚧 | [PR 181](https://github.com/javy-fernandez/dotcraft/pull/181) fixes URL scheme detection and verifies Shop.Api profile order, URL, and environment in four rc-dotnet tests. Browser opening, SDK run, and UI profile selection remain unverified. |
 | B-12 | NuGet search | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-13 | NuGet installation and removal | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| B-14 | JSON .slnf solution filters | 🚧 | Parser, explorer, SDK build and test-project selection are verified; filter-specific Roslyn and actual test execution remain pending. |
+| B-14 | JSON .slnf solution filters | 🚧 | Parser, explorer and SDK build are verified in the original baseline; filter-specific Roslyn, test-project selection and actual test execution remain pending. The test-selection [PR 153](https://github.com/javy-fernandez/dotcraft/pull/153) was closed without merge. |
 | B-15 | Interactive filter creation and editing | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-16 | Unload and reload individual projects | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-17 | Project references editor | 🚧 | [PR 204](https://github.com/javy-fernandez/dotcraft/pull/204) adds bounded backend add/remove with canonical path checks and formatting preservation, tested on Shop projects. UI, disk write, MSBuild evaluation and cycle detection remain. |
@@ -434,7 +433,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-14 | Git log and graph | ✅ | [PR 165](https://github.com/javy-fernandez/dotcraft/pull/165) draws real branch and merge lanes and supports commit selection; a real local Git merge fixture and egui UI harness passed on Linux. The local log is limited to 500 commits; pagination, huge histories, and other platforms remain untested. |
 | I-15 | Fetch pull and push workflow audit | ✅ | [PR 194](https://github.com/javy-fernandez/dotcraft/pull/194) verifies initial Push, peer Fetch/Pull, local Push, ahead/behind, divergent Push rejection and recovery through egui Git UI against a local bare remote with `Shop.sln` on Linux; targeted app and rc-vcs tests pass. Hosted auth, network cancellation and other platforms remain untested. |
 | I-16 | Interactive rebase | ⬜ | Implement with integration and UI acceptance evidence. |
-| I-17 | Cherry-pick | ⬜ | Implement with integration and UI acceptance evidence. |
+| I-17 | Cherry-pick | ✅ | [PR 208](https://github.com/javy-fernandez/dotcraft/pull/208) verifies selected-commit apply, conflict detection and Abort Cherry-pick through the real Shop.sln egui UI on Linux; cancellable backend preflight is tested. Conflict continuation, in-flight cancellation, merge commits and other platforms remain untested. |
 | I-18 | Three-way merge editor | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-19 | Conflict resolution | 🚧 | PR 8 verifies deleted-side backend resolutions; visual merge tooling remains pending. |
 | I-20 | Changelists | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -481,7 +480,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-20 | npm yarn and pnpm | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-21 | Browser debugging | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-22 | Web test runners | ⬜ | Implement with integration and UI acceptance evidence. |
-| J-23 | REST request generation | ⬜ | Implement with integration and UI acceptance evidence. |
+| J-23 | REST request generation | 🚧 | [PR 207](https://github.com/javy-fernandez/dotcraft/pull/207) converts four scanned Shop.Api endpoints into bounded parseable `.http` requests with method/route/origin checks. UI, disk write, body/auth inference and live send remain. |
 | J-24 | OpenAPI support | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-25 | gRPC client | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-26 | WebSocket client | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -545,7 +544,7 @@ Source / reuse boundary: `crates/rc-term; crates/rc-core; CrabCraft shared modul
 | L-02 | Persistent workspace sessions | 🚧 | [PR 159](https://github.com/javy-fernandez/dotcraft/pull/159) hardens concurrent atomic saves and round-trips complete session state in two .NET fixtures; 13 rc-core tests pass. Live UI restoration, crash durability, and other platforms remain unverified. |
 | L-03 | File system watching | 🚧 | [PR 155](https://github.com/javy-fernandez/dotcraft/pull/155) classifies renames and atomic saves as source removal plus destination creation; 13 rc-core tests pass, including a real filesystem .NET-project fixture. UI, index/LSP integration, and other platforms remain unverified. |
 | L-04 | Background task runtime | 🚧 | [PR 164](https://github.com/javy-fernandez/dotcraft/pull/164) adds `spawn_blocking`; four concurrent `.csproj` reads do not starve an async task, and pending async cancellation is tested. 13 rc-core tests pass. UI callers, process cancellation, and running blocking-task cancellation remain. |
-| L-05 | Terminal search and split panes | 🚧 | Bounded, cancellable terminal search is tested; split panes and cross-platform UI validation remain pending. |
+| L-05 | Terminal search and split panes | ⬜ | Search and split panes are absent from original main. The tested search [PR 152](https://github.com/javy-fernandez/dotcraft/pull/152) was closed without merge at the contributor's request. |
 | L-06 | Terminal completion | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | L-07 | Remote SSH workflows | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | L-08 | WSL workspace workflows | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |

@@ -76,12 +76,14 @@ SDK policy and the filter directory deliberately has an unusable policy, proving
 uses the source working directory. Package sources are cleared, and shared Shop outputs are
 never touched.
 
-On current upstream commit `becfb0f`, `solution_filter_selects_only_included_test_projects`
-checks the real Shop solution through an external filter. The selected xUnit project is
-returned while NUnit, MSTest and a selected non-test project are excluded. The focused
-integration test and all 132 `rc-dotnet` library tests passed with `--locked --offline`
-in `/tmp/dotcraft-slnf-upstream-target`. This verifies test-project selection; no SDK
-test process was started by this follow-up.
+On an isolated branch based on upstream commit `becfb0f`,
+`solution_filter_selects_only_included_test_projects` checked the real Shop solution
+through an external filter. The selected xUnit project was returned while NUnit,
+MSTest and a selected non-test project were excluded. The focused integration test
+and all 132 `rc-dotnet` library tests passed with `--locked --offline` in
+`/tmp/dotcraft-slnf-upstream-target`. [Original PR 153](https://github.com/javy-fernandez/dotcraft/pull/153)
+was closed without merge at the contributor's request, so this test-selection code
+is absent from original main. No SDK test process was started by this follow-up.
 
 ## Remaining scope
 

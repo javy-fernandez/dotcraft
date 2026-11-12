@@ -239,14 +239,14 @@ additional scope is pending.
 | --- | --- | --- |
 | Feature status and delivery index | [Original PR 151](https://github.com/javy-fernandez/dotcraft/pull/151) | [Detailed inventory](../FEATURES.md) |
 | Solution-filter loading and SDK build context | Original merge `a0f31fb`; [fork PR 2](https://github.com/RafaelMendes1407/dotcraft/pull/2) | [Solution filters](implementation/solution-filters.md) |
-| Filtered test-project selection | [Original PR 153](https://github.com/javy-fernandez/dotcraft/pull/153) | [Solution filters](implementation/solution-filters.md) |
+| Filtered test-project selection (not merged) | [Closed original PR 153](https://github.com/javy-fernandez/dotcraft/pull/153) | [Historical evidence](implementation/solution-filters.md) |
 | Live .NET build, run, test, and Roslyn checks | Original merge `a0f31fb` | [Live .NET validation](implementation/live-dotnet.md) |
 | Debugger attachment | Original merge `a0f31fb` | [Attach debugger](implementation/attach-debugger.md) |
 | EditorConfig indentation | Original merge `a0f31fb` | [EditorConfig](implementation/editorconfig.md) |
 | Installed SDK selection | Original merge `a0f31fb` | [SDK selection](implementation/sdk-selection.md) |
 | Responsive settings and compact menu | Original merge `a0f31fb` | [Settings](implementation/responsive-settings.md), [menu](implementation/scrollable-menu.md) |
 | Read-only SQLite browsing | Original merge `a0f31fb` | [SQLite](implementation/sqlite-browser.md) |
-| Terminal scrollback search | [Original PR 152](https://github.com/javy-fernandez/dotcraft/pull/152) | [Terminal search](implementation/terminal-search.md) |
+| Terminal scrollback search (not merged) | [Closed original PR 152](https://github.com/javy-fernandez/dotcraft/pull/152) | [Historical evidence](implementation/terminal-search.md) |
 | .NET stack-trace source links | [Original PR 154](https://github.com/javy-fernandez/dotcraft/pull/154) | [Stack-trace navigation](implementation/stack-trace-navigation.md) |
 | File watcher rename and atomic-save handling (L-03, partial) | [Original PR 155](https://github.com/javy-fernandez/dotcraft/pull/155) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/155/files) |
 | Solution build configurations and platforms (B-19, partial) | [Original PR 156](https://github.com/javy-fernandez/dotcraft/pull/156) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/156/files) |
@@ -300,6 +300,8 @@ additional scope is pending.
 | Project reference editing (B-17, partial) | [Original PR 204](https://github.com/javy-fernandez/dotcraft/pull/204) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/204/files) |
 | Safe C# reload conflict choices (A-20) | [Original PR 205](https://github.com/javy-fernandez/dotcraft/pull/205) | [Reload evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/safe-reload-shop-conflict/docs/implementation/safe-reload-shop.md) |
 | Native Shop workspace lifecycle (A-01) | [Original PR 206](https://github.com/javy-fernandez/dotcraft/pull/206) | [Workspace evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/native-workspace-shop-acceptance/docs/implementation/native-workspace-shop.md) |
+| REST requests from Shop.Api endpoints (J-23, partial) | [Original PR 207](https://github.com/javy-fernandez/dotcraft/pull/207) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/207/files) |
+| Git Cherry-pick and conflict abort (I-17) | [Original PR 208](https://github.com/javy-fernandez/dotcraft/pull/208) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/208/files) |
 
 ## Completion criteria
 

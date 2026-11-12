@@ -1,5 +1,7 @@
 # Terminal scrollback search
 
+This records a tested historical branch. [Original PR 152](https://github.com/javy-fernandez/dotcraft/pull/152) was closed without merge at the contributor's request, and the code is absent from the original main branch.
+
 The Terminal tool window can find text in the active tab's retained scrollback. The
 search bar opens from the header and provides previous/next navigation, a result count,
 and Refresh. Results update after terminal output settles briefly and are highlighted in
