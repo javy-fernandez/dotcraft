@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 48 |
+| ✅ Verified | 49 |
 | 🚧 In progress | 29 |
-| 🟢 Existing | 62 |
+| 🟢 Existing | 61 |
 | 🔁 Reuse candidate | 21 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
@@ -159,7 +159,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-01 | Open solutions and folders | 🚧 | [PR 175](https://github.com/javy-fernandez/dotcraft/pull/175) verifies solution/folder traversal on real Shop fixture and safely classifies internal directory symlinks on Unix; 13 rc-core tests pass. App UI, SDK execution and other platforms remain unverified. |
 | B-02 | Classic .sln solutions | ✅ | Live Shop build/run and C# application flows load classic solutions; see live-dotnet.md. |
 | B-03 | XML .slnx solutions | ✅ | Live Roslyn and application flows load a real two-project XML solution; see live-dotnet.md. |
-| B-04 | Standalone .NET projects | 🚧 | [PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) discovers one top-level C#, F#, or VB project when opening a folder without a solution, preserving the folder session key; 13 rc-core tests pass on real fixtures. App opening and SDK build/run remain unverified. |
+| B-04 | Standalone .NET projects | ✅ | [PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) discovers one top-level C#, F#, or VB project in a solution-free folder while preserving the session key; 13 rc-core tests pass. [PR 185](https://github.com/javy-fernandez/dotcraft/pull/185) verifies Shop.Cli folder opening, runnable configuration and egui app rendering on Linux. SDK build/run and other platforms remain untested. |
 | B-05 | Solution folders and items | ✅ | [PR 177](https://github.com/javy-fernandez/dotcraft/pull/177) restricts classic `.sln` loose items to `SolutionItems` sections; Shop `.sln`, TenProjects `.slnx`, and nested-folder fixtures verify parser membership in seven tests. UI and SDK execution remain untested. |
 | B-06 | Project templates | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-07 | File and class templates | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -467,7 +467,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-06 | HTTP environment variables | 🚧 | Inline variables were tested in fork PR 15; upstream source also has environment files and dynamic values, which need scoped validation. |
 | J-07 | Database connections and SQL console | 🚧 | PR 16 verifies read-only SQLite connections and explicit bounded SQL; writes, persistent sessions and other engines remain pending. |
 | J-08 | SQL injection support | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| J-09 | ASP.NET endpoints explorer | 🟢 | Source located in `rc-dotnet/endpoints.rs`; repeat application acceptance checks. |
+| J-09 | ASP.NET endpoints explorer | 🚧 | [PR 184](https://github.com/javy-fernandez/dotcraft/pull/184) excludes nested C#, F#, and VB projects from endpoint scan; Shop.Api still yields four endpoints and 12 rc-dotnet tests pass. Endpoints UI and live server acceptance remain. |
 | J-10 | Container tools | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | J-11 | ASP.NET MVC navigation | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-12 | ASP.NET route analysis | ⬜ | Implement with integration and UI acceptance evidence. |

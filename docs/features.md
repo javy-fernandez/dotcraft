@@ -12,6 +12,7 @@ Unchecked items require implementation or validation. They do not necessarily in
 - [ ] Support JavaScript, TypeScript, HTML, CSS, SCSS, and LESS.
 - [ ] Support JSON and SQL editing.
 - [ ] Open and manage .NET solutions, projects, libraries, services, desktop applications, and web applications.
+- [x] Open a standalone executable .NET project folder and discover its run configuration. Validated with Shop.Cli on Linux; other project kinds and SDK execution still need coverage.
 
 Reference: [Rider features](https://www.jetbrains.com/rider/features/).
 
@@ -251,7 +252,7 @@ additional scope is pending.
 | Local History concurrent revision safety (I-34, partial) | [Original PR 166](https://github.com/javy-fernandez/dotcraft/pull/166) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/166/files) |
 | Accessible status bar metadata (A-14) | [Original PR 167](https://github.com/javy-fernandez/dotcraft/pull/167) | [Status bar evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/status-bar-dotnet-acceptance/docs/implementation/status-bar-dotnet.md) |
 | C# automatic brackets (C-06) | [Original PR 168](https://github.com/javy-fernandez/dotcraft/pull/168) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/168/files) |
-| Standalone project folder discovery (B-04, partial) | [Original PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/169/files) |
+| Standalone project folder discovery (B-04) | [Original PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/169/files) |
 | Filtered Recent Files selection (A-09) | [Original PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) | [Recent Files evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/recent-files-filter-selection/docs/implementation/recent-files-filter.md) |
 | Recent Locations source navigation (A-10) | [Original PR 171](https://github.com/javy-fernandez/dotcraft/pull/171) | [Recent Locations evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/recent-locations-navigation/docs/implementation/recent-locations-dotnet.md) |
 | C# line and block comments (C-10) | [Original PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/172/files) |
@@ -266,6 +267,8 @@ additional scope is pending.
 | Launch profile URL classification (B-11, partial) | [Original PR 181](https://github.com/javy-fernandez/dotcraft/pull/181) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/181/files) |
 | Search Everywhere .NET file results (A-07, partial) | [Original PR 182](https://github.com/javy-fernandez/dotcraft/pull/182) | [File search evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/search-everywhere-dotnet-files/docs/implementation/search-everywhere-dotnet-files.md) |
 | C# undo and redo (C-12) | [Original PR 183](https://github.com/javy-fernandez/dotcraft/pull/183) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/183/files) |
+| ASP.NET endpoint project boundaries (J-09, partial) | [Original PR 184](https://github.com/javy-fernandez/dotcraft/pull/184) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/184/files) |
+| Standalone Shop.Cli workspace UI (B-04) | [Original PR 185](https://github.com/javy-fernandez/dotcraft/pull/185) | [App evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/standalone-project-ui-acceptance/docs/implementation/standalone-project-ui.md) |
 
 ## Completion criteria
 
