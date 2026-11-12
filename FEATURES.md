@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 38 |
+| ✅ Verified | 39 |
 | 🚧 In progress | 26 |
-| 🟢 Existing | 74 |
+| 🟢 Existing | 73 |
 | 🔁 Reuse candidate | 22 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
@@ -128,7 +128,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-07 | Search Everywhere | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-08 | Recent projects | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-09 | Recent files | ✅ | [PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) keeps filtered selection valid and exposes file rows to accessibility; egui UI harness opens three real `Shop.sln` C# files and selects one with Enter on Linux. Missing files and native menus remain untested. |
-| A-10 | Recent locations | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-10 | Recent locations | ✅ | [PR 171](https://github.com/javy-fernandez/dotcraft/pull/171) bounds dialog selection and exposes path/line to accessibility; egui UI harness navigates to line four of real `Shop.sln` C# source on Linux. Closed/deleted files and native menus remain untested. |
 | A-11 | Settings dialog | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-12 | Rider and Visual Studio keymaps | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-13 | Localization | 🟢 | Exercise on a real .NET fixture; record evidence. |

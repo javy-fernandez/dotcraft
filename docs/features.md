@@ -205,6 +205,7 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 - [x] Switch between normal, distraction-free, and Zen editor layouts while preserving the current tool-window arrangement. This is validated on Linux with the `Shop.sln` UI fixture; mode state is temporary.
 - [x] Show the active .NET file, encoding, line ending and caret position in the status bar, with an accessible Go to Line control. Validated with `Shop.sln` on Linux.
 - [x] Reopen a filtered recent C# file with the keyboard while keeping the selection valid. Validated with `Shop.sln` on Linux.
+- [x] Return to a recent C# source location by line number with the keyboard. Validated with `Shop.sln` on Linux.
 
 ## Implementation progress
 
@@ -245,6 +246,7 @@ additional scope is pending.
 | C# automatic brackets (C-06) | [Original PR 168](https://github.com/javy-fernandez/dotcraft/pull/168) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/168/files) |
 | Standalone project folder discovery (B-04, partial) | [Original PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/169/files) |
 | Filtered Recent Files selection (A-09) | [Original PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) | [Recent Files evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/recent-files-filter-selection/docs/implementation/recent-files-filter.md) |
+| Recent Locations source navigation (A-10) | [Original PR 171](https://github.com/javy-fernandez/dotcraft/pull/171) | [Recent Locations evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/recent-locations-navigation/docs/implementation/recent-locations-dotnet.md) |
 
 ## Completion criteria
 
