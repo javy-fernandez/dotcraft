@@ -19,6 +19,7 @@ mod runner;
 mod search;
 mod vcs;
 mod work_items;
+mod assembly_explorer;
 #[cfg(test)]
 mod vcs_tests;
 #[cfg(test)]

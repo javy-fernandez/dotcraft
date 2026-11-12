@@ -73,6 +73,7 @@ pub enum ExplorerAction {
     CopyPath(PathBuf),
     OpenInTerminal(PathBuf),
     ManagePackages(PathBuf),
+    OpenPackageAssembly { name: String, version: String },
     /// Entity Framework Core › operation, for this project.
     EfCore(PathBuf, crate::ui::ef_core::EfOp),
     /// Migrate this solution to Central Package Management (NuGet window).
@@ -624,6 +625,13 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actio
     {
         actions.push(ExplorerAction::ManagePackages(p.clone()));
         ui.close();
+    }
+    if let NodeKind::Package { name, version } = &row.kind {
+        if theme::menu_item(ui, Some(ico::LIBRARY), tr("Explore Assembly"), false).clicked() {
+            actions.push(ExplorerAction::OpenPackageAssembly { name: name.clone(), version: version.clone() });
+            ui.close();
+        }
+        return;
     }
     // Entity Framework Core › (Rider), for projects that reference EF Core.
     if let (NodeKind::Project(p), true) = (&row.kind, ef) {
