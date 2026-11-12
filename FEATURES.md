@@ -26,8 +26,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 65 |
-| 🚧 In progress | 39 |
-| 🟢 Existing | 49 |
+| 🚧 In progress | 40 |
+| 🟢 Existing | 48 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 203 |
 | 🚫 Out of scope | 0 |
@@ -161,7 +161,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-04 | Standalone .NET projects | ✅ | [PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) discovers one top-level C#, F#, or VB project in a solution-free folder while preserving the session key; 13 rc-core tests pass. [PR 185](https://github.com/javy-fernandez/dotcraft/pull/185) verifies Shop.Cli folder opening, runnable configuration and egui app rendering on Linux. SDK build/run and other platforms remain untested. |
 | B-05 | Solution folders and items | ✅ | [PR 177](https://github.com/javy-fernandez/dotcraft/pull/177) restricts classic `.sln` loose items to `SolutionItems` sections; Shop `.sln`, TenProjects `.slnx`, and nested-folder fixtures verify parser membership in seven tests. UI and SDK execution remain untested. |
 | B-06 | Project templates | 🚧 | [PR 187](https://github.com/javy-fernandez/dotcraft/pull/187) validates `.sln`/`.slnx` targets before `dotnet new` and rejects missing, directory and `.slnf` targets; Shop/TenProjects plans pass three rc-dotnet tests. Actual SDK creation and UI acceptance remain. |
-| B-07 | File and class templates | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| B-07 | File and class templates | 🚧 | [PR 217](https://github.com/javy-fernandez/dotcraft/pull/217) verifies New Class creation in a copied Shop.Core project, namespace generation, opened tab and duplicate refusal in egui on Linux. Other item kinds, project-system integration, background file creation and platforms remain. |
 | B-08 | .NET SDK discovery | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-09 | Runtime discovery | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-10 | MSBuild property evaluation | 🟢 | Exercise on a real .NET fixture; record evidence. |
