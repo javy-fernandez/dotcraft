@@ -26,8 +26,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 60 |
-| 🚧 In progress | 30 |
-| 🟢 Existing | 53 |
+| 🚧 In progress | 32 |
+| 🟢 Existing | 51 |
 | 🔁 Reuse candidate | 19 |
 | ⬜ Backlog | 211 |
 | 🚫 Out of scope | 0 |
@@ -131,7 +131,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-10 | Recent locations | ✅ | [PR 171](https://github.com/javy-fernandez/dotcraft/pull/171) bounds dialog selection and exposes path/line to accessibility; egui UI harness navigates to line four of real `Shop.sln` C# source on Linux. Closed/deleted files and native menus remain untested. |
 | A-11 | Settings dialog | ✅ | [PR 198](https://github.com/javy-fernandez/dotcraft/pull/198) verifies applying a persisted Editor setting and cancelling a later draft while real six-project `Shop.sln` remains open in egui on Linux. Responsive layout has separate A-16 evidence; other settings pages and OS integrations remain untested. |
 | A-12 | Rider and Visual Studio keymaps | 🚧 | [PR 199](https://github.com/javy-fernandez/dotcraft/pull/199) verifies both Go to File shortcuts after switching keymaps in the open Shop solution on Linux; it also refreshes macOS native menu accelerators on change. Other shortcuts and macOS behavior remain untested. |
-| A-13 | Localization | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-13 | Localization | 🚧 | [PR 203](https://github.com/javy-fernandez/dotcraft/pull/203) verifies live English, Portuguese and Spanish Explorer labels while Shop.sln remains open in egui on Linux. Other UI surfaces, catalog completeness, native menus and platforms remain unverified. |
 | A-14 | Status bar | ✅ | [PR 167](https://github.com/javy-fernandez/dotcraft/pull/167) exposes custom metadata controls to accessibility; egui harness verifies breadcrumb, UTF-8 BOM, LF, caret and Go to Line dispatch with real `Shop.sln` C# file on Linux. Compact widths and other platforms remain untested. |
 | A-15 | Notifications | ✅ | [PR 190](https://github.com/javy-fernandez/dotcraft/pull/190) checks visible status messages and 8-second informational / 15-second error expiry in a real `Shop.sln` egui UI harness on Linux; [PR 161](https://github.com/javy-fernandez/dotcraft/pull/161) covers expiry while Zen hides the status bar. History, compact layouts and other platforms remain untested. |
 | A-16 | Responsive settings layout | ✅ | Existing PR 4 preserved; 5 responsive settings tests pass, including TenProjects, scrolling, long paths and Cancel. |
@@ -200,7 +200,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-06 | Automatic brackets | ✅ | [PR 168](https://github.com/javy-fernandez/dotcraft/pull/168) fixes C# comment/string context and verifies pairing, type-over, selection wrapping, and undo through egui editor events on a real Shop C# fixture; 17 rc-editor unit and one fixture test pass. No SDK build or broader Rider parity claim. |
 | C-07 | Multiple carets | ✅ | [PR 178](https://github.com/javy-fernandez/dotcraft/pull/178) fixes data loss with mixed selection and empty caret during bracket typing; 27 rc-text, 17 rc-editor and one real Shop C# editor-event test verify per-range edits and one-step undo. No SDK build or broader input matrix claim. |
 | C-08 | Code folding | ✅ | [PR 196](https://github.com/javy-fernandez/dotcraft/pull/196) fixes Fold All when the caret is on a visible fold-start line; real Shop C# EditorView test covers Fold/Unfold/Fold All/Unfold All, caret relocation and unchanged buffer, plus 17 unit tests. No SDK build or other-language claim. |
-| C-09 | Inlay hints | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-09 | Inlay hints | 🚧 | [PR 202](https://github.com/javy-fernandez/dotcraft/pull/202) fixes requested left/right padding, verified in Shop C# layout and EditorView caret navigation. Roslyn hint delivery and other hint types remain unverified. |
 | C-10 | Line and block comments | ✅ | [PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) fixes repeated block-comment toggle and verifies Rider line/block shortcuts, selection and undo through editor events on a real Shop C# file; 17 unit and two fixture tests pass. No SDK build or broader Rider parity claim. |
 | C-11 | Indentation | ✅ | [PR 189](https://github.com/javy-fernandez/dotcraft/pull/189) indents C# `case`/`default` statements one level on Enter as one undoable edit; real Shop C# EditorView event and guard tests pass (18 unit, one fixture). Other language-specific indentation remains outside this scope. |
 | C-12 | Undo and redo | ✅ | [PR 183](https://github.com/javy-fernandez/dotcraft/pull/183) restores diagnostic/inlay anchors on history edits and clears stale search highlights; real Shop C# EditorView test verifies text, caret, undo/redo and divergent-edit invalidation. 17 unit and one fixture test pass. No SDK build claim. |

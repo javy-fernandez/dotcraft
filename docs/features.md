@@ -295,6 +295,8 @@ additional scope is pending.
 | Rider and Visual Studio Go to File keymaps (A-12) | [Original PR 199](https://github.com/javy-fernandez/dotcraft/pull/199) | [Keymap evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/keymaps-dotnet-acceptance/docs/implementation/keymaps-shop.md) |
 | Target framework property editing (B-18, partial) | [Original PR 200](https://github.com/javy-fernandez/dotcraft/pull/200) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/200/files) |
 | Shop Git Amend and saved editor changes (I-12) | [Original PR 201](https://github.com/javy-fernandez/dotcraft/pull/201) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/201/files) |
+| C# inlay hint padding (C-09, partial) | [Original PR 202](https://github.com/javy-fernandez/dotcraft/pull/202) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/202/files) |
+| Live locale switch in Shop (A-13, partial) | [Original PR 203](https://github.com/javy-fernandez/dotcraft/pull/203) | [Locale evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/localization-dotnet-acceptance/docs/implementation/localization-shop.md) |
 
 ## Completion criteria
 
