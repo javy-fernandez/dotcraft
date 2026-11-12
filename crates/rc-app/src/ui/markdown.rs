@@ -95,6 +95,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn shop_markdown_preview_switches_modes_and_renders_heading() {
+        use egui_kittest::kittest::Queryable;
+        use std::io::Write;
+
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let shop = crate::screens::fixtures().join("Shop");
+        let mut file = tempfile::Builder::new().prefix("dotcraft-preview-").suffix(".md").tempfile_in(&shop).unwrap();
+        file.write_all(b"# Shop notes\n\nThe initial preview.\n").unwrap();
+        let mut app = crate::screens::test_app(home.path(), false);
+        app.open_workspace(&shop.join("Shop.sln"));
+        app.open_file(file.path());
+        let mut harness = crate::screens::harness(app, egui::vec2(1200.0, 800.0));
+        let active = harness.state().docs.active_doc().unwrap();
+        assert_eq!(active.md_view, Some(MdView::Split));
+        harness.get_by_label("Shop notes");
+        harness.get_by_label(tr("Preview Only")).click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().docs.active_doc().unwrap().md_view, Some(MdView::Preview));
+        harness.get_by_label(tr("Editor Only")).click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().docs.active_doc().unwrap().md_view, Some(MdView::Editor));
+        harness.get_by_label(tr("Editor and Preview")).click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().docs.active_doc().unwrap().md_view, Some(MdView::Split));
+    }
+
+    #[test]
     fn markdown_files_open_beside_their_preview() {
         let dir = tempfile::tempdir().unwrap();
         let (md, cs) = (dir.path().join("README.md"), dir.path().join("Program.cs"));
