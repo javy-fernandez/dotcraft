@@ -293,6 +293,8 @@ additional scope is pending.
 | Tool-window stripes (A-03) | [Original PR 197](https://github.com/javy-fernandez/dotcraft/pull/197) | [Stripe evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/tool-stripes-dotnet-acceptance/docs/implementation/tool-stripes-shop.md) |
 | Settings apply and cancel (A-11) | [Original PR 198](https://github.com/javy-fernandez/dotcraft/pull/198) | [Settings evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/settings-dotnet-acceptance/docs/implementation/settings-shop-workspace.md) |
 | Rider and Visual Studio Go to File keymaps (A-12) | [Original PR 199](https://github.com/javy-fernandez/dotcraft/pull/199) | [Keymap evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/keymaps-dotnet-acceptance/docs/implementation/keymaps-shop.md) |
+| Target framework property editing (B-18, partial) | [Original PR 200](https://github.com/javy-fernandez/dotcraft/pull/200) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/200/files) |
+| Shop Git Amend and saved editor changes (I-12) | [Original PR 201](https://github.com/javy-fernandez/dotcraft/pull/201) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/201/files) |
 
 ## Completion criteria
 

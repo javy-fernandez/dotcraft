@@ -25,11 +25,11 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 59 |
-| 🚧 In progress | 29 |
+| ✅ Verified | 60 |
+| 🚧 In progress | 30 |
 | 🟢 Existing | 53 |
-| 🔁 Reuse candidate | 20 |
-| ⬜ Backlog | 212 |
+| 🔁 Reuse candidate | 19 |
+| ⬜ Backlog | 211 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -173,7 +173,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-15 | Interactive filter creation and editing | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-16 | Unload and reload individual projects | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-17 | Project references editor | ⬜ | Implement with integration and UI acceptance evidence. |
-| B-18 | Target frameworks editor | ⬜ | Implement with integration and UI acceptance evidence. |
+| B-18 | Target frameworks editor | 🚧 | [PR 200](https://github.com/javy-fernandez/dotcraft/pull/200) adds a bounded backend edit for one unconditional SDK-style project property, tested with Shop.Core and Shop.Api; UI integration, disk write, and SDK build acceptance remain. |
 | B-19 | Build configurations and platforms | 🚧 | [PR 156](https://github.com/javy-fernandez/dotcraft/pull/156) parses `.sln` / `.slnf` configuration-platform pairs and lets the backend pass an explicit platform; 134 rc-dotnet unit tests pass. UI selection, persistence, `.slnx` discovery, and a real nondefault-platform build remain. |
 | B-20 | global.json SDK management | 🚧 | PR 5 verifies real SDK 8.0.427/10.0.403 selection and builds; ancestor policy display, UI installation and language-service restart remain pending. |
 | B-21 | .NET workload management | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -429,7 +429,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-09 | Clone repositories | ✅ | [PR 180](https://github.com/javy-fernandez/dotcraft/pull/180) validates local clone and opening a six-project `Shop.sln` from the Git UI, including path-with-spaces and option-shaped source rejection; one rc-app UI and 45 rc-vcs tests pass on Linux. Remote auth, large clones and cancellation remain untested. |
 | I-10 | Git read safety | 🚧 | [PR 160](https://github.com/javy-fernandez/dotcraft/pull/160) resolves caller revisions to verified commit hashes for blame and file reads; 46 rc-vcs tests pass. Other Git read operations still need audit. |
 | I-11 | Shelves | ✅ | [PR 186](https://github.com/javy-fernandez/dotcraft/pull/186) validates local stash/pop from Git UI on real `Shop.sln`, including unsaved C# editor changes, untracked C# file, save-before-stash and confirmation; targeted app and rc-vcs tests pass on Linux. Restore conflicts and other platforms remain untested. |
-| I-12 | History editing | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| I-12 | History editing | ✅ | [PR 201](https://github.com/javy-fernandez/dotcraft/pull/201) verifies local Amend and normal Commit in the Shop solution egui UI, including a saved C# edit and an excluded file; interactive rebase remains separate I-16 scope. Linux Git fixture only. |
 | I-13 | Hosting CLI integration | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-14 | Git log and graph | ✅ | [PR 165](https://github.com/javy-fernandez/dotcraft/pull/165) draws real branch and merge lanes and supports commit selection; a real local Git merge fixture and egui UI harness passed on Linux. The local log is limited to 500 commits; pagination, huge histories, and other platforms remain untested. |
 | I-15 | Fetch pull and push workflow audit | ✅ | [PR 194](https://github.com/javy-fernandez/dotcraft/pull/194) verifies initial Push, peer Fetch/Pull, local Push, ahead/behind, divergent Push rejection and recovery through egui Git UI against a local bare remote with `Shop.sln` on Linux; targeted app and rc-vcs tests pass. Hosted auth, network cancellation and other platforms remain untested. |
