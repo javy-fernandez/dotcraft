@@ -30,6 +30,7 @@ pub mod project_xml;
 pub mod run;
 pub mod sdk;
 pub mod solution;
+pub mod solution_filter_edit;
 pub mod test;
 pub mod trx;
 

@@ -69,7 +69,7 @@ fn load_filter(path: &Path) -> anyhow::Result<Solution> {
     struct Selection { path: String, projects: Vec<String> }
 
     let text = std::fs::read_to_string(path).with_context(|| format!("Could not read filter {}", path.display()))?;
-    let filter: Filter = serde_json::from_str(&text).context("Invalid solution filter JSON")?;
+    let filter: Filter = serde_json::from_str(text.trim_start_matches('\u{feff}')).context("Invalid solution filter JSON")?;
     let source = resolve(path.parent().unwrap_or(Path::new(".")), &filter.solution.path);
     anyhow::ensure!(source.extension().is_some_and(|e| e.eq_ignore_ascii_case("sln") || e.eq_ignore_ascii_case("slnx")),
         "A solution filter must reference a .sln or .slnx file");
