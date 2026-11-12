@@ -309,6 +309,8 @@ additional scope is pending.
 | Solution dependency graph backend (B-28, partial) | [Original PR 212](https://github.com/javy-fernandez/dotcraft/pull/212) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/212/files) |
 | Shop.Api OpenAPI export backend (J-24, partial) | [Original PR 213](https://github.com/javy-fernandez/dotcraft/pull/213) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/213/files) |
 | Shop keyboard navigation (A-21, partial) | [Original PR 214](https://github.com/javy-fernandez/dotcraft/pull/214) | [Keyboard evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/keyboard-navigation-shop/docs/implementation/keyboard-navigation-shop.md) |
+| Shop Git worktree lifecycle (I-22) | [Original PR 215](https://github.com/javy-fernandez/dotcraft/pull/215) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/215/files) |
+| Static direct NuGet graph (B-22, partial) | [Original PR 216](https://github.com/javy-fernandez/dotcraft/pull/216) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/216/files) |
 
 ## Completion criteria
 

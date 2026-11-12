@@ -25,11 +25,11 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 64 |
-| 🚧 In progress | 38 |
+| ✅ Verified | 65 |
+| 🚧 In progress | 39 |
 | 🟢 Existing | 49 |
 | 🔁 Reuse candidate | 17 |
-| ⬜ Backlog | 205 |
+| ⬜ Backlog | 203 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -176,7 +176,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-19 | Build configurations and platforms | 🚧 | [PR 156](https://github.com/javy-fernandez/dotcraft/pull/156) parses `.sln` / `.slnf` configuration-platform pairs and lets the backend pass an explicit platform; 134 rc-dotnet unit tests pass. UI selection, persistence, `.slnx` discovery, and a real nondefault-platform build remain. |
 | B-20 | global.json SDK management | 🚧 | PR 5 verifies real SDK 8.0.427/10.0.403 selection and builds; ancestor policy display, UI installation and language-service restart remain pending. |
 | B-21 | .NET workload management | ⬜ | Implement with integration and UI acceptance evidence. |
-| B-22 | NuGet dependency graph | ⬜ | Implement with integration and UI acceptance evidence. |
+| B-22 | NuGet dependency graph | 🚧 | [PR 216](https://github.com/javy-fernandez/dotcraft/pull/216) builds a bounded static graph of direct packages with CPM, override and unresolved versions, tested on CentralShop and Shop.Api. Restore assets/transitives, MSBuild evaluation, UI and SDK validation remain. |
 | B-23 | Central package management | 🚧 | [PR 192](https://github.com/javy-fernandez/dotcraft/pull/192) resolves parent CPM imports and child `PackageVersion Update` without inventing missing packages; CentralShop fixture and 132 rc-dotnet unit tests pass. SDK/MSBuild evaluation, arbitrary import order and UI acceptance remain. |
 | B-24 | NuGet feed credentials | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-25 | Vulnerable and outdated packages | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -438,7 +438,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-19 | Conflict resolution | 🚧 | PR 8 verifies deleted-side backend resolutions; visual merge tooling remains pending. |
 | I-20 | Changelists | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-21 | Partial commit | ⬜ | Implement with integration and UI acceptance evidence. |
-| I-22 | Git worktrees | ⬜ | Implement with integration and UI acceptance evidence. |
+| I-22 | Git worktrees | ✅ | Existing backend/UI plus [PR 215](https://github.com/javy-fernandez/dotcraft/pull/215) verify create/list, dirty-worktree refusal, active-primary refusal and clean removal in real Shop.sln egui UI on Linux. Locked/symlink/network worktrees and other platforms remain untested. |
 | I-23 | Submodules | 🚧 | [PR 158](https://github.com/javy-fernandez/dotcraft/pull/158) adds typed recursive status and cancellable update; 47 rc-vcs tests pass. UI, nested/network cases, and cross-platform acceptance remain. |
 | I-24 | Git LFS | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-25 | GitHub pull requests | ⬜ | Implement with integration and UI acceptance evidence. |
