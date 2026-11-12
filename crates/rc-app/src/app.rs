@@ -1768,14 +1768,15 @@ impl DotCraftApp {
         }
         let Some(active) = self.docs.active else { return };
         let doc = &self.docs.list[active];
-        if !crate::insight::is_csharp(doc) { return; }
+        let source_language = doc.editor.syntax.lang;
+        if source_language == rc_syntax::Lang::Sln { return; }
         let key = (doc.editor.id, doc.editor.buffer.version(), self.settings.spelling_language.clone());
         if self.spelling_requested.as_ref() == Some(&key) { return; }
         let text = doc.editor.buffer.rope().to_string();
         self.docs.list[active].editor.spelling.clear();
         self.spelling_requested = Some(key.clone());
         let root = self.workspace.as_ref().map(|w| w.ws.root.clone());
-        self.spelling.check(key.0, key.1, &key.2, text, root);
+        self.spelling.check(key.0, key.1, source_language, &key.2, text, root);
     }
 
 }

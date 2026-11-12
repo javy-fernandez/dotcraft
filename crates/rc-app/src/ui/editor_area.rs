@@ -385,8 +385,7 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
                 ui.close();
             }
         };
-        if csharp {
-            if let Some(mark) = &spelling {
+        if let Some(mark) = &spelling {
                 ui.label(format!("{}: {}", tr("Spelling"), mark.word));
                 for suggestion in &mark.suggestions {
                     if theme::menu_item(ui, None, suggestion, false).clicked() {
@@ -403,7 +402,8 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
                     ui.close();
                 }
                 ui.separator();
-            }
+        }
+        if csharp {
             entry(ui, Some(ico::BULB), tr("Show Context Actions"), Action::ShowIntentions);
             entry(ui, None, tr("Go to Declaration"), Action::GotoDeclaration);
             entry(ui, None, tr("Go to Implementation"), Action::GotoImplementation);

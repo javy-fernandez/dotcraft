@@ -1,4 +1,4 @@
-//! Offline spelling analysis for C# source and commit messages.
+//! Offline spelling analysis for source files and commit messages.
 
 use rc_syntax::{Hl, Lang, highlight_lines, parse_now};
 use rc_text::Rope;
@@ -17,6 +17,7 @@ enum Request {
         generation: u64,
         doc: u64,
         version: u64,
+        source_language: Lang,
         language: String,
         text: String,
         project: Option<PathBuf>,
@@ -112,6 +113,7 @@ impl SpellingService {
                         generation,
                         doc,
                         version,
+                        source_language,
                         language,
                         text,
                         project,
@@ -129,9 +131,13 @@ impl SpellingService {
                             paths.push(path);
                         }
                         let custom = read_custom_words(&paths);
-                        let words = check_csharp_cancelled(&text, dictionary, &custom, || {
-                            latest.load(Ordering::Relaxed) != generation
-                        });
+                        let words = check_source_cancelled(
+                            &text,
+                            source_language,
+                            dictionary,
+                            &custom,
+                            || latest.load(Ordering::Relaxed) != generation,
+                        );
                         if latest.load(Ordering::Relaxed) == generation {
                             out.send(Reply::Checked {
                                 doc,
@@ -201,6 +207,7 @@ impl SpellingService {
         &self,
         doc: u64,
         version: u64,
+        source_language: Lang,
         language: &str,
         text: String,
         project: Option<PathBuf>,
@@ -210,6 +217,7 @@ impl SpellingService {
             generation,
             doc,
             version,
+            source_language,
             language: language.to_string(),
             text,
             project,
@@ -258,6 +266,7 @@ pub enum SourceKind {
     Comment,
     String,
     Identifier,
+    Text,
     CommitMessage,
 }
 
@@ -404,20 +413,20 @@ pub fn check_commit_message(
 /// Parses and checks a snapshot. Parsing and dictionary lookup must run off the UI thread.
 #[cfg(test)]
 fn check_csharp(text: &str, dictionary: &Dictionary, custom: &HashSet<String>) -> Vec<Misspelling> {
-    check_csharp_cancelled(text, dictionary, custom, || false)
+    check_source_cancelled(text, Lang::CSharp, dictionary, custom, || false)
 }
 
-fn check_csharp_cancelled(
+fn check_source_cancelled(
     text: &str,
+    source_language: Lang,
     dictionary: &Dictionary,
     custom: &HashSet<String>,
     cancelled: impl Fn() -> bool,
 ) -> Vec<Misspelling> {
     let rope = Rope::from_str(text);
-    let Some(tree) = parse_now(Lang::CSharp, &rope, None) else {
-        return Vec::new();
-    };
-    let spans = highlight_lines(Lang::CSharp, &tree, &rope, 0, rope.len_lines());
+    let spans = parse_now(source_language, &rope, None)
+        .map(|tree| highlight_lines(source_language, &tree, &rope, 0, rope.len_lines()))
+        .unwrap_or_else(|| vec![Vec::new(); rope.len_lines()]);
     let mut result = Vec::new();
     for (line, line_spans) in spans.iter().enumerate() {
         if cancelled() {
@@ -429,7 +438,7 @@ fn check_csharp_cancelled(
             let role = match span.hl {
                 Hl::Comment | Hl::DocComment => 1,
                 Hl::String => 2,
-                Hl::Keyword | Hl::Preproc => 3,
+                Hl::Keyword | Hl::Preproc | Hl::Tag | Hl::XmlAttr | Hl::Code | Hl::Link => 3,
                 _ => 0,
             };
             for cell in roles
@@ -468,7 +477,32 @@ fn check_csharp_cancelled(
                     custom,
                     &mut result,
                 ),
-                0 => scan_identifiers(&chars, cursor, end, base, dictionary, custom, &mut result),
+                0 if matches!(
+                    source_language,
+                    Lang::CSharp | Lang::JavaScript | Lang::TypeScript | Lang::Tsx
+                ) =>
+                {
+                    scan_identifiers(
+                        &chars,
+                        cursor,
+                        end,
+                        base,
+                        source_language,
+                        dictionary,
+                        custom,
+                        &mut result,
+                    )
+                }
+                0 => scan_natural(
+                    &chars,
+                    cursor,
+                    end,
+                    base,
+                    SourceKind::Text,
+                    dictionary,
+                    custom,
+                    &mut result,
+                ),
                 _ => {}
             }
             cursor = end;
@@ -506,6 +540,7 @@ fn scan_identifiers(
     start: usize,
     end: usize,
     base: usize,
+    source_language: Lang,
     dictionary: &Dictionary,
     custom: &HashSet<String>,
     out: &mut Vec<Misspelling>,
@@ -521,7 +556,9 @@ fn scan_identifiers(
             i += 1;
         }
         let token: String = chars[first..i].iter().collect();
-        if CSHARP_KEYWORDS.contains(&token.as_str()) {
+        if (source_language == Lang::CSharp && CSHARP_KEYWORDS.contains(&token.as_str()))
+            || (source_language != Lang::CSharp && JAVASCRIPT_KEYWORDS.contains(&token.as_str()))
+        {
             continue;
         }
         let mut part = first;
@@ -679,6 +716,74 @@ const CSHARP_KEYWORDS: &[&str] = &[
     "yield",
 ];
 
+const JAVASCRIPT_KEYWORDS: &[&str] = &[
+    "abstract",
+    "any",
+    "as",
+    "async",
+    "await",
+    "boolean",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "constructor",
+    "continue",
+    "debugger",
+    "declare",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "from",
+    "function",
+    "get",
+    "if",
+    "implements",
+    "import",
+    "in",
+    "instanceof",
+    "interface",
+    "let",
+    "module",
+    "namespace",
+    "new",
+    "null",
+    "number",
+    "of",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "readonly",
+    "return",
+    "set",
+    "static",
+    "string",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "type",
+    "typeof",
+    "undefined",
+    "unknown",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -730,6 +835,46 @@ mod tests {
     }
 
     #[test]
+    fn checks_javascript_and_markdown_without_reporting_keywords() {
+        let javascript = "// helo comment\nconst wrongNme = \"wrld\";";
+        let found = check_source_cancelled(
+            javascript,
+            Lang::JavaScript,
+            &dictionary(),
+            &HashSet::new(),
+            || false,
+        );
+        assert!(
+            found
+                .iter()
+                .any(|word| word.word == "helo" && word.kind == SourceKind::Comment)
+        );
+        assert!(
+            found
+                .iter()
+                .any(|word| word.word == "Nme" && word.kind == SourceKind::Identifier)
+        );
+        assert!(
+            found
+                .iter()
+                .any(|word| word.word == "wrld" && word.kind == SourceKind::String)
+        );
+        assert!(!found.iter().any(|word| word.word == "const"));
+        let markdown = check_source_cancelled(
+            "Helo world",
+            Lang::Markdown,
+            &dictionary(),
+            &HashSet::new(),
+            || false,
+        );
+        assert!(
+            markdown
+                .iter()
+                .any(|word| word.word == "Helo" && word.kind == SourceKind::Text)
+        );
+    }
+
+    #[test]
     fn custom_words_are_persistent_and_locale_paths_are_safe() {
         let dir = tempfile::tempdir().unwrap();
         let path = project_words_path(dir.path(), "pt_BR").unwrap();
@@ -749,7 +894,7 @@ mod tests {
             return;
         }
         let service = SpellingService::new(Waker::noop());
-        service.check(7, 11, "en_US", "// helo world".into(), None);
+        service.check(7, 11, Lang::CSharp, "en_US", "// helo world".into(), None);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while std::time::Instant::now() < deadline {
             for reply in service.drain() {
