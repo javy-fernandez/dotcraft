@@ -356,6 +356,7 @@ additional scope is pending.
 | Shop.Api CPU profiling (H-20) | [Original PR 259](https://github.com/javy-fernandez/dotcraft/pull/259) | [CPU evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-cpu-profile-live/docs/implementation/shop-cpu-profile-linux.md) |
 | Razor syntax in Shop workspace (J-01) | [Original PR 260](https://github.com/javy-fernandez/dotcraft/pull/260) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/260/files) |
 | Shop.Api application monitoring charts (H-24) | [Original PR 261](https://github.com/javy-fernandez/dotcraft/pull/261) | [Monitoring evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-monitoring-live/docs/implementation/shop-monitoring-linux.md) |
+| Shop.Api launch settings plan (B-11) | [Original PR 262](https://github.com/javy-fernandez/dotcraft/pull/262) | [Plan evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-launch-settings-plan-live/docs/implementation/shop-launch-settings-plan.md) |
 
 ## Completion criteria
 

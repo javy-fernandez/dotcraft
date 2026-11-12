@@ -25,8 +25,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 101 |
-| 🚧 In progress | 47 |
+| ✅ Verified | 102 |
+| 🚧 In progress | 46 |
 | 🟢 Existing | 6 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
@@ -165,7 +165,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-08 | .NET SDK discovery | ✅ | [PR 225](https://github.com/javy-fernandez/dotcraft/pull/225) fixes extensionless explicit host discovery and verifies explicit executable/directory/PATH discovery, SDK 8.0.428 listing/version and a successful build of a temporary Shop.Core copy on Linux. Windows/macOS and managed SDK installation remain untested. |
 | B-09 | Runtime discovery | ✅ | [PR 226](https://github.com/javy-fernandez/dotcraft/pull/226) parses whitespace-tolerant runtime listings and verifies .NETCore.App/AspNetCore.App 8.0.34 installed by official local SDK 8.0.428 against Shop.Api net8.0 on Linux. UI/server launch and other platforms remain untested. |
 | B-10 | MSBuild property evaluation | ✅ | [PR 230](https://github.com/javy-fernandez/dotcraft/pull/230) rejects undeclared target frameworks and verifies Debug/Release, single/multi-target outer and inner property evaluation on Shop.Core/Shop.Api with official SDK 8.0.428 on Linux. UI, other platforms and build/restore behavior remain separate. |
-| B-11 | Launch settings profiles | 🚧 | [PR 181](https://github.com/javy-fernandez/dotcraft/pull/181) fixes URL scheme detection and verifies Shop.Api profile order, URL, and environment in four rc-dotnet tests. Browser opening, SDK run, and UI profile selection remain unverified. |
+| B-11 | Launch settings profiles | ✅ | [PR 181](https://github.com/javy-fernandez/dotcraft/pull/181) validates profile parsing and URL schemes; [PR 236](https://github.com/javy-fernandez/dotcraft/pull/236) verifies native picker selection; [PR 262](https://github.com/javy-fernandez/dotcraft/pull/262) verifies Shop.Api's real http profile produces the Development environment, ASP.NET URL and browser target after SDK 8.0.428 evaluation on Linux. Automatic browser opening, changes during a running process, IIS Express and other platforms remain untested. |
 | B-12 | NuGet search | 🚧 | [PR 221](https://github.com/javy-fernandez/dotcraft/pull/221) bounds query, pagination and response size before/during NuGet V3 requests; a Shop.Api package ID is tested through a local fake feed. Live nuget.org and app UI remain unverified. |
 | B-13 | NuGet installation and removal | 🚧 | [PR 219](https://github.com/javy-fernandez/dotcraft/pull/219) preflights project path, bounded package ID and version before add/update/remove process spawn; a copied Shop.Api project and fake host verify valid arguments and no spawn on invalid input. Real SDK restore, project modification and UI remain. |
 | B-14 | JSON .slnf solution filters | 🚧 | Parser, explorer and SDK build are verified in the original baseline; filter-specific Roslyn, test-project selection and actual test execution remain pending. The test-selection [PR 153](https://github.com/javy-fernandez/dotcraft/pull/153) was closed without merge. |
