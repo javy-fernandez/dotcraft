@@ -26,10 +26,10 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 33 |
-| 🚧 In progress | 16 |
+| 🚧 In progress | 19 |
 | 🟢 Existing | 81 |
-| 🔁 Reuse candidate | 25 |
-| ⬜ Backlog | 218 |
+| 🔁 Reuse candidate | 24 |
+| ⬜ Backlog | 216 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -174,7 +174,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-16 | Unload and reload individual projects | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-17 | Project references editor | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-18 | Target frameworks editor | ⬜ | Implement with integration and UI acceptance evidence. |
-| B-19 | Build configurations and platforms | ⬜ | Implement with integration and UI acceptance evidence. |
+| B-19 | Build configurations and platforms | 🚧 | [PR 156](https://github.com/javy-fernandez/dotcraft/pull/156) parses `.sln` / `.slnf` configuration-platform pairs and lets the backend pass an explicit platform; 134 rc-dotnet unit tests pass. UI selection, persistence, `.slnx` discovery, and a real nondefault-platform build remain. |
 | B-20 | global.json SDK management | 🚧 | PR 5 verifies real SDK 8.0.427/10.0.403 selection and builds; ancestor policy display, UI installation and language-service restart remain pending. |
 | B-21 | .NET workload management | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-22 | NuGet dependency graph | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -208,14 +208,14 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-14 | Rename symbol | ✅ | Live C# application and Roslyn tests rename symbols across App and Lib projects; see live-dotnet.md. |
 | C-15 | Diagnostics in editor | ✅ | Live application verifies CS0103 ranges; Roslyn regression verifies diagnostics; see live-dotnet.md. |
 | C-16 | Large-file safeguards | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| C-17 | Complete statement | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| C-17 | Complete statement | 🚧 | [PR 157](https://github.com/javy-fernandez/dotcraft/pull/157) adds conservative C# single-line statement completion with one undo step; 21 rc-editor unit tests pass. Broader syntax handling and live UI acceptance remain. |
 | C-18 | EditorConfig integration | 🚧 | PR 3 verifies the indentation subset, embedded globstars and logical mixed editing; numeric-range/save-time/full-formatting scope remains pending. |
 | C-19 | Spelling assistance | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-20 | Web language editor improvements | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-21 | Smart and type-matching completion | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-22 | Import completion | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-23 | Live templates editor | 🟢 | Source located in `rc-editor/templates.rs`; repeat application acceptance checks. |
-| C-24 | Postfix templates | ⬜ | Implement with integration and UI acceptance evidence. |
+| C-24 | Postfix templates | 🟢 | Existing C# postfix expansion is in `rc-editor/src/templates.rs` and invoked by Tab in `view.rs`; unit tests cover the supported forms. Live .NET UI acceptance remains. |
 | C-25 | Surround with templates | 🟢 | Source located in `rc-editor/templates.rs`; repeat application acceptance checks. |
 | C-26 | Generate constructors and members | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-27 | Override and implement members | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -543,7 +543,7 @@ Source / reuse boundary: `crates/rc-term; crates/rc-core; CrabCraft shared modul
 | --- | --- | --- | --- |
 | L-01 | Integrated terminal | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | L-02 | Persistent workspace sessions | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| L-03 | File system watching | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| L-03 | File system watching | 🚧 | [PR 155](https://github.com/javy-fernandez/dotcraft/pull/155) classifies renames and atomic saves as source removal plus destination creation; 13 rc-core tests pass, including a real filesystem .NET-project fixture. UI, index/LSP integration, and other platforms remain unverified. |
 | L-04 | Background task runtime | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | L-05 | Terminal search and split panes | 🚧 | Bounded, cancellable terminal search is tested; split panes and cross-platform UI validation remain pending. |
 | L-06 | Terminal completion | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
