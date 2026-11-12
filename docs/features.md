@@ -336,6 +336,7 @@ additional scope is pending.
 | Shop test discovery across xUnit, NUnit and MSTest (H-04) | [Original PR 239](https://github.com/javy-fernandez/dotcraft/pull/239) | [Discovery evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-test-discovery-live/docs/implementation/shop-test-discovery.md) |
 | Shop.Api JSON syntax parsing and paint (J-03) | [Original PR 240](https://github.com/javy-fernandez/dotcraft/pull/240) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/240/files) |
 | Linux Shop.Core build cancellation (F-04) | [Original PR 241](https://github.com/javy-fernandez/dotcraft/pull/241) | [Cancel evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-build-cancel-live/docs/implementation/build-cancel-linux.md) |
+| Shop test result tree in native app (H-05) | [Original PR 242](https://github.com/javy-fernandez/dotcraft/pull/242) | [Test tree evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-test-result-tree-live/docs/implementation/shop-test-result-tree.md) |
 
 ## Completion criteria
 

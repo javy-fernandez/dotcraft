@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 83 |
+| ✅ Verified | 84 |
 | 🚧 In progress | 45 |
-| 🟢 Existing | 26 |
+| 🟢 Existing | 25 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -388,7 +388,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/test.rs; crates/rc-app/src/ui/run
 | H-02 | NUnit execution | ✅ | Live Shop runner executes 4 NUnit cases successfully; see live-dotnet.md. |
 | H-03 | MSTest execution | ✅ | Live Shop runner executes 4 MSTest cases successfully; see live-dotnet.md. |
 | H-04 | Test discovery | ✅ | [PR 239](https://github.com/javy-fernandez/dotcraft/pull/239) verifies at least ten fully qualified xUnit, NUnit and MSTest cases from real Shop.sln with official .NET SDK 8.0.428 on Linux, retaining class, method, project and assembly paths. App tree rendering, cancellation, changed projects, other frameworks and platforms remain untested. |
-| H-05 | Test result tree | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| H-05 | Test result tree | ✅ | [PR 242](https://github.com/javy-fernandez/dotcraft/pull/242) runs 13 passing xUnit, NUnit and MSTest cases from real Shop.sln with official .NET SDK 8.0.428 and verifies class rows and click selection in the native egui Tests window on Linux. Failed/skipped cases, rerun, keyboard navigation, large result sets and other platforms remain untested. |
 | H-06 | Test gutter icons | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | H-07 | TRX results | ✅ | Live Shop runner parses real TRX outcomes for all 13 fixture cases; see live-dotnet.md. |
 | H-08 | Test output | 🟢 | Exercise on a real .NET fixture; record evidence. |
