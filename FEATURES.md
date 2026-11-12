@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 70 |
+| ✅ Verified | 71 |
 | 🚧 In progress | 44 |
-| 🟢 Existing | 40 |
+| 🟢 Existing | 39 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -315,7 +315,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/build.rs; crates/rc-app/src/runne
 | F-04 | Cancel build | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-05 | Streamed build output | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-06 | Compiler diagnostics links | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| F-07 | Run configurations | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| F-07 | Run configurations | ✅ | [PR 227](https://github.com/javy-fernandez/dotcraft/pull/227) exposes the toolbar selection to accessibility and verifies choosing Shop.Cli plus session restoration after reopening real Shop.sln in egui on Linux. Launch profiles, SDK execution, compound editing and other platforms remain separate acceptance scope. |
 | F-08 | Launch profile selection | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-09 | Stop running processes | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-10 | Incremental build scheduling | ⬜ | Implement with integration and UI acceptance evidence. |

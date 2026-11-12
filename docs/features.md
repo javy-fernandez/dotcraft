@@ -321,6 +321,7 @@ additional scope is pending.
 | C# signature argument tracking (C-04, partial) | [Original PR 224](https://github.com/javy-fernandez/dotcraft/pull/224) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/224/files) |
 | Linux SDK discovery with Shop.Core build (B-08) | [Original PR 225](https://github.com/javy-fernandez/dotcraft/pull/225) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/225/files) |
 | Linux runtime discovery with Shop.Api (B-09) | [Original PR 226](https://github.com/javy-fernandez/dotcraft/pull/226) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/226/files) |
+| Shop run configuration toolbar selection (F-07) | [Original PR 227](https://github.com/javy-fernandez/dotcraft/pull/227) | [Run configuration evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/run-config-shop-acceptance/docs/implementation/run-config-shop.md) |
 
 ## Completion criteria
 
