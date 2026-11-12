@@ -334,6 +334,8 @@ additional scope is pending.
 | Duplicate Shop Program.cs Search Everywhere results (A-07, partial) | [Original PR 237](https://github.com/javy-fernandez/dotcraft/pull/237) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/237/files) |
 | Linux Shop.Core streamed build output (F-05) | [Original PR 238](https://github.com/javy-fernandez/dotcraft/pull/238) | [Build stream evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-build-stream-live/docs/implementation/build-stream-linux.md) |
 | Shop test discovery across xUnit, NUnit and MSTest (H-04) | [Original PR 239](https://github.com/javy-fernandez/dotcraft/pull/239) | [Discovery evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-test-discovery-live/docs/implementation/shop-test-discovery.md) |
+| Shop.Api JSON syntax parsing and paint (J-03) | [Original PR 240](https://github.com/javy-fernandez/dotcraft/pull/240) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/240/files) |
+| Linux Shop.Core build cancellation (F-04) | [Original PR 241](https://github.com/javy-fernandez/dotcraft/pull/241) | [Cancel evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-build-cancel-live/docs/implementation/build-cancel-linux.md) |
 
 ## Completion criteria
 

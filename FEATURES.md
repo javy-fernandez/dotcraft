@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 81 |
+| ✅ Verified | 83 |
 | 🚧 In progress | 45 |
-| 🟢 Existing | 28 |
+| 🟢 Existing | 26 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -312,7 +312,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/build.rs; crates/rc-app/src/runne
 | F-01 | Build solution or project | ✅ | Live Shop solution build and inherited CLI/API debugger project builds pass; see live-dotnet.md. |
 | F-02 | Rebuild | ✅ | [PR 233](https://github.com/javy-fernandez/dotcraft/pull/233) verifies a Linux Shop.Core project Rebuild with official .NET SDK 8.0.428: deliberately corrupted final and intermediate assemblies are restored, `--no-incremental --no-restore` is issued, and streamed output and success are observed. Solution rebuild, UI, other runtimes and platforms remain untested. |
 | F-03 | Clean | ✅ | [PR 235](https://github.com/javy-fernandez/dotcraft/pull/235) verifies Linux Shop.Core project Clean with official .NET SDK 8.0.428 across Debug and Release: each clean removes only its own final/intermediate assemblies, and Debug builds again. Solution/multi-target clean, UI and other platforms remain untested. |
-| F-04 | Cancel build | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| F-04 | Cancel build | ✅ | [PR 241](https://github.com/javy-fernandez/dotcraft/pull/241) verifies cancellation of a deliberately slow Shop.Core build with official .NET SDK 8.0.428 on Linux, a cancelled result before the 30-second marker and a successful later build. Direct descendant-exit inspection, UI and other platforms remain untested. |
 | F-05 | Streamed build output | ✅ | [PR 238](https://github.com/javy-fernandez/dotcraft/pull/238) verifies a Shop.Core MSBuild message arrives as a stdout event before process exit and before the successful Finished event with official .NET SDK 8.0.428 on Linux. UI rendering, very large output and other platforms remain untested. |
 | F-06 | Compiler diagnostics links | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-07 | Run configurations | ✅ | [PR 227](https://github.com/javy-fernandez/dotcraft/pull/227) exposes the toolbar selection to accessibility and verifies choosing Shop.Cli plus session restoration after reopening real Shop.sln in egui on Linux. Launch profiles, SDK execution, compound editing and other platforms remain separate acceptance scope. |
@@ -460,7 +460,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | --- | --- | --- | --- |
 | J-01 | Razor syntax parsing | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | J-02 | XML syntax parsing | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| J-03 | JSON syntax parsing | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| J-03 | JSON syntax parsing | ✅ | [PR 240](https://github.com/javy-fernandez/dotcraft/pull/240) verifies Shop.Api appsettings JSON parse trees, key/value paint in both built-in EditorView themes, and typed edit/reparse on Linux; it removes duplicate key captures. JSON Schema, formatting, JSONC and custom themes remain untested. |
 | J-04 | Markdown preview | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | J-05 | HTTP client | 🚧 | PRs 13 and 15 verify basic HTTP execution, cancellation and inline variables; advanced HTTP integrations remain pending. |
 | J-06 | HTTP environment variables | 🚧 | Inline variables were tested in fork PR 15. [PR 195](https://github.com/javy-fernandez/dotcraft/pull/195) combines parent public and child private/user files with documented precedence; real `Shop.Api.http`/`Shop.sln` integration and 132 rc-dotnet unit tests pass. Environment UI, dynamic values and live requests remain. |
