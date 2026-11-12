@@ -265,3 +265,82 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> b
     }
     open
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::kittest::Queryable;
+    use std::path::Path;
+
+    fn copy_tree(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if matches!(
+                entry.file_name().to_str(),
+                Some("bin" | "obj" | "TestResults")
+            ) {
+                continue;
+            }
+            let target = to.join(entry.file_name());
+            if path.is_dir() {
+                copy_tree(&path, &target);
+            } else {
+                std::fs::copy(path, target).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a local .NET 8 SDK; set DOTCRAFT_TEST_DOTNET"]
+    fn project_template_dialog_creates_and_opens_project_in_shop() {
+        let sdk = std::env::var_os("DOTCRAFT_TEST_DOTNET").expect("set DOTCRAFT_TEST_DOTNET");
+        let _lock = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let shop = dir.path().join("Shop");
+        copy_tree(&crate::screens::fixtures().join("Shop"), &shop);
+        let solution = shop.join("Shop.sln");
+        let mut app = crate::screens::test_app(&dir.path().join("home"), true);
+        app.settings.dotnet_path = Some(PathBuf::from(sdk));
+        app.settings.roslyn_path = Some(PathBuf::from("/nonexistent"));
+        app.open_workspace(&solution);
+        app.new_project_dialog(Some(solution.clone()));
+        let dialog = app.new_project.as_mut().unwrap();
+        dialog.template = TEMPLATES
+            .iter()
+            .position(|t| t.short_name == "classlib")
+            .unwrap();
+        dialog.project_name = "Shop.FromUi".into();
+        dialog.frameworks = vec!["net8.0".into()];
+        dialog.framework = 0;
+        let mut harness = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+        harness.get_by_label(tr("Create")).click();
+        let project = shop.join("Shop.FromUi/Shop.FromUi.csproj");
+        let source = shop.join("Shop.FromUi/Class1.cs");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while harness.state().new_project.is_some() && std::time::Instant::now() < deadline {
+            harness.run_steps(1);
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+        assert!(
+            harness.state().new_project.is_none(),
+            "dialog did not finish: {:?}",
+            harness
+                .state()
+                .new_project
+                .as_ref()
+                .and_then(|d| d.error.as_ref())
+        );
+        assert!(project.is_file());
+        assert!(source.is_file());
+        assert_eq!(harness.state().solution_projects().len(), 7);
+        assert!(harness.state().solution_projects().contains(&project));
+        assert_eq!(
+            harness.state().docs.active_doc().unwrap().path,
+            source.canonicalize().unwrap()
+        );
+    }
+}
