@@ -428,7 +428,7 @@ mod tests {
     fn search_everywhere_distinguishes_shop_program_files_by_path() {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
-        let root = home.path().join("Shop workspace");
+        let root = dunce::canonicalize(home.path()).unwrap().join("Shop workspace");
         copy_tree(&crate::screens::fixtures().join("Shop"), &root);
         let api = root.join("src/Shop.Api/Program.cs");
         let cli = root.join("src/Shop.Cli/Program.cs");

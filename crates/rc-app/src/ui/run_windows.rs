@@ -188,7 +188,7 @@ mod build_diagnostic_tests {
         let _home_lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let source = tempfile::tempdir().unwrap();
-        let file = source.path().join("PriceCalculator.cs");
+        let file = dunce::canonicalize(source.path()).unwrap().join("PriceCalculator.cs");
         std::fs::write(&file, "first line\n0123456789\nthird line\n").unwrap();
         let diagnostic = rc_dotnet::diagnostics::parse_line(&format!(
             "{}(2,4): error CS0103: Unknown name",

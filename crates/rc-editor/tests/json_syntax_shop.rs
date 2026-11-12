@@ -41,7 +41,8 @@ fn shop_appsettings_parse_and_paint_in_both_themes() {
             assert_eq!(state.lang(), Lang::Json);
             state.parse_blocking();
             assert!(!state.syntax.tree().unwrap().root_node().has_error());
-            let information = source.find("Information").unwrap();
+            // Offsets from the buffer, not the source: the buffer normalizes CRLF line endings.
+            let information = state.buffer.rope().to_string().find("Information").unwrap();
             state.selection = Selection::point(state.buffer.rope().byte_to_char(information));
             let config = EditorConfig::default();
             let keymap = Keymap::new(KeymapKind::RiderMac);

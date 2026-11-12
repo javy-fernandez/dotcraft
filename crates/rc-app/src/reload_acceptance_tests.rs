@@ -9,7 +9,7 @@ fn shop_source_conflict_load_and_keep_choices() {
     let _lock = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let home = tempfile::tempdir().unwrap();
     let source = tempfile::tempdir().unwrap();
-    let path = source.path().join("PriceCalculator.cs");
+    let path = dunce::canonicalize(source.path()).unwrap().join("PriceCalculator.cs");
     std::fs::copy(fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs"), &path).unwrap();
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());

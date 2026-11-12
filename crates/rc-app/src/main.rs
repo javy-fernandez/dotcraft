@@ -38,8 +38,6 @@ mod reload_acceptance_tests;
 #[cfg(test)]
 mod navigation_history_acceptance_tests;
 #[cfg(test)]
-mod localization_acceptance_tests;
-#[cfg(test)]
 mod native_workspace_acceptance_tests;
 #[cfg(test)]
 mod keyboard_navigation_acceptance_tests;

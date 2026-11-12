@@ -1434,7 +1434,7 @@ mod web_window_tests {
     fn shop_endpoints_scan_show_handlers_and_generate_request() {
         let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let temp = tempfile::tempdir().unwrap();
-        let shop = temp.path().join("Shop");
+        let shop = dunce::canonicalize(temp.path()).unwrap().join("Shop");
         copy_tree(&crate::screens::fixtures().join("Shop"), &shop);
         let mut app = crate::screens::test_app(temp.path(), true);
         app.settings.roslyn_path = Some("/nonexistent".into());

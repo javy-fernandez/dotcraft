@@ -11,7 +11,7 @@ fn shop_class_template_creates_namespaced_file_and_refuses_duplicate() {
     let _lock = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let home = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
-    let root = project.path().join("Shop.Core");
+    let root = dunce::canonicalize(project.path()).unwrap().join("Shop.Core");
     std::fs::create_dir(&root).unwrap();
     std::fs::copy(fixtures().join("Shop/src/Shop.Core/Shop.Core.csproj"), root.join("Shop.Core.csproj")).unwrap();
     let dir = root.join("Orders");

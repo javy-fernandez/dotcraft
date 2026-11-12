@@ -374,7 +374,8 @@ fn interactive_rebase_drag_conflict_pause_and_continue() {
     assert!(h.get_by_label(tr("Start Rebasing")).accesskit_node().is_disabled());
 
     // Drag c2 above c1.
-    let (from, to) = (h.get_by_label("c2").rect(), h.get_by_label("c1").rect());
+    // The Git log behind the dialog exposes the same subjects; the dialog rows come last.
+    let (from, to) = (h.query_all_by_label("c2").last().unwrap().rect(), h.query_all_by_label("c1").last().unwrap().rect());
     h.drag_at(from.center());
     h.run_steps(1);
     for y in [from.center().y - 8.0, to.center().y, to.top() + 4.0] {
