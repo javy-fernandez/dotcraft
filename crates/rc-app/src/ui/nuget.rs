@@ -2483,6 +2483,58 @@ mod tests {
         assert!(h.state().nuget.audit.running.is_none() && h.state().nuget.audit.report.is_none());
         h.get_by_label("Run audit");
     }
+
+    #[test]
+    #[ignore = "requires a local .NET 8 SDK and cached Newtonsoft.Json 13.0.3 package"]
+    fn nuget_window_installs_and_removes_package_in_shop_core() {
+        let host = std::env::var_os("DOTCRAFT_TEST_DOTNET").expect("set DOTCRAFT_TEST_DOTNET");
+        let cache = std::env::var_os("NUGET_PACKAGES").expect("set NUGET_PACKAGES");
+        let _lock = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let shop = dir.path().join("Shop");
+        copy(&fixtures().join("Shop"), &shop);
+        let feed = dir.path().join("feed");
+        std::fs::create_dir(&feed).unwrap();
+        let archive = "newtonsoft.json.13.0.3.nupkg";
+        std::fs::copy(Path::new(&cache).join("newtonsoft.json/13.0.3").join(archive), feed.join(archive)).unwrap();
+        std::fs::write(shop.join("NuGet.Config"), format!("<configuration><packageSources><clear/><add key=\"fixture\" value=\"{}\" /></packageSources></configuration>\n", feed.display())).unwrap();
+        let project = shop.join("src/Shop.Core/Shop.Core.csproj");
+        let mut app = test_app(&dir.path().join("home"), true);
+        app.settings.dotnet_path = Some(PathBuf::from(host.clone()));
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&shop.join("Shop.sln"));
+        let projects = app.solution_projects();
+        assert_eq!(projects.len(), 6);
+        let core_index = projects.iter().position(|p| p == &project).unwrap();
+        app.nuget.set_projects(projects, Some(rc_dotnet::Dotnet::new(host)));
+        app.nuget.selected = Some("Newtonsoft.Json".into());
+        app.nuget.version = "13.0.3".into();
+        app.nuget.tab = Tab::Browse;
+        let mut first = true;
+        let mut h = Harness::builder().with_size(vec2(1100.0, 700.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) { rc_kit::theme::install_fonts(ui.ctx()); return; }
+            window(app, ui);
+        }, app);
+        h.run_steps(3);
+        h.get_all_by_label("Install").nth(core_index).unwrap().click();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while h.state().nuget.installed_versions("Newtonsoft.Json").is_empty() && std::time::Instant::now() < deadline {
+            h.run_steps(1);
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+        assert_eq!(h.state().nuget.installed_versions("Newtonsoft.Json"), vec![(project.clone(), "13.0.3".into())]);
+        assert!(h.state().nuget.message.as_ref().is_some_and(|(error, _)| !error), "{:?}", h.state().nuget.message);
+        h.run_steps(3);
+        h.get_by_label("Remove").click();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while !h.state().nuget.installed_versions("Newtonsoft.Json").is_empty() && std::time::Instant::now() < deadline {
+            h.run_steps(1);
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+        assert!(h.state().nuget.installed_versions("Newtonsoft.Json").is_empty());
+        assert!(h.state().nuget.message.as_ref().is_some_and(|(error, _)| !error), "{:?}", h.state().nuget.message);
+        assert!(!std::fs::read_to_string(project).unwrap().contains("Newtonsoft.Json"));
+    }
 }
 
 /// Icon and short label for a source's status.
