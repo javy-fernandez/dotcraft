@@ -2,13 +2,12 @@
 //! indentation and read-only state on the right; transient messages in between.
 
 use crate::app::DotCraftApp;
-use egui::{FontId, Ui};
+use egui::{Context, FontId, Ui};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{ico, icons, theme};
 
-pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
-    let p = rc_kit::pal(ui);
-    let now = ui.input(|i| i.time);
+pub fn tick_notices(app: &mut DotCraftApp, ctx: &Context) {
+    let now = ctx.input(|i| i.time);
     for n in &mut app.notices {
         if n.at == 0.0 {
             n.at = now;
@@ -17,8 +16,12 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     // Messages stay 8 s (errors 15 s).
     app.notices.retain(|n| now - n.at < if n.error { 15.0 } else { 8.0 });
     if !app.notices.is_empty() {
-        ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
+        ctx.request_repaint_after(std::time::Duration::from_millis(500));
     }
+}
+
+pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
     ui.horizontal_centered(|ui| {
         theme::split_row(ui, |ui, side| match side {
             theme::Side::Left => {

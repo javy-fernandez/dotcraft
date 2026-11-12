@@ -43,6 +43,20 @@ pub struct WorkspaceState {
     pub solution: Option<Solution>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FocusMode {
+    #[default]
+    Normal,
+    DistractionFree,
+    Zen,
+}
+
+impl FocusMode {
+    pub fn toggle(self, requested: Self) -> Self {
+        if self == requested { Self::Normal } else { requested }
+    }
+}
+
 pub struct DotCraftApp {
     pub settings: Settings,
     pub keymap: Keymap,
@@ -51,6 +65,7 @@ pub struct DotCraftApp {
     pub docs: Docs,
     pub editor_workflows: crate::ui::editor_workflows::EditorWorkflows,
     pub dock: Dock,
+    pub focus_mode: FocusMode,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
@@ -175,6 +190,7 @@ impl DotCraftApp {
             },
             editor_workflows: Default::default(),
             dock: Dock::default(),
+            focus_mode: FocusMode::Normal,
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
@@ -1159,6 +1175,9 @@ impl DotCraftApp {
                 }
             }
             Action::Escape => {
+                if self.focus_mode != FocusMode::Normal {
+                    self.focus_mode = FocusMode::Normal;
+                }
                 // Esc in a tool window returns to the editor (IntelliJ).
                 self.focus_editor = true;
             }

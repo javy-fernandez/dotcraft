@@ -4,7 +4,7 @@
 //! Copyright (c) 2026 the CrabCraft contributors.
 //! The retained MIT notice is in docs/implementation/scrollable-menu.md.
 
-use crate::app::DotCraftApp;
+use crate::app::{DotCraftApp, FocusMode};
 use crate::toolwindow::ToolWindow;
 use crate::ui::dialogs::{Dialog, SettingsPage};
 use egui::Ui;
@@ -137,6 +137,14 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
     }
     if category == tr("View") {
         ui.separator();
+        if command(ui, tr("Distraction-free Mode"), None, true) {
+            app.focus_mode = app.focus_mode.toggle(FocusMode::DistractionFree);
+            app.focus_editor = true;
+        }
+        if command(ui, tr("Zen Mode"), None, true) {
+            app.focus_mode = app.focus_mode.toggle(FocusMode::Zen);
+            app.focus_editor = true;
+        }
         if theme::menu_entry(ui, None, tr("Tool Windows"), Some("›"), false, true).clicked() { *page = Page::ToolWindows; }
     }
     if category == tr("File") {
