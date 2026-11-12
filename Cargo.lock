@@ -3913,6 +3913,8 @@ dependencies = [
  "nucleo-matcher",
  "parking_lot",
  "rc-core",
+ "rc-syntax",
+ "rc-text",
  "regex",
  "regex-syntax",
  "tempfile",
