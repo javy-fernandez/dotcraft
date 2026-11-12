@@ -1792,7 +1792,7 @@ impl eframe::App for DotCraftApp {
                 editor_actions.push(a);
             }
         }
-        let outputs = self.insight.update(&mut self.docs, self.settings.show_inlay_hints);
+        let outputs = self.insight.update(&mut self.docs, self.settings.show_inlay_hints, self.settings.show_code_vision);
         self.handle_insight(outputs);
         let outputs = self.packages.update(&mut self.docs, &mut self.insight.problems, self.nuget.selected_source());
         self.handle_packages(outputs);

@@ -127,6 +127,9 @@ pub struct Insight {
     auto_usings: HashMap<u64, u64>,
     semantic: HashMap<u64, Versioned<Option<lsp::SemanticTokensResult>>>,
     inlay: HashMap<u64, Versioned<Option<Vec<lsp::InlayHint>>>>,
+    code_lens: HashMap<u64, Versioned<Option<Vec<lsp::CodeLens>>>>,
+    code_lens_resolve: Vec<(u64, u64, Pending<lsp::CodeLens>)>,
+    code_vision_enabled: bool,
     diag_pull: HashMap<u64, (u64, Pending<Value>)>,
     symbols: HashMap<u64, (u64, Pending<Option<lsp::DocumentSymbolResponse>>)>,
     /// Document structure of each open document.
@@ -180,6 +183,9 @@ impl Insight {
             auto_usings: HashMap::new(),
             semantic: HashMap::new(),
             inlay: HashMap::new(),
+            code_lens: HashMap::new(),
+            code_lens_resolve: Vec::new(),
+            code_vision_enabled: false,
             diag_pull: HashMap::new(),
             symbols: HashMap::new(),
             structure: HashMap::new(),
@@ -272,6 +278,8 @@ impl Insight {
         self.auto_usings.clear();
         self.semantic.clear();
         self.inlay.clear();
+        self.code_lens.clear();
+        self.code_lens_resolve.clear();
         self.diag_pull.clear();
         self.symbols.clear();
         self.refreshed.clear();
@@ -281,8 +289,18 @@ impl Insight {
 
     /// Pumps the server, syncs documents and applies finished requests. Returns what the
     /// rest of the UI must show.
-    pub fn update(&mut self, docs: &mut Docs, show_inlays: bool) -> Vec<InsightOutput> {
+    pub fn update(&mut self, docs: &mut Docs, show_inlays: bool, show_code_vision: bool) -> Vec<InsightOutput> {
         let mut out = Vec::new();
+        if self.code_vision_enabled != show_code_vision {
+            self.code_vision_enabled = show_code_vision;
+            self.refreshed.clear();
+            if !show_code_vision {
+                self.code_lens.clear();
+                for doc in &mut docs.list {
+                    doc.editor.code_vision.clear();
+                }
+            }
+        }
         for ev in self.downloads.drain() {
             match ev {
                 DownloadEvent::Progress { done, total } => self.status = InsightStatus::Downloading { done, total },
@@ -357,7 +375,7 @@ impl Insight {
             return out;
         }
         self.sync_documents(docs);
-        self.poll_requests(docs, show_inlays, &mut out);
+        self.poll_requests(docs, show_inlays, show_code_vision, &mut out);
         out
     }
 
@@ -390,12 +408,13 @@ impl Insight {
             if !edits.is_empty() {
                 session.did_change(&d.path, &edits);
                 self.dirty.insert(d.editor.id, now);
+                d.editor.code_vision.clear();
             }
         }
     }
 
     /// Requests colours, hints, diagnostics and structure for `doc` once its edits settled.
-    fn refresh(&mut self, doc: &Doc, show_inlays: bool) {
+    fn refresh(&mut self, doc: &Doc, show_inlays: bool, show_code_vision: bool) {
         let id = doc.editor.id;
         let version = doc.editor.buffer.version();
         if self.refreshed.get(&id) == Some(&version) {
@@ -414,15 +433,18 @@ impl Insight {
             let end = convert::lsp_position(doc.editor.buffer.rope(), doc.editor.buffer.len_chars());
             self.inlay.insert(id, (version, session.client.request_raw("textDocument/inlayHint", json!({ "textDocument": td, "range": { "start": { "line": 0, "character": 0 }, "end": end } }))));
         }
+        if show_code_vision {
+            self.code_lens.insert(id, (version, session.client.request_raw("textDocument/codeLens", json!({ "textDocument": td }))));
+        }
         self.refreshed.insert(id, version);
     }
 
-    fn poll_requests(&mut self, docs: &mut Docs, show_inlays: bool, out: &mut Vec<InsightOutput>) {
+    fn poll_requests(&mut self, docs: &mut Docs, show_inlays: bool, show_code_vision: bool, out: &mut Vec<InsightOutput>) {
         // Refreshes for the visible document (and any other open C# document once).
         if let Some(i) = docs.active
             && is_csharp(&docs.list[i])
         {
-            self.refresh(&docs.list[i], show_inlays);
+            self.refresh(&docs.list[i], show_inlays, show_code_vision);
         }
         // Semantic tokens.
         let legend = self.session.as_ref().map(|s| s.semantic_legend.clone()).unwrap_or_default();
@@ -469,6 +491,46 @@ impl Insight {
         for id in done.drain(..) {
             self.inlay.remove(&id);
         }
+        // Code Vision labels are cached for the exact buffer version that produced them.
+        let mut unresolved = Vec::new();
+        for (&id, (version, p)) in &mut self.code_lens {
+            if let Some(result) = p.poll() {
+                done.push(id);
+                if let (Ok(lenses), Some(doc)) = (result, docs.list.iter_mut().find(|d| d.editor.id == id))
+                    && doc.editor.buffer.version() == *version
+                {
+                    doc.editor.code_vision.clear();
+                    for lens in lenses.unwrap_or_default() {
+                        if let Some(command) = &lens.command {
+                            if !command.title.is_empty() {
+                                doc.editor.code_vision.push(rc_editor::CodeVision { line: lens.range.start.line as usize, position: convert::char_of(doc.editor.buffer.rope(), lens.range.start), title: command.title.clone() });
+                            }
+                        } else {
+                            unresolved.push((id, *version, lens));
+                        }
+                    }
+                }
+            }
+        }
+        for id in done.drain(..) {
+            self.code_lens.remove(&id);
+        }
+        if let Some(session) = &self.session {
+            for (id, version, lens) in unresolved {
+                self.code_lens_resolve.push((id, version, session.client.request_raw("codeLens/resolve", serde_json::to_value(lens).unwrap_or(Value::Null))));
+            }
+        }
+        self.code_lens_resolve.retain_mut(|(id, version, pending)| {
+            let Some(result) = pending.poll() else { return true };
+            if let (Ok(lens), Some(doc)) = (result, docs.list.iter_mut().find(|d| d.editor.id == *id))
+                && doc.editor.buffer.version() == *version
+                && let Some(command) = lens.command
+                && !command.title.is_empty()
+            {
+                doc.editor.code_vision.push(rc_editor::CodeVision { line: lens.range.start.line as usize, position: convert::char_of(doc.editor.buffer.rope(), lens.range.start), title: command.title });
+            }
+            false
+        });
         // Pulled diagnostics.
         let mut reports = Vec::new();
         for (&id, (version, p)) in &mut self.diag_pull {
