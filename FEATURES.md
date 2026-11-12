@@ -25,11 +25,11 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 33 |
-| 🚧 In progress | 21 |
+| ✅ Verified | 34 |
+| 🚧 In progress | 22 |
 | 🟢 Existing | 80 |
-| 🔁 Reuse candidate | 24 |
-| ⬜ Backlog | 215 |
+| 🔁 Reuse candidate | 23 |
+| ⬜ Backlog | 214 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -140,7 +140,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-19 | Background document saving | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | A-20 | Safe reload from disk | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | A-21 | Accessible keyboard navigation | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| A-22 | Distraction-free and Zen modes | ⬜ | Implement with integration and UI acceptance evidence. |
+| A-22 | Distraction-free and Zen modes | ✅ | [PR 161](https://github.com/javy-fernandez/dotcraft/pull/161) provides View-menu toggles, a visible exit control, and dock-preserving layout changes. Two rc-app UI harness tests passed with `Shop.sln` on Linux. Modes are process-local; native window chrome and other platforms remain untested. |
 | A-23 | Presentation mode | ⬜ | Implement with integration and UI acceptance evidence. |
 | A-24 | Customizable toolbar | ⬜ | Implement with integration and UI acceptance evidence. |
 | A-25 | Settings synchronization | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -427,7 +427,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-07 | Gutter change markers | ✅ | Verified by real-Git backend and app VCS tests; scope is local Git workflows on Linux. |
 | I-08 | Git blame | ✅ | Verified by real-Git backend and app VCS tests; scope is local Git workflows on Linux. |
 | I-09 | Clone repositories | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| I-10 | Git read safety | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| I-10 | Git read safety | 🚧 | [PR 160](https://github.com/javy-fernandez/dotcraft/pull/160) resolves caller revisions to verified commit hashes for blame and file reads; 46 rc-vcs tests pass. Other Git read operations still need audit. |
 | I-11 | Shelves | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-12 | History editing | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-13 | Hosting CLI integration | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
