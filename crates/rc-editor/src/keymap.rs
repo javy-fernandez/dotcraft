@@ -22,6 +22,7 @@ pub enum Action {
     ScrollDown,
     // --- editing
     Enter,
+    CompleteStatement,
     StartNewLine,
     StartNewLineBefore,
     Backspace,
@@ -383,6 +384,7 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::PageDown, none, PageDown(false)),
         b(Key::PageDown, s, PageDown(true)),
         b(Key::Enter, none, Enter),
+        b(Key::Enter, cs, CompleteStatement),
         b(Key::Enter, s, StartNewLine),
         b(Key::Enter, ca, StartNewLineBefore),
         b(Key::Backspace, none, Backspace),
@@ -529,6 +531,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         b(Key::ArrowUp, c, ScrollUp),
         b(Key::ArrowDown, c, ScrollDown),
         b(Key::Enter, none, Enter),
+        b(Key::Enter, cs, CompleteStatement),
         b(Key::Enter, s, StartNewLine),
         b(Key::Enter, ca, StartNewLineBefore),
         b(Key::Backspace, none, Backspace),

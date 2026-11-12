@@ -8,6 +8,7 @@ pub mod popup;
 mod popups_view;
 mod select;
 pub mod snippet;
+mod statement;
 pub mod templates;
 pub mod state;
 pub mod view;
