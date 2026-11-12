@@ -289,10 +289,12 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
                             .selected_text(match draft.keymap {
                                 KeymapChoice::Rider => if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" },
                                 KeymapChoice::VisualStudio => "Visual Studio",
+                                KeymapChoice::VsCode => tr("VS Code"),
                             })
                             .show_ui(ui, |ui| {
                                 ui.selectable_value(&mut draft.keymap, KeymapChoice::Rider, if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" });
                                 ui.selectable_value(&mut draft.keymap, KeymapChoice::VisualStudio, "Visual Studio");
+                                ui.selectable_value(&mut draft.keymap, KeymapChoice::VsCode, tr("VS Code"));
                             });
                         ui.end_row();
                     }
