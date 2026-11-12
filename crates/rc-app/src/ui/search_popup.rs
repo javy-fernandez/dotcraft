@@ -53,7 +53,16 @@ fn collect(app: &DotCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static str
         let limit = if se.tab == SeTab::All { 8 } else { 80 };
         let mut types = 0;
         let mut syms = 0;
-        for s in &se.symbols {
+        let mut symbols = se.symbols.clone();
+        if let Some(doc) = app.docs.active_doc().filter(|doc| rc_syntax::Lang::from_path(&doc.path) == rc_syntax::Lang::Proto) {
+            let container = doc.path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+            for symbol in crate::proto::symbols(&doc.editor.buffer.rope().to_string()) {
+                if rc_editor::popup::fuzzy_score(&symbol.name, text).is_some() {
+                    symbols.push(crate::search::SymbolHit { name: symbol.name, container: container.clone(), kind: symbol.kind, path: doc.path.clone(), line: symbol.line, col: symbol.col });
+                }
+            }
+        }
+        for s in &symbols {
             let is_type = s.is_type();
             if is_type && want(SeTab::Types) && types < limit {
                 out.push(((std::mem::take(&mut first_t) && se.tab == SeTab::All).then_some(tr("Types")), Hit::Symbol(s.clone())));
