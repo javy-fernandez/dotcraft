@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 92 |
-| 🚧 In progress | 46 |
-| 🟢 Existing | 16 |
+| ✅ Verified | 94 |
+| 🚧 In progress | 47 |
+| 🟢 Existing | 13 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -214,7 +214,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-21 | Smart and type-matching completion | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-22 | Import completion | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-23 | Live templates editor | 🚧 | [PR 218](https://github.com/javy-fernandez/dotcraft/pull/218) expands `cw` in Shop C# code with undo and preserves literals in comments/strings through EditorView. App popup, custom templates, advanced strings and very long lines remain unverified. |
-| C-24 | Postfix templates | 🟢 | Existing C# postfix expansion is in `rc-editor/src/templates.rs` and invoked by Tab in `view.rs`; unit tests cover the supported forms. Live .NET UI acceptance remains. |
+| C-24 | Postfix templates | ✅ | [PR 254](https://github.com/javy-fernandez/dotcraft/pull/254) verifies all six supported simple identifier/member C# postfix expansions through EditorView Tab and exact Undo on real Shop PriceCalculator source on Linux. Calls, literals, comments, multicaret, type-aware templates, immediate parse lag and popup discovery remain untested. |
 | C-25 | Surround with templates | 🚧 | [PR 210](https://github.com/javy-fernandez/dotcraft/pull/210) verifies Ctrl+Alt+T, built-in `if` surround, indentation, snippet field and undo in Shop C# EditorView; read-only phantom snippets are prevented. App popup and other templates remain untested. |
 | C-26 | Generate constructors and members | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-27 | Override and implement members | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -240,7 +240,7 @@ Source / reuse boundary: `crates/rc-app/src/search.rs; crates/rc-search; crates/
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
 | D-01 | Go to file | ✅ | [PR 228](https://github.com/javy-fernandez/dotcraft/pull/228) verifies indexed `PriceCalculator.cs:12` Go to File selection and exact C# caret position in the real Shop.sln egui UI on Linux. Duplicate basenames, live index updates, remote paths and other platforms remain untested. |
-| D-02 | Go to type | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| D-02 | Go to type | 🚧 | [PR 253](https://github.com/javy-fernandez/dotcraft/pull/253) verifies type-only results and exact Shop Order.cs declaration caret through egui with fixture-derived workspace symbols on Linux. Live Roslyn `workspace/symbol` delivery and other platforms remain untested. |
 | D-03 | Go to symbol | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-04 | Go to definition | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-05 | Go to implementation | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -347,7 +347,7 @@ Source / reuse boundary: `crates/rc-dap; crates/rc-app/src/debugger.rs`.
 | G-06 | Step out | ✅ | [PR 250](https://github.com/javy-fernandez/dotcraft/pull/250) records the same live Shop.Cli regression: DAP Step Out returns from DiscountFor to PriceCalculator.Calculate at the call line. UI dispatch, async methods, exception unwinding and other platforms remain untested. |
 | G-07 | Run to cursor | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
 | G-08 | Pause and resume | 🟢 | Resume is exercised live; explicit pause validation remains pending. |
-| G-09 | Thread list | 🟢 | Existing thread model participates in live debugging; explicit thread-list/UI validation remains pending. |
+| G-09 | Thread list | ✅ | [PR 252](https://github.com/javy-fernandez/dotcraft/pull/252) verifies the stopped Shop.Cli thread appears in DotCraft's DAP thread list with valid ID/name at a real breakpoint using .NET SDK 8.0.428/netcoredbg 3.2.0-1092 on Linux. Multiple threads, switching, UI rendering and other platforms remain untested. |
 | G-10 | Stack frames | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
 | G-11 | Variables tree | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
 | G-12 | Watches | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |

@@ -346,6 +346,9 @@ additional scope is pending.
 | Shop.Cli debugger Step Into (G-05) | [Original PR 249](https://github.com/javy-fernandez/dotcraft/pull/249) | [Step Into evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-step-into-live/docs/implementation/shop-debugger-step-into.md) |
 | Shop.Cli debugger Step Out (G-06) | [Original PR 250](https://github.com/javy-fernandez/dotcraft/pull/250) | [Step Out evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-step-out-live/docs/implementation/shop-debugger-step-out.md) |
 | Linux Shop.Core coverage collection (H-16) | [Original PR 251](https://github.com/javy-fernandez/dotcraft/pull/251) | [Coverage evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-coverage-live/docs/implementation/coverage-linux.md) |
+| Shop.Cli debugger thread list (G-09) | [Original PR 252](https://github.com/javy-fernandez/dotcraft/pull/252) | [Thread evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-debugger-thread-list-live/docs/implementation/shop-debugger-thread-list.md) |
+| Shop Go to Type with fixture symbols (D-02, partial) | [Original PR 253](https://github.com/javy-fernandez/dotcraft/pull/253) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/253/files) |
+| Shop C# postfix Tab and Undo (C-24) | [Original PR 254](https://github.com/javy-fernandez/dotcraft/pull/254) | [Postfix evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/postfix-shop-editor/docs/implementation/c24-postfix-shop-editor.md) |
 
 ## Completion criteria
 
