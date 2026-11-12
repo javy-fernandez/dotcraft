@@ -714,10 +714,32 @@ impl EditorState {
 
 /// Semantic spans override syntax spans where they overlap.
 fn merge_spans(syntax: &[Span], semantic: &[Span]) -> Vec<Span> {
+    // Language-server tokens can be broader than the syntax captures. Preserve the
+    // lexical colors of comments, strings, and escapes when ranges overlap.
+    let mut semantic_outside_literals = Vec::new();
+    for sem in semantic {
+        let mut start = sem.start;
+        for protected in syntax.iter().filter(|s| {
+            matches!(s.hl, Hl::Comment | Hl::DocComment | Hl::String | Hl::Escape)
+                && s.end > sem.start
+                && s.start < sem.end
+        }) {
+            if start < protected.start {
+                semantic_outside_literals.push(Span { start, end: protected.start.min(sem.end), hl: sem.hl });
+            }
+            start = start.max(protected.end);
+            if start >= sem.end {
+                break;
+            }
+        }
+        if start < sem.end {
+            semantic_outside_literals.push(Span { start, end: sem.end, hl: sem.hl });
+        }
+    }
     let mut out: Vec<Span> = Vec::new();
     for s in syntax {
         let mut start = s.start;
-        for sem in semantic.iter().filter(|x| x.end > s.start && x.start < s.end) {
+        for sem in semantic_outside_literals.iter().filter(|x| x.end > s.start && x.start < s.end) {
             if sem.start > start {
                 out.push(Span { start, end: sem.start, hl: s.hl });
             }
@@ -728,7 +750,7 @@ fn merge_spans(syntax: &[Span], semantic: &[Span]) -> Vec<Span> {
         }
     }
     // Comments and strings keep their colour even if the server says otherwise.
-    for sem in semantic {
+    for sem in &semantic_outside_literals {
         if sem.hl != Hl::Plain {
             out.push(*sem);
         }
