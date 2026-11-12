@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 36 |
-| 🚧 In progress | 25 |
-| 🟢 Existing | 77 |
+| ✅ Verified | 38 |
+| 🚧 In progress | 26 |
+| 🟢 Existing | 74 |
 | 🔁 Reuse candidate | 22 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
@@ -127,7 +127,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-06 | Split editors | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-07 | Search Everywhere | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-08 | Recent projects | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| A-09 | Recent files | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-09 | Recent files | ✅ | [PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) keeps filtered selection valid and exposes file rows to accessibility; egui UI harness opens three real `Shop.sln` C# files and selects one with Enter on Linux. Missing files and native menus remain untested. |
 | A-10 | Recent locations | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-11 | Settings dialog | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-12 | Rider and Visual Studio keymaps | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -159,7 +159,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-01 | Open solutions and folders | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-02 | Classic .sln solutions | ✅ | Live Shop build/run and C# application flows load classic solutions; see live-dotnet.md. |
 | B-03 | XML .slnx solutions | ✅ | Live Roslyn and application flows load a real two-project XML solution; see live-dotnet.md. |
-| B-04 | Standalone .NET projects | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| B-04 | Standalone .NET projects | 🚧 | [PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) discovers one top-level C#, F#, or VB project when opening a folder without a solution, preserving the folder session key; 13 rc-core tests pass on real fixtures. App opening and SDK build/run remain unverified. |
 | B-05 | Solution folders and items | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-06 | Project templates | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-07 | File and class templates | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -197,7 +197,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-03 | Code completion | ✅ | Live Roslyn and application regressions verify C# completion; advanced completion variants remain separate inventory targets. |
 | C-04 | Signature help | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-05 | Quick documentation | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| C-06 | Automatic brackets | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-06 | Automatic brackets | ✅ | [PR 168](https://github.com/javy-fernandez/dotcraft/pull/168) fixes C# comment/string context and verifies pairing, type-over, selection wrapping, and undo through egui editor events on a real Shop C# fixture; 17 rc-editor unit and one fixture test pass. No SDK build or broader Rider parity claim. |
 | C-07 | Multiple carets | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-08 | Code folding | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-09 | Inlay hints | 🟢 | Exercise on a real .NET fixture; record evidence. |

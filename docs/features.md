@@ -19,6 +19,7 @@ Reference: [Rider features](https://www.jetbrains.com/rider/features/).
 
 - [ ] Provide contextual completion and automatic namespace imports.
 - [ ] Match delimiters and insert closing braces automatically.
+- [x] Pair C# brackets during typing, respect comments and strings, and preserve undo. Validated through editor input events on a real Shop C# file; broader delimiter behavior remains in the unchecked item above.
 - [ ] Provide live templates and postfix templates.
 - [ ] Support multiple selections and caret editing.
 - [ ] Generate common code constructs and rearrange code.
@@ -203,6 +204,7 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 
 - [x] Switch between normal, distraction-free, and Zen editor layouts while preserving the current tool-window arrangement. This is validated on Linux with the `Shop.sln` UI fixture; mode state is temporary.
 - [x] Show the active .NET file, encoding, line ending and caret position in the status bar, with an accessible Go to Line control. Validated with `Shop.sln` on Linux.
+- [x] Reopen a filtered recent C# file with the keyboard while keeping the selection valid. Validated with `Shop.sln` on Linux.
 
 ## Implementation progress
 
@@ -240,6 +242,9 @@ additional scope is pending.
 | Git log branch and merge graph (I-14) | [Original PR 165](https://github.com/javy-fernandez/dotcraft/pull/165) | [Git log graph](https://github.com/RafaelMendes1407/dotcraft/blob/feat/git-log-graph-ui/docs/implementation/git-log-graph.md) |
 | Local History concurrent revision safety (I-34, partial) | [Original PR 166](https://github.com/javy-fernandez/dotcraft/pull/166) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/166/files) |
 | Accessible status bar metadata (A-14) | [Original PR 167](https://github.com/javy-fernandez/dotcraft/pull/167) | [Status bar evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/status-bar-dotnet-acceptance/docs/implementation/status-bar-dotnet.md) |
+| C# automatic brackets (C-06) | [Original PR 168](https://github.com/javy-fernandez/dotcraft/pull/168) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/168/files) |
+| Standalone project folder discovery (B-04, partial) | [Original PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/169/files) |
+| Filtered Recent Files selection (A-09) | [Original PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) | [Recent Files evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/recent-files-filter-selection/docs/implementation/recent-files-filter.md) |
 
 ## Completion criteria
 
