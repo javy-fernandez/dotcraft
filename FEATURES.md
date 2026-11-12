@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 105 |
+| ✅ Verified | 106 |
 | 🚧 In progress | 44 |
-| 🟢 Existing | 5 |
+| 🟢 Existing | 4 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -161,7 +161,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-04 | Standalone .NET projects | ✅ | [PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) discovers one top-level C#, F#, or VB project in a solution-free folder while preserving the session key; 13 rc-core tests pass. [PR 185](https://github.com/javy-fernandez/dotcraft/pull/185) verifies Shop.Cli folder opening, runnable configuration and egui app rendering on Linux. SDK build/run and other platforms remain untested. |
 | B-05 | Solution folders and items | ✅ | [PR 177](https://github.com/javy-fernandez/dotcraft/pull/177) restricts classic `.sln` loose items to `SolutionItems` sections; Shop `.sln`, TenProjects `.slnx`, and nested-folder fixtures verify parser membership in seven tests. UI and SDK execution remain untested. |
 | B-06 | Project templates | 🚧 | [PR 187](https://github.com/javy-fernandez/dotcraft/pull/187) validates `.sln`/`.slnx` targets before `dotnet new` and rejects missing, directory and `.slnf` targets; Shop/TenProjects plans pass three rc-dotnet tests. Actual SDK creation and UI acceptance remain. |
-| B-07 | File and class templates | 🚧 | [PR 217](https://github.com/javy-fernandez/dotcraft/pull/217) verifies New Class creation in a copied Shop.Core project, namespace generation, opened tab and duplicate refusal in egui on Linux. Other item kinds, project-system integration, background file creation and platforms remain. |
+| B-07 | File and class templates | ✅ | [PR 217](https://github.com/javy-fernandez/dotcraft/pull/217) verifies Shop.Core New Class namespace, opened tab and duplicate refusal; [PR 267](https://github.com/javy-fernandez/dotcraft/pull/267) verifies native New File nested path and New Interface namespace/opened tab in the same real Shop.sln workspace on Linux. Other item kinds, project-system notification, background creation, SDK compilation and other platforms remain untested. |
 | B-08 | .NET SDK discovery | ✅ | [PR 225](https://github.com/javy-fernandez/dotcraft/pull/225) fixes extensionless explicit host discovery and verifies explicit executable/directory/PATH discovery, SDK 8.0.428 listing/version and a successful build of a temporary Shop.Core copy on Linux. Windows/macOS and managed SDK installation remain untested. |
 | B-09 | Runtime discovery | ✅ | [PR 226](https://github.com/javy-fernandez/dotcraft/pull/226) parses whitespace-tolerant runtime listings and verifies .NETCore.App/AspNetCore.App 8.0.34 installed by official local SDK 8.0.428 against Shop.Api net8.0 on Linux. UI/server launch and other platforms remain untested. |
 | B-10 | MSBuild property evaluation | ✅ | [PR 230](https://github.com/javy-fernandez/dotcraft/pull/230) rejects undeclared target frameworks and verifies Debug/Release, single/multi-target outer and inner property evaluation on Shop.Core/Shop.Api with official SDK 8.0.428 on Linux. UI, other platforms and build/restore behavior remain separate. |
@@ -241,7 +241,7 @@ Source / reuse boundary: `crates/rc-app/src/search.rs; crates/rc-search; crates/
 | --- | --- | --- | --- |
 | D-01 | Go to file | ✅ | [PR 228](https://github.com/javy-fernandez/dotcraft/pull/228) verifies indexed `PriceCalculator.cs:12` Go to File selection and exact C# caret position in the real Shop.sln egui UI on Linux. Duplicate basenames, live index updates, remote paths and other platforms remain untested. |
 | D-02 | Go to type | 🚧 | [PR 253](https://github.com/javy-fernandez/dotcraft/pull/253) verifies type-only results and exact Shop Order.cs declaration caret through egui with fixture-derived workspace symbols on Linux. Live Roslyn `workspace/symbol` delivery and other platforms remain untested. |
-| D-03 | Go to symbol | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| D-03 | Go to symbol | 🚧 | [PR 266](https://github.com/javy-fernandez/dotcraft/pull/266) verifies Shop.sln egui symbol results distinguish the Order constructor from its same-named class and navigate to exact C# caret coordinates using fixture-derived symbols on Linux. Live Roslyn workspace-symbol delivery and other platforms remain untested. |
 | D-04 | Go to definition | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-05 | Go to implementation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-06 | Find usages | 🟢 | Exercise on a real .NET fixture; record evidence. |

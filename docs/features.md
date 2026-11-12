@@ -360,6 +360,8 @@ additional scope is pending.
 | Shop.Api memory snapshot in native app (H-22) | [Original PR 263](https://github.com/javy-fernandez/dotcraft/pull/263) | [Memory evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-memory-snapshot-live/docs/implementation/memory-snapshot-linux.md) |
 | Shop.Api HTTP client live request (J-05) | [Original PR 264](https://github.com/javy-fernandez/dotcraft/pull/264) | [HTTP evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-http-client-live/docs/implementation/shop-http-client-linux.md) |
 | Shop HTTP environment live request (J-06) | [Original PR 265](https://github.com/javy-fernandez/dotcraft/pull/265) | [Environment evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-http-environment-live/docs/implementation/shop-http-environment-live.md) |
+| Shop Go to Symbol with fixture symbols (D-03, partial) | [Original PR 266](https://github.com/javy-fernandez/dotcraft/pull/266) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/266/files) |
+| Shop file and interface templates (B-07) | [Original PR 267](https://github.com/javy-fernandez/dotcraft/pull/267) | [Template evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-file-and-interface-templates/docs/implementation/shop-file-interface-templates.md) |
 
 ## Completion criteria
 
