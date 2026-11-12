@@ -55,6 +55,7 @@ pub enum Dialog {
     BreakpointProperties { path: PathBuf, line: usize, condition: String, enabled: bool, focus: bool },
     /// Edit an application run configuration: launch profile, arguments, environment, folder.
     RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions, web: bool },
+    Publish(Box<crate::ui::publish::PublishDialog>),
     /// A compound run configuration: its name and which applications it starts.
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
@@ -107,6 +108,15 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
+        Dialog::Publish(state) => match state.show(ctx) {
+            crate::ui::publish::PublishOutcome::Keep => Outcome::Keep,
+            crate::ui::publish::PublishOutcome::Close => Outcome::Close,
+            crate::ui::publish::PublishOutcome::Start(request) => {
+                let outputs = app.runner.build_request(request);
+                crate::ui::run_windows::handle_outputs(app, outputs);
+                Outcome::Close
+            }
+        },
         Dialog::InteractiveRebase(state) => if crate::ui::rebase::dialog(app, ctx, state) { Outcome::Close } else { Outcome::Keep },
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {

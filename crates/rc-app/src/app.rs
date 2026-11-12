@@ -515,6 +515,20 @@ impl DotCraftApp {
         }
     }
 
+    pub fn publish_project_dialog(&mut self) {
+        let projects = self.solution_projects();
+        if projects.is_empty() {
+            self.notify(tr("No .NET project is available to publish"), false);
+            return;
+        }
+        let selected = self.runner.selected_config().and_then(|config| match &config.kind {
+            crate::runner::ConfigKind::App { project, .. } => Some(project.as_path()),
+            _ => None,
+        });
+        self.dialog = Some(Dialog::Publish(Box::new(crate::ui::publish::PublishDialog::new(projects, selected, self.waker.clone()))));
+        self.focus_editor = false;
+    }
+
     /// New Solution, or Add New Project when `solution` is given.
     /// Opens the Entity Framework Core dialog on `op` (for `project` when given).
     pub fn ef_dialog(&mut self, op: crate::ui::ef_core::EfOp, project: Option<PathBuf>) {
@@ -1724,6 +1738,7 @@ impl eframe::App for DotCraftApp {
                     MenuCommand::NewFile => self.new_file_dialog(),
                     MenuCommand::NewSolution => self.new_project_dialog(None),
                     MenuCommand::EditRunConfig => self.edit_run_config(None),
+                    MenuCommand::PublishProject => self.publish_project_dialog(),
                     MenuCommand::AddUsings => {
                         if let Some(i) = self.docs.active {
                             self.insight.add_missing_usings(&self.docs.list[i]);

@@ -252,20 +252,25 @@ impl Runner {
     // ------------------------------------------------------------------ build
 
     pub fn build(&mut self, target: &Path, action: BuildAction) -> Vec<RunnerOutput> {
+        self.build_request(BuildRequest::new(target, action))
+    }
+
+    pub fn build_request(&mut self, request: BuildRequest) -> Vec<RunnerOutput> {
         let dotnet = match self.dotnet() {
             Ok(d) => d,
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
         };
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
-        let title = match action {
+        let title = match request.action {
             BuildAction::Rebuild => tr("Rebuild"),
             BuildAction::Clean => tr("Clean"),
             BuildAction::Restore => tr("Restore"),
             BuildAction::Build => tr("Build"),
+            BuildAction::Publish => tr("Publish"),
         }
         .to_string();
-        let handle = rc_dotnet::start_build(&dotnet, BuildRequest::new(target, action), inbox.sender());
+        let handle = rc_dotnet::start_build(&dotnet, request, inbox.sender());
         self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, tool: None, lines: Vec::new() });
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Build)]
     }
