@@ -26,10 +26,10 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 64 |
-| 🚧 In progress | 35 |
+| 🚧 In progress | 36 |
 | 🟢 Existing | 49 |
 | 🔁 Reuse candidate | 18 |
-| ⬜ Backlog | 207 |
+| ⬜ Backlog | 206 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -182,7 +182,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-25 | Vulnerable and outdated packages | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-26 | NuGet Package Manager Console | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-27 | Project migration and upgrade | ⬜ | Implement with integration and UI acceptance evidence. |
-| B-28 | Solution dependency diagrams | ⬜ | Implement with integration and UI acceptance evidence. |
+| B-28 | Solution dependency diagrams | 🚧 | [PR 212](https://github.com/javy-fernandez/dotcraft/pull/212) builds a bounded solution graph and escaped DOT export, tested on six-project Shop.sln, filtered Shop.slnf and cycle cases. UI rendering, MSBuild evaluation and build behavior remain. |
 | B-29 | Source generators inspection | ⬜ | Implement with integration and UI acceptance evidence. |
 
 ## C. Editor and language intelligence
