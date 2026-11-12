@@ -279,11 +279,60 @@ pub fn html_spans(text: &[u8]) -> Vec<(usize, usize, Hl)> {
 
 /// Highlighting of languages without a grammar (`.sln`); `None` for the others.
 pub fn highlight_lexical(lang: Lang, rope: &Rope, first: usize, count: usize) -> Option<Vec<Vec<Span>>> {
-    if lang != Lang::Sln {
+    if !matches!(lang, Lang::Sln | Lang::Dockerfile) {
         return None;
     }
     let last = (first + count).min(rope.len_lines());
-    Some((first..last).map(|l| sln_line(&rope.line(l).to_string())).collect())
+    Some((first..last).map(|l| match lang {
+        Lang::Sln => sln_line(&rope.line(l).to_string()),
+        Lang::Dockerfile => dockerfile_line(&rope.line(l).to_string()),
+        _ => unreachable!(),
+    }).collect())
+}
+
+fn dockerfile_line(line: &str) -> Vec<Span> {
+    let line = line.trim_end_matches(['\n', '\r']);
+    let lead = line.chars().take_while(|c| c.is_whitespace()).count();
+    let trimmed = line.trim_start();
+    if trimmed.starts_with('#') {
+        return vec![Span { start: lead, end: line.chars().count(), hl: Hl::Comment }];
+    }
+    let word_len = trimmed.chars().take_while(|c| c.is_ascii_alphabetic()).count();
+    let word = trimmed.chars().take(word_len).collect::<String>().to_ascii_uppercase();
+    const INSTRUCTIONS: &[&str] = &["FROM", "RUN", "CMD", "LABEL", "MAINTAINER", "EXPOSE", "ENV", "ADD", "COPY", "ENTRYPOINT", "VOLUME", "USER", "WORKDIR", "ARG", "ONBUILD", "STOPSIGNAL", "HEALTHCHECK", "SHELL"];
+    let mut spans = Vec::new();
+    if INSTRUCTIONS.contains(&word.as_str()) {
+        spans.push(Span { start: lead, end: lead + word_len, hl: Hl::Keyword });
+    }
+    let chars: Vec<char> = line.chars().collect();
+    let mut i = lead + word_len;
+    while i < chars.len() {
+        if chars[i] == '"' || chars[i] == '\'' {
+            let quote = chars[i];
+            let start = i;
+            i += 1;
+            while i < chars.len() && chars[i] != quote {
+                if chars[i] == '\\' { i += 1; }
+                i += 1;
+            }
+            i = (i + 1).min(chars.len());
+            spans.push(Span { start, end: i, hl: Hl::String });
+        } else if chars[i] == '$' {
+            let start = i;
+            i += 1;
+            if chars.get(i) == Some(&'{') {
+                i += 1;
+                while i < chars.len() && chars[i] != '}' { i += 1; }
+                i = (i + 1).min(chars.len());
+            } else {
+                while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') { i += 1; }
+            }
+            if i > start + 1 { spans.push(Span { start, end: i, hl: Hl::Constant }); }
+        } else {
+            i += 1;
+        }
+    }
+    spans
 }
 
 /// One line of a `.sln`: comments, section keywords, strings, GUIDs and version numbers.
@@ -431,5 +480,17 @@ mod tests {
         assert!(found(3, "Project", Hl::Keyword) && found(3, "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}", Hl::Constant) && found(3, "\"App\"", Hl::String));
         assert!(found(6, "GlobalSection", Hl::Keyword) && found(6, "preSolution", Hl::Keyword));
         assert!(highlight_lexical(Lang::CSharp, &rope, 0, 1).is_none());
+    }
+
+    #[test]
+    fn dockerfiles_highlight_instructions_comments_and_variables() {
+        let rope = Rope::from_str("# syntax=docker/dockerfile:1\nFROM mcr.microsoft.com/dotnet/sdk:10 AS build\nARG VERSION=10\nRUN echo \"$VERSION\"\n");
+        let lines = highlight_lexical(Lang::Dockerfile, &rope, 0, rope.len_lines()).unwrap();
+        let text = |l: usize, s: &Span| rope.line(l).chars().skip(s.start).take(s.end - s.start).collect::<String>();
+        assert_eq!(lines[0][0].hl, Hl::Comment);
+        assert!(lines[1].iter().any(|s| s.hl == Hl::Keyword && text(1, s) == "FROM"));
+        assert!(lines[2].iter().any(|s| s.hl == Hl::Keyword && text(2, s) == "ARG"));
+        assert!(lines[3].iter().any(|s| s.hl == Hl::Keyword && text(3, s) == "RUN"));
+        assert!(lines[3].iter().any(|s| s.hl == Hl::String && text(3, s) == "\"$VERSION\""));
     }
 }
