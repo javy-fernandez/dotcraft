@@ -19,6 +19,8 @@ pub const CENTRAL_FILE: &str = "Directory.Packages.props";
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CentralItem {
     pub id: String,
+    /// `Update` changes an imported item; `Include` introduces one.
+    pub update: bool,
     /// `Version` as written (may be `$(Property)`).
     pub version: String,
     /// `Version` with `$(Property)` resolved from the file's own properties.
@@ -64,10 +66,15 @@ impl CentralFile {
         for n in doc.descendants().filter(|n| n.is_element()) {
             match n.tag_name().name() {
                 tag @ ("PackageVersion" | "GlobalPackageReference") => {
-                    let Some(id) = n.attribute("Include") else { continue };
+                    let (id, update) = match (n.attribute("Include"), n.attribute("Update")) {
+                        (Some(id), _) => (id, false),
+                        (None, Some(id)) => (id, true),
+                        (None, None) => continue,
+                    };
                     let version = version_of(n, "Version").unwrap_or_default();
                     file.items.push(CentralItem {
                         id: id.to_string(),
+                        update,
                         resolved: resolve(&version, &props),
                         version,
                         condition: condition_of(n),
@@ -257,12 +264,18 @@ pub fn detect_static(project: &Path) -> ProjectCpm {
     cpm.enabled = flag("ManagePackageVersionsCentrally", chain.iter().find_map(|f| f.manage)).unwrap_or(false);
     cpm.transitive_pinning = flag("CentralPackageTransitivePinningEnabled", chain.iter().find_map(|f| f.transitive_pinning)).unwrap_or(false);
     cpm.override_enabled = !own.get("CentralPackageVersionOverrideEnabled").or(build_props.get("CentralPackageVersionOverrideEnabled")).is_some_and(|v| v.eq_ignore_ascii_case("false"));
-    // Nearest file wins.
-    for f in &chain {
+    // Imported files establish items before the nearest file modifies them.
+    for f in chain.iter().rev() {
         for i in f.items.iter().filter(|i| i.condition.is_none()) {
             let list = if i.global { &mut cpm.globals } else { &mut cpm.versions };
-            if !list.iter().any(|v| v.id.eq_ignore_ascii_case(&i.id)) {
-                list.push(ResolvedVersion { id: i.id.clone(), version: i.resolved.clone(), file: f.path.clone() });
+            if i.update && i.version.is_empty() {
+                continue;
+            }
+            let resolved = ResolvedVersion { id: i.id.clone(), version: i.resolved.clone(), file: f.path.clone() };
+            if let Some(existing) = list.iter_mut().find(|v| v.id.eq_ignore_ascii_case(&i.id)) {
+                *existing = resolved;
+            } else if !i.update {
+                list.push(resolved);
             }
         }
     }
@@ -553,12 +566,12 @@ pub fn apply_edits(text: &str, edits: &[TextEdit]) -> String {
 /// changes the property in the same file.
 pub fn set_central_version(text: &str, id: &str, condition: Option<&str>, version: &str) -> anyhow::Result<Vec<TextEdit>> {
     let doc = parse(text)?;
-    let items: Vec<roxmltree::Node> = doc.descendants().filter(|n| n.has_tag_name("PackageVersion") && includes(n, id)).collect();
+    let items: Vec<roxmltree::Node> = doc.descendants().filter(|n| n.has_tag_name("PackageVersion") && central_item_matches(n, id)).collect();
     let item = match condition {
         Some(c) => items.iter().find(|n| condition_of(**n).as_deref() == Some(c.trim())).copied(),
         None => items.iter().find(|n| condition_of(**n).is_none()).copied().or_else(|| (items.len() == 1).then(|| items[0])),
     }
-    .or_else(|| doc.descendants().find(|n| n.has_tag_name("GlobalPackageReference") && includes(n, id)))
+    .or_else(|| doc.descendants().find(|n| n.has_tag_name("GlobalPackageReference") && central_item_matches(&n, id)))
     .ok_or_else(|| anyhow::anyhow!("{id} has no PackageVersion to update"))?;
     set_version_on(&doc, text, item, "Version", version)
 }
@@ -575,7 +588,7 @@ pub fn add_central_version(text: &str, id: &str, version: &str) -> anyhow::Resul
 /// Removes every `PackageVersion` of `id` (whole lines when they are alone on them).
 pub fn remove_central_version(text: &str, id: &str) -> anyhow::Result<Vec<TextEdit>> {
     let doc = parse(text)?;
-    let edits: Vec<TextEdit> = doc.descendants().filter(|n| n.has_tag_name("PackageVersion") && includes(n, id)).map(|n| TextEdit { range: line_span(text, n.range()), text: String::new() }).collect();
+    let edits: Vec<TextEdit> = doc.descendants().filter(|n| n.has_tag_name("PackageVersion") && central_item_matches(n, id)).map(|n| TextEdit { range: line_span(text, n.range()), text: String::new() }).collect();
     anyhow::ensure!(!edits.is_empty(), "{id} has no PackageVersion");
     Ok(edits)
 }
@@ -656,6 +669,10 @@ fn parse(text: &str) -> anyhow::Result<roxmltree::Document<'_>> {
 
 fn includes(n: &roxmltree::Node, id: &str) -> bool {
     n.attribute("Include").is_some_and(|i| i.trim().eq_ignore_ascii_case(id))
+}
+
+fn central_item_matches(n: &roxmltree::Node, id: &str) -> bool {
+    includes(n, id) || n.attribute("Update").is_some_and(|i| i.trim().eq_ignore_ascii_case(id))
 }
 
 fn escape(s: &str) -> String {
