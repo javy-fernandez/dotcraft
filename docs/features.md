@@ -219,6 +219,7 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 - [x] Split two C# editors side by side or vertically, then unsplit without closing either file. Validated with `Shop.sln` on Linux.
 - [x] Show status notifications and expire information and errors at their respective intervals. Validated with `Shop.sln` on Linux.
 - [x] Switch light and dark themes without closing a .NET solution. Validated with `Shop.sln` on Linux.
+- [x] Hide, reopen and move the docked Explorer while preserving its session state. Validated with `Shop.sln` on Linux.
 
 ## Implementation progress
 
@@ -281,6 +282,7 @@ additional scope is pending.
 | Status notification expiry (A-15) | [Original PR 190](https://github.com/javy-fernandez/dotcraft/pull/190) | [Notification evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/notifications-dotnet-acceptance/docs/implementation/notifications-shop.md) |
 | Light and dark theme switching (A-02) | [Original PR 191](https://github.com/javy-fernandez/dotcraft/pull/191) | [Theme evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/theme-dotnet-acceptance/docs/implementation/theme-shop-workspace.md) |
 | Nested CPM PackageVersion updates (B-23, partial) | [Original PR 192](https://github.com/javy-fernandez/dotcraft/pull/192) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/192/files) |
+| Docked Explorer workspace behavior (A-04) | [Original PR 193](https://github.com/javy-fernandez/dotcraft/pull/193) | [Dock evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dock-dotnet-acceptance/docs/implementation/docked-explorer-shop.md) |
 
 ## Completion criteria
 

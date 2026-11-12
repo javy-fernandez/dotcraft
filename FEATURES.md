@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 54 |
+| ✅ Verified | 55 |
 | 🚧 In progress | 30 |
-| 🟢 Existing | 57 |
+| 🟢 Existing | 56 |
 | 🔁 Reuse candidate | 20 |
 | ⬜ Backlog | 212 |
 | 🚫 Out of scope | 0 |
@@ -122,7 +122,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-01 | Native desktop workspace | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-02 | Light and dark themes | ✅ | [PR 191](https://github.com/javy-fernandez/dotcraft/pull/191) verifies live light → dark → light egui visual changes while six-project `Shop.sln` remains open on Linux. System-theme notifications, native chrome and other platforms remain untested. |
 | A-03 | Tool window stripes | 🚧 | Existing stripes plus verified overflow scrolling; PR 7. Wider UI audit remains pending. |
-| A-04 | Docked tool windows | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-04 | Docked tool windows | ✅ | [PR 193](https://github.com/javy-fernandez/dotcraft/pull/193) verifies Explorer stripe hide/reopen, left-to-right dock move and session-map round-trip in a real `Shop.sln` egui UI harness on Linux. Pointer drag, context-menu Move To and other platforms remain untested. |
 | A-05 | Editor tabs | ✅ | [PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) names close controls for accessibility; egui UI harness activates and closes C# tabs from real `Shop.sln` on Linux. Pinned/preview tabs, drag ordering, compact widths and other platforms remain untested. |
 | A-06 | Split editors | ✅ | [PR 179](https://github.com/javy-fernandez/dotcraft/pull/179) tests tab split commands in both orientations and Unsplit in an egui UI harness with real `Shop.sln` C# files on Linux. Divider drag, context-menu pointer flow, narrow layouts and persistence remain untested. |
 | A-07 | Search Everywhere | 🚧 | [PR 182](https://github.com/javy-fernandez/dotcraft/pull/182) disambiguates accessible file results and verifies `Shop.Cli/Program.cs` selection from a real `Shop.sln` index in egui on Linux. Type/symbol search, live index updates and larger workspaces remain unverified. |
