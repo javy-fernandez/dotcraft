@@ -17,6 +17,7 @@ pub mod cpm;
 pub mod diagnostics;
 pub mod global_json;
 pub mod endpoints;
+pub mod endpoint_http;
 pub mod http_file;
 pub mod openapi;
 pub mod launch;
