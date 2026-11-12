@@ -34,19 +34,19 @@ pub struct Request {
 pub enum Operation {
     Hello,
     List {
-        path: PathBuf,
+        path: String,
     },
     Read {
-        path: PathBuf,
+        path: String,
     },
     Write {
-        path: PathBuf,
+        path: String,
         data: String,
     },
     Run {
         program: String,
         args: Vec<String>,
-        cwd: PathBuf,
+        cwd: String,
         env: Vec<(String, String)>,
         timeout_ms: u64,
     },
@@ -239,7 +239,7 @@ async fn perform(operation: Operation) -> Result<Value> {
             version: PROTOCOL_VERSION,
         }),
         Operation::List { path } => {
-            let mut dir = tokio::fs::read_dir(path).await?;
+            let mut dir = tokio::fs::read_dir(PathBuf::from(path)).await?;
             let mut entries = Vec::new();
             while let Some(item) = dir.next_entry().await? {
                 entries.push(Entry {
@@ -254,7 +254,7 @@ async fn perform(operation: Operation) -> Result<Value> {
             Ok(Value::Entries { entries })
         }
         Operation::Read { path } => {
-            let file = tokio::fs::File::open(path).await?;
+            let file = tokio::fs::File::open(PathBuf::from(path)).await?;
             let mut bytes = Vec::new();
             file.take(MAX_BYTES as u64 + 1)
                 .read_to_end(&mut bytes)
@@ -271,7 +271,7 @@ async fn perform(operation: Operation) -> Result<Value> {
             if bytes.len() > MAX_BYTES {
                 bail!("write exceeds 1 MiB limit");
             }
-            tokio::fs::write(path, bytes).await?;
+            tokio::fs::write(PathBuf::from(path), bytes).await?;
             Ok(Value::Written)
         }
         Operation::Run {
@@ -286,7 +286,7 @@ async fn perform(operation: Operation) -> Result<Value> {
             }
             let mut cmd = Command::new(program);
             cmd.args(args)
-                .current_dir(cwd)
+                .current_dir(PathBuf::from(cwd))
                 .envs(env)
                 .stdin(Stdio::null())
                 .stdout(Stdio::piped())
@@ -391,13 +391,15 @@ mod tests {
         let path = dir.path().join("example.txt");
         client
             .request(Operation::Write {
-                path: path.clone(),
+                path: path.display().to_string(),
                 data: STANDARD.encode("hello"),
             })
             .await
             .unwrap();
         let Value::Data { data } = client
-            .request(Operation::Read { path: path.clone() })
+            .request(Operation::Read {
+                path: path.display().to_string(),
+            })
             .await
             .unwrap()
         else {
@@ -406,7 +408,7 @@ mod tests {
         assert_eq!(STANDARD.decode(data).unwrap(), b"hello");
         let Value::Entries { entries } = client
             .request(Operation::List {
-                path: dir.path().to_path_buf(),
+                path: dir.path().display().to_string(),
             })
             .await
             .unwrap()
@@ -424,7 +426,7 @@ mod tests {
             .request(Operation::Run {
                 program: "sh".into(),
                 args: vec!["-c".into(), "printf remote".into()],
-                cwd: dir.path().to_path_buf(),
+                cwd: dir.path().display().to_string(),
                 env: vec![],
                 timeout_ms: 5_000,
             })
@@ -528,7 +530,7 @@ mod tests {
             operation: Operation::Run {
                 program: "sleep".into(),
                 args: vec!["10".into()],
-                cwd: std::env::temp_dir(),
+                cwd: std::env::temp_dir().display().to_string(),
                 env: vec![],
                 timeout_ms: 20_000,
             },
@@ -637,7 +639,7 @@ mod limits_tests {
                 "-c".into(),
                 "import sys; sys.stdout.buffer.write(b'x' * 1048577)".into(),
             ],
-            cwd: std::env::temp_dir(),
+            cwd: std::env::temp_dir().display().to_string(),
             env: vec![],
             timeout_ms: 5_000,
         })
