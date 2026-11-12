@@ -124,7 +124,10 @@ fn collect_cs_files(dir: &Path, root: bool, out: &mut Vec<PathBuf>, cancel: &std
     if !root
         && entries
             .iter()
-            .any(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("csproj")))
+            .any(|p| {
+                p.symlink_metadata().is_ok_and(|meta| meta.file_type().is_file())
+                    && rc_core::workspace::is_project(p)
+            })
     {
         return; // nested project: it gets its own scan
     }
