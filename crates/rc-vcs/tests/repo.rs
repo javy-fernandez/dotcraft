@@ -370,6 +370,22 @@ async fn blame_matches_unsaved_buffer() {
 }
 
 #[tokio::test]
+async fn read_revisions_are_verified_before_blame_or_file_lookup() {
+    let t = TempRepo::new().await;
+    t.commit_files(&[("f.txt", "old\n")], "first");
+    t.commit_files(&[("f.txt", "new\n")], "second");
+
+    let older = Revision::Commit("HEAD~1".into());
+    assert_eq!(t.repo.show_file(&older, "f.txt").await.unwrap().unwrap().text(), "old\n");
+    assert_eq!(t.repo.blame("f.txt", None, Some("HEAD~1"), None).await.unwrap().commit_of(0).unwrap().summary, "first");
+
+    for input in ["--help", "--contents=/tmp/dotcraft-nonexistent", "--since=1970", "HEAD:f.txt"] {
+        assert!(matches!(t.repo.blame("f.txt", None, Some(input), None).await, Err(GitError::NotFound(_))), "blame accepted {input:?}");
+        assert!(t.repo.show_file(&Revision::Commit(input.into()), "f.txt").await.unwrap().is_none(), "cat-file accepted {input:?}");
+    }
+}
+
+#[tokio::test]
 async fn merge_conflicts_are_listed_and_resolved() {
     let t = TempRepo::new().await;
     t.commit_files(&[("c.txt", "base\n"), ("ok.txt", "x\n")], "base");

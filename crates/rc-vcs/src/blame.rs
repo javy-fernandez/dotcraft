@@ -125,7 +125,8 @@ impl Repository {
             cmd = cmd.args(["--contents", "-"]).stdin(text.as_bytes().to_vec());
         }
         if let Some(rev) = rev {
-            cmd = cmd.arg(rev);
+            // Use a verified hash so a caller-supplied revision cannot become a blame option.
+            cmd = cmd.arg(self.resolve(rev).await?);
         }
         let out = cmd.arg("--").arg(path).output().await?;
         Blame::parse(&out.stdout)
