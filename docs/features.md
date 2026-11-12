@@ -223,6 +223,7 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 - [x] Switch light and dark themes without closing a .NET solution. Validated with `Shop.sln` on Linux.
 - [x] Hide, reopen and move the docked Explorer while preserving its session state. Validated with `Shop.sln` on Linux.
 - [x] Use left and right tool-window stripes, including compact overflow scrolling. Validated with `Shop.sln` on Linux.
+- [x] Apply and cancel an Editor setting without closing a .NET solution. Validated with `Shop.sln` on Linux.
 
 ## Implementation progress
 
@@ -290,6 +291,7 @@ additional scope is pending.
 | HTTP parent environment resolution (J-06, partial) | [Original PR 195](https://github.com/javy-fernandez/dotcraft/pull/195) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/195/files) |
 | C# code folding (C-08) | [Original PR 196](https://github.com/javy-fernandez/dotcraft/pull/196) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/196/files) |
 | Tool-window stripes (A-03) | [Original PR 197](https://github.com/javy-fernandez/dotcraft/pull/197) | [Stripe evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/tool-stripes-dotnet-acceptance/docs/implementation/tool-stripes-shop.md) |
+| Settings apply and cancel (A-11) | [Original PR 198](https://github.com/javy-fernandez/dotcraft/pull/198) | [Settings evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/settings-dotnet-acceptance/docs/implementation/settings-shop-workspace.md) |
 
 ## Completion criteria
 

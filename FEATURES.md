@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 58 |
+| ✅ Verified | 59 |
 | 🚧 In progress | 28 |
-| 🟢 Existing | 55 |
+| 🟢 Existing | 54 |
 | 🔁 Reuse candidate | 20 |
 | ⬜ Backlog | 212 |
 | 🚫 Out of scope | 0 |
@@ -129,7 +129,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-08 | Recent projects | ✅ | [PR 176](https://github.com/javy-fernandez/dotcraft/pull/176) exposes full recent paths to accessibility; egui UI harness opens real `Shop.sln` from Welcome and verifies recent-history order on Linux. Missing-path removal, compact widths and other platforms remain untested. |
 | A-09 | Recent files | ✅ | [PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) keeps filtered selection valid and exposes file rows to accessibility; egui UI harness opens three real `Shop.sln` C# files and selects one with Enter on Linux. Missing files and native menus remain untested. |
 | A-10 | Recent locations | ✅ | [PR 171](https://github.com/javy-fernandez/dotcraft/pull/171) bounds dialog selection and exposes path/line to accessibility; egui UI harness navigates to line four of real `Shop.sln` C# source on Linux. Closed/deleted files and native menus remain untested. |
-| A-11 | Settings dialog | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-11 | Settings dialog | ✅ | [PR 198](https://github.com/javy-fernandez/dotcraft/pull/198) verifies applying a persisted Editor setting and cancelling a later draft while real six-project `Shop.sln` remains open in egui on Linux. Responsive layout has separate A-16 evidence; other settings pages and OS integrations remain untested. |
 | A-12 | Rider and Visual Studio keymaps | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-13 | Localization | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-14 | Status bar | ✅ | [PR 167](https://github.com/javy-fernandez/dotcraft/pull/167) exposes custom metadata controls to accessibility; egui harness verifies breadcrumb, UTF-8 BOM, LF, caret and Go to Line dispatch with real `Shop.sln` C# file on Linux. Compact widths and other platforms remain untested. |
