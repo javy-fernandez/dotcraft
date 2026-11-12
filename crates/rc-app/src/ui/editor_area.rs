@@ -24,7 +24,90 @@ enum TabCommand {
     Blame(usize),
     Diff(usize),
     Split(usize, bool),
+    Dock(usize, DockTarget),
     Float(usize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DockEdge { Left, Right, Top, Bottom }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DockTarget { Edge(DockEdge), Center }
+
+/// Guide positions and hit targets adapted from CrabCraft's editor docking map.
+/// Copyright (c) 2026 the CrabCraft contributors.
+/// Both scale together so the visible guides remain separate in narrow editors.
+fn docking_tiles(body: Rect) -> [(DockTarget, Rect); 5] {
+    let scale = ((body.width() - 8.0) / 168.0).min((body.height() - 8.0) / 136.0).clamp(0.0, 1.0);
+    let center = body.center();
+    let size = vec2(40.0, 32.0) * scale;
+    let dx = 64.0 * scale;
+    let dy = 52.0 * scale;
+    [
+        (DockTarget::Edge(DockEdge::Left), Rect::from_center_size(center - vec2(dx, 0.0), size)),
+        (DockTarget::Edge(DockEdge::Right), Rect::from_center_size(center + vec2(dx, 0.0), size)),
+        (DockTarget::Edge(DockEdge::Top), Rect::from_center_size(center - vec2(0.0, dy), size)),
+        (DockTarget::Edge(DockEdge::Bottom), Rect::from_center_size(center + vec2(0.0, dy), size)),
+        (DockTarget::Center, Rect::from_center_size(center, size)),
+    ]
+}
+
+fn docking_target(body: Rect, pointer: egui::Pos2) -> Option<DockTarget> {
+    if !body.contains(pointer) || body.width() < 120.0 || body.height() < 100.0 { return None; }
+    if let Some((target, _)) = docking_tiles(body).into_iter().find(|(_, tile)| tile.contains(pointer)) { return Some(target); }
+    let fx = (pointer.x - body.left()) / body.width();
+    let fy = (pointer.y - body.top()) / body.height();
+    [
+        (fx, DockEdge::Left),
+        (1.0 - fx, DockEdge::Right),
+        (fy, DockEdge::Top),
+        (1.0 - fy, DockEdge::Bottom),
+    ].into_iter().filter(|(distance, _)| *distance < 0.25)
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, edge)| DockTarget::Edge(edge))
+        .or(Some(DockTarget::Center))
+}
+
+fn docking_preview_rect(body: Rect, target: DockTarget) -> Rect {
+    let center = body.center();
+    match target {
+        DockTarget::Edge(DockEdge::Left) => Rect::from_min_max(body.min, pos2(center.x, body.bottom())),
+        DockTarget::Edge(DockEdge::Right) => Rect::from_min_max(pos2(center.x, body.top()), body.max),
+        DockTarget::Edge(DockEdge::Top) => Rect::from_min_max(body.min, pos2(body.right(), center.y)),
+        DockTarget::Edge(DockEdge::Bottom) => Rect::from_min_max(pos2(body.left(), center.y), body.max),
+        DockTarget::Center => body,
+    }
+}
+
+fn docking_preview(ui: &Ui, body: Rect, pointer: egui::Pos2, target: DockTarget, name: &str) {
+    let p = rc_kit::pal(ui);
+    let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("tab_docking_preview")));
+    let painter = painter.with_clip_rect(body.intersect(ui.clip_rect()));
+    painter.rect_filled(body, 4.0, egui::Color32::from_rgba_unmultiplied(130, 138, 150, 48));
+    let preview = docking_preview_rect(body, target);
+    painter.rect(preview.shrink(5.0), 5.0, p.accent.gamma_multiply(0.15), egui::Stroke::new(2.0, p.accent), egui::StrokeKind::Inside);
+    for (tile_target, tile) in docking_tiles(body) {
+        let active = tile_target == target;
+        painter.rect(tile, 5.0, if active { p.selection } else { p.main_bg }, egui::Stroke::new(1.0, if active { p.accent } else { p.muted }), egui::StrokeKind::Inside);
+        let glyph = tile.shrink2(tile.size() * vec2(0.2, 0.21875));
+        painter.rect_stroke(glyph, 1.0, egui::Stroke::new(1.0, p.text_muted), egui::StrokeKind::Inside);
+        let half = match tile_target {
+            DockTarget::Edge(DockEdge::Left) => Rect::from_min_max(glyph.min, pos2(glyph.center().x, glyph.bottom())),
+            DockTarget::Edge(DockEdge::Right) => Rect::from_min_max(pos2(glyph.center().x, glyph.top()), glyph.max),
+            DockTarget::Edge(DockEdge::Top) => Rect::from_min_max(glyph.min, pos2(glyph.right(), glyph.center().y)),
+            DockTarget::Edge(DockEdge::Bottom) => Rect::from_min_max(pos2(glyph.left(), glyph.center().y), glyph.max),
+            DockTarget::Center => glyph,
+        };
+        painter.rect_filled(half.shrink(1.0), 0.0, p.accent.gamma_multiply(if active { 0.9 } else { 0.45 }));
+    }
+    let text = painter.layout_no_wrap(name.to_owned(), theme::bold(12.0), p.text);
+    let viewport = ui.ctx().viewport_rect().shrink(8.0);
+    let size = (text.size() + vec2(28.0, 16.0)).min(viewport.size().max(vec2(0.0, 0.0)));
+    let position = (pointer + vec2(18.0, 20.0)).clamp(viewport.min, (viewport.max - size).max(viewport.min));
+    let card = Rect::from_min_size(position, size);
+    let card_painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("tab_docking_card")));
+    card_painter.rect(card, 5.0, p.main_bg, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside);
+    card_painter.with_clip_rect(card.shrink2(vec2(8.0, 4.0))).galley(card.min + vec2(14.0, 8.0), text, p.text);
 }
 
 pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
@@ -454,7 +537,7 @@ fn file_color(path: &std::path::Path) -> Option<egui::Color32> {
 }
 
 /// The tab strip: one scrolling row with a list of every tab (Rider's hidden tabs), or several
-/// rows (Settings › Editor). Tabs drag to reorder; returns the strip's bottom.
+/// rows (Settings › Editor). Tabs drag to reorder or dock beside the editor.
 fn tab_strip(app: &mut DotCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec<TabCommand>) -> f32 {
     let multirow = app.settings.tabs_multirow;
     let colors = app.settings.tab_colors;
@@ -521,10 +604,15 @@ fn tab_strip(app: &mut DotCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec<
         });
     }
     let bottom = if multirow { rects.iter().map(|r| r.bottom()).fold(full.top() + TABS_H - 5.0, f32::max) + 5.0 } else { full.top() + TABS_H };
-    // Dragging a tab: a marker where it would go, the move on release.
+    // A tab dropped on the strip reorders. A tab dropped on an unsplit editor docks
+    // beside its current file, using the same geometry shown by the guide map.
+    if ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+        ui.ctx().data_mut(|data| data.remove::<usize>(drag_id));
+    }
     if let Some(from) = ui.ctx().data(|d| d.get_temp::<usize>(drag_id)) {
         let pointer = ui.ctx().pointer_interact_pos();
-        let target = pointer.map(|p| {
+        let strip_pointer = pointer.filter(|p| p.x >= area.left() && p.x <= area.right() && p.y >= full.top() && p.y < bottom);
+        let target = strip_pointer.map(|p| {
             rects
                 .iter()
                 .enumerate()
@@ -533,6 +621,13 @@ fn tab_strip(app: &mut DotCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec<
                 .map(|(i, _)| i)
                 .unwrap_or(rects.len())
         });
+        let body = Rect::from_min_max(pos2(full.left(), bottom), full.max);
+        let can_dock = app.split.is_none() && app.docs.list.iter().enumerate().any(|(i, doc)| i != from && !app.floating.contains(&doc.editor.id));
+        let dock = if can_dock { pointer.and_then(|p| docking_target(body, p)) } else { None };
+        if let (Some(p), Some(destination)) = (pointer, dock) {
+            docking_preview(ui, body, p, destination, &app.docs.list[from].name());
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+        }
         if let Some(t) = target
             && let Some(r) = rects.get(t.min(rects.len().saturating_sub(1)))
         {
@@ -541,7 +636,9 @@ fn tab_strip(app: &mut DotCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec<
         }
         if !ui.input(|i| i.pointer.any_down()) {
             ui.ctx().data_mut(|d| d.remove::<usize>(drag_id));
-            if let Some(t) = target {
+            if let Some(destination) = dock {
+                commands.push(TabCommand::Dock(from, destination));
+            } else if let Some(t) = target {
                 let to = if t > from { t - 1 } else { t };
                 // Pinned tabs stay before the others.
                 let pinned = app.docs.list.iter().filter(|d| d.pinned).count();
@@ -704,6 +801,34 @@ fn run_tab_commands(app: &mut DotCraftApp, ui: &Ui, commands: Vec<TabCommand>) {
                     app.docs.activate(i);
                 }
             }
+            TabCommand::Dock(i, target) => {
+                match target {
+                    DockTarget::Center => {
+                        app.docs.activate(i);
+                        app.focus_editor = true;
+                        app.session_dirty = true;
+                    }
+                    DockTarget::Edge(edge) => {
+                        let dragged = app.docs.list[i].editor.id;
+                        let anchor = main_doc(app).filter(|&index| index != i).or_else(|| {
+                            app.docs.list.iter().enumerate()
+                                .find(|(index, doc)| *index != i && !app.floating.contains(&doc.editor.id))
+                                .map(|(index, _)| index)
+                        });
+                        if let Some(anchor) = anchor {
+                            let anchored = app.docs.list[anchor].editor.id;
+                            let (main, other, focus_second) = match edge {
+                                DockEdge::Left | DockEdge::Top => (dragged, anchored, false),
+                                DockEdge::Right | DockEdge::Bottom => (anchored, dragged, true),
+                            };
+                            app.split = Some(crate::app::Split { vertical: matches!(edge, DockEdge::Left | DockEdge::Right), main, other, focus_second, ratio: 0.5 });
+                            app.docs.activate(i);
+                            app.focus_editor = true;
+                            app.session_dirty = true;
+                        }
+                    }
+                }
+            }
             TabCommand::Float(i) => {
                 let id = app.docs.list[i].editor.id;
                 if !app.floating.contains(&id) {
@@ -838,6 +963,54 @@ mod tab_tests {
 #[cfg(test)]
 mod split_tests {
     use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn docking_guides_match_targets_and_previews_in_narrow_groups() {
+        use super::*;
+        for size in [vec2(180.0, 140.0), vec2(130.0, 110.0), vec2(900.0, 700.0)] {
+            let body = Rect::from_min_size(pos2(10.0, 20.0), size);
+            let tiles = docking_tiles(body);
+            for (index, (target, tile)) in tiles.iter().enumerate() {
+                assert!(body.contains_rect(*tile));
+                for (_, other) in tiles.iter().skip(index + 1) {
+                    assert!(!tile.intersects(*other), "guides overlap at {size:?}");
+                }
+                assert_eq!(docking_target(body, tile.center()), Some(*target), "guide and hit target differ at {size:?}");
+                let preview = docking_preview_rect(body, *target);
+                assert!(body.contains(preview.center()));
+                assert!(preview.width() > 0.0 && preview.height() > 0.0);
+            }
+            assert_eq!(docking_target(body, pos2(body.left() + 2.0, body.center().y)), Some(DockTarget::Edge(DockEdge::Left)));
+        }
+        assert_eq!(docking_target(Rect::from_min_size(pos2(0.0, 0.0), vec2(100.0, 80.0)), pos2(3.0, 3.0)), None);
+    }
+
+    #[test]
+    fn docking_tab_splits_dotnet_editor_on_each_side() {
+        use super::*;
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let fixtures = crate::screens::fixtures().join("Shop");
+        let order = fixtures.join("src/Shop.Core/Order.cs");
+        let program = fixtures.join("src/Shop.Cli/Program.cs");
+        for edge in [DockEdge::Left, DockEdge::Right, DockEdge::Top, DockEdge::Bottom] {
+            let mut app = crate::screens::test_app(home.path(), true);
+            app.open_file(&order);
+            app.open_file(&program);
+            let dragged = app.docs.list[0].editor.id;
+            let anchored = app.docs.list[1].editor.id;
+            let ctx = egui::Context::default();
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                run_tab_commands(&mut app, ui, vec![TabCommand::Dock(0, DockTarget::Edge(edge))]);
+            });
+            output.textures_delta.clear();
+            let split = app.split.unwrap();
+            assert_eq!(split.vertical, matches!(edge, DockEdge::Left | DockEdge::Right));
+            let first = matches!(edge, DockEdge::Left | DockEdge::Top);
+            assert_eq!((split.main, split.other, split.focus_second), if first { (dragged, anchored, false) } else { (anchored, dragged, true) });
+            assert_eq!(app.docs.active_doc().unwrap().editor.id, dragged);
+        }
+    }
 
     #[test]
     fn split_dotnet_editors_render_and_unsplit_in_both_orientations() {
