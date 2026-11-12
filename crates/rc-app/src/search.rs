@@ -1,13 +1,15 @@
 //! Search: the file index, Search Everywhere (files, types, symbols, actions, settings), the editor's
 //! find/replace bar and Find in Files.
 
-use rc_core::{Inbox, Waker};
+use rc_core::{Inbox, Runtime, Waker};
 use rc_editor::Action;
 use rc_kit::i18n::tr;
 use rc_lsp::Pending;
-use rc_search::{FileIndex, FindEvent, FindOptions, FindSummary, Finder, FileMatches, QueryOptions, ScanHandle};
+use rc_search::{FileIndex, FindEvent, FindOptions, FindSummary, Finder, FileMatches, Query, QueryOptions, ScanHandle};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SeTab {
@@ -209,11 +211,36 @@ pub struct FindInFiles {
     pub focus: bool,
     finder: Option<Finder>,
     inbox: Inbox<FindEvent>,
+    replace_inbox: Inbox<ReplaceDiskResult>,
+    replace_pending: Option<PendingReplace>,
     root: PathBuf,
+}
+
+struct ReplaceDiskResult {
+    files: usize,
+    errors: Vec<String>,
+    cancelled: bool,
+}
+
+struct PendingReplace {
+    cancel: Arc<AtomicBool>,
+    open: Vec<PathBuf>,
+    query: Query,
+    replacement: String,
+}
+
+pub struct ReplaceCompletion {
+    pub open: Vec<PathBuf>,
+    pub query: Query,
+    pub replacement: String,
+    pub files: usize,
+    pub errors: Vec<String>,
+    pub cancelled: bool,
 }
 
 impl FindInFiles {
     pub fn new(root: &Path, waker: Waker, query: String) -> Self {
+        let replace_inbox = Inbox::new(waker.clone());
         let inbox = Inbox::new(waker);
         let finder = Some(Finder::new(root, inbox.sender()));
         FindInFiles {
@@ -230,6 +257,8 @@ impl FindInFiles {
             focus: true,
             finder,
             inbox,
+            replace_inbox,
+            replace_pending: None,
             root: root.to_path_buf(),
         }
     }
@@ -287,6 +316,57 @@ impl FindInFiles {
 
     pub fn match_count(&self) -> usize {
         self.results.iter().map(|f| f.match_count()).sum()
+    }
+
+    pub fn replace_busy(&self) -> bool {
+        self.replace_pending.is_some()
+    }
+
+    pub fn cancel_replace(&self) {
+        if let Some(pending) = &self.replace_pending {
+            pending.cancel.store(true, Ordering::SeqCst);
+        }
+    }
+
+    /// Rewrite closed files on a blocking worker. Open documents are applied by the UI after
+    /// completion, using their then-current buffers so editor undo remains available.
+    pub fn begin_replace(&mut self, open: Vec<PathBuf>, closed: Vec<PathBuf>, query: Query, replacement: String) {
+        if self.replace_pending.is_some() {
+            return;
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker_cancel = cancel.clone();
+        let worker_query = query.clone();
+        let worker_replacement = replacement.clone();
+        let out = self.replace_inbox.sender();
+        self.replace_pending = Some(PendingReplace { cancel, open, query, replacement });
+        Runtime::handle().spawn_blocking(move || {
+            let mut files = 0;
+            let mut errors = Vec::new();
+            for path in closed {
+                if worker_cancel.load(Ordering::SeqCst) {
+                    break;
+                }
+                match rc_search::replace_in_file(&path, &worker_query, &worker_replacement) {
+                    Ok(n) if n > 0 => files += 1,
+                    Ok(_) => {}
+                    Err(error) => errors.push(format!("{}: {error}", path.display())),
+                }
+            }
+            out.send(ReplaceDiskResult { files, errors, cancelled: worker_cancel.load(Ordering::SeqCst) });
+        });
+    }
+
+    pub fn poll_replace(&mut self) -> Option<ReplaceCompletion> {
+        let result = self.replace_inbox.drain().into_iter().next()?;
+        let pending = self.replace_pending.take()?;
+        Some(ReplaceCompletion { open: pending.open, query: pending.query, replacement: pending.replacement, files: result.files, errors: result.errors, cancelled: result.cancelled })
+    }
+}
+
+impl Drop for FindInFiles {
+    fn drop(&mut self) {
+        self.cancel_replace();
     }
 }
 
