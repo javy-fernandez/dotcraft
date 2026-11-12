@@ -597,10 +597,9 @@ fn mouse_encoding(mode: TermMode) -> MouseEncoding {
     }
 }
 
-/// Text of viewport row `row` with the column of every char, for link detection.
-fn row_chars(st: &TermState, row: usize) -> (String, Vec<usize>) {
+/// Text of a grid line with the column of every char, for link detection.
+fn row_chars(st: &TermState, line: Line) -> (String, Vec<usize>) {
     let grid = st.term.grid();
-    let line = Line(row as i32 - grid.display_offset() as i32);
     let mut s = String::new();
     let mut cols = Vec::new();
     for col in 0..grid.columns() {
@@ -614,6 +613,16 @@ fn row_chars(st: &TermState, row: usize) -> (String, Vec<usize>) {
     (s, cols)
 }
 
+fn link_in_row(st: &TermState, row: usize, col: usize) -> Option<(usize, Range<usize>, Link)> {
+    let line = Line(row as i32 - st.term.grid().display_offset() as i32);
+    let (text, cols) = row_chars(st, line);
+    let idx = cols.iter().rposition(|&c| c <= col)?;
+    let (range, link) = links::link_at(&text, idx)?;
+    let start = cols[range.start];
+    let end = cols.get(range.end).copied().unwrap_or(cols[range.end - 1] + 1);
+    Some((row, start..end, link))
+}
+
 /// Link under viewport cell (`row`, `col`): an OSC 8 hyperlink or detected text.
 fn link_at_cell(st: &TermState, row: usize, col: usize) -> Option<(usize, Range<usize>, Link)> {
     let grid = st.term.grid();
@@ -624,11 +633,43 @@ fn link_at_cell(st: &TermState, row: usize, col: usize) -> Option<(usize, Range<
         let end = (col..grid.columns()).take_while(|&c| same(c)).last().unwrap_or(col) + 1;
         return Some((row, start..end, Link::Url(h.uri().to_string())));
     }
-    let (text, cols) = row_chars(st, row);
-    let idx = cols.iter().rposition(|&c| c <= col)?;
-    let (range, link) = links::link_at(&text, idx)?;
-    let start = cols[range.start];
-    let end = cols.get(range.end).copied().unwrap_or(cols[range.end - 1] + 1);
+    // WRAPLINE marks a visual row continued on the next row. Parse the complete
+    // logical line so a stack-frame path and its `:line N` suffix can span rows.
+    // Bound work done for every hover event, including very long terminal output.
+    const MAX_LINK_ROWS: i32 = 64;
+    let mut first = line;
+    while first > grid.topmost_line() && grid[first - 1i32][grid.last_column()].flags.contains(Flags::WRAPLINE) {
+        first -= 1i32;
+        if line.0 - first.0 >= MAX_LINK_ROWS {
+            return link_in_row(st, row, col);
+        }
+    }
+    let mut last = line;
+    while last < grid.bottommost_line() && grid[last][grid.last_column()].flags.contains(Flags::WRAPLINE) {
+        last += 1i32;
+        if last.0 - first.0 >= MAX_LINK_ROWS {
+            return link_in_row(st, row, col);
+        }
+    }
+    let mut text = String::new();
+    let mut clicked_start = 0;
+    let mut clicked_cols = Vec::new();
+    for number in first.0..=last.0 {
+        let current = Line(number);
+        let (part, cols) = row_chars(st, current);
+        if current == line {
+            clicked_start = text.chars().count();
+            clicked_cols = cols;
+        }
+        text.push_str(&part);
+    }
+    let idx = clicked_cols.iter().rposition(|&c| c <= col)?;
+    let clicked_end = clicked_start + clicked_cols.len();
+    let (range, link) = links::link_at(&text, clicked_start + idx)?;
+    let segment_start = range.start.max(clicked_start) - clicked_start;
+    let segment_end = range.end.min(clicked_end) - clicked_start;
+    let start = clicked_cols[segment_start];
+    let end = clicked_cols.get(segment_end).copied().unwrap_or(clicked_cols[segment_end - 1] + 1);
     Some((row, start..end, link))
 }
 
@@ -850,5 +891,60 @@ fn context_menu(response: &Response, session: &TermSession) {
             ui.close();
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rc_core::Waker;
+
+    #[test]
+    fn stack_frame_link_spans_soft_wrapped_grid_rows() {
+        let session = TermSession::output_only(24, 5, Waker::noop());
+        session.feed(b"at C.M() in /repo/Program.cs:line 42");
+        let state = session.lock();
+        let grid = state.term.grid();
+        assert!(grid[Line(0)][grid.last_column()].flags.contains(Flags::WRAPLINE));
+        let expected = Link::File { path: "/repo/Program.cs".into(), line: Some(42), column: None };
+
+        let first = link_at_cell(&state, 0, 14).unwrap();
+        assert_eq!(first.1, 12..24);
+        assert_eq!(first.2, expected);
+        let second = link_at_cell(&state, 1, 2).unwrap();
+        assert_eq!(second.1, 0..12);
+        assert_eq!(second.2, expected);
+        assert_eq!(link_at_cell(&state, 1, 10).unwrap().2, expected);
+    }
+
+    #[test]
+    fn hard_newline_does_not_join_stack_frame_path() {
+        let session = TermSession::output_only(24, 5, Waker::noop());
+        session.feed(b"at C.M() in /repo/Prog\r\nram.cs:line 42");
+        let state = session.lock();
+        let grid = state.term.grid();
+        assert!(!grid[Line(0)][grid.last_column()].flags.contains(Flags::WRAPLINE));
+        let full_frame = Link::File { path: "/repo/Program.cs".into(), line: Some(42), column: None };
+        assert_ne!(link_at_cell(&state, 0, 14).map(|found| found.2), Some(full_frame.clone()));
+        assert_ne!(link_at_cell(&state, 1, 2).map(|found| found.2), Some(full_frame));
+    }
+
+    #[test]
+    fn osc8_hyperlink_precedes_wrapped_stack_frame_link() {
+        let session = TermSession::output_only(24, 5, Waker::noop());
+        session.feed(b"at C.M() in \x1b]8;;https://example.com\x07/repo/Program.cs:line 42\x1b]8;;\x07");
+        let state = session.lock();
+        assert!(state.term.grid()[Line(0)][state.term.grid().last_column()].flags.contains(Flags::WRAPLINE));
+        assert_eq!(link_at_cell(&state, 0, 14).unwrap().2, Link::Url("https://example.com".into()));
+        assert_eq!(link_at_cell(&state, 1, 2).unwrap().2, Link::Url("https://example.com".into()));
+    }
+
+    #[test]
+    fn very_long_wrapped_lines_keep_local_links() {
+        let session = TermSession::output_only(10, 66, Waker::noop());
+        session.feed(format!("{}Foo.cs", "x".repeat(640)).as_bytes());
+        let state = session.lock();
+        assert!(state.term.grid()[Line(63)][state.term.grid().last_column()].flags.contains(Flags::WRAPLINE));
+        assert_eq!(link_at_cell(&state, 64, 2).unwrap().2, Link::File { path: "Foo.cs".into(), line: None, column: None });
+    }
 }
 
