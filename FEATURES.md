@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 89 |
+| ✅ Verified | 91 |
 | 🚧 In progress | 46 |
-| 🟢 Existing | 19 |
+| 🟢 Existing | 17 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -343,8 +343,8 @@ Source / reuse boundary: `crates/rc-dap; crates/rc-app/src/debugger.rs`.
 | G-02 | Line breakpoints | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
 | G-03 | Conditional breakpoints | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
 | G-04 | Step over | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
-| G-05 | Step into | 🟢 | Existing implementation; the live CLI/API regression does not explicitly validate Step Into. |
-| G-06 | Step out | 🟢 | Existing implementation; the live CLI/API regression does not explicitly validate Step Out. |
+| G-05 | Step into | ✅ | [PR 249](https://github.com/javy-fernandez/dotcraft/pull/249) records the existing real Shop.Cli debugger regression, rerun with .NET SDK 8.0.428/netcoredbg 3.2.0-1092 on Linux: DAP Step In moves from the DiscountFor call into that method at its opening brace. UI dispatch, async/framework code and other platforms remain untested. |
+| G-06 | Step out | ✅ | [PR 250](https://github.com/javy-fernandez/dotcraft/pull/250) records the same live Shop.Cli regression: DAP Step Out returns from DiscountFor to PriceCalculator.Calculate at the call line. UI dispatch, async methods, exception unwinding and other platforms remain untested. |
 | G-07 | Run to cursor | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
 | G-08 | Pause and resume | 🟢 | Resume is exercised live; explicit pause validation remains pending. |
 | G-09 | Thread list | 🟢 | Existing thread model participates in live debugging; explicit thread-list/UI validation remains pending. |
