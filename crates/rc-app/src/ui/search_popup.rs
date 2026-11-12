@@ -220,7 +220,11 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
                         if !shortcut.is_empty() {
                             ui.painter().text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, &shortcut, FontId::proportional(12.0), p.muted);
                         }
-                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+                        let accessible_label = match hit {
+                            Hit::File { rel, .. } => rel.as_str(),
+                            _ => name.as_str(),
+                        };
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, accessible_label));
                         if resp.clicked() {
                             choose = Some(hit.clone());
                         }
@@ -398,6 +402,27 @@ pub fn find_bar(app: &mut DotCraftApp, ui: &mut Ui, rect: Rect) -> f32 {
 mod tests {
     use super::*;
     use egui_kittest::{Harness, kittest::Queryable};
+
+    #[test]
+    fn file_search_disambiguates_and_opens_a_dotnet_source_file() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let fixtures = crate::screens::fixtures().join("Shop");
+        let solution = fixtures.join("Shop.sln");
+        let target = fixtures.join("src/Shop.Cli/Program.cs");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState {
+            ws: rc_core::Workspace::open(&solution).unwrap(),
+            solution: Some(rc_dotnet::Solution::load(&solution).unwrap()),
+        });
+        app.files.index = Some(rc_search::FileIndex::scan_blocking(&fixtures));
+        app.search_everywhere = Some(SearchEverywhere::new(SeTab::Files, "Program.cs".into()));
+        let mut harness = crate::screens::harness(app, egui::vec2(1000.0, 700.0));
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "src/Shop.Cli/Program.cs").click();
+        harness.run_steps(3);
+        assert_eq!(harness.state().docs.active_doc().unwrap().path, target);
+        assert!(harness.state().search_everywhere.is_none());
+    }
 
     #[test]
     fn settings_results_open_each_existing_page_from_search_everywhere() {
