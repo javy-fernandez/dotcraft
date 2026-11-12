@@ -2,6 +2,7 @@
 //! sides, tool windows and the editor as rounded islands, status bar at the bottom.
 
 pub mod debug_window;
+pub mod docker_services;
 pub mod database_window;
 pub mod dialogs;
 pub mod sdk_selection;
