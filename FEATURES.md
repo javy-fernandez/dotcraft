@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 86 |
+| ✅ Verified | 88 |
 | 🚧 In progress | 46 |
-| 🟢 Existing | 22 |
+| 🟢 Existing | 20 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -389,7 +389,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/test.rs; crates/rc-app/src/ui/run
 | H-03 | MSTest execution | ✅ | Live Shop runner executes 4 MSTest cases successfully; see live-dotnet.md. |
 | H-04 | Test discovery | ✅ | [PR 239](https://github.com/javy-fernandez/dotcraft/pull/239) verifies at least ten fully qualified xUnit, NUnit and MSTest cases from real Shop.sln with official .NET SDK 8.0.428 on Linux, retaining class, method, project and assembly paths. App tree rendering, cancellation, changed projects, other frameworks and platforms remain untested. |
 | H-05 | Test result tree | ✅ | [PR 242](https://github.com/javy-fernandez/dotcraft/pull/242) runs 13 passing xUnit, NUnit and MSTest cases from real Shop.sln with official .NET SDK 8.0.428 and verifies class rows and click selection in the native egui Tests window on Linux. Failed/skipped cases, rerun, keyboard navigation, large result sets and other platforms remain untested. |
-| H-06 | Test gutter icons | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| H-06 | Test gutter icons | ✅ | [PR 247](https://github.com/javy-fernandez/dotcraft/pull/247) verifies the native editor's Run Test icon on Shop's xUnit `SampleOrderGetsFreeShipping` changes to Test Passed after a live run with official .NET SDK 8.0.428 on Linux. Failed/skipped icons, parameterized cases, click-to-run, other frameworks' gutters and platforms remain untested. |
 | H-07 | TRX results | ✅ | Live Shop runner parses real TRX outcomes for all 13 fixture cases; see live-dotnet.md. |
 | H-08 | Test output | ✅ | [PR 243](https://github.com/javy-fernandez/dotcraft/pull/243) verifies streamed xUnit, NUnit and MSTest output plus DotCraft's 13-passed summary in the native Tests console for real Shop.sln with official .NET SDK 8.0.428 on Linux. Failure details, per-test stdout, large streams, cancellation and other platforms remain untested. |
 | H-09 | Named test sessions | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -459,7 +459,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
 | J-01 | Razor syntax parsing | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| J-02 | XML syntax parsing | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| J-02 | XML syntax parsing | ✅ | [PR 246](https://github.com/javy-fernandez/dotcraft/pull/246) verifies Shop.Core.csproj with UTF-8 BOM and Shop.Api.csproj parse without errors, tag/attribute/value paint in both EditorView themes, and TargetFramework typed edit/reparse on Linux. Schema, namespaces, entities and custom themes remain untested. |
 | J-03 | JSON syntax parsing | ✅ | [PR 240](https://github.com/javy-fernandez/dotcraft/pull/240) verifies Shop.Api appsettings JSON parse trees, key/value paint in both built-in EditorView themes, and typed edit/reparse on Linux; it removes duplicate key captures. JSON Schema, formatting, JSONC and custom themes remain untested. |
 | J-04 | Markdown preview | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | J-05 | HTTP client | 🚧 | PRs 13 and 15 verify basic HTTP execution, cancellation and inline variables; advanced HTTP integrations remain pending. |

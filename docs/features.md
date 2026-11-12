@@ -340,6 +340,8 @@ additional scope is pending.
 | Shop test output in native app (H-08) | [Original PR 243](https://github.com/javy-fernandez/dotcraft/pull/243) | [Test output evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-test-output-live/docs/implementation/shop-test-output.md) |
 | Shop file Structure hierarchy and empty state (D-09, partial) | [Original PR 244](https://github.com/javy-fernandez/dotcraft/pull/244) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/244/files) |
 | Linux Shop.Core compiler diagnostic links (F-06) | [Original PR 245](https://github.com/javy-fernandez/dotcraft/pull/245) | [Diagnostic evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/compiler-diagnostic-links-live/docs/implementation/compiler-diagnostic-links-linux.md) |
+| Shop .csproj XML syntax parsing and paint (J-02) | [Original PR 246](https://github.com/javy-fernandez/dotcraft/pull/246) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/246/files) |
+| Shop xUnit test gutter after live run (H-06) | [Original PR 247](https://github.com/javy-fernandez/dotcraft/pull/247) | [Gutter evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-test-gutter-live/docs/implementation/shop-test-gutter.md) |
 
 ## Completion criteria
 
