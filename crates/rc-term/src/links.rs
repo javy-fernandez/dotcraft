@@ -1,5 +1,6 @@
 //! Clickable links in terminal output: `http(s)://` URLs and file paths with an optional
-//! position (`path:line:col`, `path:line`, and MSBuild's `path(line,col)`).
+//! position (`path:line:col`, `path:line`, MSBuild's `path(line,col)`, and .NET stack
+//! traces' `path:line N`).
 
 use std::ops::Range;
 
@@ -19,6 +20,7 @@ fn is_boundary(c: char) -> bool {
 /// Every link of a line, with its range in chars.
 pub fn find_links(line: &str) -> Vec<(Range<usize>, Link)> {
     let chars: Vec<char> = line.chars().collect();
+    let stack_frame = dotnet_stack_frame(&chars);
     let mut out = Vec::new();
     let mut i = 0;
     while i < chars.len() {
@@ -31,10 +33,38 @@ pub fn find_links(line: &str) -> Vec<(Range<usize>, Link)> {
             i += 1;
         }
         if let Some((range, link)) = token_link(&chars[start..i]) {
-            out.push((start + range.start..start + range.end, link));
+            let range = start + range.start..start + range.end;
+            if stack_frame.as_ref().is_none_or(|(stack_range, _)| range.end <= stack_range.start || range.start >= stack_range.end) {
+                out.push((range, link));
+            }
         }
     }
+    if let Some((range, Some(link))) = stack_frame {
+        out.push((range, link));
+        out.sort_by_key(|(range, _)| range.start);
+    }
     out
+}
+
+/// A .NET frame ends in `in path:line N`; paths may contain spaces. An invalid
+/// line number still suppresses partial links within the path.
+fn dotnet_stack_frame(chars: &[char]) -> Option<(Range<usize>, Option<Link>)> {
+    let frame_start = chars.iter().position(|c| !c.is_whitespace())?;
+    if chars.get(frame_start..frame_start + 3)? != ['a', 't', ' '] {
+        return None;
+    }
+    let line_marker = chars[frame_start + 3..].windows(6).rposition(|w| w == [':', 'l', 'i', 'n', 'e', ' '])? + frame_start + 3;
+    let in_marker = chars[frame_start + 3..line_marker].windows(5).rposition(|w| w == [')', ' ', 'i', 'n', ' '])? + frame_start + 3;
+    let path_start = in_marker + 5;
+    let path: String = chars[path_start..line_marker].iter().collect();
+    if !looks_like_path(&path) {
+        return None;
+    }
+    let digits_start = line_marker + 6 + chars[line_marker + 6..].iter().take_while(|c| c.is_whitespace()).count();
+    let digits_end = digits_start + chars[digits_start..].iter().take_while(|c| c.is_ascii_digit()).count();
+    let valid_end = chars.get(digits_end).is_none_or(|c| c.is_whitespace() || matches!(c, ')' | ']' | ',' | ';' | '.'));
+    let line = if valid_end { chars[digits_start..digits_end].iter().collect::<String>().parse::<u32>().ok().filter(|line| *line > 0) } else { None };
+    Some((path_start..digits_end, line.map(|line| Link::File { path, line: Some(line), column: None })))
 }
 
 /// The link under char index `at`, if any.
@@ -172,6 +202,57 @@ mod tests {
         assert_eq!(proj, file("/repo/Shop/Shop.csproj", None, None));
         assert_eq!(link_at(r"C:\src\App\Foo.cs(3,1): error", 4).unwrap().1, file(r"C:\src\App\Foo.cs", Some(3), Some(1)));
         assert_eq!(link_at(r"C:\src\App\Foo.cs:7", 4).unwrap().1, file(r"C:\src\App\Foo.cs", Some(7), None));
+    }
+
+    #[test]
+    fn dotnet_stack_frames() {
+        let linux = "   at Shop.Calc.Divide() in /repo/tests/CalcTests.cs:line 42";
+        let (range, link) = link_at(linux, linux.find("CalcTests").unwrap()).unwrap();
+        assert_eq!(link, file("/repo/tests/CalcTests.cs", Some(42), None));
+        assert_eq!(&linux[range.clone()], "/repo/tests/CalcTests.cs:line 42");
+        assert_eq!(link_at(linux, range.end - 1).unwrap().1, link);
+
+        let windows = r"at Shop.Calc.Divide() in C:\src\Shop\CalcTests.cs:line 7";
+        let (range, link) = link_at(windows, windows.find("CalcTests").unwrap()).unwrap();
+        assert_eq!(link, file(r"C:\src\Shop\CalcTests.cs", Some(7), None));
+        assert_eq!(&windows[range], r"C:\src\Shop\CalcTests.cs:line 7");
+
+        let punctuated = "at C.M() in ./src/Program.cs:line 12), next";
+        let (range, link) = link_at(punctuated, punctuated.find("12").unwrap()).unwrap();
+        assert_eq!(link, file("./src/Program.cs", Some(12), None));
+        assert_eq!(&punctuated[range], "./src/Program.cs:line 12");
+
+        let spaces = "at Shop.C.M() in /repo/My Project/Program.cs:line 21";
+        let (range, link) = link_at(spaces, spaces.find("Project").unwrap()).unwrap();
+        assert_eq!(link, file("/repo/My Project/Program.cs", Some(21), None));
+        assert_eq!(&spaces[range], "/repo/My Project/Program.cs:line 21");
+
+        let repeated_in = "at C.M(string value = \" in /tmp\") in /repo/My in Progress/File.cs:line 7";
+        let (range, link) = link_at(repeated_in, repeated_in.find("File.cs").unwrap()).unwrap();
+        assert_eq!(link, file("/repo/My in Progress/File.cs", Some(7), None));
+        assert_eq!(&repeated_in[range], "/repo/My in Progress/File.cs:line 7");
+
+        let unc = r"at C.M() in \\server\share\Program.cs:line 8";
+        let (range, link) = link_at(unc, unc.find("share").unwrap()).unwrap();
+        assert_eq!(link, file(r"\\server\share\Program.cs", Some(8), None));
+        assert_eq!(&unc[range], r"\\server\share\Program.cs:line 8");
+
+        let unicode = "   at José.C.M() in /repo/Café.cs:line 9";
+        let line_col = unicode.chars().position(|c| c == '9').unwrap();
+        let (range, link) = link_at(unicode, line_col).unwrap();
+        assert_eq!(link, file("/repo/Café.cs", Some(9), None));
+        assert_eq!(unicode.chars().skip(range.start).take(range.len()).collect::<String>(), "/repo/Café.cs:line 9");
+    }
+
+    #[test]
+    fn malformed_dotnet_frames_are_not_links() {
+        assert!(find_links("at C.M() in Program.cs:line unknown").is_empty());
+        assert!(find_links("at C.M() in Program.cs:line 0").is_empty());
+        assert!(find_links("at C.M() in Program.cs:line 4294967296").is_empty());
+        assert!(find_links("at C.M() in Program.cs:line 42abc").is_empty());
+        assert!(find_links("at C.M() in /repo/My Project/Program.cs:line unknown").is_empty());
+        assert!(find_links("in Program.cs:line 42").is_empty());
+        assert!(find_links("at C.M() in https://example.com/F.cs:line 4").iter().all(|(_, link)| !matches!(link, Link::File { .. })));
     }
 
     #[test]

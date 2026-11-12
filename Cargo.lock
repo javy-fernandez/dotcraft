@@ -3951,6 +3951,7 @@ dependencies = [
  "rc-core",
  "rc-kit",
  "wgpu",
+ "winit",
 ]
 
 [[package]]
