@@ -19,6 +19,7 @@ pub mod global_json;
 pub mod endpoints;
 pub mod http_file;
 pub mod openapi;
+pub mod openapi_export;
 pub mod launch;
 pub mod msbuild;
 pub mod new_project;
