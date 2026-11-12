@@ -106,7 +106,13 @@ impl AssemblyExplorer {
         });
     }
 
-    pub fn open_package(&mut self, project: PathBuf, name: String, version: String) {
+    pub fn open_package(
+        &mut self,
+        project: PathBuf,
+        framework: Option<String>,
+        name: String,
+        version: String,
+    ) {
         self.visible = true;
         self.path = None;
         self.types.clear();
@@ -117,8 +123,8 @@ impl AssemblyExplorer {
         self.busy = true;
         let generation = self.generation.fetch_add(1, Ordering::Relaxed) + 1;
         let out = self.inbox.sender();
-        std::thread::spawn(
-            move || match find_package_assembly(&project, &name, &version) {
+        std::thread::spawn(move || {
+            match find_package_assembly(&project, framework.as_deref(), &name, &version) {
                 Some(path) => {
                     out.send(ResultEvent::Package(generation, path));
                 }
@@ -131,8 +137,8 @@ impl AssemblyExplorer {
                         ),
                     ));
                 }
-            },
-        );
+            }
+        });
     }
 
     pub fn list_framework_assemblies(&mut self) {
@@ -285,17 +291,23 @@ fn framework_assemblies_in(root: &Path) -> Vec<PathBuf> {
     assemblies
 }
 
-fn find_package_assembly(project: &Path, name: &str, version: &str) -> Option<PathBuf> {
+fn find_package_assembly(
+    project: &Path,
+    framework: Option<&str>,
+    name: &str,
+    version: &str,
+) -> Option<PathBuf> {
     let root = std::env::var_os("NUGET_PACKAGES")
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|home| home.join(".nuget").join("packages")))?;
-    find_package_assembly_from_assets(project, &root, name, version)
-        .or_else(|| find_package_assembly_in(&root, name, version))
+    find_package_assembly_from_assets(project, &root, framework, name, version)
+        .or_else(|| find_package_assembly_in(&root, framework, name, version))
 }
 
 fn find_package_assembly_from_assets(
     project: &Path,
     cache: &Path,
+    framework: Option<&str>,
     name: &str,
     version: &str,
 ) -> Option<PathBuf> {
@@ -306,21 +318,11 @@ fn find_package_assembly_from_assets(
     let package_root = cache
         .join(name.to_ascii_lowercase())
         .join(version.to_ascii_lowercase());
-    let frameworks = rc_dotnet::ProjectInfo::load(project)
-        .ok()
-        .map(|info| info.target_frameworks)
-        .unwrap_or_default();
     let mut target_names: Vec<_> = targets.keys().collect();
-    target_names.sort_by_key(|target| {
-        if frameworks
-            .iter()
-            .any(|framework| *target == framework || target.starts_with(&format!("{framework}/")))
-        {
-            0
-        } else {
-            1
-        }
-    });
+    if let Some(framework) = framework {
+        target_names
+            .retain(|target| *target == framework || target.starts_with(&format!("{framework}/")));
+    }
     for target_name in target_names {
         let Some(packages) = targets[target_name].as_object() else {
             continue;
@@ -356,7 +358,12 @@ fn find_package_assembly_from_assets(
     None
 }
 
-fn find_package_assembly_in(root: &Path, name: &str, version: &str) -> Option<PathBuf> {
+fn find_package_assembly_in(
+    root: &Path,
+    framework: Option<&str>,
+    name: &str,
+    version: &str,
+) -> Option<PathBuf> {
     let package = root
         .join(name.to_ascii_lowercase())
         .join(version.to_ascii_lowercase());
@@ -366,8 +373,13 @@ fn find_package_assembly_in(root: &Path, name: &str, version: &str) -> Option<Pa
             continue;
         };
         let mut paths = Vec::new();
-        for framework in frameworks.flatten() {
-            let Ok(files) = std::fs::read_dir(framework.path()) else {
+        for framework_dir in frameworks.flatten() {
+            if let Some(selected) = framework {
+                if framework_dir.file_name().to_string_lossy() != selected {
+                    continue;
+                }
+            }
+            let Ok(files) = std::fs::read_dir(framework_dir.path()) else {
                 continue;
             };
             for file in files.flatten() {
@@ -560,7 +572,7 @@ mod tests {
         std::fs::create_dir_all(dll.parent().unwrap()).unwrap();
         std::fs::write(&dll, []).unwrap();
         assert_eq!(
-            find_package_assembly_in(root.path(), "Newtonsoft.Json", "13.0.3"),
+            find_package_assembly_in(root.path(), None, "Newtonsoft.Json", "13.0.3"),
             Some(dll)
         );
     }
@@ -571,14 +583,27 @@ mod tests {
         let project = root.path().join("App/App.csproj");
         let cache = root.path().join("packages");
         let assembly = cache.join("example/1.0.0/lib/net10.0/Example.dll");
+        let older = cache.join("example/1.0.0/lib/net8.0/Example.dll");
         std::fs::create_dir_all(assembly.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(older.parent().unwrap()).unwrap();
         std::fs::create_dir_all(project.parent().unwrap().join("obj")).unwrap();
         std::fs::write(&project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>").unwrap();
         std::fs::write(&assembly, []).unwrap();
-        std::fs::write(project.parent().unwrap().join("obj/project.assets.json"), r#"{"targets":{"net10.0":{"Example/1.0.0":{"runtime":{"lib/net10.0/Example.dll":{}},"compile":{"ref/net10.0/Example.dll":{}}}}}}"#).unwrap();
+        std::fs::write(&older, []).unwrap();
+        std::fs::write(project.parent().unwrap().join("obj/project.assets.json"), r#"{"targets":{"net8.0":{"Example/1.0.0":{"runtime":{"lib/net8.0/Example.dll":{}}}},"net10.0":{"Example/1.0.0":{"runtime":{"lib/net10.0/Example.dll":{}},"compile":{"ref/net10.0/Example.dll":{}}}}}}"#).unwrap();
         assert_eq!(
-            find_package_assembly_from_assets(&project, &cache, "Example", "1.0.0"),
+            find_package_assembly_from_assets(
+                &project,
+                &cache,
+                Some("net10.0"),
+                "Example",
+                "1.0.0"
+            ),
             Some(assembly)
+        );
+        assert_eq!(
+            find_package_assembly_from_assets(&project, &cache, Some("net8.0"), "Example", "1.0.0"),
+            Some(older)
         );
     }
 

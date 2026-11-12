@@ -4,10 +4,10 @@ The Tools menu can open a managed `.dll` or `.exe`. Package nodes in Solution Ex
 
 `ilspycmd` must be installed separately (`dotnet tool install --global ilspycmd`) and available on `PATH`, in `~/.dotnet/tools`, or via `DOTCRAFT_ILSPYCMD`. It is an [MIT-licensed](https://github.com/icsharpcode/ILSpy/blob/master/LICENSE) external tool; no ILSpy or CrabCraft source or assets are included in DotCraft. The command-line options are from the [official ILSpy CLI documentation](https://github.com/icsharpcode/ILSpy/blob/master/ICSharpCode.ILSpyCmd/README.md).
 
-Package resolution uses `NUGET_PACKAGES` or the default user cache. When `obj/project.assets.json` exists, the selected runtime or compile asset follows restore's target entry; otherwise DotCraft selects a matching DLL under `lib` or `ref`. Reference-pack discovery uses the installed `dotnet` host's `packs` directory. Multi-target projects do not yet expose an explicit target-framework selector. Member selection narrows C# and method IL; IL for properties and fields remains at type scope. These are remaining limits of issue #142.
+Package resolution uses `NUGET_PACKAGES` or the default user cache. When `obj/project.assets.json` exists, the selected runtime or compile asset follows restore's target entry; multi-target projects offer a framework choice in the package context menu. Otherwise DotCraft selects a matching DLL under `lib` or `ref`. Reference-pack discovery uses the installed `dotnet` host's `packs` directory. Member selection narrows C# and method IL; IL for properties and fields remains at type scope. This is a remaining limit of issue #142.
 
 ## Validation
 
-- Seven focused app tests cover parsing, C#/IL member browsing, package-cache and restored-asset resolution, reference-pack discovery, and a live `ilspycmd` run against `Newtonsoft.Json.dll` from the .NET 10 SDK.
+- Seven focused app tests cover parsing, C#/IL member browsing, package-cache and multi-target restored-asset resolution, reference-pack discovery, and a live `ilspycmd` run against `Newtonsoft.Json.dll` from the .NET 10 SDK.
 - The live test listed types and produced both decompiled C# and IL in an isolated `/tmp` tool installation.
 - `git diff --check` passed. No desktop screenshot was captured.
