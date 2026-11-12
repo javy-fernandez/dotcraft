@@ -174,6 +174,8 @@ fn debugs_the_cli_breakpoints_stack_variables_watches_steps_and_output() {
     let info = r.s.stop_info().unwrap().clone();
     assert_eq!(info.reason, StopReason::Breakpoint);
     assert_eq!(info.breakpoints, vec![(calc.clone(), loop_line)]);
+    r.until("the stopped thread list", Duration::from_secs(20), |s| s.threads().iter().any(|thread| thread.id == info.thread_id));
+    assert!(r.s.threads().iter().all(|thread| thread.id > 0 && !thread.name.is_empty()), "threads: {:?}", r.s.threads());
 
     // Stack with files and lines.
     let frames = r.s.frames(info.thread_id).unwrap().frames.clone();
