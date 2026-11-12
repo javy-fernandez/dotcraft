@@ -103,12 +103,18 @@ pub async fn get_properties(dotnet: &Dotnet, project: &Path, names: &[&str], glo
 /// `TargetPath` and friends are the inner build's values.
 pub async fn evaluate(dotnet: &Dotnet, project: &Path, configuration: &str, target_framework: Option<&str>) -> anyhow::Result<ProjectProperties> {
     let mut global = vec![("Configuration", configuration)];
-    if let Some(tf) = target_framework {
-        global.push(("TargetFramework", tf));
-    }
     let mut props = ProjectProperties::from_values(get_properties(dotnet, project, PROJECT_PROPERTIES, &global).await?);
-    if target_framework.is_none() && props.raw.get("TargetFramework").is_none_or(|v| v.trim().is_empty()) && !props.target_framework.is_empty() {
-        let tf = props.target_framework.clone();
+    if let Some(tf) = target_framework {
+        anyhow::ensure!(
+            props.target_frameworks.iter().any(|declared| declared == tf),
+            "Target framework {tf} is not declared by {}",
+            project.display()
+        );
+    }
+    let outer_build = props.raw.get("TargetFramework").is_none_or(|v| v.trim().is_empty());
+    let selected = target_framework.or_else(|| (outer_build && !props.target_framework.is_empty()).then_some(props.target_framework.as_str()));
+    if let Some(tf) = selected {
+        let tf = tf.to_string();
         let all = props.target_frameworks.clone();
         global.push(("TargetFramework", &tf));
         props = ProjectProperties::from_values(get_properties(dotnet, project, PROJECT_PROPERTIES, &global).await?);
