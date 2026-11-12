@@ -31,6 +31,7 @@ mod insight_tests;
 mod package_insight_tests;
 #[cfg(test)]
 mod appsettings_insight_tests;
+mod reload_acceptance_tests;
 #[cfg(test)]
 mod screens;
 mod docs;

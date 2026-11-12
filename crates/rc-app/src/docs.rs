@@ -433,12 +433,17 @@ impl Docs {
     /// File › Reload from Disk: an unmodified document loads the file again; one with unsaved
     /// edits shows the conflict banner so the user picks which version to keep.
     pub fn reload_from_disk(&mut self, i: usize) -> Result<(), String> {
-        let doc = &mut self.list[i];
-        let (text, bom, mtime) = read_text(&doc.path)?;
-        if doc.is_modified() {
-            doc.conflict = true;
+        if self.list[i].is_modified() {
+            self.list[i].conflict = true;
             return Ok(());
         }
+        self.discard_and_reload(i)
+    }
+
+    /// Loads the disk version after the user resolves a conflict in its favor.
+    pub fn discard_and_reload(&mut self, i: usize) -> Result<(), String> {
+        let doc = &mut self.list[i];
+        let (text, bom, mtime) = read_text(&doc.path)?;
         doc.reload(&text);
         doc.bom = bom;
         doc.mtime = mtime;
