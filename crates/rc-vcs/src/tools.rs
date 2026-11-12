@@ -1,5 +1,5 @@
 //! Explicit repository maintenance operations. Call from a worker, never the UI thread.
-use crate::{Git, GitError, Repository, Result};
+use crate::{CancelToken, Git, GitError, Repository, Result};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -8,6 +8,47 @@ pub struct Worktree {
     pub branch: Option<String>,
     pub head: String,
     pub locked: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubmoduleState {
+    AtRecordedCommit,
+    Uninitialized,
+    DifferentCommit,
+    Conflict,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Submodule {
+    pub path: PathBuf,
+    pub commit: String,
+    pub state: SubmoduleState,
+    pub description: Option<String>,
+}
+
+fn parse_submodule_status(text: &str) -> Result<Vec<Submodule>> {
+    text.lines().map(|line| {
+        let (marker, rest) = line.get(..1).zip(line.get(1..)).ok_or_else(|| GitError::Parse("Empty submodule status row".into()))?;
+        let state = match marker {
+            " " => SubmoduleState::AtRecordedCommit,
+            "-" => SubmoduleState::Uninitialized,
+            "+" => SubmoduleState::DifferentCommit,
+            "U" => SubmoduleState::Conflict,
+            _ => return Err(GitError::Parse(format!("Unexpected submodule status: {line}"))),
+        };
+        let (commit, path) = rest.split_once(' ').ok_or_else(|| GitError::Parse(format!("Incomplete submodule status: {line}")))?;
+        if !matches!(commit.len(), 40 | 64) || !commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(GitError::Parse(format!("Invalid submodule commit: {line}")));
+        }
+        let (path, description) = match path.strip_suffix(')').and_then(|path| path.rsplit_once(" (")) {
+            Some((path, description)) => (path, Some(description.to_string())),
+            None => (path, None),
+        };
+        if path.is_empty() || Path::new(path).is_absolute() || path.split('/').any(|part| part == "..") {
+            return Err(GitError::Parse(format!("Invalid submodule path: {line}")));
+        }
+        Ok(Submodule { path: path.into(), commit: commit.to_string(), state, description })
+    }).collect()
 }
 
 fn input(value: &str) -> Result<&str> {
@@ -128,9 +169,19 @@ impl Repository {
         self.cmd().args(["submodule", "status", "--recursive"]).text().await
     }
 
+    /// Recursive status with Git's recorded commit and checkout state separated for callers.
+    pub async fn submodules(&self) -> Result<Vec<Submodule>> {
+        parse_submodule_status(&self.submodule_status().await?)
+    }
+
     /// Explicitly initialize/update the recorded commits; never enable --remote or file transport.
     pub async fn update_submodules(&self) -> Result<()> {
-        self.cmd().args(["submodule", "update", "--init", "--recursive"]).output().await.map(drop)
+        self.update_submodules_cancellable(None).await
+    }
+
+    /// Cancel an in-flight recursive update, including Git's spawned helper processes.
+    pub async fn update_submodules_cancellable(&self, cancel: Option<&CancelToken>) -> Result<()> {
+        self.cmd().args(["submodule", "update", "--init", "--recursive"]).cancel(cancel).output().await.map(drop)
     }
 
     pub async fn lfs_status(&self) -> Result<String> {
@@ -150,5 +201,30 @@ impl Repository {
     pub async fn lfs_pull(&self) -> Result<()> {
         self.cmd().args(["lfs", "version"]).output().await?;
         self.cmd().args(["lfs", "pull"]).output().await.map(drop)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_status_markers_and_paths_with_spaces() {
+        let hash = "a".repeat(40);
+        let rows = format!(" {hash} modules/shared library (heads/main)\n-{hash} modules/new library\n+{hash} modules/updated (new commits)\nU{hash} modules/conflicted\n");
+        let modules = parse_submodule_status(&rows).unwrap();
+        assert_eq!(modules.iter().map(|module| module.state).collect::<Vec<_>>(), [SubmoduleState::AtRecordedCommit, SubmoduleState::Uninitialized, SubmoduleState::DifferentCommit, SubmoduleState::Conflict]);
+        assert_eq!(modules[0].path, Path::new("modules/shared library"));
+        assert_eq!(modules[0].description.as_deref(), Some("heads/main"));
+        assert_eq!(modules[1].path, Path::new("modules/new library"));
+        assert_eq!(modules[1].description, None);
+    }
+
+    #[test]
+    fn rejects_malformed_rows() {
+        for row in ["", "?abcd path", "-abcd path", " abcdef ../outside", " abcdef /outside"] {
+            let text = if row.is_empty() { "\n" } else { row };
+            assert!(parse_submodule_status(text).is_err(), "{row:?}");
+        }
     }
 }
