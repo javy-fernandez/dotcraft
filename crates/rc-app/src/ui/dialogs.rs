@@ -1440,6 +1440,35 @@ mod tests {
         assert!(s.starts_with("namespace Shop.Core.Models;"), "{s}");
         assert!(s.contains("public class Order"));
     }
+
+    #[test]
+    fn shop_file_and_interface_templates_create_and_open_their_files() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        let root = project.path().join("Shop.Core");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::copy(crate::screens::fixtures().join("Shop/src/Shop.Core/Shop.Core.csproj"), root.join("Shop.Core.csproj")).unwrap();
+        let dir = root.join("Orders");
+        std::fs::create_dir(&dir).unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+        let mut harness = crate::screens::harness(app, vec2(1000.0, 700.0));
+        for (kind, name, relative, expected) in [
+            (crate::item_templates::ItemKind::File, "docs/notes.md", "docs/notes.md", ""),
+            (crate::item_templates::ItemKind::Interface, "IClock", "IClock.cs", "namespace Shop.Core.Orders;\n\npublic interface IClock"),
+        ] {
+            harness.state_mut().dialog = Some(Dialog::NewFile { dir: dir.clone(), name: name.into(), kind, error: None });
+            harness.run_steps(2);
+            harness.get_by_label(tr("Create")).click();
+            harness.run_steps(2);
+            let path = dir.join(relative);
+            let content = std::fs::read_to_string(&path).unwrap();
+            assert!(content.contains(expected), "{path:?}: {content}");
+            assert_eq!(harness.state().docs.active_doc().unwrap().path, path);
+        }
+    }
 }
 
 #[cfg(test)]
