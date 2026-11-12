@@ -337,6 +337,7 @@ additional scope is pending.
 | Shop.Api JSON syntax parsing and paint (J-03) | [Original PR 240](https://github.com/javy-fernandez/dotcraft/pull/240) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/240/files) |
 | Linux Shop.Core build cancellation (F-04) | [Original PR 241](https://github.com/javy-fernandez/dotcraft/pull/241) | [Cancel evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-build-cancel-live/docs/implementation/build-cancel-linux.md) |
 | Shop test result tree in native app (H-05) | [Original PR 242](https://github.com/javy-fernandez/dotcraft/pull/242) | [Test tree evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-test-result-tree-live/docs/implementation/shop-test-result-tree.md) |
+| Shop test output in native app (H-08) | [Original PR 243](https://github.com/javy-fernandez/dotcraft/pull/243) | [Test output evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-test-output-live/docs/implementation/shop-test-output.md) |
 
 ## Completion criteria
 

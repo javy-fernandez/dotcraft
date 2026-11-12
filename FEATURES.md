@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 84 |
+| ✅ Verified | 85 |
 | 🚧 In progress | 45 |
-| 🟢 Existing | 25 |
+| 🟢 Existing | 24 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -391,7 +391,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/test.rs; crates/rc-app/src/ui/run
 | H-05 | Test result tree | ✅ | [PR 242](https://github.com/javy-fernandez/dotcraft/pull/242) runs 13 passing xUnit, NUnit and MSTest cases from real Shop.sln with official .NET SDK 8.0.428 and verifies class rows and click selection in the native egui Tests window on Linux. Failed/skipped cases, rerun, keyboard navigation, large result sets and other platforms remain untested. |
 | H-06 | Test gutter icons | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | H-07 | TRX results | ✅ | Live Shop runner parses real TRX outcomes for all 13 fixture cases; see live-dotnet.md. |
-| H-08 | Test output | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| H-08 | Test output | ✅ | [PR 243](https://github.com/javy-fernandez/dotcraft/pull/243) verifies streamed xUnit, NUnit and MSTest output plus DotCraft's 13-passed summary in the native Tests console for real Shop.sln with official .NET SDK 8.0.428 on Linux. Failure details, per-test stdout, large streams, cancellation and other platforms remain untested. |
 | H-09 | Named test sessions | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-10 | Test grouping and filtering | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-11 | Rerun failed tests | ⬜ | Implement with integration and UI acceptance evidence. |
