@@ -33,6 +33,8 @@ pub struct Settings {
     pub editor_line_spacing: f32,
     pub ui_zoom: f32,
     pub show_inlay_hints: bool,
+    pub spellcheck_enabled: bool,
+    pub spelling_language: String,
     pub show_indent_guides: bool,
     pub right_margin: usize,
     /// Save files when the window loses focus or when switching tabs (IntelliJ autosave).
@@ -88,6 +90,8 @@ impl Default for Settings {
             editor_line_spacing: 1.2,
             ui_zoom: 1.0,
             show_inlay_hints: true,
+            spellcheck_enabled: false,
+            spelling_language: "en_US".into(),
             show_indent_guides: true,
             right_margin: 120,
             autosave: true,

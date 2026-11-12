@@ -47,6 +47,7 @@ futures-util = { version = "0.3", default-features = false }
 roxmltree = "0.20"
 keyring = { version = "3.6", default-features = false }
 sysinfo = { version = "0.40.1", default-features = false, features = ["system"] }
+spellbook = "0.4.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3.6", default-features = false, features = ["apple-native"] }

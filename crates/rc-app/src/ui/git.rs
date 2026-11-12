@@ -228,6 +228,40 @@ pub fn commit_window(app: &mut DotCraftApp, ui: &mut Ui) {
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap().shrink2(vec2(10.0, 4.0))));
     crate::work_items::sync(app);
     crate::ui::work_item_links::message_editor(&mut child, &mut app.vcs.message, &app.vcs.work_items, tr("Commit Message"));
+    if app.settings.spellcheck_enabled {
+        let mut correction = None;
+        let mut add_word = None;
+        for mark in app.commit_spelling.iter().take(6) {
+            child.horizontal(|ui| {
+                ui.label(egui::RichText::new(&mark.word).color(ui.visuals().warn_fg_color));
+                ui.menu_button(tr("Spelling suggestions"), |ui| {
+                    for word in &mark.suggestions {
+                        if ui.button(word).clicked() {
+                            correction = Some((mark.start, mark.end, word.clone()));
+                            ui.close();
+                        }
+                    }
+                    ui.separator();
+                    if ui.button(tr("Add to user dictionary")).clicked() {
+                        add_word = Some((mark.word.clone(), false));
+                        ui.close();
+                    }
+                    if app.workspace.is_some() && ui.button(tr("Add to project dictionary")).clicked() {
+                        add_word = Some((mark.word.clone(), true));
+                        ui.close();
+                    }
+                });
+            });
+        }
+        if let Some((start, end, replacement)) = correction {
+            let from = app.vcs.message.char_indices().nth(start).map_or(app.vcs.message.len(), |(byte, _)| byte);
+            let to = app.vcs.message.char_indices().nth(end).map_or(app.vcs.message.len(), |(byte, _)| byte);
+            if from <= to { app.vcs.message.replace_range(from..to, &replacement); }
+        }
+        if let Some((word, project_scope)) = add_word {
+            app.spelling.add_word(&app.settings.spelling_language, &word, app.workspace.as_ref().map(|w| w.ws.root.clone()), project_scope);
+        }
+    }
     child.horizontal(|ui| {
         ui.checkbox(&mut app.vcs.amend, tr("Amend"));
     });

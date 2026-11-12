@@ -367,10 +367,15 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
 fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
     use crate::native_menu::{MenuCommand, forward_edit};
     let csharp = app.docs.active_doc().is_some_and(crate::insight::is_csharp);
+    let spelling = app.docs.active_doc().and_then(|doc| {
+        let caret = doc.editor.caret();
+        doc.editor.spelling.iter().find(|mark| mark.start <= caret && caret <= mark.end).cloned()
+    });
     let shortcut = |app: &DotCraftApp, a: Action| app.keymap.shortcut_text(a);
     let mut actions = Vec::new();
     let mut edit = None;
     let mut usings = false;
+    let mut spelling_action = None;
     resp.context_menu(|ui| {
         ui.set_min_width(260.0);
         ui.set_max_width(320.0);
@@ -381,6 +386,24 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
             }
         };
         if csharp {
+            if let Some(mark) = &spelling {
+                ui.label(format!("{}: {}", tr("Spelling"), mark.word));
+                for suggestion in &mark.suggestions {
+                    if theme::menu_item(ui, None, suggestion, false).clicked() {
+                        spelling_action = Some((false, false, suggestion.clone()));
+                        ui.close();
+                    }
+                }
+                if theme::menu_item(ui, None, tr("Add to user dictionary"), false).clicked() {
+                    spelling_action = Some((true, false, mark.word.clone()));
+                    ui.close();
+                }
+                if app.workspace.is_some() && theme::menu_item(ui, None, tr("Add to project dictionary"), false).clicked() {
+                    spelling_action = Some((true, true, mark.word.clone()));
+                    ui.close();
+                }
+                ui.separator();
+            }
             entry(ui, Some(ico::BULB), tr("Show Context Actions"), Action::ShowIntentions);
             entry(ui, None, tr("Go to Declaration"), Action::GotoDeclaration);
             entry(ui, None, tr("Go to Implementation"), Action::GotoImplementation);
@@ -410,6 +433,15 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
         }
         entry(ui, None, tr("Toggle Bookmark with Mnemonic"), Action::ToggleBookmarkMnemonic);
     });
+    if let Some((add, project_scope, value)) = spelling_action
+        && let Some(mark) = spelling
+    {
+        if add {
+            app.spelling.add_word(&app.settings.spelling_language, &value, app.workspace.as_ref().map(|w| w.ws.root.clone()), project_scope);
+        } else if let Some(doc) = app.docs.active_doc_mut() {
+            doc.editor.replace(mark.start, mark.end, &value);
+        }
+    }
     if let Some(cmd) = edit {
         forward_edit(&resp.ctx, cmd);
     }
