@@ -492,6 +492,53 @@ mod tests {
     }
 
     #[test]
+    fn go_to_type_opens_shop_order_at_its_declaration() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let shop = crate::screens::fixtures().join("Shop");
+        let order = shop.join("src/Shop.Core/Order.cs");
+        let order_line = shop.join("src/Shop.Core/OrderLine.cs");
+        let source = std::fs::read_to_string(&order).unwrap();
+        let order_line_source = std::fs::read_to_string(&order_line).unwrap();
+        let declaration_line = source.lines().position(|line| line.contains("public sealed class Order")).unwrap();
+        let declaration_col = source.lines().nth(declaration_line).unwrap().find("Order").unwrap();
+        let record_line = order_line_source.lines().position(|line| line.contains("public sealed record OrderLine")).unwrap();
+        let record_col = order_line_source.lines().nth(record_line).unwrap().find("OrderLine").unwrap();
+
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&shop.join("Shop.sln"));
+        let mut search = SearchEverywhere::new(SeTab::Types, "Order".into());
+        search.symbols = vec![
+            crate::search::SymbolHit { name: "Order".into(), container: "Shop.Core".into(), kind: rc_lsp::lsp_types::SymbolKind::CLASS, path: order.clone(), line: declaration_line, col: declaration_col },
+            crate::search::SymbolHit { name: "OrderLine".into(), container: "Shop.Core".into(), kind: rc_lsp::lsp_types::SymbolKind::CLASS, path: order_line, line: record_line, col: record_col },
+            crate::search::SymbolHit { name: "Add".into(), container: "Order".into(), kind: rc_lsp::lsp_types::SymbolKind::METHOD, path: order.clone(), line: 0, col: 0 },
+        ];
+        app.search_everywhere = Some(search);
+
+        let mut first = true;
+        let mut harness = Harness::builder().with_size(vec2(900.0, 600.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            show(app, ui.ctx());
+        }, app);
+        harness.run_steps(3);
+        harness.get_by_label("OrderLine");
+        assert!(harness.query_by_label("Add").is_none(), "members must not appear in Go to Type");
+        harness.get_by_label("Order").click();
+        harness.run_steps(2);
+
+        let app = harness.state();
+        assert!(app.search_everywhere.is_none());
+        let doc = app.docs.active_doc().unwrap();
+        assert_eq!(doc.path, order);
+        assert_eq!(doc.editor.caret_line_col(), (declaration_line, declaration_col));
+        assert!(app.focus_editor);
+    }
+
+    #[test]
     fn settings_results_open_each_existing_page_from_search_everywhere() {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
