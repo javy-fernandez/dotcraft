@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 72 |
+| ✅ Verified | 73 |
 | 🚧 In progress | 44 |
-| 🟢 Existing | 38 |
+| 🟢 Existing | 37 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -191,7 +191,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| C-01 | C# syntax highlighting | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-01 | C# syntax highlighting | ✅ | [PR 229](https://github.com/javy-fernandez/dotcraft/pull/229) preserves lexical comment/string color against semantic tokens and verifies actual Shop C# EditorView paint in built-in light and dark themes. Custom themes, full snapshots and live Roslyn semantic delivery remain untested. |
 | C-02 | Roslyn semantic highlighting | ✅ | Live C# application regression verifies Roslyn semantic color for a class; see live-dotnet.md. |
 | C-03 | Code completion | ✅ | Live Roslyn and application regressions verify C# completion; advanced completion variants remain separate inventory targets. |
 | C-04 | Signature help | 🚧 | [PR 224](https://github.com/javy-fernandez/dotcraft/pull/224) updates the active argument at the caret in Shop C# EditorView, including nested and quoted commas. Metadata is supplied directly; Roslyn/app delivery and other C# forms remain unverified. |
