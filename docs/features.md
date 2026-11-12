@@ -232,6 +232,8 @@ additional scope is pending.
 | Concurrent workspace session saves (L-02, partial) | [Original PR 159](https://github.com/javy-fernandez/dotcraft/pull/159) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/159/files) |
 | Git revision read safety (I-10, partial) | [Original PR 160](https://github.com/javy-fernandez/dotcraft/pull/160) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/160/files) |
 | Distraction-free and Zen modes (A-22) | [Original PR 161](https://github.com/javy-fernandez/dotcraft/pull/161) | [Focus modes](https://github.com/RafaelMendes1407/dotcraft/blob/feat/zen-and-distraction-free/docs/implementation/focus-modes.md) |
+| EditorConfig numeric-range globs (C-18, partial) | [Original PR 162](https://github.com/javy-fernandez/dotcraft/pull/162) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/162/files) |
+| Long-line editor safeguard (C-16, partial) | [Original PR 163](https://github.com/javy-fernandez/dotcraft/pull/163) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/163/files) |
 
 ## Completion criteria
 

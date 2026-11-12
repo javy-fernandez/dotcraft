@@ -26,9 +26,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 34 |
-| 🚧 In progress | 22 |
+| 🚧 In progress | 23 |
 | 🟢 Existing | 80 |
-| 🔁 Reuse candidate | 23 |
+| 🔁 Reuse candidate | 22 |
 | ⬜ Backlog | 214 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
@@ -207,9 +207,9 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-13 | Code actions and quick fixes | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-14 | Rename symbol | ✅ | Live C# application and Roslyn tests rename symbols across App and Lib projects; see live-dotnet.md. |
 | C-15 | Diagnostics in editor | ✅ | Live application verifies CS0103 ranges; Roslyn regression verifies diagnostics; see live-dotnet.md. |
-| C-16 | Large-file safeguards | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| C-16 | Large-file safeguards | 🚧 | [PR 163](https://github.com/javy-fernandez/dotcraft/pull/163) bounds editor line layout to 4,096 characters while preserving the full buffer; 18 rc-editor unit tests pass, including a 100,000-character line. Decorations, exact horizontal placement, and live UI acceptance remain. |
 | C-17 | Complete statement | 🚧 | [PR 157](https://github.com/javy-fernandez/dotcraft/pull/157) adds conservative C# single-line statement completion with one undo step; 21 rc-editor unit tests pass. Broader syntax handling and live UI acceptance remain. |
-| C-18 | EditorConfig integration | 🚧 | PR 3 verifies the indentation subset, embedded globstars and logical mixed editing; numeric-range/save-time/full-formatting scope remains pending. |
+| C-18 | EditorConfig integration | 🚧 | PR 3 verifies the indentation subset, embedded globstars and logical mixed editing. [PR 162](https://github.com/javy-fernandez/dotcraft/pull/162) adds signed numeric-range globs up to 256 values; 13 rc-core tests pass. Save-time/full-formatting and live UI scope remain pending. |
 | C-19 | Spelling assistance | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-20 | Web language editor improvements | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-21 | Smart and type-matching completion | ⬜ | Implement with integration and UI acceptance evidence. |
