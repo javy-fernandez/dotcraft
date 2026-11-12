@@ -337,6 +337,8 @@ fn stops_on_exceptions_with_exception_info() {
     let options = DebugOptions { exception_filters: Some(vec!["all".into()]), ..Default::default() };
     let mut r = Run::start(DebugTarget::Project { dotnet: dotnet(), run }, options, Breakpoints::new());
     r.until_stopped();
+    assert_eq!(r.s.exception_filters(), Some(&["all".to_string()][..]));
+    assert!(r.s.exception_filters_available().iter().any(|filter| filter.filter == "all"));
     assert_eq!(r.s.stop_info().unwrap().reason, StopReason::Exception);
     let (name, path, line) = r.location();
     assert!(name.contains("Order"), "{name}");
@@ -369,6 +371,8 @@ fn stops_on_exceptions_with_exception_info() {
     run.build_first = false;
     let mut r = Run::start(DebugTarget::Project { dotnet: dotnet(), run }, DebugOptions::default(), Breakpoints::new());
     r.until_stopped();
+    assert!(r.s.exception_filters().is_none());
+    assert_eq!(r.s.stop_info().unwrap().reason, StopReason::Exception);
     r.until("exceptionInfo", Duration::from_secs(20), |s| s.exception().is_some());
     assert_eq!(r.s.exception().unwrap().break_mode, "unhandled");
     r.s.continue_();
