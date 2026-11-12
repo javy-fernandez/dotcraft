@@ -165,7 +165,9 @@ fn member_source<'a>(
         return source;
     };
     if il {
-        return il_method_source(source, &member.name).unwrap_or(source);
+        return il_declaration_source(source, &member.name)
+            .or_else(|| il_method_source(source, &member.name))
+            .unwrap_or(source);
     }
     let start = source
         .lines()
@@ -183,6 +185,30 @@ fn member_source<'a>(
         .sum::<usize>()
         .min(source.len());
     source.get(start..end).unwrap_or(source)
+}
+
+fn il_declaration_source<'a>(source: &'a str, name: &str) -> Option<&'a str> {
+    let mut start = 0;
+    for line in source.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if trimmed.starts_with(".field ")
+            && (trimmed.split_whitespace().last() == Some(name)
+                || trimmed.contains(&format!(" {name} =")))
+        {
+            return source.get(start..start + line.len());
+        }
+        if (trimmed.starts_with(".property ") && trimmed.contains(&format!(" {name}(")))
+            || (trimmed.starts_with(".event ") && trimmed.ends_with(name))
+        {
+            let tail = &source[start + line.len()..];
+            let end = tail
+                .find("\n\t}")
+                .map(|offset| start + line.len() + offset + 3)?;
+            return source.get(start..end);
+        }
+        start += line.len();
+    }
+    None
 }
 
 fn il_method_source<'a>(source: &'a str, name: &str) -> Option<&'a str> {
@@ -235,5 +261,27 @@ mod tests {
         let selected = member_source(source, &members, Some(0), true);
         assert!(selected.contains("Widget::Second"));
         assert!(!selected.contains("Widget::First"));
+    }
+
+    #[test]
+    fn il_member_selection_shows_fields_and_properties() {
+        let source = ".class Widget\n{\n\t.field public int32 Count\n\t.field public int32 Other\n\t.property int32 Value()\n\t{\n\t\t.get instance int32 Widget::get_Value()\n\t}\n}";
+        let members = vec![
+            crate::assembly_explorer::Member {
+                name: "Count".into(),
+                line: 0,
+            },
+            crate::assembly_explorer::Member {
+                name: "Value".into(),
+                line: 0,
+            },
+        ];
+        assert_eq!(
+            member_source(source, &members, Some(0), true),
+            "\t.field public int32 Count\n"
+        );
+        let property = member_source(source, &members, Some(1), true);
+        assert!(property.contains(".property int32 Value()"));
+        assert!(!property.contains(".field public int32 Other"));
     }
 }
