@@ -107,6 +107,7 @@ pub struct DotCraftApp {
     pub fullscreen_before_focus: bool,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
+    pub generate: Option<crate::generate::Dialog>,
     pub notices: Vec<Notice>,
     /// Monitoring: CPU and memory of the program in the selected Run tab.
     pub monitor: crate::monitor::Monitor,
@@ -233,6 +234,7 @@ impl DotCraftApp {
             fullscreen_before_focus: false,
             explorer: ExplorerState::default(),
             dialog: None,
+            generate: None,
             notices: Vec::new(),
             monitor: crate::monitor::Monitor::new(waker.clone()),
             todos: None,
@@ -798,6 +800,10 @@ impl DotCraftApp {
     /// Runs a code-insight action from the editor's keymap on the active document.
     pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
         let Some(i) = self.docs.active else { return };
+        if action == Action::Generate {
+            crate::ui::generate::open(self);
+            return;
+        }
         // Project files: package completion, documentation and fixes.
         if rc_dotnet::project_xml::is_package_file(&self.docs.list[i].path) && matches!(action, Action::Complete | Action::QuickDoc | Action::ShowIntentions) {
             let doc = &mut self.docs.list[i];
