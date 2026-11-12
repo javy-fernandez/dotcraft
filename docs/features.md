@@ -213,6 +213,7 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 ## Workspace layout
 
 - [x] Switch between normal, distraction-free, and Zen editor layouts while preserving the current tool-window arrangement. This is validated on Linux with the `Shop.sln` UI fixture; mode state is temporary.
+- [x] Enter and exit Presentation Mode with larger editor text and a preserved dock layout. Validated with `Shop.sln` on Linux; OS fullscreen behavior remains unverified.
 - [x] Show the active .NET file, encoding, line ending and caret position in the status bar, with an accessible Go to Line control. Validated with `Shop.sln` on Linux.
 - [x] Reopen a filtered recent C# file with the keyboard while keeping the selection valid. Validated with `Shop.sln` on Linux.
 - [x] Return to a recent C# source location by line number with the keyboard. Validated with `Shop.sln` on Linux.
