@@ -714,6 +714,10 @@ fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &
         (ok || enter && !name.trim().is_empty(), cancel)
     });
     if ok {
+        if dir.starts_with(rc_core::paths::scratches_dir()) && !scratch_name_stays_inside(name) {
+            *error = Some(tr("Scratch file names must stay inside Scratches").to_string());
+            return Outcome::Keep;
+        }
         let files = kind.files(dir, name);
         if files.iter().any(|(p, _)| p.exists()) {
             *error = Some(tr("A file or folder with this name already exists").to_string());
@@ -749,6 +753,10 @@ fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &
         }
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn scratch_name_stays_inside(name: &str) -> bool {
+    std::path::Path::new(name.trim()).components().all(|part| matches!(part, std::path::Component::Normal(_)))
 }
 
 fn rename(app: &mut DotCraftApp, ctx: &Context, path: &mut PathBuf, name: &mut String, error: &mut Option<String>) -> Outcome {
@@ -1363,6 +1371,15 @@ fn file_structure(app: &mut DotCraftApp, ctx: &Context, filter: &mut String, sel
 mod tests {
     use super::*;
     use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn scratch_file_names_cannot_escape_the_data_directory() {
+        assert!(scratch_name_stays_inside("notes/example.http"));
+        assert!(!scratch_name_stays_inside("../outside.cs"));
+        assert!(!scratch_name_stays_inside("notes/../../outside.cs"));
+        assert!(!scratch_name_stays_inside("/tmp/outside.cs"));
+    }
+
     #[test]
     fn recent_files_filter_clamps_selection_and_opens_a_dotnet_file() {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());

@@ -126,6 +126,7 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
     if category == tr("File") {
         if command(ui, tr("New Solution…"), Some(ico::ADD), true) { app.new_project_dialog(None); }
         if command(ui, tr("New File…"), Some(ico::NEW_FILE), app.workspace.is_some() || app.docs.active_doc().is_some()) { app.new_file_dialog(); }
+        if command(ui, tr("New Scratch File…"), Some(ico::NEW_FILE), true) { app.new_scratch_file_dialog(); }
         if command(ui, tr("Open…"), Some(ico::OPEN), true) { app.pick_and_open(); }
         if command(ui, tr("Close Project"), Some(ico::CLOSE), app.workspace.is_some()) { app.close_project(); }
         ui.separator();

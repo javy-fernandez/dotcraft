@@ -1425,6 +1425,16 @@ impl DotCraftApp {
         }
     }
 
+    /// Creates a persistent file outside the workspace for experiments and notes.
+    pub fn new_scratch_file_dialog(&mut self) {
+        self.dialog = Some(Dialog::NewFile {
+            dir: rc_core::paths::scratches_dir(),
+            name: String::new(),
+            kind: crate::item_templates::ItemKind::File,
+            error: None,
+        });
+    }
+
     /// Open…: a folder, solution or project opens as the workspace, any other file in the
     /// editor (macOS lets one panel pick both; elsewhere it picks a folder).
     pub fn pick_and_open(&mut self) {

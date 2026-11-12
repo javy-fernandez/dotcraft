@@ -17,6 +17,7 @@ const INDENT: f32 = 18.0;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NodeKind {
     Solution,
+    Scratches,
     SolutionFolder { name: String, children: Vec<SolutionItem> },
     Project(PathBuf),
     Dependencies(PathBuf),
@@ -57,6 +58,8 @@ pub struct ExplorerState {
     pub show_all: bool,
     /// Keys of the rows drawn dimmed (not part of the solution), rebuilt by `rows`.
     dimmed: HashSet<String>,
+    /// Override used by isolated explorer tests; production uses the shared data directory.
+    scratch_dir: Option<PathBuf>,
 }
 
 /// What the user asked for in the explorer this frame.
@@ -86,6 +89,10 @@ pub enum ExplorerAction {
 }
 
 impl ExplorerState {
+    fn scratches_dir(&self) -> PathBuf {
+        self.scratch_dir.clone().unwrap_or_else(rc_core::paths::scratches_dir)
+    }
+
     pub fn invalidate(&mut self, path: &Path) {
         if let Some(parent) = path.parent() {
             self.dir_cache.remove(parent);
@@ -123,6 +130,21 @@ impl ExplorerState {
     /// Expands the parents of `path` and selects it (Locate in explorer / "Always select
     /// opened file").
     pub fn locate(&mut self, path: &Path, solution: Option<&Solution>, root: &Path) {
+        let scratches = self.scratches_dir();
+        if path.starts_with(&scratches) {
+            let mut keys = vec!["scratches".to_string()];
+            let mut dirs = Vec::new();
+            let mut parent = path.parent();
+            while let Some(dir) = parent.filter(|dir| *dir != scratches && dir.starts_with(&scratches)) {
+                dirs.push(format!("dir:{}", dir.display()));
+                parent = dir.parent();
+            }
+            keys.extend(dirs.into_iter().rev());
+            self.expanded.extend(keys);
+            self.selected = Some(format!("file:{}", path.display()));
+            self.reveal = true;
+            return;
+        }
         let mut keys = vec!["sln".to_string()];
         if let Some(sln) = solution {
             // The project that contains the file, and the solution folders around it.
@@ -194,18 +216,29 @@ impl ExplorerState {
             expandable: true,
         };
         rows.push(root_row);
-        if !self.expanded.contains("sln") {
-            return rows;
-        }
-        match solution {
-            Some(sln) => {
-                let items = sln.items.clone();
-                self.push_items(&mut rows, &items, 1, "");
-                if self.show_all {
-                    self.push_unattached(&mut rows, sln);
+        if self.expanded.contains("sln") {
+            match solution {
+                Some(sln) => {
+                    let items = sln.items.clone();
+                    self.push_items(&mut rows, &items, 1, "");
+                    if self.show_all {
+                        self.push_unattached(&mut rows, sln);
+                    }
                 }
+                None => self.push_dir(&mut rows, root, 1, false),
             }
-            None => self.push_dir(&mut rows, root, 1, false),
+        }
+        rows.push(Row {
+            key: "scratches".into(),
+            kind: NodeKind::Scratches,
+            depth: 0,
+            label: tr("Scratches").to_string(),
+            secondary: String::new(),
+            icon: ico::FOLDER,
+            expandable: true,
+        });
+        if self.expanded.contains("scratches") {
+            self.push_dir(&mut rows, &self.scratches_dir(), 1, false);
         }
         rows
     }
@@ -592,6 +625,13 @@ fn row_path(r: &Row) -> Option<PathBuf> {
 
 fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
+    if matches!(&row.kind, NodeKind::Scratches) {
+        if theme::menu_item(ui, Some(ico::NEW_FILE), tr("New Scratch File…"), false).clicked() {
+            actions.push(ExplorerAction::NewItem(rc_core::paths::scratches_dir(), crate::item_templates::ItemKind::File));
+            ui.close();
+        }
+        return;
+    }
     if let (NodeKind::Solution, Some(sln)) = (&row.kind, solution) {
         if theme::menu_item(ui, Some(ico::ADD), tr("Add New Project…"), false).clicked() {
             actions.push(ExplorerAction::AddProject(sln.to_path_buf()));
@@ -703,6 +743,25 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scratches_are_visible_outside_the_workspace_and_can_be_relocated() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = dir.path().join("workspace");
+        let scratches = dir.path().join("scratches");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(scratches.join("notes")).unwrap();
+        let scratch = scratches.join("notes/example.http");
+        std::fs::write(&scratch, "GET https://example.org\n").unwrap();
+
+        let mut explorer = ExplorerState { scratch_dir: Some(scratches), ..Default::default() };
+        explorer.expanded.insert("sln".into());
+        explorer.locate(&scratch, None, &workspace);
+        let rows = explorer.rows(None, &workspace, "workspace");
+        assert!(rows.iter().any(|row| row.key == "scratches" && row.depth == 0));
+        assert!(rows.iter().any(|row| row.kind == NodeKind::File(scratch.clone()) && row.depth == 2));
+        assert_eq!(explorer.selected, Some(format!("file:{}", scratch.display())));
+    }
 
     #[test]
     fn show_all_files_adds_bin_obj_and_unattached_files_dimmed() {
