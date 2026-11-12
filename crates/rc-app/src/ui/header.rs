@@ -66,8 +66,40 @@ fn gradient_rounded_rect(r: Rect, radius: f32, top: Color32, bottom: Color32) ->
     mesh
 }
 
+/// A project-coloured wash behind the title controls.
+/// Adapted from CrabCraft commit 95e6a4200da83f009b14f431216446202e82414b.
+/// Copyright (c) 2026 the CrabCraft contributors.
+fn project_glow(ui: &Ui, name: &str) {
+    let rect = ui.max_rect();
+    let hash = name.bytes().fold(0u32, |hash, byte| hash.wrapping_mul(31).wrapping_add(byte as u32));
+    let color = rgb(BADGE_COLORS[hash as usize % BADGE_COLORS.len()].0);
+    let mut mesh = egui::Mesh::default();
+    let columns = 48;
+    let rows = 8;
+    let width = rect.width().min(720.0);
+    for y in 0..=rows {
+        for x in 0..=columns {
+            let point = pos2(rect.left() + width * x as f32 / columns as f32, rect.top() + rect.height() * y as f32 / rows as f32);
+            let dx = (point.x - rect.left() - 145.0) / 180.0;
+            let dy = (point.y - rect.top()) / 90.0;
+            let alpha = 0.22 * (-0.5 * (dx * dx + dy * dy)).exp();
+            mesh.colored_vertex(point, color.gamma_multiply(alpha));
+        }
+    }
+    for y in 0..rows {
+        for x in 0..columns {
+            let a = y * (columns + 1) + x;
+            mesh.add_triangle(a, a + 1, a + columns + 1);
+            mesh.add_triangle(a + 1, a + columns + 2, a + columns + 1);
+        }
+    }
+    ui.painter().add(egui::Shape::mesh(mesh));
+}
+
 pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     let rect = ui.max_rect();
+    let project_name = app.workspace.as_ref().map(|workspace| workspace.ws.name());
+    project_glow(ui, project_name.as_deref().unwrap_or("DotCraft"));
     // The whole bar drags the window (behind the widgets).
     let drag = ui.interact(rect, ui.id().with("title_drag"), Sense::click_and_drag());
     if drag.drag_started() {
