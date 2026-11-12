@@ -287,9 +287,18 @@ fn show_signature(ui: &Ui, sig: &crate::popup::SignatureHelp, scheme: &Scheme, p
 }
 
 fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, m: &Metrics) -> Option<usize> {
-    let pos = h.screen + vec2(-4.0, m.row_h);
+    let bounds = ui.ctx().content_rect();
+    let right = h.screen.x > bounds.center().x;
+    let above = h.screen.y + m.row_h > bounds.center().y;
+    let pivot = match (right, above) {
+        (false, false) => Align2::LEFT_TOP,
+        (true, false) => Align2::RIGHT_TOP,
+        (false, true) => Align2::LEFT_BOTTOM,
+        (true, true) => Align2::RIGHT_BOTTOM,
+    };
+    let pos = pos2(h.screen.x.clamp(bounds.left(), bounds.right()), if above { h.screen.y - 4.0 } else { h.screen.y + m.row_h });
     let mut clicked = None;
-    let resp = egui::Area::new(Id::new("hover_popup")).order(Order::Foreground).fixed_pos(pos).show(ui.ctx(), |ui| {
+    let resp = egui::Area::new(Id::new("hover_popup")).order(Order::Foreground).fixed_pos(pos).pivot(pivot).show(ui.ctx(), |ui| {
         popup_frame(pal).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
             ui.set_max_width(560.0);
             if let Some((sev, msg)) = &h.problem {
