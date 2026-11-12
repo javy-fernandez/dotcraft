@@ -1049,7 +1049,7 @@ fn find_in_files(app: &mut DotCraftApp, ui: &mut Ui) {
                         files += 1;
                     }
                 } else {
-                    errors.push(format!("{}: document closed before replacement", path.display()));
+                    errors.push(rc_kit::i18n::trf("{path}: document closed before replacement", &[("path", &path.display())]));
                 }
             }
         }
@@ -1089,8 +1089,8 @@ fn find_in_files(app: &mut DotCraftApp, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.add_space(10.0);
             ui.add(egui::TextEdit::singleline(&mut f.replace).hint_text(tr("Replace with")).desired_width(280.0));
-            replace_all = ui.add_enabled(!f.replace_busy() && f.match_count() > 0 && f.summary.is_some(), egui::Button::new(tr("Replace All"))).clicked();
-            if f.replace_busy() && ui.button(tr("Cancel Replace")).clicked() {
+            replace_all = kit::button(ui, Some(rc_kit::ico::REPLACE), tr("Replace All"), !f.replace_busy() && f.match_count() > 0 && f.summary.is_some()).clicked();
+            if f.replace_busy() && kit::button(ui, Some(rc_kit::ico::STOP), tr("Cancel Replace"), true).clicked() {
                 f.cancel_replace();
             }
         });
@@ -1158,19 +1158,19 @@ fn find_in_files(app: &mut DotCraftApp, ui: &mut Ui) {
     if rerun {
         f.search();
     }
-    if replace_all {
-        if let Ok(q) = rc_search::Query::new(f.options()) {
-            let mut open = Vec::new();
-            let mut closed = Vec::new();
-            for file in &f.results {
-                if app.docs.index_of(&file.path).is_some() {
-                    open.push(file.path.clone());
-                } else {
-                    closed.push(file.path.clone());
-                }
+    if replace_all
+        && let Ok(q) = rc_search::Query::new(f.options())
+    {
+        let mut open = Vec::new();
+        let mut closed = Vec::new();
+        for file in &f.results {
+            if app.docs.index_of(&file.path).is_some() {
+                open.push(file.path.clone());
+            } else {
+                closed.push(file.path.clone());
             }
-            f.begin_replace(open, closed, q, f.replace.clone());
         }
+        f.begin_replace(open, closed, q, f.replace.clone());
     }
     let _ = root;
     app.find_in_files = Some(f);
@@ -1271,7 +1271,8 @@ mod replace_window_tests {
     fn replace_in_shop_csharp_files_keeps_open_editor_undo_and_closed_disk_edits() {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
-        let root = home.path().join("Shop");
+        // Canonical: the finder reports /private/var on macOS, and open documents are matched by path.
+        let root = home.path().canonicalize().unwrap().join("Shop");
         copy_tree(&crate::screens::fixtures().join("Shop"), &root);
         let open_file = root.join("src/Shop.Core/Order.cs");
         let closed_file = root.join("src/Shop.Api/Controllers/OrdersController.cs");
