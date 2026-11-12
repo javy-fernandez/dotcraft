@@ -113,6 +113,7 @@ Rider uses dotCover for its coverage integration. Select a suitable DotCraft cov
 ## Version control
 
 - [ ] Review local changes, repository history, and incoming changes.
+- [x] Draw branch and merge lanes in the local Git history and select a commit. Validated with a real local merge fixture on Linux; the view loads the first 500 commits.
 - [ ] Highlight changes in the editor and provide blame annotations.
 - [ ] Stage changes, commit, push, and manage branches.
 - [ ] Organize changes into changelists and shelve work.
@@ -235,6 +236,8 @@ additional scope is pending.
 | EditorConfig numeric-range globs (C-18, partial) | [Original PR 162](https://github.com/javy-fernandez/dotcraft/pull/162) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/162/files) |
 | Long-line editor safeguard (C-16, partial) | [Original PR 163](https://github.com/javy-fernandez/dotcraft/pull/163) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/163/files) |
 | Blocking background runtime (L-04, partial) | [Original PR 164](https://github.com/javy-fernandez/dotcraft/pull/164) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/164/files) |
+| Git log branch and merge graph (I-14) | [Original PR 165](https://github.com/javy-fernandez/dotcraft/pull/165) | [Git log graph](https://github.com/RafaelMendes1407/dotcraft/blob/feat/git-log-graph-ui/docs/implementation/git-log-graph.md) |
+| Local History concurrent revision safety (I-34, partial) | [Original PR 166](https://github.com/javy-fernandez/dotcraft/pull/166) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/166/files) |
 
 ## Completion criteria
 

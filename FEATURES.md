@@ -25,11 +25,11 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 34 |
-| 🚧 In progress | 24 |
-| 🟢 Existing | 79 |
+| ✅ Verified | 35 |
+| 🚧 In progress | 25 |
+| 🟢 Existing | 78 |
 | 🔁 Reuse candidate | 22 |
-| ⬜ Backlog | 214 |
+| ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -431,7 +431,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-11 | Shelves | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-12 | History editing | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-13 | Hosting CLI integration | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| I-14 | Git log and graph | ⬜ | Implement with integration and UI acceptance evidence. |
+| I-14 | Git log and graph | ✅ | [PR 165](https://github.com/javy-fernandez/dotcraft/pull/165) draws real branch and merge lanes and supports commit selection; a real local Git merge fixture and egui UI harness passed on Linux. The local log is limited to 500 commits; pagination, huge histories, and other platforms remain untested. |
 | I-15 | Fetch pull and push workflow audit | 🚧 | Real-Git fetch/pull/push backend tests pass; a complete hosting/UI workflow audit remains pending. |
 | I-16 | Interactive rebase | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-17 | Cherry-pick | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -451,7 +451,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-31 | Mercurial integration | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-32 | Perforce integration | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-33 | Azure DevOps integration | ⬜ | Implement with integration and UI acceptance evidence. |
-| I-34 | Local history | 🟢 | Source located in `rc-core/local_history.rs`; repeat application acceptance checks. |
+| I-34 | Local history | 🚧 | [PR 166](https://github.com/javy-fernandez/dotcraft/pull/166) uses exclusive revision creation; 24 concurrent C# revisions are retained in a real .NET fixture, with deduplication and 100-revision retention tested. 13 rc-core tests pass. Live compare/restore UI and concurrent reader behavior remain. |
 
 ## J. Web, services and databases
 
