@@ -47,6 +47,7 @@ mod keyboard_navigation_acceptance_tests;
 mod find_in_files_acceptance_tests;
 #[cfg(test)]
 mod go_to_file_acceptance_tests;
+mod keymap_acceptance_tests;
 #[cfg(test)]
 mod screens;
 #[cfg(test)]
