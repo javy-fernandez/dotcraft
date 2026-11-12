@@ -28,6 +28,8 @@ mod insight_tests;
 mod package_insight_tests;
 #[cfg(test)]
 mod screens;
+#[cfg(test)]
+mod history_tests;
 mod docs;
 mod native_menu;
 mod open_files;
