@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn picker_offers_interface_override_and_delegate_members() {
-        let source = "interface IName { string Name { get; set; } void Rename(string value); }\nclass Base { public virtual int Score() => 1; }\nclass Service { public string Format(int n) => n.ToString(); }\nclass Derived : Base, IName { private Service _service; }";
+        let source = "interface IName { string Name { get; set; } void Rename(string value); event System.EventHandler Changed; string this[int i] { get; set; } }\nclass Base { public virtual int Score() => 1; }\nclass Service { public string Format(int n) => n.ToString(); }\nclass Derived : Base, IName { private Service _service; }";
         let rope = rc_text::Rope::from_str(source);
         let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None).unwrap();
         let caret = source.find("_service").unwrap();
@@ -476,6 +476,18 @@ mod tests {
                 .targets
                 .iter()
                 .any(|m| m.kind == Kind::Implement && m.label.contains("Name"))
+        );
+        assert!(
+            dialog
+                .targets
+                .iter()
+                .any(|m| m.kind == Kind::Implement && m.label.contains("Changed"))
+        );
+        assert!(
+            dialog
+                .targets
+                .iter()
+                .any(|m| m.kind == Kind::Implement && m.label.contains("this"))
         );
         assert!(
             dialog
@@ -511,7 +523,7 @@ mod tests {
     #[test]
     #[ignore = "requires a .NET SDK; run with DOTNET_BIN set to the SDK executable"]
     fn generated_target_members_build_with_dotnet() {
-        let source = "interface IName { string Name { get; set; } void Rename(string value); }\nclass Base { public virtual int Score() => 1; }\nclass Service { public string Format(int n) => n.ToString(); }\nclass Derived : Base, IName { private Service _service = new(); }";
+        let source = "interface IName { string Name { get; set; } void Rename(string value); event System.EventHandler Changed; string this[int i] { get; set; } }\nclass Base { public virtual int Score() => 1; }\nclass Service { public string Format(int n) => n.ToString(); }\nclass Derived : Base, IName { private Service _service = new(); }";
         let rope = rc_text::Rope::from_str(source);
         let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None).unwrap();
         let caret = source.find("_service").unwrap();
@@ -544,5 +556,19 @@ mod tests {
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+
+    #[test]
+    fn generic_interface_arguments_are_substituted() {
+        let source =
+            "interface IRepository<T> { T Find(T value); } class App : IRepository<string> { }";
+        let rope = rc_text::Rope::from_str(source);
+        let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None).unwrap();
+        let mut dialog =
+            Dialog::from_source(source, &tree, source.find("App :").unwrap(), 1, 0).unwrap();
+        dialog.kind = Kind::Implement;
+        assert!(!dialog.targets.is_empty(), "{}", tree.root_node().to_sexp());
+        let code = dialog.render().unwrap();
+        assert!(code.contains("string Find(string value)"), "{code}");
     }
 }
