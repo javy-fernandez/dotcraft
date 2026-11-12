@@ -1023,6 +1023,46 @@ fn screens_http_client_and_endpoints() {
 }
 
 #[test]
+#[ignore = "requires a local .NET SDK and restored Shop fixture packages"]
+fn shop_http_environment_selection_sends_a_live_request() {
+    let _lock = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let requests = home.path().join("shop.http");
+    std::fs::write(&requests, "GET {{host}}/weatherforecast/\nAccept: application/json\n").unwrap();
+    std::fs::write(home.path().join(rc_dotnet::http_file::ENV_FILE), r#"{"dev":{"host":"http://localhost:5112"}}"#).unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    app.runner.selected = app.runner.configs.iter().position(|c| c.name.starts_with("Shop.Api")).unwrap();
+    let outputs = app.runner.run_selected();
+    crate::ui::run_windows::handle_outputs(&mut app, outputs);
+    app.open_file(&requests);
+    app.dock.show(crate::toolwindow::ToolWindow::HttpClient);
+    let mut harness = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut harness, "HTTP environment list", |a| a.http.environments == ["dev"]);
+    harness.get_by_label("No environment").click();
+    harness.run_steps(2);
+    harness.get_by_label("dev").click();
+    harness.run_steps(2);
+    assert_eq!(harness.state().http.env.as_deref(), Some("dev"));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    loop {
+        let index = harness.state().docs.active.unwrap();
+        harness.state_mut().send_http_request(index, 0);
+        run_frames(&mut harness, "the live HTTP response", |a| a.http.response.is_some());
+        if matches!(&harness.state().http.response, Some(Ok(response)) if response.status == 200) || std::time::Instant::now() > deadline {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    let response = harness.state().http.response.as_ref().unwrap().as_ref().unwrap();
+    assert_eq!(response.status, 200);
+    assert!(response.text.contains("temperatureC"));
+    assert_eq!(harness.state().http.request.as_deref(), Some("GET http://localhost:5112/weatherforecast/"));
+    harness.state_mut().runner.kill_all_now();
+}
+
+#[test]
 #[ignore = "Requires a GPU and the .NET SDK; runs Shop's tests with coverage and writes target/snapshots/coverage-dark.png"]
 fn screens_coverage() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
