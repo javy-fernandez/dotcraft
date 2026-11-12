@@ -208,6 +208,7 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 - [x] Reopen a filtered recent C# file with the keyboard while keeping the selection valid. Validated with `Shop.sln` on Linux.
 - [x] Return to a recent C# source location by line number with the keyboard. Validated with `Shop.sln` on Linux.
 - [x] Activate and close C# editor tabs with accessible controls. Validated with `Shop.sln` on Linux.
+- [x] Open a recent .NET solution from Welcome with an accessible full-path row. Validated with `Shop.sln` on Linux.
 
 ## Implementation progress
 
@@ -252,6 +253,8 @@ additional scope is pending.
 | C# line and block comments (C-10) | [Original PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/172/files) |
 | Integrated local terminal (L-01) | [Original PR 173](https://github.com/javy-fernandez/dotcraft/pull/173) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/173/files) |
 | Accessible C# editor tabs (A-05) | [Original PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) | [Editor tabs evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/accessible-editor-tabs/docs/implementation/editor-tabs-dotnet.md) |
+| Workspace solution/folder symlink tree (B-01, partial) | [Original PR 175](https://github.com/javy-fernandez/dotcraft/pull/175) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/175/files) |
+| Recent solution on Welcome (A-08) | [Original PR 176](https://github.com/javy-fernandez/dotcraft/pull/176) | [Welcome evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/recent-projects-welcome/docs/implementation/recent-projects-shop.md) |
 
 ## Completion criteria
 

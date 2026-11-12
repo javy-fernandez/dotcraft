@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 42 |
-| 🚧 In progress | 26 |
-| 🟢 Existing | 70 |
+| ✅ Verified | 43 |
+| 🚧 In progress | 27 |
+| 🟢 Existing | 68 |
 | 🔁 Reuse candidate | 22 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
@@ -126,7 +126,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-05 | Editor tabs | ✅ | [PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) names close controls for accessibility; egui UI harness activates and closes C# tabs from real `Shop.sln` on Linux. Pinned/preview tabs, drag ordering, compact widths and other platforms remain untested. |
 | A-06 | Split editors | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-07 | Search Everywhere | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| A-08 | Recent projects | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-08 | Recent projects | ✅ | [PR 176](https://github.com/javy-fernandez/dotcraft/pull/176) exposes full recent paths to accessibility; egui UI harness opens real `Shop.sln` from Welcome and verifies recent-history order on Linux. Missing-path removal, compact widths and other platforms remain untested. |
 | A-09 | Recent files | ✅ | [PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) keeps filtered selection valid and exposes file rows to accessibility; egui UI harness opens three real `Shop.sln` C# files and selects one with Enter on Linux. Missing files and native menus remain untested. |
 | A-10 | Recent locations | ✅ | [PR 171](https://github.com/javy-fernandez/dotcraft/pull/171) bounds dialog selection and exposes path/line to accessibility; egui UI harness navigates to line four of real `Shop.sln` C# source on Linux. Closed/deleted files and native menus remain untested. |
 | A-11 | Settings dialog | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -156,7 +156,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| B-01 | Open solutions and folders | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| B-01 | Open solutions and folders | 🚧 | [PR 175](https://github.com/javy-fernandez/dotcraft/pull/175) verifies solution/folder traversal on real Shop fixture and safely classifies internal directory symlinks on Unix; 13 rc-core tests pass. App UI, SDK execution and other platforms remain unverified. |
 | B-02 | Classic .sln solutions | ✅ | Live Shop build/run and C# application flows load classic solutions; see live-dotnet.md. |
 | B-03 | XML .slnx solutions | ✅ | Live Roslyn and application flows load a real two-project XML solution; see live-dotnet.md. |
 | B-04 | Standalone .NET projects | 🚧 | [PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) discovers one top-level C#, F#, or VB project when opening a folder without a solution, preserving the folder session key; 13 rc-core tests pass on real fixtures. App opening and SDK build/run remain unverified. |
