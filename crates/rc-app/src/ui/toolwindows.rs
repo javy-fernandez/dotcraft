@@ -1159,6 +1159,23 @@ mod web_window_tests {
     use super::*;
     use egui_kittest::{Harness, kittest::Queryable};
 
+    fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let name = entry.file_name();
+            if matches!(name.to_str(), Some("bin" | "obj")) {
+                continue;
+            }
+            let target = to.join(name);
+            if entry.file_type().unwrap().is_dir() {
+                copy_tree(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+
     fn pump(harness: &mut Harness<'_, DotCraftApp>, done: impl Fn(&DotCraftApp) -> bool) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while !done(harness.state()) {
@@ -1232,5 +1249,58 @@ mod web_window_tests {
         let generated = std::fs::read_to_string(&output).unwrap();
         assert_eq!(rc_dotnet::http_file::parse(&generated).requests.len(), 1);
         assert!(!harness.state().http.busy(), "import must not send a request");
+    }
+
+    #[test]
+    fn shop_endpoints_scan_show_handlers_and_generate_request() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let temp = tempfile::tempdir().unwrap();
+        let shop = temp.path().join("Shop");
+        copy_tree(&crate::screens::fixtures().join("Shop"), &shop);
+        let mut app = crate::screens::test_app(temp.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&shop.join("Shop.sln"));
+
+        let mut first = true;
+        let mut harness = Harness::builder().with_size(vec2(1100.0, 800.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            app.endpoints.poll();
+            endpoints_window(app, ui);
+        }, app);
+        harness.run_steps(3);
+        pump(&mut harness, |app| !app.endpoints.scanning);
+        let project = harness.state().endpoints.projects.iter().find(|(name, _, _)| name == "Shop.Api").unwrap();
+        assert_eq!(project.2.len(), 4);
+        let sample = project.2.iter().find(|endpoint| endpoint.route == "/Orders/sample").unwrap().clone();
+        for route in ["GET /Orders/sample", "POST /Orders/quote", "GET /WeatherForecast", "GET /health"] {
+            harness.get_by_label(route);
+        }
+        harness.state_mut().endpoints.method = "POST".into();
+        harness.run_steps(2);
+        assert!(harness.query_by_label("GET /health").is_none());
+        harness.get_by_label("POST /Orders/quote");
+        harness.state_mut().endpoints.method.clear();
+        harness.run_steps(2);
+
+        harness.get_by_label("GET /Orders/sample").click_secondary();
+        harness.run_steps(2);
+        harness.get_by_label(tr("Go to Handler")).click();
+        harness.run_steps(2);
+        let doc = harness.state().docs.active_doc().unwrap();
+        assert_eq!(doc.path, sample.file);
+        assert_eq!(doc.editor.caret_line_col().0, sample.line);
+
+        let requests = shop.join("src/Shop.Api/Shop.Api.http");
+        let before = std::fs::read_to_string(&requests).unwrap();
+        harness.get_by_label("GET /health").click_secondary();
+        harness.run_steps(2);
+        harness.get_by_label(tr("Generate Request in HTTP Client")).click();
+        pump(&mut harness, |app| app.docs.active_doc().is_some_and(|doc| doc.path == requests));
+        let after = std::fs::read_to_string(&requests).unwrap();
+        assert!(after.starts_with(&before));
+        assert!(after.contains("GET {{Shop.Api_HostAddress}}/health"));
     }
 }
