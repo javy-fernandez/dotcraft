@@ -1041,10 +1041,52 @@ fn screens_coverage() {
     let d = h.state().docs.active_doc().unwrap();
     let line = d.editor.buffer.rope().to_string().lines().position(|l| l.contains("subtotal += line.Subtotal")).unwrap();
     assert_eq!(d.editor.coverage.get(&line), Some(&rc_editor::CoverageMark::Covered));
+    assert!(d.editor.coverage.values().any(|mark| *mark == rc_editor::CoverageMark::NotCovered));
     h.state_mut().coverage.expanded.insert("Shop.Core".into());
     h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Coverage, 320.0);
     h.run_steps(3);
-    h.render().unwrap().save(out.join("coverage-dark.png")).unwrap();
+    fn gutter_pixels(image: &image::RgbaImage, color: [u8; 4]) -> usize {
+        let mut count = 0;
+        for y in 80..image.height().min(580) {
+            for x in 350..image.width().min(450) {
+                count += usize::from(image.get_pixel(x, y).0 == color);
+            }
+        }
+        count
+    }
+    let covered_color = [0x5f, 0xb8, 0x65, 0xff];
+    let uncovered_color = [0xe5, 0x53, 0x53, 0xff];
+    let visible = h.render().unwrap();
+    assert!(gutter_pixels(&visible, covered_color) > 12);
+    assert!(gutter_pixels(&visible, uncovered_color) > 12);
+    visible.save(out.join("coverage-gutter-visible.png")).unwrap();
+
+    h.state_mut().coverage.show_in_editor = false;
+    h.run_steps(3);
+    let hidden = h.render().unwrap();
+    assert_eq!(gutter_pixels(&hidden, covered_color), 0);
+    assert_eq!(gutter_pixels(&hidden, uncovered_color), 0);
+    assert!(h.state().docs.active_doc().unwrap().editor.coverage.is_empty());
+    hidden.save(out.join("coverage-gutter-hidden.png")).unwrap();
+
+    h.state_mut().coverage.show_in_editor = true;
+    h.run_steps(3);
+    let visible_again = h.render().unwrap();
+    assert!(gutter_pixels(&visible_again, covered_color) > 12);
+    visible_again.save(out.join("coverage-dark.png")).unwrap();
+
+    // The Shop run has no partly covered line. Add one branch to its real report to
+    // exercise the partial state through Coverage::mark and the editor painter.
+    let mut partial_report = h.state().coverage.report.clone().unwrap();
+    partial_report.files.get_mut(&calc).unwrap().branches.insert(line, rc_dotnet::coverage::Ratio::new(1, 2));
+    let mut partial_coverage = crate::coverage::Coverage::new(Waker::noop());
+    partial_coverage.report = Some(partial_report);
+    h.state_mut().coverage = partial_coverage;
+    h.run_steps(3);
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.coverage.get(&line), Some(&rc_editor::CoverageMark::Partial));
+    let partial = h.render().unwrap();
+    assert!(gutter_pixels(&partial, [0xe0, 0xb0, 0x40, 0xff]) > 12);
+    partial.save(out.join("coverage-gutter-partial.png")).unwrap();
 }
 
 #[test]
