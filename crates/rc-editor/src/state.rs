@@ -567,9 +567,14 @@ impl EditorState {
 
     pub fn fold_all(&mut self) {
         self.folded = self.syntax.folds().iter().map(|f| f.start_line).collect();
-        // Do not hide the caret.
+        // A fold starting on the caret line leaves that line visible. Only open
+        // enclosing folds that would actually hide the caret.
         let (line, _) = self.caret_line_col();
-        self.unfold_line(line);
+        let hiding: BTreeSet<usize> = self.syntax.folds().iter()
+            .filter(|f| f.start_line < line && line <= self.fold_end(f.end_line, f.kind))
+            .map(|f| f.start_line)
+            .collect();
+        self.folded.retain(|start| !hiding.contains(start));
         self.display = None;
     }
 
