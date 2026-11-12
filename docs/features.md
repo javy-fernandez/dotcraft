@@ -355,6 +355,7 @@ additional scope is pending.
 | Shop coverage gutter marks and toggle (H-17) | [Original PR 258](https://github.com/javy-fernandez/dotcraft/pull/258) | [Gutter evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/coverage-gutter-live/docs/implementation/coverage-gutter-linux.md) |
 | Shop.Api CPU profiling (H-20) | [Original PR 259](https://github.com/javy-fernandez/dotcraft/pull/259) | [CPU evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-cpu-profile-live/docs/implementation/shop-cpu-profile-linux.md) |
 | Razor syntax in Shop workspace (J-01) | [Original PR 260](https://github.com/javy-fernandez/dotcraft/pull/260) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/260/files) |
+| Shop.Api application monitoring charts (H-24) | [Original PR 261](https://github.com/javy-fernandez/dotcraft/pull/261) | [Monitoring evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-monitoring-live/docs/implementation/shop-monitoring-linux.md) |
 
 ## Completion criteria
 

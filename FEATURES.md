@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 100 |
+| ✅ Verified | 101 |
 | 🚧 In progress | 47 |
-| 🟢 Existing | 7 |
+| 🟢 Existing | 6 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -407,7 +407,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/test.rs; crates/rc-app/src/ui/run
 | H-21 | Allocation profiling | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-22 | Memory snapshots | 🟢 | Source located in `rc-dotnet/gcdump.rs`; repeat real .NET acceptance checks. |
 | H-23 | Profiling comparison | ⬜ | Implement with integration and UI acceptance evidence. |
-| H-24 | Application monitoring | 🟢 | Source located in `rc-app/monitor.rs`; repeat application acceptance checks. |
+| H-24 | Application monitoring | ✅ | [PR 261](https://github.com/javy-fernandez/dotcraft/pull/261) verifies live Shop.Api CPU/memory samples and .NET GC heap counter, with native Monitoring charts and an inspected screenshot using SDK 8.0.428 on Linux. History retention, heavy load, restart, chart accessibility, other runtimes and platforms remain untested. |
 | H-25 | Performance issue detection | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-26 | BenchmarkDotNet integration | ⬜ | Implement with integration and UI acceptance evidence. |
 
