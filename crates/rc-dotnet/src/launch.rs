@@ -40,11 +40,18 @@ impl LaunchProfile {
         }
         let base = self.urls().into_iter().next()?;
         Some(match self.launch_url.as_deref().filter(|u| !u.is_empty()) {
-            Some(u) if u.contains("://") => u.to_string(),
+            Some(u) if has_uri_scheme(u) => u.to_string(),
             Some(u) => format!("{}/{}", base.trim_end_matches('/'), u.trim_start_matches('/')),
             None => base,
         })
     }
+}
+
+fn has_uri_scheme(url: &str) -> bool {
+    url.split_once("://").is_some_and(|(scheme, _)| {
+        scheme.chars().next().is_some_and(|first| first.is_ascii_alphabetic())
+            && scheme.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '-' | '.'))
+    })
 }
 
 /// Splits `https://localhost:7001;http://localhost:5001`.
