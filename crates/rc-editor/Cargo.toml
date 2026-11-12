@@ -16,6 +16,9 @@ egui_kittest.workspace = true
 wgpu.workspace = true
 criterion.workspace = true
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+eframe = { workspace = true, features = ["x11"] }
+
 [[bench]]
 name = "frame"
 harness = false

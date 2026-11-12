@@ -1335,7 +1335,11 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         ScrollUp => state.scroll.y -= 20.0,
         ScrollDown => state.scroll.y += 20.0,
         Enter if !ro => {
-            let e = commands::newline(&rope, &sel, &indent);
+            let e = if state.lang() == rc_syntax::Lang::CSharp {
+                csharp_case_newline(&rope, &sel, &indent).unwrap_or_else(|| commands::newline(&rope, &sel, &indent))
+            } else {
+                commands::newline(&rope, &sel, &indent)
+            };
             state.apply(e, EditKind::Other);
             // The language server may continue a `///` comment on the new line.
             out.events.push(EditorEvent::Typed('\n'));
@@ -1522,6 +1526,28 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
     let _ = config;
 }
 
+/// A C# switch label starts its statement one indentation level deeper.
+fn csharp_case_newline(rope: &rc_text::Rope, sel: &Selection, indent: &commands::Indent) -> Option<commands::Edited> {
+    if sel.len() != 1 || !sel.primary().is_empty() { return None; }
+    let caret = sel.primary().head;
+    let line = rope.char_to_line(caret);
+    let start = rope.line_to_char(line);
+    let end = start + rc_text::buffer::line_len(rope, line);
+    if caret != end { return None; }
+    let text = rope.slice(start..end).to_string();
+    let content = text.trim_end_matches([' ', '\t']);
+    let label = content.trim_start();
+    let is_case = label.ends_with(':') && (label.starts_with("case ") || label.starts_with("case\t") || label == "default:");
+    if !is_case { return None; }
+    let base = commands::line_indent(rope, line);
+    let deeper = indent.whitespace(0, indent.columns(&base) + indent.width());
+    let inserted = format!("\n{deeper}");
+    let insert_at = start + content.chars().count();
+    let new_caret = insert_at + inserted.chars().count();
+    let changes = rc_text::ChangeSet::single(rc_text::Change::new(insert_at, caret, inserted));
+    Some(commands::Edited { changes, selection: Selection::point(new_caret) })
+}
+
 /// Runs an editing action on `state` from outside the widget (native menu, actions popup).
 /// Returns the code-insight actions it could not handle itself.
 pub fn run_action(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action) -> Vec<Action> {
@@ -1615,4 +1641,19 @@ fn expand_template(state: &mut EditorState) -> bool {
     let body = crate::templates::fill(body, &stem);
     state.insert_snippet(start, caret, &body);
     true
+}
+
+#[cfg(test)]
+mod csharp_case_indent_tests {
+    use super::*;
+
+    #[test]
+    fn only_complete_case_labels_get_extra_indentation() {
+        let indent = commands::Indent::default();
+        for line in ["// case fake:", "label:", "var result = ready ? one :", "case 1: more"] {
+            let rope = rc_text::Rope::from_str(line);
+            let caret = Selection::point(rope.len_chars());
+            assert!(csharp_case_newline(&rope, &caret, &indent).is_none(), "{line}");
+        }
+    }
 }
