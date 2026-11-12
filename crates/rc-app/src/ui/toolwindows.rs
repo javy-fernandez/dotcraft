@@ -1116,6 +1116,8 @@ fn find_in_files(app: &mut DotCraftApp, ui: &mut Ui) {
                 }
                 let g = ui.painter().layout_job(job);
                 ui.painter().galley(pos2(x + 44.0, r.center().y - g.size().y / 2.0), g, p.text);
+                let accessible = format!("{}:{} {}", file.rel, l.line + 1, text.trim());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &accessible));
                 if resp.clicked() {
                     open = Some((file.path.clone(), l.line as usize, l.ranges.first().map_or(0, |r| r.start as usize)));
                 }
