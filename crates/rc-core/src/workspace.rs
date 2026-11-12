@@ -17,26 +17,41 @@ pub struct Workspace {
     /// Folder that contains everything (the solution's folder).
     pub root: PathBuf,
     pub kind: WorkspaceKind,
+    /// Session and recent-entry key; folder-opened projects retain the folder key.
+    key: PathBuf,
 }
 
 impl Workspace {
-    /// Opens `path`: a folder (using the single solution inside it, if there is exactly one),
-    /// or a solution / project file.
+    /// Opens `path`: a folder (using its single solution or standalone project), or a
+    /// solution / project file. Ambiguous folders remain plain folders.
     pub fn open(path: &Path) -> std::io::Result<Workspace> {
         let path = dunce::canonicalize(path)?;
         if path.is_dir() {
-            let solutions: Vec<PathBuf> = std::fs::read_dir(&path)?
+            let files: Vec<PathBuf> = std::fs::read_dir(&path)?
                 .flatten()
                 .map(|e| e.path())
-                .filter(|p| p.is_file() && is_solution(p))
+                .filter(|p| p.is_file())
                 .collect();
+            let solutions: Vec<_> = files.iter().filter(|p| is_solution(p)).collect();
             let kind = match solutions.as_slice() {
-                [only] => WorkspaceKind::Solution(only.clone()),
+                [only] => WorkspaceKind::Solution((*only).clone()),
+                [] => {
+                    let projects: Vec<_> = files.iter().filter(|p| is_project(p)).collect();
+                    match projects.as_slice() {
+                        [only] => WorkspaceKind::Project((*only).clone()),
+                        _ => WorkspaceKind::Folder,
+                    }
+                }
                 _ => WorkspaceKind::Folder,
             };
-            return Ok(Workspace { root: path, kind });
+            let key = match &kind {
+                WorkspaceKind::Solution(solution) => solution.clone(),
+                _ => path.clone(),
+            };
+            return Ok(Workspace { root: path, kind, key });
         }
         let root = path.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
+        let key = path.clone();
         let kind = if is_solution(&path) {
             WorkspaceKind::Solution(path)
         } else if is_project(&path) {
@@ -44,7 +59,7 @@ impl Workspace {
         } else {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a folder, solution or project"));
         };
-        Ok(Workspace { root, kind })
+        Ok(Workspace { root, kind, key })
     }
 
     /// Display name: the solution / project name or the folder name.
@@ -58,10 +73,7 @@ impl Workspace {
 
     /// The path the session and the recent list are keyed by.
     pub fn key_path(&self) -> &Path {
-        match &self.kind {
-            WorkspaceKind::Folder => &self.root,
-            WorkspaceKind::Solution(p) | WorkspaceKind::Project(p) => p,
-        }
+        &self.key
     }
 
     pub fn solution(&self) -> Option<&Path> {
@@ -137,5 +149,47 @@ mod tests {
         assert_eq!(ws.name(), "App");
         let names: Vec<String> = list_dir(dir.path()).into_iter().map(|n| n.name).collect();
         assert_eq!(names, vec!["Src", "a.cs", "App.sln"]);
+    }
+
+    #[test]
+    fn a_folder_with_one_dotnet_project_opens_it_without_changing_the_folder_session_key() {
+        for extension in ["csproj", "fsproj", "vbproj"] {
+            let dir = tempfile::tempdir().unwrap();
+            let project = dir.path().join(format!("App.{extension}"));
+            std::fs::write(&project, "<Project Sdk=\"Microsoft.NET.Sdk\" />\n").unwrap();
+            std::fs::write(dir.path().join("Program.cs"), "class Program {}\n").unwrap();
+            let root = dunce::canonicalize(dir.path()).unwrap();
+            let project = dunce::canonicalize(&project).unwrap();
+
+            let opened_folder = Workspace::open(&root).unwrap();
+            assert_eq!(opened_folder.kind, WorkspaceKind::Project(project.clone()));
+            assert_eq!(opened_folder.root, root);
+            assert_eq!(opened_folder.key_path(), root);
+            assert_eq!(opened_folder.name(), "App");
+
+            let opened_file = Workspace::open(&project).unwrap();
+            assert_eq!(opened_file.kind, WorkspaceKind::Project(project.clone()));
+            assert_eq!(opened_file.key_path(), project);
+        }
+    }
+
+    #[test]
+    fn solution_precedence_and_ambiguous_folders_are_preserved() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::write(root.join("App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />\n").unwrap();
+        std::fs::write(root.join("Tests.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />\n").unwrap();
+        assert_eq!(Workspace::open(&root).unwrap().kind, WorkspaceKind::Folder);
+
+        let solution = root.join("App.sln");
+        std::fs::write(&solution, "Microsoft Visual Studio Solution File, Format Version 12.00\n").unwrap();
+        let workspace = Workspace::open(&root).unwrap();
+        assert_eq!(workspace.kind, WorkspaceKind::Solution(solution.clone()));
+        assert_eq!(workspace.key_path(), solution);
+
+        std::fs::write(root.join("Other.slnx"), "<Solution />\n").unwrap();
+        let workspace = Workspace::open(&root).unwrap();
+        assert_eq!(workspace.kind, WorkspaceKind::Folder);
+        assert_eq!(workspace.key_path(), root);
     }
 }
