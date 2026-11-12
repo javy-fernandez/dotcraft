@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 74 |
+| ✅ Verified | 75 |
 | 🚧 In progress | 44 |
-| 🟢 Existing | 36 |
+| 🟢 Existing | 35 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -317,7 +317,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/build.rs; crates/rc-app/src/runne
 | F-06 | Compiler diagnostics links | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-07 | Run configurations | ✅ | [PR 227](https://github.com/javy-fernandez/dotcraft/pull/227) exposes the toolbar selection to accessibility and verifies choosing Shop.Cli plus session restoration after reopening real Shop.sln in egui on Linux. Launch profiles, SDK execution, compound editing and other platforms remain separate acceptance scope. |
 | F-08 | Launch profile selection | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| F-09 | Stop running processes | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| F-09 | Stop running processes | ✅ | [PR 231](https://github.com/javy-fernandez/dotcraft/pull/231) verifies live Shop.Api startup on ephemeral loopback, process ID, Stop exit and Run-console report using official .NET SDK 8.0.428 on Linux. Debugger stop, hot reload, other runtimes and platforms remain untested. |
 | F-10 | Incremental build scheduling | ⬜ | Implement with integration and UI acceptance evidence. |
 | F-11 | Build dependency visualization | ⬜ | Implement with integration and UI acceptance evidence. |
 | F-12 | Build log viewer | ⬜ | Implement with integration and UI acceptance evidence. |
