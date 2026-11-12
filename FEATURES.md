@@ -25,8 +25,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 106 |
-| 🚧 In progress | 44 |
+| ✅ Verified | 107 |
+| 🚧 In progress | 43 |
 | 🟢 Existing | 4 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
@@ -160,7 +160,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-03 | XML .slnx solutions | ✅ | Live Roslyn and application flows load a real two-project XML solution; see live-dotnet.md. |
 | B-04 | Standalone .NET projects | ✅ | [PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) discovers one top-level C#, F#, or VB project in a solution-free folder while preserving the session key; 13 rc-core tests pass. [PR 185](https://github.com/javy-fernandez/dotcraft/pull/185) verifies Shop.Cli folder opening, runnable configuration and egui app rendering on Linux. SDK build/run and other platforms remain untested. |
 | B-05 | Solution folders and items | ✅ | [PR 177](https://github.com/javy-fernandez/dotcraft/pull/177) restricts classic `.sln` loose items to `SolutionItems` sections; Shop `.sln`, TenProjects `.slnx`, and nested-folder fixtures verify parser membership in seven tests. UI and SDK execution remain untested. |
-| B-06 | Project templates | 🚧 | [PR 187](https://github.com/javy-fernandez/dotcraft/pull/187) validates `.sln`/`.slnx` targets before `dotnet new` and rejects missing, directory and `.slnf` targets; Shop/TenProjects plans pass three rc-dotnet tests. Actual SDK creation and UI acceptance remain. |
+| B-06 | Project templates | ✅ | [PR 187](https://github.com/javy-fernandez/dotcraft/pull/187) validates solution targets before `dotnet new`; [PR 268](https://github.com/javy-fernandez/dotcraft/pull/268) verifies real SDK 8.0.428 classlib add/build in copied Shop, console solution create/build/run, and native Create dialog workspace reload on Linux. Other templates, platforms, Git integration and failure recovery remain untested. |
 | B-07 | File and class templates | ✅ | [PR 217](https://github.com/javy-fernandez/dotcraft/pull/217) verifies Shop.Core New Class namespace, opened tab and duplicate refusal; [PR 267](https://github.com/javy-fernandez/dotcraft/pull/267) verifies native New File nested path and New Interface namespace/opened tab in the same real Shop.sln workspace on Linux. Other item kinds, project-system notification, background creation, SDK compilation and other platforms remain untested. |
 | B-08 | .NET SDK discovery | ✅ | [PR 225](https://github.com/javy-fernandez/dotcraft/pull/225) fixes extensionless explicit host discovery and verifies explicit executable/directory/PATH discovery, SDK 8.0.428 listing/version and a successful build of a temporary Shop.Core copy on Linux. Windows/macOS and managed SDK installation remain untested. |
 | B-09 | Runtime discovery | ✅ | [PR 226](https://github.com/javy-fernandez/dotcraft/pull/226) parses whitespace-tolerant runtime listings and verifies .NETCore.App/AspNetCore.App 8.0.34 installed by official local SDK 8.0.428 against Shop.Api net8.0 on Linux. UI/server launch and other platforms remain untested. |

@@ -362,6 +362,7 @@ additional scope is pending.
 | Shop HTTP environment live request (J-06) | [Original PR 265](https://github.com/javy-fernandez/dotcraft/pull/265) | [Environment evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-http-environment-live/docs/implementation/shop-http-environment-live.md) |
 | Shop Go to Symbol with fixture symbols (D-03, partial) | [Original PR 266](https://github.com/javy-fernandez/dotcraft/pull/266) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/266/files) |
 | Shop file and interface templates (B-07) | [Original PR 267](https://github.com/javy-fernandez/dotcraft/pull/267) | [Template evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-file-and-interface-templates/docs/implementation/shop-file-interface-templates.md) |
+| Shop classlib and console project templates (B-06) | [Original PR 268](https://github.com/javy-fernandez/dotcraft/pull/268) | [Project template evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-project-templates-live/docs/implementation/project-templates-linux.md) |
 
 ## Completion criteria
 
