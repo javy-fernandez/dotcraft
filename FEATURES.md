@@ -26,8 +26,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 34 |
-| 🚧 In progress | 23 |
-| 🟢 Existing | 80 |
+| 🚧 In progress | 24 |
+| 🟢 Existing | 79 |
 | 🔁 Reuse candidate | 22 |
 | ⬜ Backlog | 214 |
 | 🚫 Out of scope | 0 |
@@ -544,7 +544,7 @@ Source / reuse boundary: `crates/rc-term; crates/rc-core; CrabCraft shared modul
 | L-01 | Integrated terminal | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | L-02 | Persistent workspace sessions | 🚧 | [PR 159](https://github.com/javy-fernandez/dotcraft/pull/159) hardens concurrent atomic saves and round-trips complete session state in two .NET fixtures; 13 rc-core tests pass. Live UI restoration, crash durability, and other platforms remain unverified. |
 | L-03 | File system watching | 🚧 | [PR 155](https://github.com/javy-fernandez/dotcraft/pull/155) classifies renames and atomic saves as source removal plus destination creation; 13 rc-core tests pass, including a real filesystem .NET-project fixture. UI, index/LSP integration, and other platforms remain unverified. |
-| L-04 | Background task runtime | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| L-04 | Background task runtime | 🚧 | [PR 164](https://github.com/javy-fernandez/dotcraft/pull/164) adds `spawn_blocking`; four concurrent `.csproj` reads do not starve an async task, and pending async cancellation is tested. 13 rc-core tests pass. UI callers, process cancellation, and running blocking-task cancellation remain. |
 | L-05 | Terminal search and split panes | 🚧 | Bounded, cancellable terminal search is tested; split panes and cross-platform UI validation remain pending. |
 | L-06 | Terminal completion | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | L-07 | Remote SSH workflows | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
