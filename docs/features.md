@@ -342,6 +342,7 @@ additional scope is pending.
 | Linux Shop.Core compiler diagnostic links (F-06) | [Original PR 245](https://github.com/javy-fernandez/dotcraft/pull/245) | [Diagnostic evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/compiler-diagnostic-links-live/docs/implementation/compiler-diagnostic-links-linux.md) |
 | Shop .csproj XML syntax parsing and paint (J-02) | [Original PR 246](https://github.com/javy-fernandez/dotcraft/pull/246) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/246/files) |
 | Shop xUnit test gutter after live run (H-06) | [Original PR 247](https://github.com/javy-fernandez/dotcraft/pull/247) | [Gutter evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-test-gutter-live/docs/implementation/shop-test-gutter.md) |
+| Shop Markdown preview modes (J-04) | [Original PR 248](https://github.com/javy-fernandez/dotcraft/pull/248) | [Preview evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-markdown-preview/docs/implementation/shop-markdown-preview.md) |
 
 ## Completion criteria
 
