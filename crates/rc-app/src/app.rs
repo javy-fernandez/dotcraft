@@ -133,6 +133,7 @@ pub struct DotCraftApp {
     /// Completion, hover and problems in `appsettings*.json`.
     pub appsettings: crate::appsettings_insight::SettingsInsight,
     pub runner: Runner,
+    pub benchmarks: crate::benchmarks::Benchmarks,
     pub debugger: crate::debugger::Debugger,
     window_title: String,
     pub files: crate::search::Files,
@@ -161,6 +162,7 @@ pub struct DotCraftApp {
     /// Screen position under the active caret (popups that belong to the editor).
     pub caret_screen: Option<egui::Pos2>,
     pub test_markers: Vec<crate::runner::TestMarker>,
+    pub benchmark_markers: Vec<crate::runner::TestMarker>,
     pub native_menu: Option<NativeMenu>,
     pub waker: Waker,
     fs_inbox: Inbox<FsEvent>,
@@ -248,6 +250,7 @@ impl DotCraftApp {
             packages: crate::package_insight::PackageInsight::new(waker.clone()),
             appsettings: crate::appsettings_insight::SettingsInsight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
+            benchmarks: crate::benchmarks::Benchmarks::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
             files: crate::search::Files::new(),
@@ -269,6 +272,7 @@ impl DotCraftApp {
             find_results: None,
             caret_screen: None,
             test_markers: Vec::new(),
+            benchmark_markers: Vec::new(),
             native_menu,
             fs_inbox: Inbox::new(waker.clone()),
             doc_inbox: Inbox::new(waker.clone()),
@@ -550,6 +554,7 @@ impl DotCraftApp {
         self._watcher = None;
         self._filter_watcher = None;
         self.insight.stop();
+        self.benchmarks.stop();
         self.debugger.stop();
         self.runner.stop_all();
         self.runner.clear();
@@ -1334,7 +1339,8 @@ impl DotCraftApp {
         }
         let Some(tree) = doc.editor.syntax.tree() else { return };
         let markers = crate::runner::test_markers(doc.editor.buffer.rope(), tree);
-        doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed));
+        let benchmarks = crate::runner::benchmark_markers(doc.editor.buffer.rope(), tree);
+        doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed | rc_editor::GutterIcon::RunBenchmark));
         for m in &markers {
             let icon = match self.runner.test_outcomes.get(&m.name) {
                 Some(crate::runner::TestState::Passed) => rc_editor::GutterIcon::TestPassed,
@@ -1344,6 +1350,10 @@ impl DotCraftApp {
             doc.editor.gutter_icons.insert(m.line, icon);
         }
         self.test_markers = markers;
+        for marker in &benchmarks {
+            doc.editor.gutter_icons.entry(marker.line).or_insert(rc_editor::GutterIcon::RunBenchmark);
+        }
+        self.benchmark_markers = benchmarks;
     }
 
     /// Click on a test's gutter icon: runs that test (or class) in its project.
@@ -1358,6 +1368,29 @@ impl DotCraftApp {
         let filter = if m.is_class { rc_dotnet::TestFilter::Class(m.name.clone()) } else { rc_dotnet::TestFilter::Tests(vec![m.name.clone()]) };
         let outs = self.runner.run_tests(&project, Some(filter));
         crate::ui::run_windows::handle_outputs(self, outs);
+    }
+
+    /// Run the benchmark method or class selected in the C# gutter.
+    pub fn run_benchmark_at(&mut self, line: usize) {
+        let Some(marker) = self.benchmark_markers.iter().find(|marker| marker.line == line).cloned() else { return };
+        let Some(file) = self.docs.active_doc().map(|doc| doc.path.clone()) else { return };
+        let Some(project) = crate::runner::benchmark_project_of(&file, &self.runner.configs) else {
+            self.notify(tr("This file is not part of a runnable benchmark project"), false);
+            return;
+        };
+        let dotnet = match self.runner.dotnet() {
+            Ok(dotnet) => dotnet,
+            Err(error) => {
+                self.notify(error, true);
+                return;
+            }
+        };
+        self.save_all_docs();
+        let filter = if marker.is_class { format!("{}.*", marker.name) } else { marker.name };
+        match self.benchmarks.start(dotnet, project, filter) {
+            Ok(()) => self.dock.show(ToolWindow::Benchmarks),
+            Err(error) => self.notify(trf("Could not start benchmarks: {error}", &[("error", &error)]), true),
+        }
     }
 
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
@@ -1799,6 +1832,7 @@ impl eframe::App for DotCraftApp {
         self.appsettings.update(&mut self.docs, &mut self.insight.problems);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
+        self.benchmarks.update();
         // Monitoring follows the selected Run tab's process (or the last one started).
         let target = self.runner.runs.get(self.runner.active_run).filter(|r| r.running()).or_else(|| self.runner.runs.iter().rev().find(|r| r.running()));
         self.monitor.follow(target.and_then(|r| Some((r.name.clone(), r.handle.as_ref()?.pid()?))));

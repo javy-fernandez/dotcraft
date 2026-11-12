@@ -282,6 +282,62 @@ pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
     }
 }
 
+// ---------------------------------------------------------------------------------- Benchmarks
+
+pub fn benchmarks(app: &mut DotCraftApp, ui: &mut Ui) {
+    let running = app.benchmarks.running;
+    let has_run = !app.benchmarks.status.is_empty();
+    let actions = [
+        (ico::RERUN, tr("Rerun Benchmarks"), has_run && !running),
+        (ico::STOP, tr("Stop"), running),
+    ];
+    match header(ui, tr("Benchmarks"), &actions) {
+        Some(0) => {
+            if let Err(error) = app.benchmarks.rerun() {
+                app.notify(trf("Could not start benchmarks: {error}", &[("error", &error)]), true);
+            }
+        }
+        Some(1) => app.benchmarks.stop(),
+        Some(usize::MAX) => app.toggle_tool(ToolWindow::Benchmarks),
+        _ => {}
+    }
+    if !has_run {
+        empty_state(ui, ToolWindow::Benchmarks.icon(), tr("No benchmarks run yet"), tr("Click a benchmark gutter icon to see the results."));
+        return;
+    }
+    if running {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
+    }
+    ui.label(&app.benchmarks.status);
+    ui.add_space(8.0);
+    egui::ScrollArea::both().auto_shrink([false, true]).max_height((ui.available_height() - 80.0).max(80.0)).show(ui, |ui| {
+        egui::Grid::new("benchmark-results").striped(true).spacing([18.0, 6.0]).show(ui, |ui| {
+            for label in [tr("Benchmark"), tr("Mean"), tr("Error"), tr("StdDev"), tr("Allocated")] {
+                ui.strong(label);
+            }
+            ui.end_row();
+            for result in &app.benchmarks.results {
+                ui.label(&result.name);
+                ui.monospace(crate::benchmarks::format_time(result.mean_ns));
+                ui.monospace(result.error_ns.map(crate::benchmarks::format_time).unwrap_or_else(|| "—".into()));
+                ui.monospace(result.stddev_ns.map(crate::benchmarks::format_time).unwrap_or_else(|| "—".into()));
+                ui.monospace(result.allocated_bytes.map(|bytes| format!("{bytes:.0} B")).unwrap_or_else(|| "—".into()));
+                ui.end_row();
+            }
+        });
+    });
+    if !app.benchmarks.output.is_empty() {
+        ui.add_space(8.0);
+        egui::CollapsingHeader::new(tr("Output")).show(ui, |ui| {
+            egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
+                for line in &app.benchmarks.output {
+                    ui.monospace(line);
+                }
+            });
+        });
+    }
+}
+
 // ---------------------------------------------------------------------------------- Tests
 
 pub fn tests(app: &mut DotCraftApp, ui: &mut Ui) {

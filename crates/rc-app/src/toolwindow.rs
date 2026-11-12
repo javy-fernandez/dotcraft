@@ -13,6 +13,7 @@ pub enum ToolWindow {
     Run,
     Debug,
     Tests,
+    Benchmarks,
     Build,
     Terminal,
     Problems,
@@ -65,7 +66,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 23] = [
+    pub const ALL: [ToolWindow; 24] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -73,6 +74,7 @@ impl ToolWindow {
         ToolWindow::Run,
         ToolWindow::Debug,
         ToolWindow::Tests,
+        ToolWindow::Benchmarks,
         ToolWindow::Coverage,
         ToolWindow::Build,
         ToolWindow::Monitoring,
@@ -99,6 +101,7 @@ impl ToolWindow {
             ToolWindow::Run => "run",
             ToolWindow::Debug => "debug",
             ToolWindow::Tests => "tests",
+            ToolWindow::Benchmarks => "benchmarks",
             ToolWindow::Build => "build",
             ToolWindow::Terminal => "terminal",
             ToolWindow::Problems => "problems",
@@ -127,6 +130,7 @@ impl ToolWindow {
             ToolWindow::Run => tr("Run"),
             ToolWindow::Debug => tr("Debug"),
             ToolWindow::Tests => tr("Tests"),
+            ToolWindow::Benchmarks => tr("Benchmarks"),
             ToolWindow::Build => tr("Build"),
             ToolWindow::Terminal => tr("Terminal"),
             ToolWindow::Problems => tr("Problems"),
@@ -155,6 +159,7 @@ impl ToolWindow {
             ToolWindow::Run => ico::TW_RUN,
             ToolWindow::Debug => ico::TW_DEBUG,
             ToolWindow::Tests => ico::RUN_ALL,
+            ToolWindow::Benchmarks => ico::TW_MONITORING,
             ToolWindow::Build => ico::TW_BUILD,
             ToolWindow::Terminal => ico::FILE_SHELL,
             ToolWindow::Problems => ico::TW_PROBLEMS,
