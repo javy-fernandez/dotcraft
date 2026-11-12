@@ -1,0 +1,7 @@
+# Debugger memory capability audit (#127)
+
+DotCraft's DAP client currently advertises `supportsMemoryReferences: false` in its `initialize` request. Its capability model has no `supportsReadMemoryRequest`, and variables have no `memoryReference` field. A Memory view would need a valid memory reference from the selected frame or variable and a working `readMemory` request. Merely displaying a hex grid would not supply either.
+
+On 2026-11-12, a direct DAP `initialize` probe of the pinned netcoredbg `3.2.0-1092` Linux binary sent `supportsMemoryReferences: true`. The adapter returned a successful response but omitted `supportsReadMemoryRequest` and `supportsWriteMemoryRequest` from its capability object. The accompanying `capabilities` event also omitted them. This means the adapter did not claim support for raw memory reading even when the client allowed memory references. The adapter's upstream [memory-reference pull request](https://github.com/Samsung/netcoredbg/pull/218) remained open at the time of this audit.
+
+A future implementation should first use a debugger version that advertises `supportsReadMemoryRequest` and supplies `memoryReference` values, then gate the UI on those capabilities, bound reads, handle unreadable ranges, and clear displayed bytes on continue or session end. It needs a live .NET debug fixture with known memory contents to verify the DAP response. The present adapter cannot support a truthful raw Memory view, so this issue remains partial after the Parallel Stacks PR.
