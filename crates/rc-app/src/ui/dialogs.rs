@@ -55,6 +55,7 @@ pub enum Dialog {
     BreakpointProperties { path: PathBuf, line: usize, condition: String, enabled: bool, focus: bool },
     /// Edit an application run configuration: launch profile, arguments, environment, folder.
     RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions, web: bool },
+    LaunchProfileEditor(Box<crate::ui::launch_profile_editor::LaunchProfileEditor>),
     /// A compound run configuration: its name and which applications it starts.
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
@@ -107,6 +108,15 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
+        Dialog::LaunchProfileEditor(editor) => {
+            match editor.show(ctx) {
+                Some(saved) => {
+                    if saved { app.reload_workspace(); }
+                    Outcome::Close
+                }
+                None => Outcome::Keep,
+            }
+        }
         Dialog::InteractiveRebase(state) => if crate::ui::rebase::dialog(app, ctx, state) { Outcome::Close } else { Outcome::Keep },
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
@@ -471,8 +481,7 @@ fn goto_line(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus: &mu
 }
 
 fn run_options(app: &mut DotCraftApp, ctx: &Context, name: &str, project: &std::path::Path, profiles: &[String], o: &mut rc_core::session::RunOptions, web: bool) -> Outcome {
-    let settings_file = project.parent().map(|d| d.join("Properties/launchSettings.json")).filter(|p| p.exists());
-    let mut open_settings = false;
+    let mut edit_settings = false;
     let ((ok, cancel), esc) = modal(ctx, "run_options", 560.0, |ui| {
         title(ui, &trf("Run Configuration: {name}", &[("name", &name)]));
         let p = rc_kit::pal(ui);
@@ -519,16 +528,14 @@ fn run_options(app: &mut DotCraftApp, ctx: &Context, name: &str, project: &std::
         });
         ui.add_space(6.0);
         ui.label(egui::RichText::new(tr("Variables here are added to the profile's; one NAME=value per line.")).size(12.0).color(p.muted));
-        if settings_file.is_some() {
-            ui.add_space(4.0);
-            if ui.link(tr("Open launchSettings.json")).clicked() {
-                open_settings = true;
-            }
+        ui.add_space(4.0);
+        if ui.link(tr("Edit launch profiles…")).clicked() {
+            edit_settings = true;
         }
         buttons(ui, tr("OK"), true)
     });
-    if open_settings && let Some(f) = settings_file {
-        app.open_file(&f);
+    if edit_settings {
+        app.dialog = Some(Dialog::LaunchProfileEditor(Box::new(crate::ui::launch_profile_editor::LaunchProfileEditor::new(project.to_path_buf(), app.waker.clone()))));
         return Outcome::Close;
     }
     if ok {

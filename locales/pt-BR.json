@@ -1463,5 +1463,23 @@
   },
   "rc-app": {
     "Exit Focus Mode": "Exit Focus Mode"
+  },
+  "launchprofileeditor": {
+    "Add profile": "Add profile",
+    "Application URLs": "Application URLs",
+    "Command": "Command",
+    "Delete profile": "Delete profile",
+    "Edit launch profiles": "Edit launch profiles",
+    "Edit launch profiles…": "Edit launch profiles…",
+    "Enter a command name": "Enter a command name",
+    "Enter a profile name": "Enter a profile name",
+    "Environment variable names must be unique and nonempty": "Environment variable names must be unique and nonempty",
+    "Executable path": "Executable path",
+    "Launch URL": "Launch URL",
+    "Launch browser": "Launch browser",
+    "Loading launch profiles…": "Loading launch profiles…",
+    "New profile": "New profile",
+    "Profile name": "Profile name",
+    "Use NAME=value for each environment variable": "Use NAME=value for each environment variable"
   }
 }
