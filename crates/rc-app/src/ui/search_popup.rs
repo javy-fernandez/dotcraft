@@ -220,7 +220,11 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
                         if !shortcut.is_empty() {
                             ui.painter().text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, &shortcut, FontId::proportional(12.0), p.muted);
                         }
-                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+                        let accessible_name = match hit {
+                            Hit::File { rel, .. } => rel.as_str(),
+                            _ => name.as_str(),
+                        };
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, accessible_name));
                         if resp.clicked() {
                             choose = Some(hit.clone());
                         }
@@ -398,6 +402,68 @@ pub fn find_bar(app: &mut DotCraftApp, ui: &mut Ui, rect: Rect) -> f32 {
 mod tests {
     use super::*;
     use egui_kittest::{Harness, kittest::Queryable};
+    use std::path::Path;
+    use std::time::{Duration, Instant};
+
+    fn copy_tree(source: &Path, target: &Path) {
+        std::fs::create_dir_all(target).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let source = entry.path();
+            let target = target.join(entry.file_name());
+            if source.is_dir() {
+                copy_tree(&source, &target);
+            } else {
+                std::fs::copy(source, target).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn search_everywhere_distinguishes_shop_program_files_by_path() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = home.path().join("Shop workspace");
+        copy_tree(&crate::screens::fixtures().join("Shop"), &root);
+        let api = root.join("src/Shop.Api/Program.cs");
+        let cli = root.join("src/Shop.Cli/Program.cs");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root.join("Shop.sln"));
+        app.search_everywhere = Some(SearchEverywhere::new(SeTab::Files, "Program.cs:12".into()));
+        let mut first = true;
+        let mut h = Harness::builder().with_size(vec2(1050.0, 750.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            show(app, ui.ctx());
+        }, app);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !h.state().files.index.as_ref().is_some_and(|index| {
+            let snapshot = index.snapshot();
+            snapshot.get("src/Shop.Api/Program.cs").is_some() && snapshot.get("src/Shop.Cli/Program.cs").is_some()
+        }) && Instant::now() < deadline {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.run_steps(3);
+        use egui::accesskit::Role;
+        assert!(h.query_by_role_and_label(Role::Button, "src/Shop.Api/Program.cs").is_some());
+        assert!(h.query_by_role_and_label(Role::Button, "src/Shop.Cli/Program.cs").is_some());
+        h.get_by_role_and_label(Role::Button, "src/Shop.Api/Program.cs").click();
+        h.run_steps(2);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, api);
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.caret_line_col(), (11, 0));
+
+        h.state_mut().search_everywhere = Some(SearchEverywhere::new(SeTab::Files, "Program.cs".into()));
+        h.run_steps(3);
+        h.get_by_role_and_label(Role::Button, "src/Shop.Cli/Program.cs").click();
+        h.run_steps(2);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, cli);
+        assert!(h.state().search_everywhere.is_none());
+        h.state_mut().close_workspace();
+    }
 
     #[test]
     fn settings_results_open_each_existing_page_from_search_everywhere() {
