@@ -1,6 +1,7 @@
 //! Local History (IntelliJ): a copy of a file each time DotCraft saves it or another app changes
 //! it, kept for a few days outside the project, to compare and restore without Git.
 
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -52,14 +53,28 @@ fn record_in(root: &Path, path: &Path, text: &str, label: &str) -> std::io::Resu
     let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
     // Labels are short ASCII words; keep them safe for a file name.
     let label: String = label.chars().map(|c| if c.is_ascii_alphanumeric() || c == ' ' { c } else { '_' }).collect();
-    let mut name = format!("{millis}-{label}.txt");
-    // Two saves in the same millisecond.
-    let mut n = 1;
-    while dir.join(&name).exists() {
-        name = format!("{millis}{n:03}-{label}.txt");
-        n += 1;
+    // Exclusive creation keeps simultaneous saves in the same millisecond separate.
+    let mut n = 0;
+    loop {
+        let name = if n == 0 {
+            format!("{millis}-{label}.txt")
+        } else {
+            format!("{millis}{n:03}-{label}.txt")
+        };
+        let path = dir.join(name);
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut file) => {
+                if let Err(error) = file.write_all(text.as_bytes()) {
+                    drop(file);
+                    let _ = std::fs::remove_file(&path);
+                    return Err(error);
+                }
+                break;
+            }
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => n += 1,
+            Err(error) => return Err(error),
+        }
     }
-    std::fs::write(dir.join(name), text)?;
     prune(root, path);
     Ok(())
 }
@@ -102,6 +117,8 @@ fn prune(root: &Path, path: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+    use std::sync::{Arc, Barrier};
 
     #[test]
     fn records_lists_and_skips_duplicates() {
@@ -118,5 +135,48 @@ mod tests {
         assert_eq!(revs[0].label, "External change");
         assert_eq!(revs[1].read().unwrap(), "one");
         assert!(revisions_in(&root, &home.path().join("B.cs")).is_empty());
+    }
+
+    #[test]
+    fn concurrent_dotnet_source_revisions_remain_distinct_and_readable() {
+        let home = tempfile::tempdir().unwrap();
+        let root = home.path().join("history");
+        std::fs::write(home.path().join("App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />\n").unwrap();
+        let source = home.path().join("Program.cs");
+        std::fs::write(&source, "class Program {}\n").unwrap();
+        let barrier = Arc::new(Barrier::new(24));
+        let workers: Vec<_> = (0..24)
+            .map(|index| {
+                let root = root.clone();
+                let source = source.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    let text = format!("class Revision{index} {{}}\n");
+                    barrier.wait();
+                    record_in(&root, &source, &text, "Saved").unwrap();
+                    text
+                })
+            })
+            .collect();
+        let expected: BTreeSet<_> = workers.into_iter().map(|worker| worker.join().unwrap()).collect();
+        let revisions = revisions_in(&root, &source);
+        assert_eq!(revisions.len(), expected.len());
+        let actual: BTreeSet<_> = revisions.iter().map(|revision| revision.read().unwrap()).collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn old_revisions_are_pruned_after_the_retention_limit() {
+        let home = tempfile::tempdir().unwrap();
+        let root = home.path().join("history");
+        let source = home.path().join("Program.cs");
+        std::fs::write(&source, "class Program {}\n").unwrap();
+        for index in 0..=MAX_REVISIONS {
+            record_in(&root, &source, &format!("revision {index}"), "Saved").unwrap();
+        }
+        let revisions = revisions_in(&root, &source);
+        assert_eq!(revisions.len(), MAX_REVISIONS);
+        assert_eq!(revisions[0].read().unwrap(), format!("revision {MAX_REVISIONS}"));
+        assert!(!revisions.iter().any(|revision| revision.read().unwrap() == "revision 0"));
     }
 }
