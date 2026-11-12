@@ -50,6 +50,7 @@ pub struct Debugger {
     temp: Option<(PathBuf, u32)>,
     /// URLs the debugged web app listens on.
     pub urls: Vec<String>,
+    pub dashboard_url: Option<String>,
     /// Extra environment for the debugged program (tests pick free ports with it).
     pub env: Vec<(String, String)>,
 }
@@ -74,6 +75,7 @@ impl Debugger {
             show_console: false,
             temp: None,
             urls: Vec::new(),
+            dashboard_url: None,
             env: Vec::new(),
         }
     }
@@ -124,6 +126,7 @@ impl Debugger {
         };
         run.env.extend(self.env.iter().cloned());
         self.urls.clear();
+        self.dashboard_url = None;
         let target = DebugTarget::Project { dotnet, run };
         let console = crate::runner::Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &config.name)]));
@@ -297,6 +300,9 @@ impl Debugger {
                     }
                 }
                 DebugEvent::Output { category, text } => {
+                    if let Some(url) = crate::aspire::dashboard_url(&text) {
+                        self.dashboard_url = Some(url);
+                    }
                     if let Some(c) = &self.console {
                         let stream = if category == OutputCategory::Stderr { rc_dotnet::Stream::Stderr } else { rc_dotnet::Stream::Stdout };
                         let console_msg = matches!(category, OutputCategory::Console | OutputCategory::Important);

@@ -110,6 +110,7 @@ pub struct DotCraftApp {
     pub notices: Vec<Notice>,
     /// Monitoring: CPU and memory of the program in the selected Run tab.
     pub monitor: crate::monitor::Monitor,
+    pub aspire: crate::aspire::Aspire,
     /// TODO tool window: the workspace's TODO and FIXME comments.
     pub todos: Option<crate::todo::Todos>,
     /// Hierarchy tool window (Call / Type Hierarchy).
@@ -235,6 +236,7 @@ impl DotCraftApp {
             dialog: None,
             notices: Vec::new(),
             monitor: crate::monitor::Monitor::new(waker.clone()),
+            aspire: crate::aspire::Aspire::new(waker.clone()),
             todos: None,
             hierarchy: None,
             history_file: None,
@@ -410,6 +412,7 @@ impl DotCraftApp {
         self.ef_options = session.ef.clone();
         self.ef = None;
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
+        self.aspire.set_hosts(self.runner.aspire_hosts.clone());
         let root = ws.root.clone();
         self.workspace = Some(WorkspaceState { ws, solution });
         self.packages.set_workspace(&root, self.solution_projects());
@@ -553,6 +556,7 @@ impl DotCraftApp {
         self.debugger.stop();
         self.runner.stop_all();
         self.runner.clear();
+        self.aspire.set_hosts(Vec::new());
         self.files.close();
         self.todos = None;
         self.vcs.close();
@@ -1131,10 +1135,18 @@ impl DotCraftApp {
                 self.save_all_docs();
                 match self.runner.selected_config().cloned() {
                     Some(config) => {
+                        let aspire_host = match &config.kind {
+                            crate::runner::ConfigKind::App { project, .. } => self.aspire.hosts.iter().position(|host| host == project),
+                            _ => None,
+                        };
                         let dotnet = dotnet_path(&self.settings);
                         let request = self.runner.request_for(&config);
                         let outs = self.debugger.start(config, request, &dotnet, self.settings.netcoredbg_path.as_deref(), &self.docs);
                         self.handle_debug(outs);
+                        if let Some(index) = aspire_host {
+                            self.aspire.select_host(index);
+                            self.dock.show(ToolWindow::AspireResources);
+                        }
                     }
                     None => self.notify(tr("There is no run configuration to debug"), false),
                 }
@@ -1799,6 +1811,9 @@ impl eframe::App for DotCraftApp {
         self.appsettings.update(&mut self.docs, &mut self.insight.problems);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
+        let aspire_running = self.runner.runs.iter().any(|r| r.running() && matches!(&r.config.kind, crate::runner::ConfigKind::App { project, .. } if self.aspire.host() == Some(project.as_path())));
+        let aspire_debugging = self.debugger.active() && self.runner.configs.iter().any(|config| config.name == self.debugger.name && matches!(&config.kind, crate::runner::ConfigKind::App { project, .. } if self.aspire.host() == Some(project.as_path())));
+        self.aspire.poll(self.dock.is_open(ToolWindow::AspireResources) && (aspire_running || aspire_debugging));
         // Monitoring follows the selected Run tab's process (or the last one started).
         let target = self.runner.runs.get(self.runner.active_run).filter(|r| r.running()).or_else(|| self.runner.runs.iter().rev().find(|r| r.running()));
         self.monitor.follow(target.and_then(|r| Some((r.name.clone(), r.handle.as_ref()?.pid()?))));

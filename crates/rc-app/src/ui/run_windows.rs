@@ -43,7 +43,15 @@ pub fn console(ui: &mut Ui, term: &rc_term::TermSession) -> Vec<rc_term::ViewEve
 pub fn handle_outputs(app: &mut DotCraftApp, outputs: Vec<RunnerOutput>) {
     for o in outputs {
         match o {
-            RunnerOutput::ShowTool(tw) => app.dock.show(tw),
+            RunnerOutput::ShowTool(tw) => {
+                if tw == ToolWindow::AspireResources
+                    && let Some(crate::runner::ConfigKind::App { project, .. }) = app.runner.runs.get(app.runner.active_run).map(|run| &run.config.kind)
+                    && let Some(index) = app.aspire.hosts.iter().position(|host| host == project)
+                {
+                    app.aspire.select_host(index);
+                }
+                app.dock.show(tw);
+            }
             RunnerOutput::Notify(m, err) => app.notify(m, err),
             RunnerOutput::BuildDiagnostics(list) => app.set_build_problems(list),
             RunnerOutput::ToolFinished { followup, success, lines } => crate::ui::ef_core::tool_finished(app, followup, success, &lines),
