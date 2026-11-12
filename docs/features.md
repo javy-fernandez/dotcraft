@@ -3,7 +3,7 @@
 Generated from [FEATURES.md](../FEATURES.md) by `python3 scripts/features_summary.py`.
 The issues below were open on 2026-11-12. Every listed PR is open against the original repository's `main`; unchecked means not merged and does not imply Rider parity.
 
-**22 open issues:** 15 with a closing PR pending review and merge; 7 with only partial PRs.
+**22 open issues:** 16 with a closing PR pending review and merge; 6 with only partial PRs.
 
 | Issue | Requested feature | PR status | PR index |
 | --- | --- | --- | --- |
@@ -28,6 +28,6 @@ The issues below were open on 2026-11-12. Every listed PR is open against the or
 | - [ ] [#138](https://github.com/javy-fernandez/dotcraft/issues/138) | BenchmarkDotNet gutter run and results table | Closing PR | [#290](https://github.com/javy-fernandez/dotcraft/pull/290) |
 | - [ ] [#140](https://github.com/javy-fernandez/dotcraft/issues/140) | Live MAUI and Avalonia XAML preview while editing | Partial PR | [#307](https://github.com/javy-fernandez/dotcraft/pull/307) |
 | - [ ] [#141](https://github.com/javy-fernandez/dotcraft/issues/141) | Remote WSL/SSH workspaces with .NET, Roslyn and debugger on remote host | Partial PR | [#309](https://github.com/javy-fernandez/dotcraft/pull/309) |
-| - [ ] [#142](https://github.com/javy-fernandez/dotcraft/issues/142) | Assembly Explorer | Partial PR | [#303](https://github.com/javy-fernandez/dotcraft/pull/303) |
+| - [ ] [#142](https://github.com/javy-fernandez/dotcraft/issues/142) | Assembly Explorer | Closing PR | [#303](https://github.com/javy-fernandez/dotcraft/pull/303) |
 
 A closing PR uses `Closes #...` and may close its issue after merge. A partial PR uses `Refs #...` and leaves its issue open. Detailed scope, evidence paths, validation, and limitations are in [FEATURES.md](../FEATURES.md) and the linked PRs.
