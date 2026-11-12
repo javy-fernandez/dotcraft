@@ -3,11 +3,11 @@
 Generated from [FEATURES.md](../FEATURES.md) by `python3 scripts/features_summary.py`.
 The issues below were open on 2026-11-12. Every listed PR is open against the original repository's `main`; unchecked means not merged and does not imply Rider parity.
 
-**22 open issues:** 16 with a closing PR pending review and merge; 6 with only partial PRs.
+**22 open issues:** 17 with a closing PR pending review and merge; 5 with only partial PRs.
 
 | Issue | Requested feature | PR status | PR index |
 | --- | --- | --- | --- |
-| - [ ] [#117](https://github.com/javy-fernandez/dotcraft/issues/117) | Code Vision | Partial PR | [#297](https://github.com/javy-fernandez/dotcraft/pull/297), [#308](https://github.com/javy-fernandez/dotcraft/pull/308) |
+| - [ ] [#117](https://github.com/javy-fernandez/dotcraft/issues/117) | Code Vision | Closing PR | [#297](https://github.com/javy-fernandez/dotcraft/pull/297), [#308](https://github.com/javy-fernandez/dotcraft/pull/308) |
 | - [ ] [#119](https://github.com/javy-fernandez/dotcraft/issues/119) | Manage User Secrets | Closing PR | [#287](https://github.com/javy-fernandez/dotcraft/pull/287) |
 | - [ ] [#120](https://github.com/javy-fernandez/dotcraft/issues/120) | Multi-culture `.resx` grid | Closing PR | [#293](https://github.com/javy-fernandez/dotcraft/pull/293) |
 | - [ ] [#121](https://github.com/javy-fernandez/dotcraft/issues/121) | Publish profiles | Closing PR | [#288](https://github.com/javy-fernandez/dotcraft/pull/288) |
