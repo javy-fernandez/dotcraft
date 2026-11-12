@@ -25,11 +25,11 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 67 |
+| ✅ Verified | 68 |
 | 🚧 In progress | 43 |
 | 🟢 Existing | 43 |
 | 🔁 Reuse candidate | 17 |
-| ⬜ Backlog | 203 |
+| ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -437,7 +437,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-18 | Three-way merge editor | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-19 | Conflict resolution | 🚧 | PR 8 verifies deleted-side backend resolutions; visual merge tooling remains pending. |
 | I-20 | Changelists | ⬜ | Implement with integration and UI acceptance evidence. |
-| I-21 | Partial commit | ⬜ | Implement with integration and UI acceptance evidence. |
+| I-21 | Partial commit | ✅ | [PR 223](https://github.com/javy-fernandez/dotcraft/pull/223) verifies staging one text hunk and committing only the index in real Shop.sln egui UI on Linux; unsaved editor buffers block the operation and other edits stay unstaged. Line UI, binary/rename/concurrent index and other platforms remain untested. |
 | I-22 | Git worktrees | ✅ | Existing backend/UI plus [PR 215](https://github.com/javy-fernandez/dotcraft/pull/215) verify create/list, dirty-worktree refusal, active-primary refusal and clean removal in real Shop.sln egui UI on Linux. Locked/symlink/network worktrees and other platforms remain untested. |
 | I-23 | Submodules | 🚧 | [PR 158](https://github.com/javy-fernandez/dotcraft/pull/158) adds typed recursive status and cancellable update; 47 rc-vcs tests pass. UI, nested/network cases, and cross-platform acceptance remain. |
 | I-24 | Git LFS | ⬜ | Implement with integration and UI acceptance evidence. |

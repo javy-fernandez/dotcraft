@@ -317,6 +317,7 @@ additional scope is pending.
 | Shop navigation history with removed source (D-10) | [Original PR 220](https://github.com/javy-fernandez/dotcraft/pull/220) | [Navigation evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/navigation-history-missing-files/docs/implementation/navigation-history-shop.md) |
 | Bounded NuGet search (B-12, partial) | [Original PR 221](https://github.com/javy-fernandez/dotcraft/pull/221) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/221/files) |
 | Accessible Shop Find in Files results (D-07) | [Original PR 222](https://github.com/javy-fernandez/dotcraft/pull/222) | [Find evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/find-in-files-shop-accessibility/docs/implementation/find-in-files-shop.md) |
+| Shop text-hunk partial commit (I-21) | [Original PR 223](https://github.com/javy-fernandez/dotcraft/pull/223) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/223/files) |
 
 ## Completion criteria
 
