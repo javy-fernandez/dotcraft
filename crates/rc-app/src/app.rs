@@ -3,7 +3,7 @@
 
 use crate::docs::Docs;
 use crate::insight::{Insight, InsightOutput, NavKind, Target};
-use crate::runner::Runner;
+use crate::runner::{ConfigKind, Runner};
 use crate::native_menu::{MenuCommand, NativeMenu};
 use crate::toolwindow::{Dock, ToolWindow};
 use crate::ui::dialogs::Dialog;
@@ -133,6 +133,7 @@ pub struct DotCraftApp {
     /// Completion, hover and problems in `appsettings*.json`.
     pub appsettings: crate::appsettings_insight::SettingsInsight,
     pub runner: Runner,
+    pub continuous: crate::continuous_testing::ContinuousTesting,
     pub debugger: crate::debugger::Debugger,
     window_title: String,
     pub files: crate::search::Files,
@@ -248,6 +249,7 @@ impl DotCraftApp {
             packages: crate::package_insight::PackageInsight::new(waker.clone()),
             appsettings: crate::appsettings_insight::SettingsInsight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
+            continuous: crate::continuous_testing::ContinuousTesting::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
             files: crate::search::Files::new(),
@@ -410,6 +412,12 @@ impl DotCraftApp {
         self.ef_options = session.ef.clone();
         self.ef = None;
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
+        let all_projects = solution.as_ref().map(|solution| solution.projects().into_iter().map(|project| project.path.clone()).collect()).unwrap_or_else(|| projects.clone());
+        let test_projects = self.runner.configs.iter().filter_map(|config| match &config.kind {
+            ConfigKind::Tests { target } if target.extension().is_some_and(|extension| extension == "csproj") => Some(target.clone()),
+            _ => None,
+        }).collect();
+        self.continuous.set_workspace(all_projects, test_projects, session.continuous_testing.clone());
         let root = ws.root.clone();
         self.workspace = Some(WorkspaceState { ws, solution });
         self.packages.set_workspace(&root, self.solution_projects());
@@ -550,6 +558,7 @@ impl DotCraftApp {
         self._watcher = None;
         self._filter_watcher = None;
         self.insight.stop();
+        self.continuous.reset();
         self.debugger.stop();
         self.runner.stop_all();
         self.runner.clear();
@@ -669,6 +678,7 @@ impl DotCraftApp {
                 m
             },
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
+            continuous_testing: self.continuous.options.clone(),
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
             ef: self.ef_options.clone(),
@@ -697,17 +707,20 @@ impl DotCraftApp {
         self.session_dirty = false;
     }
 
-    pub fn save_all_docs(&mut self) {
+    pub fn save_all_docs(&mut self) -> Vec<PathBuf> {
         let modified: Vec<PathBuf> = self.docs.list.iter().filter(|d| d.is_modified()).map(|d| d.path.clone()).collect();
         for e in self.docs.save_all() {
             self.notify(e, true);
         }
+        let mut saved = Vec::new();
         for p in modified {
             // A failed save keeps the buffer dirty and must not send didSave.
             if self.docs.index_of(&p).is_some_and(|i| !self.docs.list[i].is_modified()) {
                 self.insight.did_save_synced(&mut self.docs, &p);
+                saved.push(p);
             }
         }
+        saved
     }
 
     /// Code-insight results that leave the editor: navigation, result lists, dialogs.
@@ -1055,15 +1068,23 @@ impl DotCraftApp {
             Action::Save => {
                 if let Some(i) = self.docs.active && !self.docs.list[i].editor.read_only {
                     let path = self.docs.list[i].path.clone();
+                    let changed = self.docs.list[i].is_modified();
                     match self.docs.save(i) {
-                        Ok(()) => self.insight.did_save_synced(&mut self.docs, &path),
+                        Ok(()) => {
+                            self.insight.did_save_synced(&mut self.docs, &path);
+                            if changed {
+                                self.continuous.note_saved(&path);
+                                if self.continuous.waiting_for_save() { ctx.request_repaint_after(std::time::Duration::from_millis(450)); }
+                            }
+                        }
                         Err(error) => self.notify(error, true),
                     }
                 }
                 self.save_session();
             }
             Action::SaveAll => {
-                self.save_all_docs();
+                for path in self.save_all_docs() { self.continuous.note_saved(&path); }
+                if self.continuous.waiting_for_save() { ctx.request_repaint_after(std::time::Duration::from_millis(450)); }
                 self.save_session();
             }
             Action::CloseTab => {
@@ -1093,7 +1114,7 @@ impl DotCraftApp {
             }
             Action::OpenFolder => self.pick_and_open(),
             Action::Build => {
-                self.save_all_docs();
+                for path in self.save_all_docs() { self.continuous.note_saved(&path); }
                 if let Some(target) = self.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
                     let outs = self.runner.build(&target, rc_dotnet::BuildAction::Build);
                     crate::ui::run_windows::handle_outputs(self, outs);
@@ -1580,6 +1601,7 @@ impl DotCraftApp {
         }
         for e in &events {
             self.vcs.on_fs_change(e.path());
+            self.continuous.note_disk_change(e.path());
         }
         for ev in events {
             let p = ev.path().to_path_buf();
@@ -1798,6 +1820,15 @@ impl eframe::App for DotCraftApp {
         self.handle_packages(outputs);
         self.appsettings.update(&mut self.docs, &mut self.insight.problems);
         let outs = self.runner.update();
+        crate::ui::run_windows::handle_outputs(self, outs);
+        if let Some(build) = &self.runner.build
+            && matches!(build.action, Some(rc_dotnet::BuildAction::Build | rc_dotnet::BuildAction::Rebuild))
+            && (build.result.is_some() || build.failed.is_some())
+        {
+            let success = build.result.as_ref().is_some_and(|result| result.success && !result.cancelled);
+            self.continuous.observe_build(build.started, success);
+        }
+        let outs = self.continuous.poll(&mut self.runner);
         crate::ui::run_windows::handle_outputs(self, outs);
         // Monitoring follows the selected Run tab's process (or the last one started).
         let target = self.runner.runs.get(self.runner.active_run).filter(|r| r.running()).or_else(|| self.runner.runs.iter().rev().find(|r| r.running()));

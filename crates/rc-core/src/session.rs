@@ -71,6 +71,33 @@ impl Default for ToolWindowState {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContinuousMode {
+    #[default]
+    Off,
+    OnSave,
+    OnBuild,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContinuousScope {
+    #[default]
+    Affected,
+    Session,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ContinuousTestingOptions {
+    pub mode: ContinuousMode,
+    pub scope: ContinuousScope,
+    /// A test project or solution and its optional VSTest filter expression.
+    pub session_target: Option<PathBuf>,
+    pub session_filter: Option<String>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Session {
@@ -87,6 +114,7 @@ pub struct Session {
     /// Bookmarks: file → (0-based line, mnemonic).
     pub bookmarks: BTreeMap<PathBuf, Vec<(usize, Option<char>)>>,
     pub run_configuration: Option<String>,
+    pub continuous_testing: ContinuousTestingOptions,
     /// Breakpoints: file → 0-based lines (with an optional condition).
     pub breakpoints: BTreeMap<PathBuf, Vec<(usize, Option<String>)>>,
     /// Breakpoints that are disabled: file → 0-based lines.
@@ -155,6 +183,12 @@ mod tests {
         s.tool_windows.insert("Explorer".into(), ToolWindowState { visible: true, size: 320.0, side: Some("left".into()) });
         s.run_options.insert("MySolution".into(), RunOptions { args: "--verbose".into(), build_first: false, ..Default::default() });
         s.custom_templates.insert("greet".into(), "Console.WriteLine(${1:name});$0".into());
+        s.continuous_testing = ContinuousTestingOptions {
+            mode: ContinuousMode::OnSave,
+            scope: ContinuousScope::Session,
+            session_target: Some(ws.join("MySolution.csproj")),
+            session_filter: Some("FullyQualifiedName~Example".into()),
+        };
         s.save(&ws).unwrap();
         assert_eq!(Session::load(&ws), s);
 
