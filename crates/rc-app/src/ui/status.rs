@@ -152,3 +152,32 @@ fn breadcrumbs(app: &mut DotCraftApp, ui: &mut Ui) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn dotnet_workspace_notifications_show_and_expire_by_severity() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let solution = crate::screens::fixtures().join("Shop/Shop.sln");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState {
+            ws: rc_core::Workspace::open(&solution).unwrap(),
+            solution: Some(rc_dotnet::Solution::load(&solution).unwrap()),
+        });
+        app.notify("Example information", false);
+        app.notify("Example error", true);
+        let mut harness = crate::screens::harness(app, egui::vec2(1000.0, 700.0));
+        harness.get_by_label("Example error");
+        for notice in &mut harness.state_mut().notices { notice.at = 1.0; }
+        harness.input_mut().time = Some(10.0);
+        harness.run_steps(2);
+        assert_eq!(harness.state().notices.len(), 1);
+        assert!(harness.state().notices[0].error);
+        harness.input_mut().time = Some(20.0);
+        harness.run_steps(2);
+        assert!(harness.state().notices.is_empty());
+    }
+}
