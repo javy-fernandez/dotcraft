@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 65 |
+| ✅ Verified | 66 |
 | 🚧 In progress | 42 |
-| 🟢 Existing | 46 |
+| 🟢 Existing | 45 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 203 |
 | 🚫 Out of scope | 0 |
@@ -248,7 +248,7 @@ Source / reuse boundary: `crates/rc-app/src/search.rs; crates/rc-search; crates/
 | D-07 | Find in files | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-08 | Replace in files | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-09 | File structure | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| D-10 | Navigation history | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| D-10 | Navigation history | ✅ | [PR 220](https://github.com/javy-fernandez/dotcraft/pull/220) skips removed files even when their editor buffer remains open, preserving Back/Forward stacks and exact C# caret locations in the real Shop.sln egui UI on Linux. Renames, remote files and other platforms remain untested. |
 | D-11 | Type hierarchy | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | D-12 | Call hierarchy | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | D-13 | Scope-aware search | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
