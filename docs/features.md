@@ -324,6 +324,7 @@ additional scope is pending.
 | Shop run configuration toolbar selection (F-07) | [Original PR 227](https://github.com/javy-fernandez/dotcraft/pull/227) | [Run configuration evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/run-config-shop-acceptance/docs/implementation/run-config-shop.md) |
 | Shop Go to File name and line (D-01) | [Original PR 228](https://github.com/javy-fernandez/dotcraft/pull/228) | [Go to File evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/go-to-file-shop-line/docs/implementation/go-to-file-shop.md) |
 | Shop C# syntax paint in built-in themes (C-01) | [Original PR 229](https://github.com/javy-fernandez/dotcraft/pull/229) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/229/files) |
+| Linux MSBuild property evaluation (B-10) | [Original PR 230](https://github.com/javy-fernandez/dotcraft/pull/230) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/230/files) |
 
 ## Completion criteria
 
