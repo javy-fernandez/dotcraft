@@ -130,6 +130,55 @@ pub struct SignatureHelp {
     pub active: usize,
 }
 
+impl SignatureHelp {
+    /// Argument under the caret, ignoring commas in nested expressions and quoted text.
+    pub fn argument_at(&self, rope: &rc_text::Rope, caret: usize) -> Option<usize> {
+        if self.anchor >= rope.len_chars() || rope.char(self.anchor) != '(' || caret <= self.anchor || caret > rope.len_chars() {
+            return None;
+        }
+        let mut depth = 0usize;
+        let mut argument = 0usize;
+        let mut quote = None;
+        let mut escaped = false;
+        let mut line_comment = false;
+        let mut block_comment = false;
+        let mut i = self.anchor + 1;
+        while i < caret {
+            let c = rope.char(i);
+            let next = (i + 1 < caret).then(|| rope.char(i + 1));
+            if line_comment {
+                line_comment = c != '\n';
+            } else if block_comment {
+                if c == '*' && next == Some('/') {
+                    block_comment = false;
+                    i += 1;
+                }
+            } else if let Some(delimiter) = quote {
+                if escaped {
+                    escaped = false;
+                } else if c == '\\' {
+                    escaped = true;
+                } else if c == delimiter {
+                    quote = None;
+                }
+            } else {
+                match (c, next) {
+                    ('/', Some('/')) => { line_comment = true; i += 1; }
+                    ('/', Some('*')) => { block_comment = true; i += 1; }
+                    ('"' | '\'', _) => quote = Some(c),
+                    ('(' | '[' | '{', _) => depth += 1,
+                    (')', _) if depth == 0 => return None,
+                    (')' | ']' | '}', _) => depth = depth.saturating_sub(1),
+                    (',', _) if depth == 0 => argument += 1,
+                    _ => {}
+                }
+            }
+            i += 1;
+        }
+        Some(argument)
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Signature {
     pub label: String,

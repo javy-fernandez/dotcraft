@@ -142,6 +142,13 @@ pub(crate) fn show(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
             state.popups.completion = None;
         }
     }
+    if let Some(sig) = &mut state.popups.signature {
+        if let Some(argument) = sig.argument_at(state.buffer.rope(), state.selection.primary().head) {
+            if let Some(active) = sig.signatures.get_mut(sig.active) {
+                active.active_param = Some(argument);
+            }
+        }
+    }
     if let Some(sig) = state.popups.signature.clone() {
         let anchor = crate::view::caret_anchor(ui, state, scheme, m, text_rect, sig.anchor);
         show_signature(ui, &sig, scheme, pal, anchor, m);
