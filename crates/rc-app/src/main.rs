@@ -39,6 +39,7 @@ mod navigation_history_acceptance_tests;
 mod screens;
 #[cfg(test)]
 mod standalone_project_tests;
+mod workspace_open_tests;
 mod docs;
 mod native_menu;
 mod open_files;
