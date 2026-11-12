@@ -1307,8 +1307,7 @@
     "Submodules": "Submodules",
     "Track LFS pattern": "Track LFS pattern",
     "Worktree absolute path": "Worktree absolute path",
-    "Worktrees": "Worktrees",
-    "en": "de"
+    "Worktrees": "Worktrees"
   },
   "batch2-database": {
     "Added in other file": "Added in other file",
@@ -1463,8 +1462,6 @@
     "{method}: {title}": "{method}: {title}"
   },
   "rc-app": {
-    "Distraction-free Mode": "Distraction-free Mode",
-    "Zen Mode": "Zen Mode",
     "Exit Focus Mode": "Exit Focus Mode"
   }
 }
