@@ -26,6 +26,7 @@ pub mod nuget;
 pub mod nuget_auth;
 pub mod process;
 pub mod project;
+pub mod project_references;
 pub mod project_xml;
 pub mod run;
 pub mod sdk;
