@@ -285,7 +285,7 @@ pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &Edit
             if h.pad_right {
                 label.push(' ');
             }
-            virtuals.push(Virtual { col: h.pos - line_start, text: label.trim().to_string(), kind: VirtualKind::InlayHint });
+            virtuals.push(Virtual { col: h.pos - line_start, text: label, kind: VirtualKind::InlayHint });
         }
     }
     let mut suffix: Option<(String, Vec<rc_syntax::Span>)> = None;
@@ -1615,4 +1615,35 @@ fn expand_template(state: &mut EditorState) -> bool {
     let body = crate::templates::fill(body, &stem);
     state.insert_snippet(start, caret, &body);
     true
+}
+
+#[cfg(test)]
+mod shop_inlay_padding_tests {
+    use super::*;
+
+    #[test]
+    fn requested_padding_survives_layout_on_shop_csharp_call() {
+        const SOURCE: &str = include_str!("../../../tests/fixtures/Shop/src/Shop.Core/PriceCalculator.cs");
+        let mut state = EditorState::new(1, Some("PriceCalculator.cs".into()), SOURCE);
+        let pos = SOURCE[..SOURCE.find("ThrowIfNull(order)").unwrap() + "ThrowIfNull(".len()].chars().count();
+        let line = state.buffer.rope().char_to_line(pos);
+        state.inlays.push(crate::InlayHint { pos, label: "value:".into(), pad_left: true, pad_right: true });
+        let context = egui::Context::default();
+        for (left, right, expected) in [
+            (true, true, "\u{2009} value: \u{2009}"),
+            (true, false, "\u{2009} value:\u{2009}"),
+            (false, true, "\u{2009}value: \u{2009}"),
+            (false, false, "\u{2009}value:\u{2009}"),
+        ] {
+            state.inlays[0].pad_left = left;
+            state.inlays[0].pad_right = right;
+            let mut shown = String::new();
+            let mut output = context.run_ui(Default::default(), |ui| {
+                let layout = layout_buffer_line(ui, &mut state, &EditorConfig::default(), &rc_kit::theme::SCHEME_DARK, line, &[]);
+                shown = layout.galley.text().to_string();
+            });
+            output.textures_delta.clear();
+            assert!(shown.contains(expected), "left={left}, right={right}");
+        }
+    }
 }
