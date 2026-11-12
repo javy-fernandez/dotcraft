@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 102 |
+| ✅ Verified | 103 |
 | 🚧 In progress | 46 |
-| 🟢 Existing | 6 |
+| 🟢 Existing | 5 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -405,7 +405,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/test.rs; crates/rc-app/src/ui/run
 | H-19 | Coverage thresholds | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-20 | CPU profiling | ✅ | [PR 259](https://github.com/javy-fernandez/dotcraft/pull/259) records the existing live Shop.Api test rerun with SDK 8.0.428 on Linux: Monitoring starts/stops CPU profiling during concurrent HTTP load, obtains 4,343 samples and renders call tree/hot spots in egui. Other runtimes, accuracy under idle/large loads and other platforms remain untested. |
 | H-21 | Allocation profiling | ⬜ | Implement with integration and UI acceptance evidence. |
-| H-22 | Memory snapshots | 🟢 | Source located in `rc-dotnet/gcdump.rs`; repeat real .NET acceptance checks. |
+| H-22 | Memory snapshots | ✅ | [PR 263](https://github.com/javy-fernandez/dotcraft/pull/263) verifies a live Shop.Api EventPipe heap snapshot with SDK 8.0.428 on Linux, nonempty sorted type totals, and the native Memory tab with >1,000 objects including ASP.NET types. Full-GC pause, shallow sizes, large heaps and other platforms remain untested. |
 | H-23 | Profiling comparison | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-24 | Application monitoring | ✅ | [PR 261](https://github.com/javy-fernandez/dotcraft/pull/261) verifies live Shop.Api CPU/memory samples and .NET GC heap counter, with native Monitoring charts and an inspected screenshot using SDK 8.0.428 on Linux. History retention, heavy load, restart, chart accessibility, other runtimes and platforms remain untested. |
 | H-25 | Performance issue detection | ⬜ | Implement with integration and UI acceptance evidence. |
