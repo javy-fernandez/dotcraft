@@ -152,7 +152,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                             ui.close();
                         }
                     });
-                    if (app.runner.busy() || app.debugger.active() || app.debugger.downloading.is_some()) && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked() {
+                    if (app.runner.busy() || app.docker_runs.running || app.debugger.active() || app.debugger.downloading.is_some()) && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked() {
                         app.pending.push(Action::StopRun);
                     }
                     if theme::icon_button_sized(ui, ico::DEBUG, true, &format!("{}{}", tr("Debug"), shortcut(Action::Debug)), 30.0).clicked() {

@@ -17,6 +17,8 @@ pub enum ConfigKind {
     Tests { target: PathBuf },
     /// Several application configurations started together (by name).
     Compound { members: Vec<String> },
+    /// A Dockerfile or Compose file discovered in the workspace.
+    Docker { file: PathBuf, compose: bool },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,6 +34,7 @@ impl RunConfig {
             ConfigKind::App { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Tests { .. } => rc_kit::ico::RUN_ALL,
             ConfigKind::Compound { .. } => rc_kit::ico::TW_SERVICES,
+            ConfigKind::Docker { .. } => rc_kit::ico::TW_SERVICES,
         }
     }
 }
@@ -316,6 +319,7 @@ impl Runner {
                 }
                 out
             }
+            ConfigKind::Docker { .. } => vec![RunnerOutput::Notify(tr("Use the Docker run action").into(), true)],
         }
     }
 
