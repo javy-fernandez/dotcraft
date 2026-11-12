@@ -345,6 +345,7 @@ additional scope is pending.
 | Shop Markdown preview modes (J-04) | [Original PR 248](https://github.com/javy-fernandez/dotcraft/pull/248) | [Preview evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-markdown-preview/docs/implementation/shop-markdown-preview.md) |
 | Shop.Cli debugger Step Into (G-05) | [Original PR 249](https://github.com/javy-fernandez/dotcraft/pull/249) | [Step Into evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-step-into-live/docs/implementation/shop-debugger-step-into.md) |
 | Shop.Cli debugger Step Out (G-06) | [Original PR 250](https://github.com/javy-fernandez/dotcraft/pull/250) | [Step Out evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-step-out-live/docs/implementation/shop-debugger-step-out.md) |
+| Linux Shop.Core coverage collection (H-16) | [Original PR 251](https://github.com/javy-fernandez/dotcraft/pull/251) | [Coverage evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-coverage-live/docs/implementation/coverage-linux.md) |
 
 ## Completion criteria
 
