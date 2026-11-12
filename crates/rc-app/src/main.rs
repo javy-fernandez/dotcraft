@@ -65,6 +65,7 @@ mod docs;
 mod native_menu;
 mod open_files;
 mod generate;
+mod generate_targets;
 mod toolwindow;
 mod ui;
 

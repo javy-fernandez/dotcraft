@@ -10,6 +10,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &egui::Context) {
     };
     let mut keep = true;
     let mut generated = None;
+    let mut use_roslyn = false;
     egui::Window::new(tr("Generate"))
         .id(egui::Id::new("generate_members"))
         .collapsible(false)
@@ -27,16 +28,40 @@ pub fn show(app: &mut DotCraftApp, ctx: &egui::Context) {
             egui::ScrollArea::vertical()
                 .max_height(280.0)
                 .show(ui, |ui| {
-                    let candidates = dialog
-                        .candidates()
-                        .map(|(index, _)| index)
-                        .collect::<Vec<_>>();
-                    for index in candidates {
-                        let member = &mut dialog.members[index];
-                        ui.checkbox(
-                            &mut member.selected,
-                            format!("{}: {}", member.name, member.ty),
-                        );
+                    if matches!(
+                        dialog.kind,
+                        Kind::Implement | Kind::Override | Kind::Delegate
+                    ) {
+                        if !dialog
+                            .targets
+                            .iter()
+                            .any(|member| member.kind == dialog.kind)
+                        {
+                            ui.label(tr("No local members found"));
+                            if ui.button(tr("Try Roslyn code actions")).clicked() {
+                                use_roslyn = true;
+                                keep = false;
+                            }
+                        }
+                        for member in dialog
+                            .targets
+                            .iter_mut()
+                            .filter(|member| member.kind == dialog.kind)
+                        {
+                            ui.checkbox(&mut member.selected, &member.label);
+                        }
+                    } else {
+                        let candidates = dialog
+                            .candidates()
+                            .map(|(index, _)| index)
+                            .collect::<Vec<_>>();
+                        for index in candidates {
+                            let member = &mut dialog.members[index];
+                            ui.checkbox(
+                                &mut member.selected,
+                                format!("{}: {}", member.name, member.ty),
+                            );
+                        }
                     }
                 });
             ui.separator();
@@ -55,6 +80,12 @@ pub fn show(app: &mut DotCraftApp, ctx: &egui::Context) {
                 }
             });
         });
+    if use_roslyn {
+        app.run_insight_action(
+            rc_editor::Action::ShowIntentions,
+            app.caret_screen.unwrap_or(egui::Pos2::ZERO),
+        );
+    }
     if let Some(code) = generated {
         if let Some(doc) = app.docs.active_doc_mut() {
             if doc.editor.id == dialog.doc_id
@@ -123,6 +154,7 @@ mod tests {
                 readonly: false,
                 selected: true,
             }],
+            targets: Vec::new(),
             existing: Vec::new(),
         });
         let mut harness = crate::screens::harness(app, egui::vec2(1100.0, 700.0));

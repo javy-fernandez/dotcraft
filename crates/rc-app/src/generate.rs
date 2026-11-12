@@ -10,15 +10,21 @@ pub enum Kind {
     Equality,
     ToString,
     Formatting,
+    Implement,
+    Override,
+    Delegate,
 }
 
 impl Kind {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 8] = [
         Self::Constructor,
         Self::Properties,
         Self::Equality,
         Self::ToString,
         Self::Formatting,
+        Self::Implement,
+        Self::Override,
+        Self::Delegate,
     ];
 
     pub fn label(self) -> &'static str {
@@ -29,6 +35,9 @@ impl Kind {
             Self::Equality => tr("Equals and GetHashCode"),
             Self::ToString => tr("ToString"),
             Self::Formatting => tr("Formatting members"),
+            Self::Implement => tr("Implement members"),
+            Self::Override => tr("Override members"),
+            Self::Delegate => tr("Delegate members"),
         }
     }
 }
@@ -43,6 +52,14 @@ pub struct Member {
 }
 
 #[derive(Clone, Debug)]
+pub struct TargetMember {
+    pub kind: Kind,
+    pub label: String,
+    pub code: String,
+    pub selected: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct Dialog {
     pub doc_id: u64,
     pub version: u64,
@@ -52,6 +69,7 @@ pub struct Dialog {
     pub indent: String,
     pub kind: Kind,
     pub members: Vec<Member>,
+    pub targets: Vec<TargetMember>,
     pub existing: Vec<String>,
 }
 
@@ -157,6 +175,7 @@ impl Dialog {
                 _ => {}
             }
         }
+        let targets = crate::generate_targets::collect(tree, source, node, &members, &existing);
         Some(Self {
             doc_id,
             version,
@@ -166,6 +185,7 @@ impl Dialog {
             indent,
             kind: Kind::Constructor,
             members,
+            targets,
             existing,
         })
     }
@@ -190,6 +210,19 @@ impl Dialog {
     }
 
     pub fn render(&self) -> Result<String, &'static str> {
+        if matches!(self.kind, Kind::Implement | Kind::Override | Kind::Delegate) {
+            let code = self
+                .targets
+                .iter()
+                .filter(|m| m.kind == self.kind && m.selected)
+                .map(|m| m.code.as_str())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            if code.is_empty() {
+                return Err("Select at least one member");
+            }
+            return Ok(self.indent_code(&code));
+        }
         let selected: Vec<_> = self
             .candidates()
             .filter(|(_, m)| m.selected)
@@ -276,7 +309,12 @@ impl Dialog {
                     "public override string ToString() => ToString(null, global::System.Globalization.CultureInfo.CurrentCulture);\n\npublic string ToString(string? format, global::System.IFormatProvider? provider)\n{{\n    return format switch\n    {{\n        \"G\" or null => $\"{name} {{{{ {values} }}}}\",\n        _ => throw new global::System.FormatException($\"Unsupported format: {{format}}\")\n    }};\n}}"
                 )
             }
+            Kind::Implement | Kind::Override | Kind::Delegate => unreachable!(),
         };
+        Ok(self.indent_code(&body))
+    }
+
+    fn indent_code(&self, body: &str) -> String {
         let unit = if self.indent.contains('\t') {
             "\t"
         } else {
@@ -288,7 +326,7 @@ impl Dialog {
             .map(|line| format!("{prefix}{line}"))
             .collect::<Vec<_>>()
             .join("\n");
-        Ok(format!("\n{formatted}\n"))
+        format!("\n{formatted}\n")
     }
 }
 
@@ -349,6 +387,7 @@ mod tests {
                     selected: true,
                 },
             ],
+            targets: Vec::new(),
             existing: vec!["Age".into()],
         }
     }
@@ -402,7 +441,13 @@ mod tests {
 
     #[test]
     fn generated_members_parse_as_csharp() {
-        for kind in Kind::ALL {
+        for kind in [
+            Kind::Constructor,
+            Kind::Properties,
+            Kind::Equality,
+            Kind::ToString,
+            Kind::Formatting,
+        ] {
             let code = dialog(kind).render().unwrap();
             let source = format!(
                 "class Person\n{{\nprivate string _name = string.Empty;\npublic int Age {{ get; set; }}\n{code}\n}}"
@@ -411,5 +456,93 @@ mod tests {
             let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None).unwrap();
             assert!(!tree.root_node().has_error(), "{kind:?}: {code}");
         }
+    }
+
+    #[test]
+    fn picker_offers_interface_override_and_delegate_members() {
+        let source = "interface IName { string Name { get; set; } void Rename(string value); }\nclass Base { public virtual int Score() => 1; }\nclass Service { public string Format(int n) => n.ToString(); }\nclass Derived : Base, IName { private Service _service; }";
+        let rope = rc_text::Rope::from_str(source);
+        let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None).unwrap();
+        let caret = source.find("_service").unwrap();
+        let mut dialog = Dialog::from_source(source, &tree, caret, 1, 0).unwrap();
+        assert!(
+            dialog
+                .targets
+                .iter()
+                .any(|m| m.kind == Kind::Implement && m.label.contains("Rename"))
+        );
+        assert!(
+            dialog
+                .targets
+                .iter()
+                .any(|m| m.kind == Kind::Implement && m.label.contains("Name"))
+        );
+        assert!(
+            dialog
+                .targets
+                .iter()
+                .any(|m| m.kind == Kind::Override && m.label.contains("Score"))
+        );
+        assert!(
+            dialog
+                .targets
+                .iter()
+                .any(|m| m.kind == Kind::Delegate && m.label.contains("Format"))
+        );
+        for kind in [Kind::Implement, Kind::Override, Kind::Delegate] {
+            dialog.kind = kind;
+            let code = dialog.render().unwrap();
+            assert!(code.contains("public"));
+            let inserted = source.replacen(
+                "private Service _service;",
+                &format!("private Service _service;\n{code}"),
+                1,
+            );
+            let tree = rc_syntax::parse_now(
+                rc_syntax::Lang::CSharp,
+                &rc_text::Rope::from_str(&inserted),
+                None,
+            )
+            .unwrap();
+            assert!(!tree.root_node().has_error(), "{kind:?}: {code}");
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a .NET SDK; run with DOTNET_BIN set to the SDK executable"]
+    fn generated_target_members_build_with_dotnet() {
+        let source = "interface IName { string Name { get; set; } void Rename(string value); }\nclass Base { public virtual int Score() => 1; }\nclass Service { public string Format(int n) => n.ToString(); }\nclass Derived : Base, IName { private Service _service = new(); }";
+        let rope = rc_text::Rope::from_str(source);
+        let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None).unwrap();
+        let caret = source.find("_service").unwrap();
+        let mut dialog = Dialog::from_source(source, &tree, caret, 1, 0).unwrap();
+        let mut code = String::new();
+        for kind in [Kind::Implement, Kind::Override, Kind::Delegate] {
+            dialog.kind = kind;
+            code.push_str(&dialog.render().unwrap());
+        }
+        let complete = source.replacen(
+            "private Service _service = new();",
+            &format!("private Service _service = new();\n{code}"),
+            1,
+        );
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Generate.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup></Project>").unwrap();
+        std::fs::write(dir.path().join("Generated.cs"), complete).unwrap();
+        let dotnet = std::env::var("DOTNET_BIN").unwrap_or_else(|_| "dotnet".into());
+        let output = std::process::Command::new(dotnet)
+            .arg("build")
+            .arg("--nologo")
+            .arg("--verbosity")
+            .arg("quiet")
+            .current_dir(dir.path())
+            .env("DOTNET_CLI_TELEMETRY_OPTOUT", "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
