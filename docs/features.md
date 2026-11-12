@@ -369,6 +369,7 @@ additional scope is pending.
 | CentralShop CPM evaluation, restore and UI (B-23) | [Original PR 272](https://github.com/javy-fernandez/dotcraft/pull/272) | [CPM evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/central-shop-cpm-live/docs/implementation/central-shop-cpm-sdk8.md) |
 | Shop.Api endpoints explorer and live routes (J-09) | [Original PR 273](https://github.com/javy-fernandez/dotcraft/pull/273) | [Endpoint evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/endpoints-explorer-shop/docs/implementation/j-09-endpoints-explorer-shop.md) |
 | Shop Roslyn System.Text quick fix (C-13) | [Original PR 274](https://github.com/javy-fernandez/dotcraft/pull/274) | [Code action evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/code-action-shop/docs/implementation/c13-shop-code-action.md) |
+| Shop resolved NuGet dependency graph (B-22, partial) | [Original PR 275](https://github.com/javy-fernandez/dotcraft/pull/275) | [Resolved graph evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-nuget-graph-live/docs/implementation/nuget-resolved-graph-linux.md) |
 
 ## Completion criteria
 
