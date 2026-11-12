@@ -43,17 +43,25 @@ pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()>
         let mut name = file_name.to_os_string();
         name.push(format!(".dotcraft-{}-{sequence}.tmp", std::process::id()));
         let tmp = path.with_file_name(name);
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp)
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
         {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
             Ok(file) => break (tmp, file),
             Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error),
         }
     };
     let result = (|| {
+        // Replacing a file must retain its access controls, including private user secrets.
+        #[cfg(unix)]
+        if let Ok(metadata) = std::fs::metadata(path) {
+            file.set_permissions(metadata.permissions())?;
+        }
         file.write_all(bytes)?;
         drop(file);
         std::fs::rename(&tmp, path)
@@ -68,6 +76,20 @@ pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()>
 mod tests {
     use super::*;
     use std::sync::{Arc, Barrier};
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_replacement_preserves_private_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("secrets.json");
+        std::fs::write(&file, b"private").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+        write_atomic(&file, b"still private").unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), b"still private");
+        assert_eq!(std::fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o600);
+    }
 
     #[test]
     fn concurrent_writes_leave_a_complete_file_and_no_temporary_files() {
