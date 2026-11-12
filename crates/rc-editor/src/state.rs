@@ -381,6 +381,7 @@ impl EditorState {
     /// Inserts a snippet over `start..end`: `\t` becomes one indent level, new lines keep the
     /// line's indentation, and its fields are selected one after another with Tab.
     pub fn insert_snippet(&mut self, start: usize, end: usize, body: &str) {
+        if self.read_only { return; }
         let line = self.buffer.rope().char_to_line(start);
         let base = commands::line_indent(self.buffer.rope(), line);
         let body = body.replace('\t', &self.indent.unit).replace('\n', &format!("\n{base}"));
