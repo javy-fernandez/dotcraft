@@ -877,14 +877,32 @@ mod split_tests {
 mod razor_shop_tests {
     use super::*;
     use rc_syntax::Lang;
+    use std::path::Path;
+
+    /// Copies a folder without `bin/` and `obj/`.
+    fn copy_tree(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap().flatten() {
+            if entry.file_name() == "bin" || entry.file_name() == "obj" {
+                continue;
+            }
+            if entry.file_type().unwrap().is_dir() {
+                copy_tree(&entry.path(), &to.join(entry.file_name()));
+            } else {
+                std::fs::copy(entry.path(), to.join(entry.file_name())).unwrap();
+            }
+        }
+    }
 
     #[test]
     fn razor_component_in_shop_workspace_paints_and_edits() {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
-        let shop = crate::screens::fixtures().join("Shop");
-        let temp = tempfile::Builder::new().prefix("razor-").tempdir_in(shop.join("src/Shop.Api")).unwrap();
-        let component = temp.path().join("Orders.razor");
+        // A copy of Shop: the repo fixture is shared by other tests and stays untouched.
+        let work = tempfile::tempdir().unwrap();
+        let shop = dunce::canonicalize(work.path()).unwrap().join("Shop");
+        copy_tree(&crate::screens::fixtures().join("Shop"), &shop);
+        let component = shop.join("src/Shop.Api/Orders.razor");
         let source = "@page \"/orders\"\n@using Shop.Core\n<h1>Orders</h1>\n@if (selected is not null)\n{\n    <p>@selected.Customer</p>\n}\n@code {\n    private Order? selected;\n}\n";
         std::fs::write(&component, source).unwrap();
 
