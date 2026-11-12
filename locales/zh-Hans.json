@@ -1463,5 +1463,27 @@
   },
   "rc-app": {
     "Exit Focus Mode": "Exit Focus Mode"
-  }
+  },
+    "Benchmarks": "Benchmarks",
+    "No benchmarks run yet": "No benchmarks run yet",
+    "Click a benchmark gutter icon to see the results.": "Click a benchmark gutter icon to see the results.",
+    "Rerun Benchmarks": "Rerun Benchmarks",
+    "Could not start benchmarks: {error}": "Could not start benchmarks: {error}",
+    "Building benchmark project…": "Building benchmark project…",
+    "Benchmark project build failed": "Benchmark project build failed",
+    "Running benchmarks…": "Running benchmarks…",
+    "Benchmarks stopped": "Benchmarks stopped",
+    "Reading benchmark results…": "Reading benchmark results…",
+    "Benchmark run failed": "Benchmark run failed",
+    "Benchmark results ready": "Benchmark results ready",
+    "Benchmark": "Benchmark",
+    "Mean": "Mean",
+    "Error": "Error",
+    "StdDev": "StdDev",
+    "Allocated": "Allocated",
+    "Output": "Output",
+    "No benchmark run to repeat": "No benchmark run to repeat",
+    "Could not read benchmark reports: {error}": "Could not read benchmark reports: {error}",
+    "BenchmarkDotNet produced no JSON results. Ensure the app passes arguments to BenchmarkSwitcher.": "BenchmarkDotNet produced no JSON results. Ensure the app passes arguments to BenchmarkSwitcher.",
+    "Benchmark report has no Benchmarks array": "Benchmark report has no Benchmarks array"
 }

@@ -51,6 +51,7 @@ pub enum CoverageMark {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GutterIcon {
     RunTest,
+    RunBenchmark,
     TestPassed,
     TestFailed,
     RunApp,

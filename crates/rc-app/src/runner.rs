@@ -732,6 +732,15 @@ const TEST_ATTRIBUTES: &[&str] = &["Fact", "Theory", "Test", "TestCase", "TestCa
 
 /// Test methods and classes of a C# file (xUnit, NUnit, MSTest attributes).
 pub fn test_markers(rope: &rc_text::Rope, tree: &rc_syntax::tree_sitter::Tree) -> Vec<TestMarker> {
+    attribute_markers(rope, tree, TEST_ATTRIBUTES)
+}
+
+/// BenchmarkDotNet methods and their containing classes.
+pub fn benchmark_markers(rope: &rc_text::Rope, tree: &rc_syntax::tree_sitter::Tree) -> Vec<TestMarker> {
+    attribute_markers(rope, tree, &["Benchmark"])
+}
+
+fn attribute_markers(rope: &rc_text::Rope, tree: &rc_syntax::tree_sitter::Tree, attributes: &[&str]) -> Vec<TestMarker> {
     use rc_syntax::tree_sitter::Node;
     let text = |n: Node| rope.byte_slice(n.start_byte()..n.end_byte()).to_string();
     let has_test_attr = |n: Node| -> bool {
@@ -741,7 +750,7 @@ pub fn test_markers(rope: &rc_text::Rope, tree: &rc_syntax::tree_sitter::Tree) -
             list.children(&mut c2).filter(|a| a.kind() == "attribute").any(|a| {
                 let name = a.child_by_field_name("name").map(text).unwrap_or_default();
                 let short = name.rsplit('.').next().unwrap_or(&name).trim_end_matches("Attribute").to_string();
-                TEST_ATTRIBUTES.contains(&short.as_str())
+                attributes.contains(&short.as_str())
             })
         })
     };
@@ -802,6 +811,18 @@ pub fn project_of(file: &Path, configs: &[RunConfig]) -> Option<PathBuf> {
         .max_by_key(|p| p.as_os_str().len())
 }
 
+/// The nearest runnable console project that contains a benchmark source file.
+pub fn benchmark_project_of(file: &Path, configs: &[RunConfig]) -> Option<PathBuf> {
+    configs
+        .iter()
+        .filter_map(|config| match &config.kind {
+            ConfigKind::App { project, web: false, .. } => Some(project.clone()),
+            _ => None,
+        })
+        .filter(|project| project.parent().is_some_and(|dir| file.starts_with(dir)))
+        .max_by_key(|project| project.as_os_str().len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -823,5 +844,14 @@ mod tests {
                 ("Shop.Tests.Other.One", 18, false),
             ]
         );
+    }
+
+    #[test]
+    fn finds_benchmark_methods_without_marking_helpers() {
+        let src = "namespace Perf; public class SortBench { [Benchmark] public void Quick() {} public void Helper() {} [BenchmarkAttribute] public void Merge() {} }";
+        let rope = rc_text::Rope::from_str(src);
+        let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None).unwrap();
+        let names: Vec<_> = benchmark_markers(&rope, &tree).into_iter().map(|marker| marker.name).collect();
+        assert_eq!(names, ["Perf.SortBench", "Perf.SortBench.Quick", "Perf.SortBench.Merge"]);
     }
 }

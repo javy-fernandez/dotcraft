@@ -46,6 +46,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
             bookmarks(app, ui);
         }
         ToolWindow::Tests => crate::ui::run_windows::tests(app, ui),
+        ToolWindow::Benchmarks => crate::ui::run_windows::benchmarks(app, ui),
         ToolWindow::Terminal => crate::ui::run_windows::terminal(app, ui),
         ToolWindow::Commit => crate::ui::git::commit_window(app, ui),
         ToolWindow::Git => crate::ui::git::git_window(app, ui),
@@ -1197,6 +1198,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Run => (tr("Nothing is running"), tr("Run a project to see its output here.")),
         ToolWindow::Debug => (tr("No debug session"), tr("Start debugging to see frames, variables and watches.")),
         ToolWindow::Tests => (tr("No tests run yet"), tr("Run the tests of a project or file to see the results.")),
+        ToolWindow::Benchmarks => (tr("No benchmarks run yet"), tr("Click a benchmark gutter icon to see the results.")),
         ToolWindow::Build => (tr("No build output"), tr("Build the solution to see errors and warnings.")),
         ToolWindow::Terminal => (tr("Terminal"), tr("A shell in the workspace folder.")),
         ToolWindow::Problems => (tr("No problems"), tr("Errors and warnings of the open files show up here.")),
