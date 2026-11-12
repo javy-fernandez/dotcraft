@@ -8,7 +8,93 @@ use crate::ui::toolwindows::{empty_state, header};
 use egui::{Align2, Color32, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{ico, icons, theme};
-use rc_vcs::FileState;
+use rc_vcs::{FileState, GraphRow, Half};
+
+fn graph_color(index: usize, dark: bool) -> Color32 {
+    let colors = if dark {
+        [0x6F9EF7, 0x73BD79, 0xE8A15A, 0xC58AE5, 0x66C6C2, 0xD5756C]
+    } else {
+        [0x0A54C9, 0x067D17, 0xA65700, 0x873AA8, 0x007D81, 0xB5312C]
+    };
+    let rgb = colors[index % colors.len()];
+    Color32::from_rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
+}
+
+fn paint_graph_row(ui: &Ui, rect: Rect, row: &GraphRow, dark: bool) -> f32 {
+    let x = |column: usize| rect.left() + 16.0 + column as f32 * 14.0;
+    for edge in &row.edges {
+        let (from_y, to_y) = match edge.half {
+            Half::Upper => (rect.top(), rect.center().y),
+            Half::Lower => (rect.center().y, rect.bottom()),
+        };
+        ui.painter().line_segment([pos2(x(edge.from), from_y), pos2(x(edge.to), to_y)], egui::Stroke::new(1.5, graph_color(edge.color, dark)));
+    }
+    ui.painter().circle(pos2(x(row.column), rect.center().y), 4.0, rc_kit::pal(ui).island_bg, egui::Stroke::new(2.0, graph_color(row.color, dark)));
+    x(row.width.max(1) - 1) + 18.0
+}
+
+#[cfg(test)]
+mod log_graph_tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+    use std::path::Path;
+
+    fn git(root: &Path, args: &[&str]) {
+        let output = std::process::Command::new("git").current_dir(root).args(args).output().unwrap();
+        assert!(output.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    #[tokio::test]
+    async fn real_merge_log_draws_branch_lanes_and_selects_a_commit() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = home.path().join("repo");
+        std::fs::create_dir(&root).unwrap();
+        git(&root, &["init", "-q", "-b", "main"]);
+        git(&root, &["config", "user.name", "Test"]);
+        git(&root, &["config", "user.email", "test@example.com"]);
+        std::fs::write(root.join("base.txt"), "base\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "base"]);
+        git(&root, &["switch", "-qc", "side"]);
+        std::fs::write(root.join("side.txt"), "side\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "side change"]);
+        git(&root, &["switch", "-q", "main"]);
+        std::fs::write(root.join("main.txt"), "main\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "main change"]);
+        git(&root, &["merge", "-q", "--no-ff", "--no-edit", "side"]);
+
+        let repo = rc_vcs::Repository::discover(&root).await.unwrap();
+        let log = repo.log(&rc_vcs::LogOptions { all: true, ..Default::default() }).await.unwrap();
+        let graph = rc_vcs::Graph::new().rows(&log);
+        assert!(graph.iter().any(|row| row.column > 0));
+        assert!(graph.iter().any(|row| row.edges.iter().any(|edge| edge.from != edge.to)));
+        let side_hash = log.iter().find(|commit| commit.subject == "side change").unwrap().hash.clone();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.vcs.repo = Some(repo);
+        app.vcs.log = log;
+        let mut first = true;
+        let mut harness = Harness::builder().with_size(egui::vec2(1100.0, 600.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            git_window(app, ui);
+        }, app);
+        harness.run_steps(3);
+        let diagonal = harness.output().shapes.iter().any(|clipped| matches!(&clipped.shape,
+            egui::Shape::LineSegment { points, stroke }
+                if (points[0].x - points[1].x).abs() > 1.0
+                    && (stroke.width - 1.5).abs() < 0.01
+                    && (0..6).any(|index| stroke.color == graph_color(index, true) || stroke.color == graph_color(index, false))));
+        assert!(diagonal, "the merge must paint at least one diagonal graph edge");
+        harness.get_by_label("side change").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().vcs.selected_commit.as_deref(), Some(side_hash.as_str()));
+    }
+}
 
 /// IntelliJ's file status colours.
 fn state_color(state: FileState, untracked: bool, dark: bool) -> Color32 {
@@ -207,9 +293,10 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
     let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left));
     lu.set_clip_rect(left.intersect(ui.clip_rect()));
     let log = app.vcs.log.clone();
+    let graph_rows = rc_vcs::Graph::new().rows(&log);
     egui::ScrollArea::vertical().id_salt("git_log").auto_shrink([false, false]).show_rows(&mut lu, 24.0, log.len(), |ui, range| {
         ui.spacing_mut().item_spacing.y = 0.0;
-        for c in &log[range] {
+        for (index, c) in log[range.clone()].iter().enumerate() {
             let selected = app.vcs.selected_commit.as_deref() == Some(c.hash.as_str());
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
             if selected {
@@ -217,10 +304,7 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
             } else if resp.hovered() {
                 ui.painter().rect_filled(r.shrink2(vec2(4.0, 0.0)), 4.0, p.row_hover);
             }
-            let dot = pos2(r.left() + 16.0, r.center().y);
-            ui.painter().vline(dot.x, r.y_range(), egui::Stroke::new(1.5, p.accent.gamma_multiply(0.6)));
-            ui.painter().circle(dot, 4.0, p.island_bg, egui::Stroke::new(2.0, p.accent));
-            let mut x = r.left() + 30.0;
+            let mut x = paint_graph_row(ui, r, &graph_rows[range.start + index], p.dark);
             for rf in c.refs.iter().take(3) {
                 let label = match rf {
                     rc_vcs::RefLabel::Head => "HEAD".to_string(),
@@ -242,6 +326,7 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
             let g = ui.painter().layout_job(job);
             ui.painter().galley(pos2(x, (r.center().y - g.size().y / 2.0).round()), g, p.text);
             ui.painter().galley(pos2(r.right() - mg.size().x - 10.0, (r.center().y - mg.size().y / 2.0).round()), mg, p.muted);
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &c.subject));
             if resp.clicked() {
                 select = Some(c.hash.clone());
             }
