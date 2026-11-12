@@ -24,7 +24,7 @@ pub enum NodeKind {
     Packages(PathBuf),
     ProjectRefs(PathBuf),
     Framework(String),
-    Package { name: String, version: String },
+    Package { project: PathBuf, frameworks: Vec<String>, name: String, version: String },
     ProjectRef(PathBuf),
     Dir(PathBuf),
     File(PathBuf),
@@ -73,6 +73,7 @@ pub enum ExplorerAction {
     CopyPath(PathBuf),
     OpenInTerminal(PathBuf),
     ManagePackages(PathBuf),
+    OpenPackageAssembly { project: PathBuf, framework: Option<String>, name: String, version: String },
     /// Entity Framework Core › operation, for this project.
     EfCore(PathBuf, crate::ui::ef_core::EfOp),
     /// Migrate this solution to Central Package Management (NuGet window).
@@ -317,7 +318,7 @@ impl ExplorerState {
                         for p in &info.packages {
                             rows.push(Row {
                                 key: format!("{gkey}/{}", p.name),
-                                kind: NodeKind::Package { name: p.name.clone(), version: p.version.clone() },
+                                kind: NodeKind::Package { project: path.to_path_buf(), frameworks: info.target_frameworks.clone(), name: p.name.clone(), version: p.version.clone() },
                                 depth: depth + 3,
                                 label: p.name.clone(),
                                 secondary: p.version.clone(),
@@ -624,6 +625,22 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actio
     {
         actions.push(ExplorerAction::ManagePackages(p.clone()));
         ui.close();
+    }
+    if let NodeKind::Package { project, frameworks, name, version } = &row.kind {
+        if frameworks.len() > 1 {
+            ui.menu_button(tr("Explore Assembly"), |ui| {
+                for framework in frameworks {
+                    if ui.button(framework).clicked() {
+                        actions.push(ExplorerAction::OpenPackageAssembly { project: project.clone(), framework: Some(framework.clone()), name: name.clone(), version: version.clone() });
+                        ui.close();
+                    }
+                }
+            });
+        } else if theme::menu_item(ui, Some(ico::LIBRARY), tr("Explore Assembly"), false).clicked() {
+            actions.push(ExplorerAction::OpenPackageAssembly { project: project.clone(), framework: None, name: name.clone(), version: version.clone() });
+            ui.close();
+        }
+        return;
     }
     // Entity Framework Core › (Rider), for projects that reference EF Core.
     if let (NodeKind::Project(p), true) = (&row.kind, ef) {

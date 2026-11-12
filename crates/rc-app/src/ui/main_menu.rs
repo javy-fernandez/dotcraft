@@ -172,6 +172,9 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
     }
     if category == tr("Run") && command(ui, tr("Run All Tests with Coverage"), Some(ico::RUN_COVERAGE), app.workspace.is_some()) { app.run_coverage(); }
     if category == tr("Tools") {
+        if command(ui, tr("Open Assembly…"), Some(ico::LIBRARY), true)
+            && let Some(path) = rfd::FileDialog::new().set_title(tr("Open Assembly")).add_filter(tr(".NET assemblies"), &["dll", "exe"]).pick_file()
+        { app.assembly_explorer.open(path); }
         if command(ui, tr("Editor Workflows"), Some(ico::SETTINGS), app.workspace.is_some()) { app.editor_workflows.visible = true; }
         if command(ui, tr("Entity Framework Core…"), Some(ico::TW_DATABASE), app.workspace.is_some()) { app.ef_dialog(crate::ui::ef_core::EfOp::AddMigration, None); }
         if command(ui, tr(".NET CLI"), Some(ico::SETTINGS), true) {
