@@ -133,6 +133,10 @@ pub enum Action {
     ShowBookmarks,
     /// ⌃1…⌃9: jump to the bookmark with that digit.
     GotoBookmark(u8),
+    /// View › Appearance modes (no default shortcut, like Rider).
+    TogglePresentationMode,
+    ToggleDistractionFreeMode,
+    ToggleZenMode,
 }
 
 impl Action {
@@ -214,6 +218,9 @@ impl Action {
                 | ZoomReset
                 | ShowBookmarks
                 | GotoBookmark(_)
+                | TogglePresentationMode
+                | ToggleDistractionFreeMode
+                | ToggleZenMode
         )
     }
 }

@@ -772,7 +772,21 @@
     "Could not reach SQL Server: {error}": "SQL Server ist nicht erreichbar: {error}",
     "TLS error: {error}. If the server uses a self-signed certificate, enable Trust server certificate.": "TLS-Fehler: {error}. Wenn der Server ein selbstsigniertes Zertifikat verwendet, aktivieren Sie Serverzertifikat vertrauen.",
     "SQL Server error: {error}": "SQL-Server-Fehler: {error}",
-    "SQL Server did not answer within the time limit.": "SQL Server hat nicht innerhalb des Zeitlimits geantwortet."
+    "SQL Server did not answer within the time limit.": "SQL Server hat nicht innerhalb des Zeitlimits geantwortet.",
+    "Presentation Mode": "Präsentationsmodus",
+    "Exit Presentation Mode": "Präsentationsmodus beenden",
+    "Distraction-free Mode": "Ablenkungsfreier Modus",
+    "Exit Distraction-free Mode": "Ablenkungsfreien Modus beenden",
+    "Zen Mode": "Zen-Modus",
+    "Exit Zen Mode": "Zen-Modus beenden",
+    "Toggle Presentation Mode": "Präsentationsmodus umschalten",
+    "Toggle Distraction-free Mode": "Ablenkungsfreien Modus umschalten",
+    "Toggle Zen Mode": "Zen-Modus umschalten",
+    "Cancel Replace": "Ersetzen abbrechen",
+    "Replacement cancelled": "Ersetzen abgebrochen",
+    "Replacing…": "Wird ersetzt…",
+    "{path}: document closed before replacement": "{path}: Dokument vor dem Ersetzen geschlossen",
+    "Run configuration: {name}": "Ausführungskonfiguration: {name}"
   },
   "terminal": {
     "Local": "Lokal",
@@ -1439,8 +1453,5 @@
     "{method}: {title}": "{method}: {title}"
   },
   "rc-app": {
-    "Distraction-free Mode": "Distraction-free Mode",
-    "Zen Mode": "Zen Mode",
-    "Exit Focus Mode": "Exit Focus Mode"
   }
 }

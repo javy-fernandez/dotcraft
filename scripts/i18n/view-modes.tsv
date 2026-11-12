@@ -1,0 +1,16 @@
+# View modes, background Replace All, run configuration label. Import: python3 scripts/i18n_tsv.py app scripts/i18n/view-modes.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Presentation Mode	Modo presentación	Mode présentation	Modo de apresentação	Präsentationsmodus	Tryb prezentacji	演示模式	プレゼンテーションモード
+Exit Presentation Mode	Salir del modo presentación	Quitter le mode présentation	Sair do modo de apresentação	Präsentationsmodus beenden	Zakończ tryb prezentacji	退出演示模式	プレゼンテーションモードを終了
+Distraction-free Mode	Modo sin distracciones	Mode sans distraction	Modo sem distrações	Ablenkungsfreier Modus	Tryb bez rozpraszaczy	免打扰模式	集中モード
+Exit Distraction-free Mode	Salir del modo sin distracciones	Quitter le mode sans distraction	Sair do modo sem distrações	Ablenkungsfreien Modus beenden	Zakończ tryb bez rozpraszaczy	退出免打扰模式	集中モードを終了
+Zen Mode	Modo zen	Mode zen	Modo zen	Zen-Modus	Tryb zen	禅模式	Zen モード
+Exit Zen Mode	Salir del modo zen	Quitter le mode zen	Sair do modo zen	Zen-Modus beenden	Zakończ tryb zen	退出禅模式	Zen モードを終了
+Toggle Presentation Mode	Alternar modo presentación	Basculer le mode présentation	Alternar modo de apresentação	Präsentationsmodus umschalten	Przełącz tryb prezentacji	切换演示模式	プレゼンテーションモードの切り替え
+Toggle Distraction-free Mode	Alternar modo sin distracciones	Basculer le mode sans distraction	Alternar modo sem distrações	Ablenkungsfreien Modus umschalten	Przełącz tryb bez rozpraszaczy	切换免打扰模式	集中モードの切り替え
+Toggle Zen Mode	Alternar modo zen	Basculer le mode zen	Alternar modo zen	Zen-Modus umschalten	Przełącz tryb zen	切换禅模式	Zen モードの切り替え
+Cancel Replace	Cancelar reemplazo	Annuler le remplacement	Cancelar substituição	Ersetzen abbrechen	Anuluj zamianę	取消替换	置換をキャンセル
+Replacement cancelled	Reemplazo cancelado	Remplacement annulé	Substituição cancelada	Ersetzen abgebrochen	Zamiana anulowana	已取消替换	置換をキャンセルしました
+Replacing…	Reemplazando…	Remplacement…	Substituindo…	Wird ersetzt…	Zamienianie…	正在替换…	置換中…
+{path}: document closed before replacement	{path}: el documento se cerró antes del reemplazo	{path} : document fermé avant le remplacement	{path}: o documento foi fechado antes da substituição	{path}: Dokument vor dem Ersetzen geschlossen	{path}: dokument zamknięto przed zamianą	{path}：文档在替换前已关闭	{path}: 置換前にドキュメントが閉じられました
+Run configuration: {name}	Configuración de ejecución: {name}	Configuration d'exécution : {name}	Configuração de execução: {name}	Ausführungskonfiguration: {name}	Konfiguracja uruchomienia: {name}	运行配置：{name}	実行構成: {name}

@@ -176,6 +176,32 @@ impl NativeMenu {
         })
     }
 
+    /// Rebuilds the menu with `keymap`'s shortcuts (the keymap changed in Settings) and installs it
+    /// in NSApp in place of the current one. The event handler and its channel stay as they are;
+    /// if the new menu can't be built, the installed one is kept.
+    pub fn rebuild(&mut self, keymap: &Keymap) {
+        let built = match build(keymap, self.icons_dark.get()) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("native menu: {e}");
+                return;
+            }
+        };
+        // Install the new menu before the old one is dropped, so NSApp never points at freed items.
+        #[cfg(target_os = "macos")]
+        built.menu.init_for_nsapp();
+        self._menu = built.menu;
+        self.commands = built.commands;
+        self.theme_light = built.theme_light;
+        self.theme_dark = built.theme_dark;
+        self.labels = built.labels;
+        self.icons = built.icons;
+        self.recent = built.recent;
+        // The theme checks and Open Recent are filled again on the next frame.
+        self.synced.set(None);
+        *self.recent_lists.borrow_mut() = (Vec::new(), vec![PathBuf::new()]);
+    }
+
     /// Commands clicked since the last frame; edit commands are forwarded to egui instead.
     pub fn poll(&self) -> Vec<MenuCommand> {
         let mut out = Vec::new();
@@ -500,10 +526,19 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::HideToolWindows, || tr("Hide All Tool Windows")),
         ],
     )?;
+    let appearance = submenu(
+        || tr("Appearance"),
+        &[
+            &act(Action::TogglePresentationMode, || tr("Presentation Mode")),
+            &act(Action::ToggleDistractionFreeMode, || tr("Distraction-free Mode")),
+            &act(Action::ToggleZenMode, || tr("Zen Mode")),
+        ],
+    )?;
     let view_menu = submenu(
         || tr("View"),
         &[
             &tool_windows,
+            &appearance,
             &theme_menu,
             &sep(),
             &act(Action::ZoomIn, || tr("Zoom In")),
@@ -618,6 +653,24 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn accelerators_follow_the_keymap_the_menu_is_built_with() {
+        use rc_editor::KeymapKind;
+        let mac = Keymap::new(KeymapKind::RiderMac);
+        let vs = Keymap::new(KeymapKind::VisualStudio);
+        assert_eq!(accelerator(&mac, Action::GotoFile), Some(Accelerator::new(Modifiers::META | Modifiers::SHIFT, Code::KeyO)));
+        assert_eq!(accelerator(&vs, Action::GotoFile), Some(Accelerator::new(Modifiers::CONTROL | Modifiers::SHIFT, Code::KeyT)));
+        // Every IDE action with a menu shortcut gets the one of its own keymap.
+        for keymap in [&mac, &vs, &Keymap::new(KeymapKind::Rider)] {
+            for a in [Action::Build, Action::Run, Action::Debug, Action::SearchEverywhere, Action::FindInFiles, Action::GotoClass, Action::Commit] {
+                if let Some(acc) = accelerator(keymap, a) {
+                    let chord = keymap.chord(a).unwrap();
+                    assert_eq!(acc.key(), code_of(chord.key).unwrap(), "{:?} {a:?}", keymap.kind);
+                }
+            }
+        }
+    }
 
     #[test]
     fn menu_icons_are_18_points_at_2x_in_both_appearances() {

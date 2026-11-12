@@ -772,7 +772,21 @@
     "Could not reach SQL Server: {error}": "无法连接到 SQL Server：{error}",
     "TLS error: {error}. If the server uses a self-signed certificate, enable Trust server certificate.": "TLS 错误：{error}。如果服务器使用自签名证书，请启用“信任服务器证书”。",
     "SQL Server error: {error}": "SQL Server 错误：{error}",
-    "SQL Server did not answer within the time limit.": "SQL Server 未在时间限制内响应。"
+    "SQL Server did not answer within the time limit.": "SQL Server 未在时间限制内响应。",
+    "Presentation Mode": "演示模式",
+    "Exit Presentation Mode": "退出演示模式",
+    "Distraction-free Mode": "免打扰模式",
+    "Exit Distraction-free Mode": "退出免打扰模式",
+    "Zen Mode": "禅模式",
+    "Exit Zen Mode": "退出禅模式",
+    "Toggle Presentation Mode": "切换演示模式",
+    "Toggle Distraction-free Mode": "切换免打扰模式",
+    "Toggle Zen Mode": "切换禅模式",
+    "Cancel Replace": "取消替换",
+    "Replacement cancelled": "已取消替换",
+    "Replacing…": "正在替换…",
+    "{path}: document closed before replacement": "{path}：文档在替换前已关闭",
+    "Run configuration: {name}": "运行配置：{name}"
   },
   "terminal": {
     "Local": "本地",
@@ -1439,8 +1453,5 @@
     "{method}: {title}": "{method}：{title}"
   },
   "rc-app": {
-    "Distraction-free Mode": "Distraction-free Mode",
-    "Zen Mode": "Zen Mode",
-    "Exit Focus Mode": "Exit Focus Mode"
   }
 }

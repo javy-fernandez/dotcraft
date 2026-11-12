@@ -31,7 +31,7 @@ use crate::app::{DotCraftApp, FocusMode};
 use crate::toolwindow::Side;
 use egui::{Margin, Ui};
 use rc_editor::Action;
-use rc_kit::{i18n::tr, theme};
+use rc_kit::theme;
 
 pub const TITLE_H: f32 = 40.0;
 pub const STRIPE_W: f32 = 40.0;
@@ -43,18 +43,24 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     let p = rc_kit::pal(ui);
     let bar = egui::Frame::NONE.fill(p.main_bg);
     let title_h = TITLE_H.max(32.0 / ctx.zoom_factor().max(0.1));
-    if app.focus_mode != FocusMode::Zen {
+    // The focus modes need an editor: the welcome screen leaves them.
+    if app.workspace.is_none() && app.docs.list.is_empty() {
+        app.set_focus_mode(&ctx, FocusMode::Normal);
+    }
+    if !app.focus_mode.hides_chrome() {
         egui::Panel::top("title_bar").exact_size(title_h).resizable(false).show_separator_line(false).frame(bar).show(ui, |ui| header::show(app, ui));
         egui::Panel::bottom("status_bar").exact_size(STATUS_H).resizable(false).show_separator_line(false).frame(bar).show(ui, |ui| status::show(app, ui));
     }
     if app.focus_mode != FocusMode::Normal {
+        // Bottom right, over the editor's scroll bar gap: the way out without menus or Esc.
+        let bottom = if app.focus_mode.hides_chrome() { 0.0 } else { STATUS_H };
         egui::Area::new(egui::Id::new("exit_focus_mode"))
-            .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-12.0, if app.focus_mode == FocusMode::Zen { 12.0 } else { title_h + 12.0 }))
+            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-28.0, -(bottom + 16.0)))
             .order(egui::Order::Foreground)
             .show(&ctx, |ui| {
-                if ui.button(tr("Exit Focus Mode")).clicked() {
-                    app.focus_mode = FocusMode::Normal;
-                    app.focus_editor = true;
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                if theme::secondary_button(ui, app.focus_mode.label(true)).clicked() {
+                    app.set_focus_mode(&ctx, FocusMode::Normal);
                 }
             });
     }
@@ -74,21 +80,13 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     }
     // Files on their own (no workspace): only the editor, like Rider's LightEdit.
     let light = app.workspace.is_none();
-    let margin = if light || app.presentation_mode {
+    let margin = if app.focus_mode.hides_chrome() {
+        Margin::same(6)
+    } else if light || app.focus_mode != FocusMode::Normal {
         Margin { left: 6, right: 6, top: 0, bottom: 0 }
-    } else if app.focus_mode == FocusMode::Normal {
-        tool_windows(app, ui, &p, bar)
     } else {
-        Margin::same(0)
+        tool_windows(app, ui, &p, bar)
     };
-    if matches!(app.dialog, Some(dialogs::Dialog::CodeActions { .. })) {
-        app.focus_editor = false;
-        ctx.memory_mut(|memory| {
-            for doc in &app.docs.list {
-                memory.surrender_focus(rc_editor::EditorView::id_for(doc.editor.id));
-            }
-        });
-    }
     egui::CentralPanel::default().frame(bar.inner_margin(margin)).show(ui, |ui| {
         theme::fixed_island(ui, &p, |ui| editor_area::show(app, ui, editor_actions));
     });
@@ -171,6 +169,7 @@ fn remember_size(app: &mut DotCraftApp, tw: crate::toolwindow::ToolWindow, size:
 #[cfg(test)]
 mod focus_mode_tests {
     use super::*;
+    use rc_kit::i18n::tr;
     use egui_kittest::kittest::Queryable;
 
     #[test]
@@ -193,32 +192,68 @@ mod focus_mode_tests {
         harness.run_steps(3);
         assert_eq!(harness.state().dock, original);
         assert!(harness.state().notices.is_empty());
-        harness.get_by_label(tr("Exit Focus Mode")).click();
+        harness.get_by_label(tr("Exit Zen Mode")).click();
         harness.run_steps(2);
         assert_eq!(harness.state().focus_mode, FocusMode::Normal);
         assert_eq!(harness.state().dock, original);
     }
 
     #[test]
-    fn view_menu_enters_both_focus_modes_and_exit_control_restores_chrome() {
+    fn view_menu_enters_each_focus_mode_and_the_exit_button_leaves_it() {
         let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
         let path = crate::screens::fixtures().join("Shop/Shop.sln");
         let mut app = crate::screens::test_app(home.path(), true);
         app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(&path).unwrap(), solution: Some(rc_dotnet::Solution::load(&path).unwrap()) });
         let mut harness = crate::screens::harness(app, egui::vec2(900.0, 600.0));
-        for (label, mode) in [(tr("Distraction-free Mode"), FocusMode::DistractionFree), (tr("Zen Mode"), FocusMode::Zen)] {
+        let font = harness.state().editor_config.font.size;
+        for mode in FocusMode::ALL {
             harness.get_by_label(tr("Main Menu")).click();
             harness.run_steps(3);
             harness.get_by_label(tr("View")).click();
             harness.run_steps(3);
-            harness.get_by_label(label).click();
+            harness.get_by_label(tr("Appearance")).click();
+            harness.run_steps(3);
+            harness.get_by_label(mode.label(false)).click();
             harness.run_steps(3);
             assert_eq!(harness.state().focus_mode, mode);
-            harness.get_by_label(tr("Exit Focus Mode")).click();
+            // Presentation and Zen hide the title bar (and with it the Main Menu button).
+            assert_eq!(harness.query_by_label(tr("Main Menu")).is_none(), mode.hides_chrome(), "{mode:?}");
+            assert_eq!(harness.state().editor_config.font.size > font, mode == FocusMode::Presentation, "{mode:?}");
+            harness.get_by_label(mode.label(true)).click();
             harness.run_steps(3);
             assert_eq!(harness.state().focus_mode, FocusMode::Normal);
+            assert_eq!(harness.state().editor_config.font.size, font);
         }
+    }
+
+    #[test]
+    fn focus_modes_are_exclusive_actions_and_esc_leaves_them() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let path = crate::screens::fixtures().join("Shop/Shop.sln");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(&path).unwrap(), solution: Some(rc_dotnet::Solution::load(&path).unwrap()) });
+        let mut harness = crate::screens::harness(app, egui::vec2(900.0, 600.0));
+        let ctx = harness.ctx.clone();
+        let font = harness.state().editor_config.font.size;
+        // Every mode is a Find Action entry.
+        for mode in FocusMode::ALL {
+            assert!(crate::search::action_items().iter().any(|(_, a)| Some(*a) == mode.action()), "{mode:?}");
+        }
+        harness.state_mut().run_ide_action(&ctx, Action::TogglePresentationMode);
+        assert_eq!(harness.state().focus_mode, FocusMode::Presentation);
+        harness.state_mut().run_ide_action(&ctx, Action::ToggleZenMode);
+        assert_eq!(harness.state().focus_mode, FocusMode::Zen);
+        assert_eq!(harness.state().editor_config.font.size, font, "leaving Presentation for Zen restores the font");
+        harness.state_mut().run_ide_action(&ctx, Action::ToggleDistractionFreeMode);
+        assert_eq!(harness.state().focus_mode, FocusMode::DistractionFree);
+        harness.state_mut().run_ide_action(&ctx, Action::ToggleDistractionFreeMode);
+        assert_eq!(harness.state().focus_mode, FocusMode::Normal);
+        harness.state_mut().run_ide_action(&ctx, Action::TogglePresentationMode);
+        harness.state_mut().run_ide_action(&ctx, Action::Escape);
+        assert_eq!(harness.state().focus_mode, FocusMode::Normal);
+        assert_eq!(harness.state().editor_config.font.size, font);
     }
 }
 
