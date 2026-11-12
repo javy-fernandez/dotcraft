@@ -9,6 +9,7 @@
 ## Validation
 
 - `cargo test -p rc-app --locked --offline --target-dir /home/rafael-mendes/Documentos/dotcraft/target/issue-125 scratches_are_visible_outside_the_workspace_and_can_be_relocated -- --test-threads=1` passed.
+- The focused `scratch_file_names_cannot_escape_the_data_directory` test passed in the same Cargo target directory.
 - `git diff --check` passed.
 
 ## Provenance and limits
