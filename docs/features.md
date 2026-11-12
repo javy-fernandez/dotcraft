@@ -318,6 +318,9 @@ additional scope is pending.
 | Bounded NuGet search (B-12, partial) | [Original PR 221](https://github.com/javy-fernandez/dotcraft/pull/221) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/221/files) |
 | Accessible Shop Find in Files results (D-07) | [Original PR 222](https://github.com/javy-fernandez/dotcraft/pull/222) | [Find evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/find-in-files-shop-accessibility/docs/implementation/find-in-files-shop.md) |
 | Shop text-hunk partial commit (I-21) | [Original PR 223](https://github.com/javy-fernandez/dotcraft/pull/223) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/223/files) |
+| C# signature argument tracking (C-04, partial) | [Original PR 224](https://github.com/javy-fernandez/dotcraft/pull/224) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/224/files) |
+| Linux SDK discovery with Shop.Core build (B-08) | [Original PR 225](https://github.com/javy-fernandez/dotcraft/pull/225) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/225/files) |
+| Linux runtime discovery with Shop.Api (B-09) | [Original PR 226](https://github.com/javy-fernandez/dotcraft/pull/226) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/226/files) |
 
 ## Completion criteria
 

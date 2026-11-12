@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 68 |
-| 🚧 In progress | 43 |
-| 🟢 Existing | 43 |
+| ✅ Verified | 70 |
+| 🚧 In progress | 44 |
+| 🟢 Existing | 40 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -162,8 +162,8 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-05 | Solution folders and items | ✅ | [PR 177](https://github.com/javy-fernandez/dotcraft/pull/177) restricts classic `.sln` loose items to `SolutionItems` sections; Shop `.sln`, TenProjects `.slnx`, and nested-folder fixtures verify parser membership in seven tests. UI and SDK execution remain untested. |
 | B-06 | Project templates | 🚧 | [PR 187](https://github.com/javy-fernandez/dotcraft/pull/187) validates `.sln`/`.slnx` targets before `dotnet new` and rejects missing, directory and `.slnf` targets; Shop/TenProjects plans pass three rc-dotnet tests. Actual SDK creation and UI acceptance remain. |
 | B-07 | File and class templates | 🚧 | [PR 217](https://github.com/javy-fernandez/dotcraft/pull/217) verifies New Class creation in a copied Shop.Core project, namespace generation, opened tab and duplicate refusal in egui on Linux. Other item kinds, project-system integration, background file creation and platforms remain. |
-| B-08 | .NET SDK discovery | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| B-09 | Runtime discovery | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| B-08 | .NET SDK discovery | ✅ | [PR 225](https://github.com/javy-fernandez/dotcraft/pull/225) fixes extensionless explicit host discovery and verifies explicit executable/directory/PATH discovery, SDK 8.0.428 listing/version and a successful build of a temporary Shop.Core copy on Linux. Windows/macOS and managed SDK installation remain untested. |
+| B-09 | Runtime discovery | ✅ | [PR 226](https://github.com/javy-fernandez/dotcraft/pull/226) parses whitespace-tolerant runtime listings and verifies .NETCore.App/AspNetCore.App 8.0.34 installed by official local SDK 8.0.428 against Shop.Api net8.0 on Linux. UI/server launch and other platforms remain untested. |
 | B-10 | MSBuild property evaluation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-11 | Launch settings profiles | 🚧 | [PR 181](https://github.com/javy-fernandez/dotcraft/pull/181) fixes URL scheme detection and verifies Shop.Api profile order, URL, and environment in four rc-dotnet tests. Browser opening, SDK run, and UI profile selection remain unverified. |
 | B-12 | NuGet search | 🚧 | [PR 221](https://github.com/javy-fernandez/dotcraft/pull/221) bounds query, pagination and response size before/during NuGet V3 requests; a Shop.Api package ID is tested through a local fake feed. Live nuget.org and app UI remain unverified. |
@@ -194,7 +194,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-01 | C# syntax highlighting | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-02 | Roslyn semantic highlighting | ✅ | Live C# application regression verifies Roslyn semantic color for a class; see live-dotnet.md. |
 | C-03 | Code completion | ✅ | Live Roslyn and application regressions verify C# completion; advanced completion variants remain separate inventory targets. |
-| C-04 | Signature help | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-04 | Signature help | 🚧 | [PR 224](https://github.com/javy-fernandez/dotcraft/pull/224) updates the active argument at the caret in Shop C# EditorView, including nested and quoted commas. Metadata is supplied directly; Roslyn/app delivery and other C# forms remain unverified. |
 | C-05 | Quick documentation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-06 | Automatic brackets | ✅ | [PR 168](https://github.com/javy-fernandez/dotcraft/pull/168) fixes C# comment/string context and verifies pairing, type-over, selection wrapping, and undo through egui editor events on a real Shop C# fixture; 17 rc-editor unit and one fixture test pass. No SDK build or broader Rider parity claim. |
 | C-07 | Multiple carets | ✅ | [PR 178](https://github.com/javy-fernandez/dotcraft/pull/178) fixes data loss with mixed selection and empty caret during bracket typing; 27 rc-text, 17 rc-editor and one real Shop C# editor-event test verify per-range edits and one-step undo. No SDK build or broader input matrix claim. |
