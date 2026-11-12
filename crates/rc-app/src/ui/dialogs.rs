@@ -1637,6 +1637,43 @@ mod sdk_settings_return_tests {
     use std::os::unix::fs::PermissionsExt;
 
     #[test]
+    #[ignore = "requires a local .NET SDK and restored Shop fixture packages"]
+    fn shop_sdk_chooser_writes_global_json_and_builds_with_selected_sdk() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let dotnet = rc_dotnet::Dotnet::locate(None).expect("install a .NET SDK for this acceptance test");
+        let version = dotnet.list_sdks().unwrap().into_iter().find(|sdk| sdk.major() == 8).unwrap().version;
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("Shop.Core");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::copy(crate::screens::fixtures().join("Shop/src/Shop.Core/Shop.Core.csproj"), root.join("Shop.Core.csproj")).unwrap();
+        let mut app = crate::screens::test_app(&temp.path().join("home"), true);
+        app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(&root).unwrap(), solution: None });
+        app.dialog = Some(Dialog::SdkSelection {
+            state: Box::new(crate::ui::sdk_selection::SdkSelection::new(root.clone(), dotnet.path.clone(), app.waker.clone())),
+            parent_draft: Box::new(app.settings.clone()),
+            parent_page: SettingsPage::Tools,
+        });
+        let mut harness = crate::screens::harness(app, vec2(900.0, 600.0));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while harness.get_by_role(egui::accesskit::Role::ComboBox).accesskit_node().is_disabled() {
+            assert!(std::time::Instant::now() < deadline, "SDK chooser did not load");
+            harness.run_steps(2);
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        harness.get_by_role(egui::accesskit::Role::ComboBox).click();
+        harness.run_steps(2);
+        harness.get_by_label(&version).click();
+        harness.run_steps(2);
+        harness.get_by_label(tr("Save SDK selection")).click();
+        harness.run_steps(3);
+        let policy: serde_json::Value = serde_json::from_slice(&std::fs::read(root.join("global.json")).unwrap()).unwrap();
+        assert_eq!(policy["sdk"]["version"], version);
+        assert_eq!(dotnet.version(Some(&root)).unwrap(), version);
+        let output = dotnet.std_command().args(["build", "Shop.Core.csproj", "--nologo", "-v:q"]).current_dir(&root).output().unwrap();
+        assert!(output.status.success(), "{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    }
+
+    #[test]
     fn closing_or_saving_sdk_chooser_restores_settings_draft_and_cancel_discards_it() {
         let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         for save in [false, true] {
