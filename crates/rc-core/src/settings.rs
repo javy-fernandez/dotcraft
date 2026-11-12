@@ -20,6 +20,7 @@ pub enum KeymapChoice {
     #[default]
     Rider,
     VisualStudio,
+    VsCode,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -171,5 +172,13 @@ mod tests {
         s.add_recent("/b".into());
         s.add_recent("/a".into());
         assert_eq!(s.recent_workspaces, vec![PathBuf::from("/a"), PathBuf::from("/b")]);
+    }
+
+    #[test]
+    fn vscode_keymap_survives_settings_round_trip() {
+        let settings = Settings { keymap: KeymapChoice::VsCode, ..Settings::default() };
+        let json = serde_json::to_string(&settings).unwrap();
+        assert_eq!(serde_json::from_str::<Settings>(&json).unwrap().keymap, KeymapChoice::VsCode);
+        assert_eq!(serde_json::from_str::<Settings>(r#"{"keymap":"Rider"}"#).unwrap().keymap, KeymapChoice::Rider);
     }
 }
