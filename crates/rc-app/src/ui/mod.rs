@@ -5,6 +5,7 @@ pub mod debug_window;
 pub mod database_window;
 pub mod dialogs;
 pub mod sdk_selection;
+pub mod publish;
 pub mod editor_area;
 pub mod ef_core;
 pub mod explorer;

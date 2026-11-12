@@ -1,0 +1,18 @@
+# Folder publish profiles. English fallback values are intentional until translations are added.
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+A publish profile with this name already exists	A publish profile with this name already exists	A publish profile with this name already exists	A publish profile with this name already exists	A publish profile with this name already exists	A publish profile with this name already exists	A publish profile with this name already exists	A publish profile with this name already exists
+Configuration	Configuration	Configuration	Configuration	Configuration	Configuration	Configuration	Configuration
+Loading publish profiles…	Loading publish profiles…	Loading publish profiles…	Loading publish profiles…	Loading publish profiles…	Loading publish profiles…	Loading publish profiles…	Loading publish profiles…
+New profile	New profile	New profile	New profile	New profile	New profile	New profile	New profile
+No .NET project is available to publish	No .NET project is available to publish	No .NET project is available to publish	No .NET project is available to publish	No .NET project is available to publish	No .NET project is available to publish	No .NET project is available to publish	No .NET project is available to publish
+Profile name	Profile name	Profile name	Profile name	Profile name	Profile name	Profile name	Profile name
+Publish	Publish	Publish	Publish	Publish	Publish	Publish	Publish
+Publish Project	Publish Project	Publish Project	Publish Project	Publish Project	Publish Project	Publish Project	Publish Project
+Publish Project…	Publish Project…	Publish Project…	Publish Project…	Publish Project…	Publish Project…	Publish Project…	Publish Project…
+Publish profile	Publish profile	Publish profile	Publish profile	Publish profile	Publish profile	Publish profile	Publish profile
+ReadyToRun	ReadyToRun	ReadyToRun	ReadyToRun	ReadyToRun	ReadyToRun	ReadyToRun	ReadyToRun
+Runtime identifier	Runtime identifier	Runtime identifier	Runtime identifier	Runtime identifier	Runtime identifier	Runtime identifier	Runtime identifier
+Save Profile	Save Profile	Save Profile	Save Profile	Save Profile	Save Profile	Save Profile	Save Profile
+Self-contained	Self-contained	Self-contained	Self-contained	Self-contained	Self-contained	Self-contained	Self-contained
+Single file	Single file	Single file	Single file	Single file	Single file	Single file	Single file
+Trim unused code	Trim unused code	Trim unused code	Trim unused code	Trim unused code	Trim unused code	Trim unused code	Trim unused code

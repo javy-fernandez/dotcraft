@@ -161,6 +161,9 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
     }
     if category == tr("Help") && command(ui, tr("Check for Updates…"), None, true) { app.check_for_updates(ui.ctx()); }
     if category == tr("Build") {
+        if command(ui, tr("Publish Project…"), Some(ico::BUILD), app.workspace.is_some()) {
+            app.publish_project_dialog();
+        }
         for (label, icon, action) in [(tr("Rebuild Solution"), ico::REBUILD, rc_dotnet::BuildAction::Rebuild), (tr("Clean Solution"), ico::DELETE, rc_dotnet::BuildAction::Clean), (tr("Restore NuGet Packages"), ico::DOWNLOAD, rc_dotnet::BuildAction::Restore)] {
             if command(ui, label, Some(icon), app.workspace.is_some())
                 && let Some(target) = app.workspace.as_ref().map(|workspace| workspace.ws.key_path().to_path_buf())

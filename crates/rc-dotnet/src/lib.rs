@@ -22,6 +22,7 @@ pub mod endpoints;
 pub mod http_file;
 pub mod openapi;
 pub mod launch;
+pub mod publish;
 pub mod msbuild;
 pub mod new_project;
 pub mod nuget;
