@@ -1553,7 +1553,7 @@ impl DotCraftApp {
                     self.nuget.focus_project(&project);
                     self.dock.show(ToolWindow::Nuget);
                 }
-                ExplorerAction::OpenPackageAssembly { name, version } => self.assembly_explorer.open_package(name, version),
+                ExplorerAction::OpenPackageAssembly { project, name, version } => self.assembly_explorer.open_package(project, name, version),
             }
         }
     }

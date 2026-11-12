@@ -24,7 +24,7 @@ pub enum NodeKind {
     Packages(PathBuf),
     ProjectRefs(PathBuf),
     Framework(String),
-    Package { name: String, version: String },
+    Package { project: PathBuf, name: String, version: String },
     ProjectRef(PathBuf),
     Dir(PathBuf),
     File(PathBuf),
@@ -73,7 +73,7 @@ pub enum ExplorerAction {
     CopyPath(PathBuf),
     OpenInTerminal(PathBuf),
     ManagePackages(PathBuf),
-    OpenPackageAssembly { name: String, version: String },
+    OpenPackageAssembly { project: PathBuf, name: String, version: String },
     /// Entity Framework Core › operation, for this project.
     EfCore(PathBuf, crate::ui::ef_core::EfOp),
     /// Migrate this solution to Central Package Management (NuGet window).
@@ -318,7 +318,7 @@ impl ExplorerState {
                         for p in &info.packages {
                             rows.push(Row {
                                 key: format!("{gkey}/{}", p.name),
-                                kind: NodeKind::Package { name: p.name.clone(), version: p.version.clone() },
+                                kind: NodeKind::Package { project: path.to_path_buf(), name: p.name.clone(), version: p.version.clone() },
                                 depth: depth + 3,
                                 label: p.name.clone(),
                                 secondary: p.version.clone(),
@@ -626,9 +626,9 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actio
         actions.push(ExplorerAction::ManagePackages(p.clone()));
         ui.close();
     }
-    if let NodeKind::Package { name, version } = &row.kind {
+    if let NodeKind::Package { project, name, version } = &row.kind {
         if theme::menu_item(ui, Some(ico::LIBRARY), tr("Explore Assembly"), false).clicked() {
-            actions.push(ExplorerAction::OpenPackageAssembly { name: name.clone(), version: version.clone() });
+            actions.push(ExplorerAction::OpenPackageAssembly { project: project.clone(), name: name.clone(), version: version.clone() });
             ui.close();
         }
         return;

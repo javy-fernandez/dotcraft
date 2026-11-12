@@ -165,7 +165,7 @@ fn member_source<'a>(
         return source;
     };
     if il {
-        return source;
+        return il_method_source(source, &member.name).unwrap_or(source);
     }
     let start = source
         .lines()
@@ -183,6 +183,22 @@ fn member_source<'a>(
         .sum::<usize>()
         .min(source.len());
     source.get(start..end).unwrap_or(source)
+}
+
+fn il_method_source<'a>(source: &'a str, name: &str) -> Option<&'a str> {
+    for (end, _) in source.match_indices("// end of method ") {
+        let line_end = source[end..]
+            .find('\n')
+            .map_or(source.len(), |offset| end + offset + 1);
+        let marker = source[end..line_end].trim();
+        let member = marker.rsplit_once("::")?.1;
+        if member != name && member != format!("get_{name}") && member != format!("set_{name}") {
+            continue;
+        }
+        let start = source[..end].rfind("\t.method ")?;
+        return source.get(start..line_end);
+    }
+    None
 }
 
 #[cfg(test)]
@@ -207,5 +223,17 @@ mod tests {
             "void First() {}\n"
         );
         assert_eq!(member_source(source, &members, None, false), source);
+    }
+
+    #[test]
+    fn il_member_selection_shows_the_chosen_method() {
+        let source = ".class Widget\n{\n\t.method void First()\n\t{\n\t\tIL_0000: ret\n\t} // end of method Widget::First\n\t.method void Second()\n\t{\n\t\tIL_0000: ret\n\t} // end of method Widget::Second\n}";
+        let members = vec![crate::assembly_explorer::Member {
+            name: "Second".into(),
+            line: 0,
+        }];
+        let selected = member_source(source, &members, Some(0), true);
+        assert!(selected.contains("Widget::Second"));
+        assert!(!selected.contains("Widget::First"));
     }
 }

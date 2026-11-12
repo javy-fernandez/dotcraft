@@ -106,7 +106,7 @@ impl AssemblyExplorer {
         });
     }
 
-    pub fn open_package(&mut self, name: String, version: String) {
+    pub fn open_package(&mut self, project: PathBuf, name: String, version: String) {
         self.visible = true;
         self.path = None;
         self.types.clear();
@@ -117,20 +117,22 @@ impl AssemblyExplorer {
         self.busy = true;
         let generation = self.generation.fetch_add(1, Ordering::Relaxed) + 1;
         let out = self.inbox.sender();
-        std::thread::spawn(move || match find_package_assembly(&name, &version) {
-            Some(path) => {
-                out.send(ResultEvent::Package(generation, path));
-            }
-            None => {
-                out.send(ResultEvent::Error(
-                    generation,
-                    trf(
-                        "No installed assembly found for {name} {version}",
-                        &[("name", &name), ("version", &version)],
-                    ),
-                ));
-            }
-        });
+        std::thread::spawn(
+            move || match find_package_assembly(&project, &name, &version) {
+                Some(path) => {
+                    out.send(ResultEvent::Package(generation, path));
+                }
+                None => {
+                    out.send(ResultEvent::Error(
+                        generation,
+                        trf(
+                            "No installed assembly found for {name} {version}",
+                            &[("name", &name), ("version", &version)],
+                        ),
+                    ));
+                }
+            },
+        );
     }
 
     pub fn list_framework_assemblies(&mut self) {
@@ -283,11 +285,75 @@ fn framework_assemblies_in(root: &Path) -> Vec<PathBuf> {
     assemblies
 }
 
-fn find_package_assembly(name: &str, version: &str) -> Option<PathBuf> {
+fn find_package_assembly(project: &Path, name: &str, version: &str) -> Option<PathBuf> {
     let root = std::env::var_os("NUGET_PACKAGES")
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|home| home.join(".nuget").join("packages")))?;
-    find_package_assembly_in(&root, name, version)
+    find_package_assembly_from_assets(project, &root, name, version)
+        .or_else(|| find_package_assembly_in(&root, name, version))
+}
+
+fn find_package_assembly_from_assets(
+    project: &Path,
+    cache: &Path,
+    name: &str,
+    version: &str,
+) -> Option<PathBuf> {
+    let assets = project.parent()?.join("obj/project.assets.json");
+    let document: serde_json::Value = serde_json::from_slice(&std::fs::read(assets).ok()?).ok()?;
+    let targets = document.get("targets")?.as_object()?;
+    let package_id = format!("{name}/{version}");
+    let package_root = cache
+        .join(name.to_ascii_lowercase())
+        .join(version.to_ascii_lowercase());
+    let frameworks = rc_dotnet::ProjectInfo::load(project)
+        .ok()
+        .map(|info| info.target_frameworks)
+        .unwrap_or_default();
+    let mut target_names: Vec<_> = targets.keys().collect();
+    target_names.sort_by_key(|target| {
+        if frameworks
+            .iter()
+            .any(|framework| *target == framework || target.starts_with(&format!("{framework}/")))
+        {
+            0
+        } else {
+            1
+        }
+    });
+    for target_name in target_names {
+        let Some(packages) = targets[target_name].as_object() else {
+            continue;
+        };
+        let Some((_, package)) = packages
+            .iter()
+            .find(|(id, _)| id.eq_ignore_ascii_case(&package_id))
+        else {
+            continue;
+        };
+        for group in ["runtime", "compile"] {
+            let Some(files) = package.get(group).and_then(serde_json::Value::as_object) else {
+                continue;
+            };
+            for relative in files.keys() {
+                let candidate = Path::new(relative);
+                if candidate
+                    .extension()
+                    .is_none_or(|extension| !extension.eq_ignore_ascii_case("dll"))
+                    || !candidate
+                        .components()
+                        .all(|part| matches!(part, std::path::Component::Normal(_)))
+                {
+                    continue;
+                }
+                let path = package_root.join(candidate);
+                if path.is_file() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
 }
 
 fn find_package_assembly_in(root: &Path, name: &str, version: &str) -> Option<PathBuf> {
@@ -496,6 +562,23 @@ mod tests {
         assert_eq!(
             find_package_assembly_in(root.path(), "Newtonsoft.Json", "13.0.3"),
             Some(dll)
+        );
+    }
+
+    #[test]
+    fn selects_the_asset_chosen_by_restore() {
+        let root = tempfile::tempdir().unwrap();
+        let project = root.path().join("App/App.csproj");
+        let cache = root.path().join("packages");
+        let assembly = cache.join("example/1.0.0/lib/net10.0/Example.dll");
+        std::fs::create_dir_all(assembly.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(project.parent().unwrap().join("obj")).unwrap();
+        std::fs::write(&project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>").unwrap();
+        std::fs::write(&assembly, []).unwrap();
+        std::fs::write(project.parent().unwrap().join("obj/project.assets.json"), r#"{"targets":{"net10.0":{"Example/1.0.0":{"runtime":{"lib/net10.0/Example.dll":{}},"compile":{"ref/net10.0/Example.dll":{}}}}}}"#).unwrap();
+        assert_eq!(
+            find_package_assembly_from_assets(&project, &cache, "Example", "1.0.0"),
+            Some(assembly)
         );
     }
 
