@@ -367,6 +367,23 @@ pub fn parse_test_list(text: &str, project: &Path, assembly: &Path) -> Vec<Disco
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    #[ignore = "requires a local .NET SDK and restored Shop fixture packages"]
+    async fn discovers_shop_xunit_nunit_and_mstest_with_real_sdk() {
+        let dotnet = Dotnet::locate(None).expect("install a .NET SDK for this acceptance test");
+        let solution = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/Shop/Shop.sln");
+        let found = discover_tests(&dotnet, &solution, "Debug", true, &CancelToken::new()).await.unwrap();
+        assert!(found.len() >= 10, "discovered only {found:?}");
+        for (project, method) in [
+            ("Shop.Core.XunitTests", "PriceCalculatorTests"),
+            ("Shop.Core.NunitTests", "OrderTests"),
+            ("Shop.Core.MSTests", "PriceBreakdownTests"),
+        ] {
+            assert!(found.iter().any(|test| test.project.to_string_lossy().contains(project) && test.class_name.contains(method) && !test.method_name.is_empty() && test.assembly.exists()),
+                "missing {project} test: {found:?}");
+        }
+    }
+
     #[test]
     fn builds_filters() {
         assert_eq!(TestFilter::Tests(vec!["A.B.C".into(), "A.B.D(9,0)".into()]).expression(), "FullyQualifiedName=A.B.C|FullyQualifiedName=A.B.D\\(9,0\\)");
