@@ -1111,6 +1111,20 @@ mod branches_tests {
         String::from_utf8_lossy(&out.stdout).into_owned()
     }
 
+    fn copy_tree(source: &Path, target: &Path) {
+        std::fs::create_dir_all(target).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let source = entry.path();
+            let target = target.join(entry.file_name());
+            if source.is_dir() {
+                copy_tree(&source, &target);
+            } else {
+                std::fs::copy(source, target).unwrap();
+            }
+        }
+    }
+
     /// A clone of a bare remote: `main` and `feature` pushed, `topic` local and unmerged.
     fn repos(base: &Path) -> (PathBuf, PathBuf) {
         let remote = base.join("remote.git");
@@ -1169,6 +1183,95 @@ mod branches_tests {
         open_popup(h);
         h.get_by_role_and_label(Role::Button, name).click();
         h.run_steps(3);
+    }
+
+    #[test]
+    fn shop_solution_fetch_pull_and_push_from_git_menu() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let base = home.path().canonicalize().unwrap();
+        let root = base.join("Shop");
+        copy_tree(&crate::screens::fixtures().join("Shop"), &root);
+        let remote = base.join("remote.git");
+        std::fs::create_dir(&remote).unwrap();
+        git(&remote, &["init", "-q", "--bare", "-b", "main"]);
+        git(&root, &["init", "-q", "-b", "main"]);
+        for (key, value) in [("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false"), ("pull.rebase", "false")] {
+            git(&root, &["config", key, value]);
+        }
+        git(&root, &["remote", "add", "origin", &format!("file://{}", remote.display())]);
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "Shop fixture"]);
+
+        let mut app = crate::screens::test_app(&base.join("home"), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root.join("Shop.sln"));
+        let mut h = crate::screens::harness(app, egui::vec2(1200.0, 800.0));
+        frames(&mut h, "Shop repository", |a| a.vcs.status.is_some());
+        open_popup(&mut h);
+        h.get_by_role_and_label(Role::Button, tr("Push…")).click();
+        frames(&mut h, "first push", |a| a.vcs.busy.is_none() && a.vcs.status.as_ref().is_some_and(|s| s.branch.upstream.as_deref() == Some("origin/main")));
+        assert_eq!(git(&root, &["rev-parse", "HEAD"]).trim(), git(&remote, &["rev-parse", "main"]).trim());
+
+        let peer = base.join("peer");
+        git(&base, &["clone", "-q", &format!("file://{}", remote.display()), peer.to_str().unwrap()]);
+        for (key, value) in [("user.name", "Peer"), ("user.email", "peer@example.com"), ("commit.gpgsign", "false")] {
+            git(&peer, &["config", key, value]);
+        }
+        let peer_file = peer.join("src/Shop.Core/Order.cs");
+        let peer_text = std::fs::read_to_string(&peer_file).unwrap();
+        std::fs::write(&peer_file, format!("// remote update\n{peer_text}")).unwrap();
+        git(&peer, &["commit", "-qam", "Remote C# update"]);
+        git(&peer, &["push", "-q"]);
+
+        open_popup(&mut h);
+        h.get_by_role_and_label(Role::Button, tr("Fetch")).click();
+        frames(&mut h, "fetch", |a| a.vcs.busy.is_none() && a.vcs.branches.iter().any(|b| b.name == "main" && b.behind == 1));
+        assert!(h.state().notices.iter().any(|n| n.text == tr("Fetched")));
+        open_popup(&mut h);
+        h.get_by_role_and_label(Role::Button, tr("Update Project…")).click();
+        frames(&mut h, "pull", |a| a.vcs.busy.is_none() && a.vcs.branches.iter().any(|b| b.name == "main" && b.behind == 0));
+        assert!(std::fs::read_to_string(root.join("src/Shop.Core/Order.cs")).unwrap().starts_with("// remote update\n"));
+
+        let local_file = root.join("src/Shop.Core/Cart.cs");
+        std::fs::write(&local_file, "namespace Shop.Core; class Cart {}\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "Local C# update"]);
+        h.state_mut().vcs.refresh();
+        frames(&mut h, "ahead", |a| a.vcs.branches.iter().any(|b| b.name == "main" && b.ahead == 1));
+        open_popup(&mut h);
+        h.get_by_role_and_label(Role::Button, tr("Push…")).click();
+        frames(&mut h, "second push", |a| a.vcs.busy.is_none() && a.vcs.branches.iter().any(|b| b.name == "main" && b.ahead == 0));
+        assert_eq!(git(&root, &["rev-parse", "HEAD"]).trim(), git(&remote, &["rev-parse", "main"]).trim());
+
+        // A non-fast-forward push reports the rejection. Fetch and pull resolve the
+        // independent commits before the next UI push.
+        git(&peer, &["pull", "-q", "--ff-only"]);
+        std::fs::write(peer.join("src/Shop.Core/Peer.cs"), "namespace Shop.Core; class Peer {}\n").unwrap();
+        git(&peer, &["add", "."]);
+        git(&peer, &["commit", "-qm", "Peer C# update"]);
+        git(&peer, &["push", "-q"]);
+        std::fs::write(root.join("src/Shop.Core/Local.cs"), "namespace Shop.Core; class Local {}\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "Divergent local C# update"]);
+        h.state_mut().vcs.refresh();
+        open_popup(&mut h);
+        h.get_by_role_and_label(Role::Button, tr("Push…")).click();
+        frames(&mut h, "rejected push", |a| a.vcs.busy.is_none() && a.vcs.error.as_deref().is_some_and(|error| error.contains("rejected")));
+        assert_ne!(git(&root, &["rev-parse", "HEAD"]).trim(), git(&remote, &["rev-parse", "main"]).trim());
+        open_popup(&mut h);
+        h.get_by_role_and_label(Role::Button, tr("Fetch")).click();
+        frames(&mut h, "fetch divergence", |a| a.vcs.busy.is_none() && a.vcs.branches.iter().any(|b| b.name == "main" && b.behind == 1));
+        open_popup(&mut h);
+        h.get_by_role_and_label(Role::Button, tr("Update Project…")).click();
+        frames(&mut h, "merge pull", |a| a.vcs.busy.is_none() && a.vcs.branches.iter().any(|b| b.name == "main" && b.behind == 0));
+        assert!(root.join("src/Shop.Core/Peer.cs").exists());
+        assert!(root.join("src/Shop.Core/Local.cs").exists());
+        open_popup(&mut h);
+        h.get_by_role_and_label(Role::Button, tr("Push…")).click();
+        frames(&mut h, "push merged history", |a| a.vcs.busy.is_none() && a.vcs.branches.iter().any(|b| b.name == "main" && b.ahead == 0));
+        assert_eq!(git(&root, &["rev-parse", "HEAD"]).trim(), git(&remote, &["rev-parse", "main"]).trim());
+        h.state_mut().close_workspace();
     }
 
     #[test]
