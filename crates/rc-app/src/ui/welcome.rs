@@ -74,7 +74,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
             ui.painter().text(pos2(badge.right() + 12.0, r.top() + 7.0), Align2::LEFT_TOP, &name, theme::bold(13.0), if exists { p.text } else { p.disabled });
             let sub = if exists { path.display().to_string() } else { format!("{} — {}", path.display(), tr("not found")) };
             ui.painter().text(pos2(badge.right() + 12.0, r.top() + 25.0), Align2::LEFT_TOP, sub, FontId::proportional(12.0), p.muted);
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+            let accessible_path = path.display().to_string();
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, exists, &accessible_path));
             let resp = resp.on_hover_text(path.display().to_string());
             if resp.clicked() && exists {
                 app.open_workspace(path);
@@ -97,4 +98,23 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         app.open_paths(dropped);
         ui.allocate_rect(rect, Sense::hover());
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn recent_solution_opens_from_the_welcome_screen() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let solution = crate::screens::fixtures().join("Shop/Shop.sln");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.recent_workspaces = vec![solution.clone()];
+        let mut harness = crate::screens::harness(app, egui::vec2(900.0, 700.0));
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, &solution.display().to_string()).click();
+        harness.run_steps(3);
+        assert_eq!(harness.state().workspace.as_ref().unwrap().ws.key_path(), solution);
+        assert_eq!(harness.state().settings.recent_workspaces.first(), Some(&solution));
+    }
 }
