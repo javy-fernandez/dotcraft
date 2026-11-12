@@ -2,6 +2,7 @@
 mod common;
 use common::TempRepo;
 use rc_vcs::{Git, Repository};
+use rc_vcs::tools::SubmoduleState;
 
 #[cfg(unix)]
 #[tokio::test]
@@ -119,10 +120,20 @@ async fn submodule_status_and_update_restore_recorded_commits() {
     let module = Repository::discover(&parent.path("modules/library")).await.unwrap();
     common::configure(module.root());
     common::git(module.root(), &["commit", "--allow-empty", "-m", "local deviation"]);
-    assert!(parent.repo.submodule_status().await.unwrap().starts_with('+'));
+    let before = parent.repo.submodules().await.unwrap();
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0].path, std::path::Path::new("modules/library"));
+    assert_eq!(before[0].state, SubmoduleState::DifferentCommit);
+    assert_eq!(before[0].commit, module.resolve("HEAD").await.unwrap());
+    let cancelled = rc_vcs::CancelToken::new();
+    cancelled.cancel();
+    assert!(matches!(parent.repo.update_submodules_cancellable(Some(&cancelled)).await, Err(rc_vcs::GitError::Cancelled)));
+    assert_eq!(module.resolve("HEAD").await.unwrap(), before[0].commit);
     parent.repo.update_submodules().await.unwrap();
     assert_eq!(module.resolve("HEAD").await.unwrap(), expected);
-    assert!(parent.repo.submodule_status().await.unwrap().contains("modules/library"));
+    let after = parent.repo.submodules().await.unwrap();
+    assert_eq!(after[0].state, SubmoduleState::AtRecordedCommit);
+    assert_eq!(after[0].commit, expected);
 }
 
 #[tokio::test]
