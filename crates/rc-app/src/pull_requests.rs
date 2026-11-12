@@ -21,7 +21,8 @@ enum Event {
     Detected(PathBuf, Option<HostRepo>),
     /// The token was checked: (result, token, whether to store it).
     Connected(Result<Viewer, HostError>, String, bool),
-    List(Result<Vec<PullRequest>, HostError>),
+    /// A list reply; the number is the request it answers (older replies are dropped).
+    List(u64, Result<Vec<PullRequest>, HostError>),
     Details(u64, Result<PrDetails, HostError>),
     Diff(String, String, Result<(String, String), HostError>),
     /// An action finished: (what, result with the notice, pull request to reload).
@@ -60,6 +61,8 @@ pub struct PullRequests {
     pub token_input: String,
     pub list: Vec<PullRequest>,
     pub loading: bool,
+    /// Id of the latest list request: a slower, older reply must not undo a newer selection.
+    list_request: u64,
     pub error: Option<String>,
     pub selected: Option<u64>,
     pub details: Option<PrDetails>,
@@ -108,6 +111,7 @@ impl PullRequests {
             token_input: String::new(),
             list: Vec::new(),
             loading: false,
+            list_request: 0,
             error: None,
             selected: None,
             details: None,
@@ -189,7 +193,8 @@ impl PullRequests {
                         }
                     }
                 }
-                Event::List(r) => {
+                Event::List(request, _) if request != self.list_request => {}
+                Event::List(_, r) => {
                     self.loading = false;
                     match r {
                         Ok(list) => {
@@ -331,9 +336,11 @@ impl PullRequests {
     pub fn refresh(&mut self) {
         let Some(client) = self.client.clone() else { return };
         self.loading = true;
+        self.list_request += 1;
+        let request = self.list_request;
         let out = self.inbox.sender();
         Runtime::spawn(async move {
-            out.send(Event::List(client.list().await));
+            out.send(Event::List(request, client.list().await));
         });
         if let Some(id) = self.selected {
             self.load_details(id);
