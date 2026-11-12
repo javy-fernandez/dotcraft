@@ -316,6 +316,7 @@ additional scope is pending.
 | NuGet command preflight (B-13, partial) | [Original PR 219](https://github.com/javy-fernandez/dotcraft/pull/219) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/219/files) |
 | Shop navigation history with removed source (D-10) | [Original PR 220](https://github.com/javy-fernandez/dotcraft/pull/220) | [Navigation evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/navigation-history-missing-files/docs/implementation/navigation-history-shop.md) |
 | Bounded NuGet search (B-12, partial) | [Original PR 221](https://github.com/javy-fernandez/dotcraft/pull/221) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/221/files) |
+| Accessible Shop Find in Files results (D-07) | [Original PR 222](https://github.com/javy-fernandez/dotcraft/pull/222) | [Find evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/find-in-files-shop-accessibility/docs/implementation/find-in-files-shop.md) |
 
 ## Completion criteria
 

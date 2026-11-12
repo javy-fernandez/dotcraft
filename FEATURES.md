@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 66 |
+| ✅ Verified | 67 |
 | 🚧 In progress | 43 |
-| 🟢 Existing | 44 |
+| 🟢 Existing | 43 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 203 |
 | 🚫 Out of scope | 0 |
@@ -245,7 +245,7 @@ Source / reuse boundary: `crates/rc-app/src/search.rs; crates/rc-search; crates/
 | D-04 | Go to definition | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-05 | Go to implementation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-06 | Find usages | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| D-07 | Find in files | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| D-07 | Find in files | ✅ | [PR 222](https://github.com/javy-fernandez/dotcraft/pull/222) gives each result an accessible path/line/text label and verifies literal search plus exact C# source navigation in the real Shop.sln egui UI on Linux. Regex, replacement, huge workspaces and other platforms remain untested. |
 | D-08 | Replace in files | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-09 | File structure | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-10 | Navigation history | ✅ | [PR 220](https://github.com/javy-fernandez/dotcraft/pull/220) skips removed files even when their editor buffer remains open, preserving Back/Forward stacks and exact C# caret locations in the real Shop.sln egui UI on Linux. Renames, remote files and other platforms remain untested. |
