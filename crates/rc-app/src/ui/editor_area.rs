@@ -251,9 +251,9 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
                 }
                 app.session_dirty = true;
             }
-            EditorEvent::CodeVisionClicked { position } => {
+            EditorEvent::CodeVisionClicked { position, kind } => {
                 if position <= doc.editor.buffer.len_chars() {
-                    code_vision_target = Some((doc.path.clone(), position));
+                    code_vision_target = Some((doc.path.clone(), position, kind));
                 }
             }
             EditorEvent::GutterSecondaryClicked { line, .. } => {
@@ -363,9 +363,13 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     if let Some((path, pos)) = navigated_from {
         app.push_nav_at(path, pos);
     }
-    if let Some((path, pos)) = code_vision_target {
+    if let Some((path, pos, kind)) = code_vision_target {
         app.push_nav_at(path, pos);
-        app.insight.navigate(&app.docs.list[active], pos, crate::insight::NavKind::Usages);
+        let nav = match kind {
+            rc_editor::CodeVisionKind::Usages => crate::insight::NavKind::Usages,
+            rc_editor::CodeVisionKind::Implementations | rc_editor::CodeVisionKind::Overrides => crate::insight::NavKind::Implementation,
+        };
+        app.insight.navigate(&app.docs.list[active], pos, nav);
     }
     for a in insight_actions {
         app.run_insight_action(a, caret_screen);

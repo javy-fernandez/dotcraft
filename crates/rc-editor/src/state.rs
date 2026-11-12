@@ -44,6 +44,14 @@ pub struct CodeVision {
     pub line: usize,
     pub position: usize,
     pub title: String,
+    pub kind: CodeVisionKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CodeVisionKind {
+    Usages,
+    Implementations,
+    Overrides,
 }
 
 /// Coverage of a line (gutter bar while coverage is shown).
@@ -98,8 +106,8 @@ pub enum EditorEvent {
     CaretMoved,
     /// Click in the breakpoint area of the gutter (0-based line).
     GutterClicked { line: usize },
-    /// A Code Vision reference count was clicked.
-    CodeVisionClicked { position: usize },
+    /// A Code Vision count was clicked.
+    CodeVisionClicked { position: usize, kind: CodeVisionKind },
     /// Right-click on a line number (0-based line).
     GutterSecondaryClicked { line: usize, screen: egui::Pos2 },
     /// Click on an icon of the gutter's icon column.

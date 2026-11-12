@@ -3,7 +3,7 @@
 
 use crate::keymap::{Action, Keymap};
 use crate::layout::{EditorFont, LineInput, LineLayout, Virtual, VirtualKind, fold_placeholder, layout_line, mono, severity_color};
-use crate::state::{BreakpointKind, EditorEvent, EditorState, GutterIcon, LineChange, Severity};
+use crate::state::{BreakpointKind, CodeVisionKind, EditorEvent, EditorState, GutterIcon, LineChange, Severity};
 use egui::{Color32, CornerRadius, CursorIcon, Event, Id, Key, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2, pos2, vec2};
 use rc_kit::{Scheme, ico, icons};
 use rc_text::commands::{self, Motion};
@@ -144,8 +144,8 @@ impl<'a> EditorView<'a> {
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, CornerRadius::ZERO, pal.editor_bg);
         paint_text_area(ui, state, config, &scheme, &m, text_rect, focused);
-        for position in paint_code_vision(ui, state, config, &m, text_rect) {
-            out.events.push(EditorEvent::CodeVisionClicked { position });
+        for (position, kind) in paint_code_vision(ui, state, config, &m, text_rect) {
+            out.events.push(EditorEvent::CodeVisionClicked { position, kind });
         }
         paint_gutter(ui, state, &scheme, &pal, &m, rect, text_rect);
         let (vbar, hbar) = paint_scrollbars(ui, state, &scheme, &pal, rect, text_rect, content_h, content_w, &m);
@@ -190,21 +190,18 @@ impl<'a> EditorView<'a> {
     }
 }
 
-fn paint_code_vision(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m: &Metrics, text_rect: Rect) -> Vec<usize> {
+fn paint_code_vision(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m: &Metrics, text_rect: Rect) -> Vec<(usize, CodeVisionKind)> {
     let pal = rc_kit::pal(ui);
     let font = egui::FontId::monospace(config.font.size * 0.82);
     let painter = ui.painter_at(text_rect);
     let mut clicked = Vec::new();
-    let mut visions = std::collections::BTreeMap::<usize, (String, usize)>::new();
+    let mut visions = std::collections::BTreeMap::<usize, Vec<crate::state::CodeVision>>::new();
     for vision in &state.code_vision {
-        let (label, _) = visions.entry(vision.line).or_insert_with(|| (String::new(), vision.position));
-        if !label.is_empty() {
-            label.push_str(" · ");
-        }
-        label.push_str(&vision.title);
+        visions.entry(vision.line).or_default().push(vision.clone());
     }
-    for (line, (title, position)) in visions {
-        if line >= state.buffer.len_lines() {
+    let visible_lines = vision_lines(state);
+    for (line, labels) in visions {
+        if visible_lines.binary_search(&line).is_err() {
             continue;
         }
         let row = row_of_line(state, line);
@@ -212,17 +209,25 @@ fn paint_code_vision(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m:
         if y + m.row_h < text_rect.top() || y > text_rect.bottom() {
             continue;
         }
-        let galley = ui.fonts_mut(|fonts| fonts.layout_no_wrap(title, font.clone(), pal.muted));
-        let width = galley.size().x.min((text_rect.width() - 12.0).max(0.0));
-        let rect = Rect::from_min_size(pos2(text_rect.right() - width - 14.0, y + 1.0), vec2(width + 10.0, m.row_h - 2.0));
-        let response = ui.interact(rect, Id::new(("code_vision", state.id, line)), Sense::click());
-        painter.rect_filled(rect, 3.0, if response.hovered() { pal.row_hover } else { pal.editor_bg });
-        painter.galley(rect.min + vec2(5.0, (rect.height() - galley.size().y) / 2.0), galley, pal.muted);
-        if response.hovered() {
-            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-        }
-        if response.clicked() {
-            clicked.push(position);
+        let mut x = text_rect.left() + 6.0;
+        for (index, vision) in labels.iter().enumerate() {
+            let galley = ui.fonts_mut(|fonts| fonts.layout_no_wrap(vision.title.clone(), font.clone(), pal.muted));
+            let available = text_rect.right() - 6.0 - x;
+            if available <= 10.0 {
+                break;
+            }
+            let width = (galley.size().x + 10.0).min(available);
+            let rect = Rect::from_min_size(pos2(x, y + 1.0), vec2(width, m.row_h - 2.0));
+            let response = ui.interact(rect, Id::new(("code_vision", state.id, line, index)), Sense::click());
+            painter.rect_filled(rect, 3.0, if response.hovered() { pal.row_hover } else { pal.editor_bg });
+            painter.galley(rect.min + vec2(5.0, (rect.height() - galley.size().y) / 2.0), galley, pal.muted);
+            if response.hovered() {
+                ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+            }
+            if response.clicked() {
+                clicked.push((vision.position, vision.kind));
+            }
+            x += width + 8.0;
         }
     }
     clicked
@@ -255,25 +260,80 @@ pub(crate) fn metrics(ui: &Ui, state: &EditorState, config: &EditorConfig, rect:
 
 fn display_row_count(state: &mut EditorState) -> usize {
     let n = state.buffer.len_lines();
-    state.display_rows().map_or(n, |r| r.len())
+    state.display_rows().map_or(n, |r| r.len()) + vision_lines(state).len()
 }
 
-/// Display row of buffer line `line` (the fold's first line when it is hidden).
-pub(crate) fn row_of_line(state: &mut EditorState, line: usize) -> usize {
+fn source_row_of_line(state: &mut EditorState, line: usize) -> usize {
     match state.display_rows() {
         None => line,
         Some(rows) => match rows.binary_search(&line) {
-            Ok(r) => r,
-            Err(r) => r.saturating_sub(1),
+            Ok(row) => row,
+            Err(row) => row.saturating_sub(1),
         },
     }
 }
 
+fn vision_lines(state: &mut EditorState) -> Vec<usize> {
+    let mut lines = state.code_vision.iter().map(|vision| vision.line).collect::<Vec<_>>();
+    lines.sort_unstable();
+    lines.dedup();
+    lines.retain(|&line| line < state.buffer.len_lines() && {
+        let row = source_row_of_line(state, line);
+        state.display_rows().is_none_or(|rows| rows.get(row) == Some(&line))
+    });
+    lines
+}
+
+/// Display row of buffer line `line` (the fold's first line when it is hidden).
+pub(crate) fn row_of_line(state: &mut EditorState, line: usize) -> usize {
+    let source_row = source_row_of_line(state, line);
+    source_row + vision_lines(state).partition_point(|&vision_line| vision_line <= line)
+}
+
 pub(crate) fn line_of_row(state: &mut EditorState, row: usize) -> usize {
     let n = state.buffer.len_lines();
-    match state.display_rows() {
-        None => row.min(n.saturating_sub(1)),
-        Some(rows) => rows.get(row).copied().unwrap_or_else(|| *rows.last().unwrap_or(&0)),
+    let source_rows = state.display_rows().map_or(n, |rows| rows.len());
+    let mut low = 0;
+    let mut high = source_rows;
+    while low < high {
+        let middle = (low + high) / 2;
+        let line = state.display_rows().map_or(middle, |rows| rows[middle]);
+        if row_of_line(state, line) < row {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+    let index = low.min(source_rows.saturating_sub(1));
+    state.display_rows().map_or(index, |rows| rows[index])
+}
+
+fn is_vision_row(state: &mut EditorState, row: usize) -> bool {
+    let line = line_of_row(state, row);
+    row_of_line(state, line) == row + 1
+}
+
+#[cfg(test)]
+mod code_vision_layout_tests {
+    use super::*;
+    use crate::state::CodeVision;
+
+    #[test]
+    fn labels_have_their_own_rows_before_declarations() {
+        let mut state = EditorState::new(1, Some("A.cs".into()), "class A {\n void M() {}\n}\n");
+        state.code_vision = vec![
+            CodeVision { line: 0, position: 0, title: "1 reference".into(), kind: CodeVisionKind::Usages },
+            CodeVision { line: 1, position: 10, title: "2 overrides".into(), kind: CodeVisionKind::Overrides },
+            CodeVision { line: 1, position: 10, title: "3 references".into(), kind: CodeVisionKind::Usages },
+        ];
+        assert_eq!(display_row_count(&mut state), 6);
+        assert_eq!(row_of_line(&mut state, 0), 1);
+        assert_eq!(row_of_line(&mut state, 1), 3);
+        assert_eq!(line_of_row(&mut state, 0), 0);
+        assert_eq!(line_of_row(&mut state, 2), 1);
+        assert!(is_vision_row(&mut state, 0));
+        assert!(is_vision_row(&mut state, 2));
+        assert!(!is_vision_row(&mut state, 3));
     }
 }
 
@@ -419,7 +479,11 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
     let y_of_row = |row: usize| text_rect.top() + row as f32 * m.row_h - scroll_y;
 
     // Buffer lines of the visible rows.
-    let lines: Vec<usize> = (first_row..last_row).map(|r| line_of_row(state, r)).collect();
+    let source_rows = (first_row..last_row).filter(|&row| !is_vision_row(state, row)).collect::<Vec<_>>();
+    if source_rows.is_empty() {
+        return;
+    }
+    let lines: Vec<usize> = source_rows.iter().map(|&row| line_of_row(state, row)).collect();
     let first_line = lines[0];
     let last_line = *lines.last().expect("non-empty");
     let span_lines: Vec<Vec<rc_syntax::Span>> = state.line_spans(first_line, last_line - first_line + 1).to_vec();
@@ -438,7 +502,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
 
     // Caret row (only without a selection, like IntelliJ).
     for (i, &l) in lines.iter().enumerate() {
-        let y = y_of_row(first_row + i);
+        let y = y_of_row(source_rows[i]);
         let row_rect = Rect::from_min_size(pos2(text_rect.left(), y), vec2(text_rect.width(), m.row_h));
         if let Some(bg) = state.line_backgrounds.get(&l) {
             painter.rect_filled(row_rect, 0.0, *bg);
@@ -462,7 +526,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
             }
             let ca = a.max(ls) - ls;
             let cb = b.min(le) - ls;
-            let y = y_of_row(first_row + i);
+            let y = y_of_row(source_rows[i]);
             let x_a = col_x(lay, ca);
             let mut x_b = col_x(lay, cb);
             if b > le {
@@ -527,7 +591,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
                 let down = (l + 1..rope.len_lines()).take(100).find_map(indent_of).unwrap_or(0);
                 up.max(down)
             });
-            let y = y_of_row(first_row + i);
+            let y = y_of_row(source_rows[i]);
             let mut col = 0;
             while col + unit <= indent {
                 // Guides start under the first char of the block line, slightly inset.
@@ -550,7 +614,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
 
     // Text and virtual-text boxes.
     for (i, lay) in layouts.iter().enumerate() {
-        let y = y_of_row(first_row + i);
+        let y = y_of_row(source_rows[i]);
         let origin = pos2(x0 + lay.origin_x(), y + m.text_dy);
         for (r, kind) in &lay.virtuals {
             let xa = lay.origin_x() + lay.galley.pos_from_cursor(egui::text::CCursor::new(r.start)).min.x;
@@ -575,7 +639,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
         for (i, &l) in lines.iter().enumerate() {
             let (ls, lay) = (line_start(l), &layouts[i]);
             if a >= ls && b <= ls + lay.len {
-                let y = y_of_row(first_row + i) + m.row_h - 3.0;
+                let y = y_of_row(source_rows[i]) + m.row_h - 3.0;
                 painter.hline(col_x(lay, a - ls)..=col_x(lay, b - ls), y, Stroke::new(1.0, scheme.hyperlink));
             }
         }
@@ -600,7 +664,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
                 if b < lay.len { b += 1 } else { a = a.saturating_sub(1) }
             }
             let (xa, xb) = (col_x(lay, a), col_x(lay, b).max(col_x(lay, a) + m.char_w));
-            let y = y_of_row(first_row + i) + m.row_h - 3.0;
+            let y = y_of_row(source_rows[i]) + m.row_h - 3.0;
             if d.severity == Severity::Info {
                 painter.hline(xa..=xb, y + 1.0, Stroke::new(1.0, color));
             } else {
@@ -618,7 +682,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
             if let Some(i) = lines.iter().position(|&l| l == cl) {
                 let lay = &layouts[i];
                 let x = (col_x(lay, cc.min(lay.len)) * ui.ctx().pixels_per_point()).round() / ui.ctx().pixels_per_point();
-                let y = y_of_row(first_row + i);
+                let y = y_of_row(source_rows[i]);
                 painter.rect_filled(Rect::from_min_size(pos2(x, y + 1.0), vec2(2.0, m.row_h - 2.0)), 0.0, scheme.caret);
             }
         }
@@ -631,7 +695,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
         if let Some(i) = lines.iter().position(|&l| l == cl) {
             let lay = &layouts[i];
             let x = col_x(lay, cc);
-            let y = y_of_row(first_row + i);
+            let y = y_of_row(source_rows[i]);
             let g = painter.layout_no_wrap(pre.clone(), mono(config.font.size), scheme.text);
             let r = Rect::from_min_size(pos2(x, y), vec2(g.size().x, m.row_h));
             painter.rect_filled(r, 0.0, pal.editor_bg);
@@ -699,6 +763,9 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
         line_of_row(state, row)
     });
     for row in first_row..last_row {
+        if is_vision_row(state, row) {
+            continue;
+        }
         let l = line_of_row(state, row);
         let y = text_rect.top() + row as f32 * m.row_h - state.scroll.y;
         let row_rect = Rect::from_min_max(pos2(gutter.left(), y), pos2(gutter.right(), y + m.row_h));
@@ -930,6 +997,13 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
     let config = EditorConfig::default();
     let (pointer, now, mods) = ui.input(|i| (i.pointer.clone(), i.time, i.modifiers));
     let gutter = Rect::from_min_max(rect.min, pos2(text_rect.left(), rect.bottom()));
+
+    if let Some(p) = response.interact_pointer_pos().filter(|p| rect.contains(*p)) {
+        let row = ((p.y - text_rect.top() + state.scroll.y) / m.row_h).floor().max(0.0) as usize;
+        if is_vision_row(state, row) && (response.clicked() || response.secondary_clicked() || response.drag_started()) {
+            return;
+        }
+    }
 
     // Right-click on the line numbers: breakpoint properties.
     if response.secondary_clicked()

@@ -29,7 +29,7 @@ fn demo_solution(dir: &Path) -> PathBuf {
 fn pump(app: &mut DotCraftApp, what: &str, mut done: impl FnMut(&mut DotCraftApp) -> bool) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(120) {
-        let out = app.insight.update(&mut app.docs, true);
+        let out = app.insight.update(&mut app.docs, true, false);
         app.handle_insight(out);
         app.docs.poll_parses();
         if let InsightStatus::Failed(why) = &app.insight.status {
