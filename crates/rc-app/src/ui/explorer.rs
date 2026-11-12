@@ -659,21 +659,10 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actio
     }
     // Add › (Rider): types, controllers, Razor, tests, files and folders.
     ui.menu_button(tr("Add"), |ui| {
-        ui.set_min_width(220.0);
-        for entry in crate::item_templates::ItemKind::MENU {
-            match entry {
-                None => {
-                    ui.separator();
-                }
-                Some(kind) => {
-                    let label = format!("{}…", tr(kind.title()));
-                    if theme::menu_item(ui, Some(kind.icon()), &label, false).clicked() {
-                        actions.push(ExplorerAction::NewItem(target_dir.clone(), *kind));
-                        ui.close();
-                    }
-                }
-            }
-        }
+        let id = ui.id().with("new_item_filter");
+        let mut filter = ui.ctx().data(|data| data.get_temp::<String>(id).unwrap_or_default());
+        new_item_menu(ui, &target_dir, &mut filter, actions);
+        ui.ctx().data_mut(|data| data.insert_temp(id, filter));
     });
     ui.separator();
     if theme::menu_item(ui, Some(ico::EDIT), tr("Rename…"), false).clicked() {
@@ -696,6 +685,60 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actio
     }
     if theme::menu_item(ui, Some(ico::FILE_SHELL), tr("Open in Terminal"), false).clicked() {
         actions.push(ExplorerAction::OpenInTerminal(target_dir));
+        ui.close();
+    }
+}
+
+/// Searchable Add menu adapted from CrabCraft commits 95e6a42 and 2356dd9.
+/// Copyright (c) 2026 the CrabCraft contributors.
+fn new_item_menu(ui: &mut Ui, target: &Path, filter: &mut String, actions: &mut Vec<ExplorerAction>) {
+    ui.set_min_width(260.0);
+    ui.set_max_width(320.0);
+    let pass = ui.ctx().cumulative_pass_nr();
+    let focus_id = ui.id().with("new_item_search_opened");
+    let opened = ui.ctx().data_mut(|data| {
+        let (last, mut opened) = data.get_temp::<(u64, u64)>(focus_id).unwrap_or((pass, pass));
+        if last.saturating_add(1) < pass {
+            filter.clear();
+            opened = pass;
+        }
+        data.insert_temp(focus_id, (pass, opened));
+        opened
+    });
+    let field = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Search file type")).desired_width(260.0));
+    if pass <= opened.saturating_add(1) {
+        field.request_focus();
+    }
+    let enter = (field.has_focus() || field.lost_focus()) && ui.input(|input| input.key_pressed(Key::Enter));
+    ui.separator();
+    let query = filter.trim().to_lowercase();
+    let mut first = None;
+    let mut selected = None;
+    let height = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 16.0).clamp(80.0, 360.0);
+    egui::ScrollArea::vertical().max_height(height).show(ui, |ui| {
+        for entry in crate::item_templates::ItemKind::MENU {
+            if let Some(kind) = entry {
+                let title = tr(kind.title());
+                if !title.to_lowercase().contains(&query) {
+                    continue;
+                }
+                if first.is_none() {
+                    first = Some(*kind);
+                }
+                let label = format!("{title}…");
+                if theme::menu_item(ui, Some(kind.icon()), &label, false).clicked() {
+                    selected = Some(*kind);
+                }
+            } else if query.is_empty() {
+                ui.separator();
+            }
+        }
+        if first.is_none() {
+            ui.label(tr("No results"));
+        }
+    });
+    if let Some(kind) = selected.or_else(|| enter.then_some(first).flatten()) {
+        actions.push(ExplorerAction::NewItem(target.to_path_buf(), kind));
         ui.close();
     }
 }
@@ -733,5 +776,50 @@ mod tests {
         assert!(state.is_dimmed(&format!("dir:{}", root.join("App/bin").display())));
         assert!(state.is_dimmed(&format!("file:{}", root.join("README.md").display())));
         assert!(!state.is_dimmed(&format!("file:{}", root.join("App/Program.cs").display())));
+    }
+}
+
+#[cfg(test)]
+mod template_picker_tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+
+    fn picker() -> Harness<'static, (String, Vec<ExplorerAction>)> {
+        Harness::new_ui_state(|ui, state: &mut (String, Vec<ExplorerAction>)| {
+            let button = ui.button("Add template");
+            egui::Popup::menu(&button).show(|ui| new_item_menu(ui, Path::new("/project/src"), &mut state.0, &mut state.1));
+        }, (String::new(), Vec::new()))
+    }
+
+    #[test]
+    fn search_focuses_and_enter_selects_a_dotnet_template() {
+        let mut harness = picker();
+        harness.get_by_label("Add template").click();
+        harness.run_steps(3);
+        harness.input_mut().events.push(egui::Event::Text("  json file  ".into()));
+        harness.run_steps(2);
+        assert_eq!(harness.state().0, "  json file  ");
+        assert!(harness.query_by_label("Class…").is_none());
+        assert!(harness.query_by_label("JSON File…").is_some());
+        harness.input_mut().events.push(egui::Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+        harness.run_steps(2);
+        assert_eq!(harness.state().1, [ExplorerAction::NewItem(PathBuf::from("/project/src"), crate::item_templates::ItemKind::Json)]);
+        harness.get_by_label("Add template").click();
+        harness.run_steps(3);
+        assert!(harness.state().0.is_empty(), "the next Add menu should start with an empty query");
+        assert!(harness.query_by_label("Class…").is_some());
+    }
+
+    #[test]
+    fn empty_search_explains_result_and_enter_creates_nothing() {
+        let mut harness = picker();
+        harness.get_by_label("Add template").click();
+        harness.run_steps(3);
+        harness.input_mut().events.push(egui::Event::Text("  no-such-template  ".into()));
+        harness.run_steps(2);
+        assert!(harness.query_by_label(tr("No results")).is_some());
+        harness.input_mut().events.push(egui::Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+        harness.run_steps(2);
+        assert!(harness.state().1.is_empty());
     }
 }
