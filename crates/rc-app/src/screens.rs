@@ -1062,9 +1062,15 @@ fn screens_profiler() {
     crate::ui::run_windows::handle_outputs(&mut app, outs);
     let mut h = harness(app, vec2(1440.0, 900.0));
     run_frames(&mut h, "runtime counters", |a| a.monitor.runtime().is_some());
+    let sample = h.state().monitor.last().unwrap();
+    assert!(sample.cpu.is_finite() && sample.cpu >= 0.0);
+    assert!(sample.memory_mb.is_finite() && sample.memory_mb > 0.0);
+    let runtime = h.state().monitor.runtime().unwrap();
+    assert!(runtime.gc_heap_mb.is_some_and(|value| value.is_finite() && value > 0.0), "{runtime:?}");
     h.state_mut().dock.show(crate::toolwindow::ToolWindow::Monitoring);
     h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Monitoring, 420.0);
     h.run_steps(3);
+    h.render().unwrap().save(out.join("profiler-charts-dark.png")).unwrap();
     // CPU profile of a few seconds while requests come in.
     h.get_by_label("Start CPU Profiling").click();
     h.run_steps(2);
