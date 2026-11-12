@@ -133,3 +133,34 @@ fn a_new_solution_starts_with_the_last_layout() {
     assert_eq!(app.dock.side_of(crate::toolwindow::ToolWindow::Explorer), crate::toolwindow::Side::Right);
     assert_eq!(app.dock.right, Some(crate::toolwindow::ToolWindow::Explorer));
 }
+
+#[test]
+#[ignore = "requires a local .NET SDK and restored Shop fixture packages"]
+fn shop_test_results_render_and_select_in_the_tests_window() {
+    use egui_kittest::kittest::Queryable;
+
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    let target = app.workspace.as_ref().unwrap().ws.key_path().to_path_buf();
+    let outputs = app.runner.run_tests(&target, None);
+    crate::ui::run_windows::handle_outputs(&mut app, outputs);
+    pump(&mut app, "Shop tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let results = app.runner.tests.as_ref().unwrap();
+    assert_eq!(results.failed, 0, "{:?}", results.failure);
+    assert!(results.passed >= 10, "passed {}", results.passed);
+    app.dock.show(crate::toolwindow::ToolWindow::Tests);
+
+    let mut harness = crate::screens::harness(app, egui::vec2(1400.0, 900.0));
+    harness.get_by_label("PriceBreakdownTests");
+    harness.get_by_label("SampleKeepsTheCustomer").click();
+    harness.run_steps(2);
+    let selected = harness.state().runner.tests.as_ref().unwrap().selected.as_deref();
+    assert!(selected.is_some_and(|name| name.contains("SampleKeepsTheCustomer")), "selected {selected:?}");
+    harness.get_by_label("PriceCalculatorTests");
+    harness.get_by_label("OrderTests");
+}
