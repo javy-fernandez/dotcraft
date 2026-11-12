@@ -65,6 +65,14 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     } else {
         tool_windows(app, ui, &p, bar)
     };
+    if matches!(app.dialog, Some(dialogs::Dialog::CodeActions { .. })) {
+        app.focus_editor = false;
+        ctx.memory_mut(|memory| {
+            for doc in &app.docs.list {
+                memory.surrender_focus(rc_editor::EditorView::id_for(doc.editor.id));
+            }
+        });
+    }
     egui::CentralPanel::default().frame(bar.inner_margin(margin)).show(ui, |ui| {
         theme::fixed_island(ui, &p, |ui| editor_area::show(app, ui, editor_actions));
     });

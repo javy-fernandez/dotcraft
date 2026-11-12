@@ -1016,6 +1016,7 @@ fn code_actions(app: &mut DotCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp
         close = true;
     }
     if let Some(i) = chosen {
+        app.focus_editor = true;
         let action = list.swap_remove(i);
         // Package fixes of project files are applied here, not by the language server.
         if let Some(fix) = crate::package_insight::fix_of(&action) {
@@ -1027,7 +1028,12 @@ fn code_actions(app: &mut DotCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp
         app.handle_insight(out);
         return Outcome::Close;
     }
-    if close { Outcome::Close } else { Outcome::Keep }
+    if close {
+        app.focus_editor = true;
+        Outcome::Close
+    } else {
+        Outcome::Keep
+    }
 }
 
 fn rename_symbol(app: &mut DotCraftApp, ctx: &Context, doc: u64, pos: usize, original: &mut String, name: &mut String, focus: &mut bool) -> Outcome {

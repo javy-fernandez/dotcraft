@@ -613,6 +613,62 @@ fn screens_readme() {
 }
 
 #[test]
+#[ignore = "Requires .NET SDK 8, runtime 10, and a configured Roslyn server"]
+fn shop_roslyn_quick_fix_adds_missing_using() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let roslyn = PathBuf::from(std::env::var_os("DOTCRAFT_ROSLYN").expect("DOTCRAFT_ROSLYN must point to the Roslyn server"));
+    let shop = fixtures().join("Shop");
+    let calc = shop.join("src/Shop.Core/PriceCalculator.cs");
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some(roslyn);
+    app.settings.dotnet_path = Some(PathBuf::from(std::env::var_os("DOTNET_ROOT").expect("DOTNET_ROOT must point to the .NET SDK")).join("dotnet"));
+    app.open_workspace(&shop.join("Shop.sln"));
+    app.open_file(&calc);
+    let mut h = harness(app, vec2(1200.0, 800.0));
+    run_frames(&mut h, "Roslyn", |a| {
+        if matches!(a.insight.status, crate::insight::InsightStatus::Failed(_) | crate::insight::InsightStatus::NotInstalled) {
+            panic!("Roslyn unavailable: {:?}", a.insight.status);
+        }
+        a.insight.status == crate::insight::InsightStatus::Ready
+    });
+
+    let original = std::fs::read_to_string(&calc).unwrap();
+    {
+        let app = h.state_mut();
+        let i = app.docs.active.unwrap();
+        let doc = &mut app.docs.list[i];
+        let needle = "        var taxable = subtotal - discount;";
+        let byte = original.find(needle).unwrap();
+        let pos = doc.editor.buffer.rope().byte_to_char(byte);
+        let inserted = "        StringBuilder builder = new();\n";
+        doc.editor.replace(pos, pos, inserted);
+        doc.editor.selection = rc_text::Selection::point(pos + "        StringBuilder".len());
+        app.insight.on_editor_events(doc, &[rc_editor::EditorEvent::Changed]);
+    }
+    run_frames(&mut h, "CS0246 diagnostic", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|diag| diag.code.as_deref() == Some("CS0246"))));
+    h.state_mut().run_insight_action(rc_editor::Action::ShowIntentions, egui::pos2(300.0, 300.0));
+    run_frames(&mut h, "code actions", |a| matches!(a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { .. })));
+    {
+        let app = h.state_mut();
+        let Some(crate::ui::dialogs::Dialog::CodeActions { list, selected }) = &mut app.dialog else { panic!("missing code actions") };
+        *selected = list.iter().position(|action| match action {
+            rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(a) => a.title.contains("System.Text"),
+            rc_lsp::lsp_types::CodeActionOrCommand::Command(a) => a.title.contains("System.Text"),
+        }).unwrap_or_else(|| panic!("no System.Text quick fix: {list:?}"));
+    }
+    h.key_press(egui::Key::Enter);
+    run_frames(&mut h, "applied quick fix", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("using System.Text;")));
+    run_frames(&mut h, "resolved CS0246", |a| a.docs.active_doc().is_some_and(|d| !d.editor.diagnostics.iter().any(|diag| diag.code.as_deref() == Some("CS0246"))));
+    let edited = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(edited.contains("StringBuilder builder = new();"), "{edited}");
+    let editor_id = rc_editor::EditorView::id_for(h.state().docs.active_doc().unwrap().editor.id);
+    assert!(h.ctx.memory(|memory| memory.has_focus(editor_id)), "editor focus was not restored after the fix");
+    assert_eq!(std::fs::read_to_string(&calc).unwrap(), original, "quick fix changed the fixture on disk");
+    h.state_mut().insight.stop();
+}
+
+#[test]
 fn solution_filter_explorer_shows_only_selected_real_projects() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
