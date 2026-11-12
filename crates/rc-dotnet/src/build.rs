@@ -27,6 +27,8 @@ pub struct BuildRequest {
     pub action: BuildAction,
     /// `Debug` by default.
     pub configuration: String,
+    /// Solution platform as written in the solution, such as `Any CPU` or `x64`.
+    pub platform: Option<String>,
     pub target_framework: Option<String>,
     pub no_restore: bool,
     /// Extra `-p:Name=Value` properties.
@@ -40,6 +42,7 @@ impl BuildRequest {
             target: target.into(),
             action,
             configuration: "Debug".into(),
+            platform: None,
             target_framework: None,
             no_restore: false,
             properties: Vec::new(),
@@ -59,6 +62,9 @@ impl BuildRequest {
         a.push(self.target.to_string_lossy().into_owned());
         if self.action != BuildAction::Restore {
             a.extend(["-c".into(), self.configuration.clone()]);
+            if let Some(platform) = &self.platform {
+                a.push(format!("-p:Platform={platform}"));
+            }
             if let Some(tf) = &self.target_framework {
                 a.extend(["-f".into(), tf.clone()]);
             }
@@ -212,6 +218,9 @@ mod tests {
         assert_eq!(&a[..4], ["build", "/w/Shop.sln", "-c", "Debug"]);
         assert!(a.contains(&"-p:GenerateFullPaths=true".to_string()));
         assert!(a.contains(&"-p:ContinuousIntegrationBuild=true".to_string()));
+
+        r.platform = Some("Any CPU".into());
+        assert!(r.args().contains(&"-p:Platform=Any CPU".to_string()));
 
         let mut r = BuildRequest::new("/w/A.csproj", BuildAction::Rebuild);
         r.configuration = "Release".into();

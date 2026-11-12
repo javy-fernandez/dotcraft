@@ -8,6 +8,7 @@
 //! [`CancelToken`] and a callback instead.
 
 pub mod build;
+pub mod configuration;
 pub mod counters;
 pub mod cpu_profile;
 mod eventpipe;
