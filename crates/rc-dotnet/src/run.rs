@@ -212,6 +212,10 @@ pub struct RunHandle {
 }
 
 impl RunHandle {
+    pub(crate) fn from_parts(op: OpHandle, input: mpsc::UnboundedSender<Vec<u8>>, pid: Arc<AtomicU32>) -> Self {
+        Self { op, input, pid }
+    }
+
     /// Stops the program (graceful first, then killed after a few seconds).
     pub fn stop(&self) {
         self.op.cancel();

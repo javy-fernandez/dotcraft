@@ -53,6 +53,8 @@ pub struct Settings {
     /// Explicit path to the Roslyn language server DLL or executable.
     pub roslyn_path: Option<PathBuf>,
     pub netcoredbg_path: Option<PathBuf>,
+    /// Explicit path to a Godot 4 .NET editor (otherwise searched on PATH).
+    pub godot_path: Option<PathBuf>,
     /// Most recent first.
     pub recent_workspaces: Vec<PathBuf>,
     /// Files opened in the editor, most recent first (File › Open Recent).
@@ -99,6 +101,7 @@ impl Default for Settings {
             dotnet_path: None,
             roslyn_path: None,
             netcoredbg_path: None,
+            godot_path: None,
             recent_workspaces: Vec::new(),
             recent_files: Vec::new(),
             reopen_last: true,
@@ -162,6 +165,7 @@ mod tests {
         let s: Settings = serde_json::from_str(r#"{"editor_font_size": 15.0, "unknown": 1}"#).unwrap();
         assert_eq!(s.editor_font_size, 15.0);
         assert_eq!(s.right_margin, 120);
+        assert_eq!(s.godot_path, None);
     }
 
     #[test]

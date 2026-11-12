@@ -87,6 +87,8 @@ pub struct Session {
     /// Bookmarks: file → (0-based line, mnemonic).
     pub bookmarks: BTreeMap<PathBuf, Vec<(usize, Option<char>)>>,
     pub run_configuration: Option<String>,
+    /// Selected scene relative to a Godot workspace, when a scene configuration is active.
+    pub godot_scene: Option<PathBuf>,
     /// Breakpoints: file → 0-based lines (with an optional condition).
     pub breakpoints: BTreeMap<PathBuf, Vec<(usize, Option<String>)>>,
     /// Breakpoints that are disabled: file → 0-based lines.

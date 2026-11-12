@@ -271,6 +271,7 @@ pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
     }
     let cwd = app.runner.runs.get(app.runner.active_run).and_then(|r| match &r.config.kind {
         crate::runner::ConfigKind::App { project, .. } => project.parent().map(|d| d.to_path_buf()),
+        crate::runner::ConfigKind::Godot { project_root, .. } => Some(project_root.clone()),
         _ => None,
     });
     let Some(r) = app.runner.runs.get(app.runner.active_run) else { return };

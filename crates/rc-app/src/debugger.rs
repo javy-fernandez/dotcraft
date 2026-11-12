@@ -23,6 +23,7 @@ pub type Evaluation = (u64, String, Option<Result<EvalValue, String>>);
 
 enum PendingStart {
     Launch(RunConfig, rc_dotnet::RunRequest, PathBuf),
+    Godot(String, rc_dap::LaunchConfig),
     Attach(u32),
 }
 
@@ -134,6 +135,37 @@ impl Debugger {
         let mut session = DebugSession::start(adapter, target, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
         for w in watches {
             session.add_watch(w);
+        }
+        self.session = Some(session);
+        vec![DebugOutput::ShowDebugWindow]
+    }
+
+    /// Launches the Godot native host through netcoredbg after its C# project has built.
+    /// Launching from the adapter also works with Linux ptrace restrictions on sibling processes.
+    pub fn launch_godot(&mut self, name: String, mut launch: rc_dap::LaunchConfig, configured: Option<&Path>, docs: &Docs) -> Vec<DebugOutput> {
+        self.pending = None;
+        if let Some(session) = &mut self.session {
+            session.stop();
+        }
+        let Some(adapter) = rc_dap::netcoredbg::locate(configured) else {
+            if self.download.is_none() {
+                self.downloading = Some((0, None));
+                self.download = Some(rc_dap::netcoredbg::start_download(self.downloads.sender()));
+            }
+            self.pending = Some(PendingStart::Godot(name, launch));
+            return vec![DebugOutput::Notify(tr("Downloading the netcoredbg debugger (first use)…").into(), false)];
+        };
+        launch.env.extend(self.env.iter().cloned());
+        self.urls.clear();
+        self.expanded.clear();
+        let console = crate::runner::Console::new(&self.waker);
+        console.note(&trf("Starting {name}…", &[("name", &name)]));
+        self.console = Some(console);
+        self.name = name;
+        let watches: Vec<String> = self.session.as_ref().map(|session| session.watches().iter().map(|watch| watch.expression.clone()).collect()).unwrap_or_default();
+        let mut session = DebugSession::start(adapter, DebugTarget::Launch(launch), DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        for watch in watches {
+            session.add_watch(watch);
         }
         self.session = Some(session);
         vec![DebugOutput::ShowDebugWindow]
@@ -263,6 +295,7 @@ impl Debugger {
                     if let Some(pending) = self.pending.take() {
                         out.extend(match pending {
                             PendingStart::Launch(cfg, run, dotnet) => self.start(cfg, Some(run), &dotnet, None, docs),
+                            PendingStart::Godot(name, launch) => self.launch_godot(name, launch, None, docs),
                             PendingStart::Attach(pid) => self.attach(pid, None, docs),
                         });
                     }

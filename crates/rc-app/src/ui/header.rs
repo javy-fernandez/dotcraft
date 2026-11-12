@@ -124,31 +124,36 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                     app.pending.push(Action::SearchEverywhere);
                 }
                 if app.workspace.is_some() {
+                    let godot_project = app.workspace.as_ref().is_some_and(|workspace| workspace.ws.godot_project().is_some());
                     ui.add_space(6.0);
                     theme::toolbar_separator(ui);
                     ui.add_space(4.0);
                     let more = theme::icon_button_sized(ui, ico::MORE_VERT, true, tr("More actions"), 30.0);
                     egui::Popup::menu(&more).show(|ui| {
                         ui.set_min_width(200.0);
-                        if theme::menu_item(ui, Some(ico::REBUILD), tr("Rebuild Solution"), false).clicked() {
-                            if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Rebuild);
-                                crate::ui::run_windows::handle_outputs(app, outs);
+                        let scene = app.docs.active_doc().map(|doc| doc.path.clone()).filter(|path| {
+                            matches!(path.extension().and_then(|ext| ext.to_str()), Some("tscn" | "scn"))
+                        });
+                        if godot_project
+                            && let Some(scene) = scene
+                            && theme::menu_item(ui, Some(ico::RUN), tr("Run Current Godot Scene"), false).clicked()
+                        {
+                            if app.runner.select_godot_scene(&scene) {
+                                app.pending.push(Action::Run);
+                                app.session_dirty = true;
                             }
                             ui.close();
                         }
-                        if theme::menu_item(ui, Some(ico::DELETE), tr("Clean Solution"), false).clicked() {
-                            if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Clean);
-                                crate::ui::run_windows::handle_outputs(app, outs);
-                            }
+                        if theme::menu_item(ui, Some(ico::REBUILD), if godot_project { tr("Rebuild C# Project") } else { tr("Rebuild Solution") }, false).clicked() {
+                            app.build_workspace(rc_dotnet::BuildAction::Rebuild);
+                            ui.close();
+                        }
+                        if theme::menu_item(ui, Some(ico::DELETE), if godot_project { tr("Clean C# Project") } else { tr("Clean Solution") }, false).clicked() {
+                            app.build_workspace(rc_dotnet::BuildAction::Clean);
                             ui.close();
                         }
                         if theme::menu_item(ui, Some(ico::DOWNLOAD), tr("Restore NuGet Packages"), false).clicked() {
-                            if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Restore);
-                                crate::ui::run_windows::handle_outputs(app, outs);
-                            }
+                            app.build_workspace(rc_dotnet::BuildAction::Restore);
                             ui.close();
                         }
                     });
@@ -161,7 +166,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                     if theme::icon_button_sized(ui, ico::RUN, true, &format!("{}{}", tr("Run"), shortcut(Action::Run)), 30.0).clicked() {
                         app.pending.push(Action::Run);
                     }
-                    if theme::icon_button_sized(ui, ico::BUILD, true, &format!("{}{}", tr("Build Solution"), shortcut(Action::Build)), 30.0).clicked() {
+                    let build_label = if godot_project { tr("Build C# Project") } else { tr("Build Solution") };
+                    if theme::icon_button_sized(ui, ico::BUILD, app.workspace_build_target().is_some(), &format!("{}{}", build_label, shortcut(Action::Build)), 30.0).clicked() {
                         app.pending.push(Action::Build);
                     }
                     ui.add_space(2.0);

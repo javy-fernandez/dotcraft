@@ -9,6 +9,7 @@ mod monitor;
 mod update;
 mod convert;
 mod debugger;
+mod godot_cli;
 mod database;
 mod insight;
 mod package_insight;
@@ -100,9 +101,24 @@ fn main() -> eframe::Result {
     let mut options = eframe::NativeOptions { viewport: rc_kit::window_chrome::viewport(), ..Default::default() };
     // Window size and position persist through eframe; everything else lives in our own files.
     options.persist_window = true;
-    // `dotcraft <path>` opens a folder, solution, project or any text file; on macOS Finder's
-    // "Open With" arrives through `open_files`.
-    let open = std::env::args_os().nth(1).map(std::path::PathBuf::from).filter(|p| !p.to_string_lossy().starts_with("-psn_"));
+    // `dotcraft <path>` opens a folder, solution, project or text file. Godot passes its
+    // external-editor placeholders through `--godot` or `--godot-csharp`; a running window
+    // receives them locally.
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    let open = match godot_cli::parse(&args) {
+        godot_cli::Invocation::Ordinary(path) => path,
+        godot_cli::Invocation::Godot(Ok(request)) => {
+            if godot_cli::forward(&request) { return Ok(()); }
+            let open = request.project.clone().or_else(|| Some(request.file.clone()));
+            godot_cli::queue(request);
+            open
+        }
+        godot_cli::Invocation::Godot(Err(error)) => {
+            eprintln!("DotCraft: {error}");
+            return Ok(());
+        }
+    };
+    godot_cli::install_listener();
     open_files::install();
     eframe::run_native("DotCraft", options, Box::new(move |cc| Ok(Box::new(app::DotCraftApp::new(cc, open)))))
 }
