@@ -70,6 +70,40 @@ async fn conflicting_rebase_is_guarded_and_aborted() {
 }
 
 #[tokio::test]
+async fn cherry_pick_applies_commits_and_aborts_conflicts() {
+    let t = TempRepo::new().await;
+    t.commit_files(&[("Order.cs", "class Order {}\n")], "Shop base");
+    t.repo.create_branch("topic", None, true).await.unwrap();
+    t.commit_files(&[("Cart.cs", "class Cart {}\n")], "Add Cart");
+    let picked = t.repo.resolve("HEAD").await.unwrap();
+    t.repo.checkout_branch("main").await.unwrap();
+    t.commit_files(&[("Price.cs", "class Price {}\n")], "Main pricing");
+    t.repo.cherry_pick(&picked, None).await.unwrap();
+    assert_eq!(t.read("Cart.cs"), "class Cart {}\n");
+    assert_eq!(t.git(&["log", "-1", "--format=%s"]).trim(), "Add Cart");
+    assert_ne!(t.repo.resolve("HEAD").await.unwrap(), picked);
+
+    t.repo.create_branch("conflicting", None, true).await.unwrap();
+    t.commit_files(&[("Order.cs", "class ConflictingOrder {}\n")], "Conflicting Order");
+    let conflicting = t.repo.resolve("HEAD").await.unwrap();
+    t.repo.checkout_branch("main").await.unwrap();
+    t.commit_files(&[("Order.cs", "class MainOrder {}\n")], "Main Order");
+    let before = t.repo.resolve("HEAD").await.unwrap();
+    assert!(matches!(t.repo.cherry_pick(&conflicting, None).await, Err(GitError::Conflicts(_))));
+    assert_eq!(t.repo.state().await, RepoState::CherryPicking);
+    assert!(matches!(t.repo.ensure_no_conflicts().await, Err(GitError::Conflicts(_))));
+    t.repo.abort_cherry_pick().await.unwrap();
+    assert_eq!(t.repo.state().await, RepoState::Clean);
+    assert_eq!(t.repo.resolve("HEAD").await.unwrap(), before);
+    assert_eq!(t.read("Order.cs"), "class MainOrder {}\n");
+
+    let token = CancelToken::new();
+    token.cancel();
+    assert!(matches!(t.repo.cherry_pick(&conflicting, Some(&token)).await, Err(GitError::Cancelled)));
+    assert_eq!(t.repo.state().await, RepoState::Clean);
+}
+
+#[tokio::test]
 async fn push_checkout_and_delete_remote_branches() {
     let remote_dir = tempfile::tempdir().unwrap();
     let remote_root = remote_dir.path().canonicalize().unwrap();

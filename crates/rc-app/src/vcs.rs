@@ -433,6 +433,13 @@ impl Vcs {
         });
     }
 
+    /// Applies a selected history commit onto the current branch.
+    pub fn cherry_pick(&mut self, hash: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let hash = hash.to_string();
+        self.op_notice("cherry_pick", tr("Cherry-picked commit").to_string(), async move { repo.cherry_pick(&hash, None).await });
+    }
+
     /// Pushes a local branch to its upstream, or sets one on the default remote.
     pub fn push_branch(&mut self, branch: &str) {
         let Some(repo) = self.repo.clone() else { return };
@@ -441,12 +448,21 @@ impl Vcs {
         self.op_notice("push_branch", notice, async move { repo.push_branch(&n, None, None).await.map(drop) });
     }
 
-    /// Aborts the merge or rebase in progress.
+    /// Aborts the merge, rebase, or cherry-pick in progress.
     pub fn abort_operation(&mut self) {
         let Some(repo) = self.repo.clone() else { return };
-        let rebase = self.state == rc_vcs::RepoState::Rebasing;
-        self.op_notice("abort", if rebase { tr("Rebase aborted") } else { tr("Merge aborted") }.to_string(), async move {
-            if rebase { repo.abort_rebase().await } else { repo.abort_merge().await }
+        let state = self.state;
+        let notice = match state {
+            rc_vcs::RepoState::Rebasing => tr("Rebase aborted"),
+            rc_vcs::RepoState::CherryPicking => tr("Cherry-pick aborted"),
+            _ => tr("Merge aborted"),
+        };
+        self.op_notice("abort", notice.to_string(), async move {
+            match state {
+                rc_vcs::RepoState::Rebasing => repo.abort_rebase().await,
+                rc_vcs::RepoState::CherryPicking => repo.abort_cherry_pick().await,
+                _ => repo.abort_merge().await,
+            }
         });
     }
 
@@ -627,8 +643,8 @@ impl Vcs {
                         Some(e) => {
                             self.error = Some(e.clone());
                             notices.push(e);
-                            // A failed merge, rebase or stash can leave conflicts behind.
-                            if what.starts_with("stash_") || matches!(what, "merge" | "rebase" | "checkout" | "pull") {
+                            // A failed merge, rebase, cherry-pick or stash can leave conflicts behind.
+                            if what.starts_with("stash_") || matches!(what, "merge" | "rebase" | "cherry_pick" | "checkout" | "pull") {
                                 self.refresh();
                             }
                         }

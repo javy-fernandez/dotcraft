@@ -263,6 +263,13 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
         }
         ru.label(egui::RichText::new(format!("{}  {} <{}>  {}", c.short_hash(), c.author_name, c.author_email, crate::vcs::format_date(c.author_time))).size(12.0).color(p.muted));
         ru.add_space(6.0);
+        let can_pick = app.vcs.busy.is_none()
+            && !has_conflicts(app)
+            && app.vcs.status.as_ref().and_then(|s| s.branch.oid.as_deref()) != Some(h.as_str());
+        if ru.add_enabled_ui(can_pick, |ui| theme::secondary_button(ui, tr("Cherry-pick"))).inner.clicked() && save_before_branch_change(app) {
+            app.vcs.cherry_pick(&h);
+        }
+        ru.add_space(6.0);
         let files = app.vcs.commit_files.clone();
         egui::ScrollArea::vertical().id_salt("commit_files").auto_shrink([false, false]).show(&mut ru, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
@@ -534,9 +541,13 @@ fn branch_list(app: &mut DotCraftApp, ui: &mut Ui, state: &mut BranchMenuState, 
     });
     ui.add_space(2.0);
     if state.filter.is_empty() {
-        if app.vcs.state != rc_vcs::RepoState::Clean {
-            let rebase = app.vcs.state == rc_vcs::RepoState::Rebasing;
-            if theme::menu_entry(ui, Some(ico::ABORT), if rebase { tr("Abort Rebase") } else { tr("Abort Merge") }, None, false, !busy).clicked() {
+        if matches!(app.vcs.state, rc_vcs::RepoState::Merging | rc_vcs::RepoState::Rebasing | rc_vcs::RepoState::CherryPicking) {
+            let label = match app.vcs.state {
+                rc_vcs::RepoState::Rebasing => tr("Abort Rebase"),
+                rc_vcs::RepoState::CherryPicking => tr("Abort Cherry-pick"),
+                _ => tr("Abort Merge"),
+            };
+            if theme::menu_entry(ui, Some(ico::ABORT), label, None, false, !busy).clicked() {
                 app.vcs.abort_operation();
                 ui.close();
             }
@@ -990,6 +1001,20 @@ mod branches_tests {
         String::from_utf8_lossy(&out.stdout).into_owned()
     }
 
+    fn copy_tree(source: &Path, target: &Path) {
+        std::fs::create_dir_all(target).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let source = entry.path();
+            let target = target.join(entry.file_name());
+            if source.is_dir() {
+                copy_tree(&source, &target);
+            } else {
+                std::fs::copy(source, target).unwrap();
+            }
+        }
+    }
+
     /// A clone of a bare remote: `main` and `feature` pushed, `topic` local and unmerged.
     fn repos(base: &Path) -> (PathBuf, PathBuf) {
         let remote = base.join("remote.git");
@@ -1048,6 +1073,66 @@ mod branches_tests {
         open_popup(h);
         h.get_by_role_and_label(Role::Button, name).click();
         h.run_steps(3);
+    }
+
+    #[test]
+    fn cherry_pick_shop_commit_and_abort_conflict_from_git_ui() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let base = home.path().canonicalize().unwrap();
+        let root = base.join("Shop");
+        copy_tree(&crate::screens::fixtures().join("Shop"), &root);
+        git(&root, &["init", "-q", "-b", "main"]);
+        for (key, value) in [("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")] {
+            git(&root, &["config", key, value]);
+        }
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "Shop base"]);
+        git(&root, &["checkout", "-qb", "topic"]);
+        let order = root.join("src/Shop.Core/Order.cs");
+        let original = std::fs::read_to_string(&order).unwrap();
+        std::fs::write(&order, format!("// picked from topic\n{original}")).unwrap();
+        git(&root, &["commit", "-qam", "Add topic order change"]);
+        let picked = git(&root, &["rev-parse", "HEAD"]).trim().to_string();
+        git(&root, &["checkout", "-q", "main"]);
+        std::fs::write(root.join("src/Shop.Core/Main.cs"), "namespace Shop.Core; class Main {}\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-qm", "Main C# work"]);
+
+        let mut app = crate::screens::test_app(&base.join("home"), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root.join("Shop.sln"));
+        app.dock.show(crate::toolwindow::ToolWindow::Git);
+        let mut h = crate::screens::harness(app, egui::vec2(1500.0, 900.0));
+        frames(&mut h, "topic commit", |a| a.vcs.log.iter().any(|c| c.hash == picked));
+        h.state_mut().vcs.select_commit(&picked);
+        h.run_steps(3);
+        h.get_by_role_and_label(Role::Button, tr("Cherry-pick")).click();
+        frames(&mut h, "cherry-pick", |a| a.vcs.busy.is_none() && a.notices.iter().any(|n| n.text == tr("Cherry-picked commit")));
+        assert!(std::fs::read_to_string(&order).unwrap().starts_with("// picked from topic\n"));
+        assert_eq!(git(&root, &["log", "-1", "--format=%s"]).trim(), "Add topic order change");
+
+        git(&root, &["checkout", "-qb", "conflicting"]);
+        std::fs::write(&order, format!("// conflicting topic\n{original}")).unwrap();
+        git(&root, &["commit", "-qam", "Conflicting topic order"]);
+        let conflicting = git(&root, &["rev-parse", "HEAD"]).trim().to_string();
+        git(&root, &["checkout", "-q", "main"]);
+        std::fs::write(&order, format!("// main order\n{original}")).unwrap();
+        git(&root, &["commit", "-qam", "Main order change"]);
+        let before = git(&root, &["rev-parse", "HEAD"]);
+        h.state_mut().vcs.refresh();
+        frames(&mut h, "conflicting commit", |a| a.vcs.log.iter().any(|c| c.hash == conflicting));
+        h.state_mut().vcs.select_commit(&conflicting);
+        h.run_steps(3);
+        h.get_by_role_and_label(Role::Button, tr("Cherry-pick")).click();
+        frames(&mut h, "cherry-pick conflict", |a| a.vcs.busy.is_none() && a.vcs.state == rc_vcs::RepoState::CherryPicking);
+        assert!(h.state().vcs.error.is_some());
+        open_popup(&mut h);
+        h.get_by_role_and_label(Role::Button, tr("Abort Cherry-pick")).click();
+        frames(&mut h, "abort cherry-pick", |a| a.vcs.busy.is_none() && a.vcs.state == rc_vcs::RepoState::Clean);
+        assert_eq!(git(&root, &["rev-parse", "HEAD"]), before);
+        assert!(std::fs::read_to_string(&order).unwrap().starts_with("// main order\n"));
+        h.state_mut().close_workspace();
     }
 
     #[test]

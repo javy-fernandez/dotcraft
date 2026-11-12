@@ -142,6 +142,18 @@ impl Repository {
         self.cmd().args(["rebase", "--abort"]).output().await.map(drop)
     }
 
+    /// Applies a commit onto the current branch. Conflicts leave the cherry-pick in progress
+    /// until resolved or aborted.
+    pub async fn cherry_pick(&self, rev: &str, cancel: Option<&CancelToken>) -> Result<()> {
+        self.ensure_no_conflicts().await?;
+        let hash = self.resolve(rev).await?;
+        self.cmd().args(["cherry-pick", "--no-edit", &hash]).cancel(cancel).output().await.map(drop)
+    }
+
+    pub async fn abort_cherry_pick(&self) -> Result<()> {
+        self.cmd().args(["cherry-pick", "--abort"]).output().await.map(drop)
+    }
+
     /// Commits reachable from `other` but not from `base` (up to `max`), newest first.
     pub async fn commits_between(&self, base: &str, other: &str, max: usize) -> Result<Vec<Commit>> {
         self.log(&LogOptions { revs: vec![format!("{base}..{other}")], max_count: max, ..Default::default() }).await
