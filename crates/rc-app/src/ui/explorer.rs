@@ -73,6 +73,7 @@ pub enum ExplorerAction {
     CopyPath(PathBuf),
     OpenInTerminal(PathBuf),
     ManagePackages(PathBuf),
+    ProjectProperties(PathBuf),
     /// Entity Framework Core › operation, for this project.
     EfCore(PathBuf, crate::ui::ef_core::EfOp),
     /// Migrate this solution to Central Package Management (NuGet window).
@@ -616,6 +617,13 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actio
         && theme::menu_item(ui, Some(ico::EDIT), tr("Edit Project File"), false).clicked()
     {
         actions.push(ExplorerAction::Open(p.clone()));
+        ui.close();
+    }
+    if let NodeKind::Project(p) = &row.kind
+        && p.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("csproj"))
+        && theme::menu_item(ui, Some(ico::SETTINGS), tr("Project Properties…"), false).clicked()
+    {
+        actions.push(ExplorerAction::ProjectProperties(p.clone()));
         ui.close();
     }
     let dir_of = |p: &Path, is_dir: bool| if is_dir { p.to_path_buf() } else { p.parent().unwrap_or(p).to_path_buf() };

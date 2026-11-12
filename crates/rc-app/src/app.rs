@@ -1551,6 +1551,9 @@ impl DotCraftApp {
                     self.nuget.focus_project(&project);
                     self.dock.show(ToolWindow::Nuget);
                 }
+                ExplorerAction::ProjectProperties(project) => {
+                    self.dialog = Some(Dialog::ProjectProperties(Box::new(crate::ui::project_properties::ProjectPropertiesDialog::new(project, self.waker.clone()))));
+                }
             }
         }
     }

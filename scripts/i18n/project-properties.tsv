@@ -1,0 +1,22 @@
+# Project properties editor. English fallback values are intentional until translations are added.
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Annotations	Annotations	Annotations	Annotations	Annotations	Annotations	Annotations	Annotations
+Disable	Disable	Disable	Disable	Disable	Disable	Disable	Disable
+Enable	Enable	Enable	Enable	Enable	Enable	Enable	Enable
+False	False	False	False	False	False	False	False
+True	True	True	True	True	True	True	True
+Warnings	Warnings	Warnings	Warnings	Warnings	Warnings	Warnings	Warnings
+Authors	Authors	Authors	Authors	Authors	Authors	Authors	Authors
+Build properties	Build properties	Build properties	Build properties	Build properties	Build properties	Build properties	Build properties
+Implicit usings	Implicit usings	Implicit usings	Implicit usings	Implicit usings	Implicit usings	Implicit usings	Implicit usings
+Inherited	Inherited	Inherited	Inherited	Inherited	Inherited	Inherited	Inherited
+Language version	Language version	Language version	Language version	Language version	Language version	Language version	Language version
+License expression	License expression	License expression	License expression	License expression	License expression	License expression	License expression
+Loading project properties…	Loading project properties…	Loading project properties…	Loading project properties…	Loading project properties…	Loading project properties…	Loading project properties…	Loading project properties…
+Nullable	Nullable	Nullable	Nullable	Nullable	Nullable	Nullable	Nullable
+Package ID	Package ID	Package ID	Package ID	Package ID	Package ID	Package ID	Package ID
+Package metadata	Package metadata	Package metadata	Package metadata	Package metadata	Package metadata	Package metadata	Package metadata
+Project Properties	Project Properties	Project Properties	Project Properties	Project Properties	Project Properties	Project Properties	Project Properties
+Project Properties…	Project Properties…	Project Properties…	Project Properties…	Project Properties…	Project Properties…	Project Properties…	Project Properties…
+Target framework(s)	Target framework(s)	Target framework(s)	Target framework(s)	Target framework(s)	Target framework(s)	Target framework(s)	Target framework(s)
+Warnings as errors	Warnings as errors	Warnings as errors	Warnings as errors	Warnings as errors	Warnings as errors	Warnings as errors	Warnings as errors

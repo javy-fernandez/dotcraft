@@ -1463,5 +1463,27 @@
   },
   "rc-app": {
     "Exit Focus Mode": "Exit Focus Mode"
+  },
+  "projectproperties": {
+    "Annotations": "Annotations",
+    "Disable": "Disable",
+    "Enable": "Enable",
+    "False": "False",
+    "True": "True",
+    "Warnings": "Warnings",
+    "Authors": "Authors",
+    "Build properties": "Build properties",
+    "Implicit usings": "Implicit usings",
+    "Inherited": "Inherited",
+    "Language version": "Language version",
+    "License expression": "License expression",
+    "Loading project properties…": "Loading project properties…",
+    "Nullable": "Nullable",
+    "Package ID": "Package ID",
+    "Package metadata": "Package metadata",
+    "Project Properties": "Project Properties",
+    "Project Properties…": "Project Properties…",
+    "Target framework(s)": "Target framework(s)",
+    "Warnings as errors": "Warnings as errors"
   }
 }
