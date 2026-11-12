@@ -1362,6 +1362,10 @@ mod tests {
         let program = fixtures.join("src/Shop.Cli/Program.cs");
         let weather = fixtures.join("src/Shop.Api/WeatherForecast.cs");
         let file = fixtures.join("src/Shop.Core/Order.cs");
+    fn settings_apply_and_cancel_with_shop_solution_open() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let solution = crate::screens::fixtures().join("Shop/Shop.sln");
         let mut app = crate::screens::test_app(home.path(), true);
         app.workspace = Some(crate::app::WorkspaceState {
             ws: rc_core::Workspace::open(&solution).unwrap(),
@@ -1389,6 +1393,30 @@ mod tests {
         harness.run_steps(3);
         assert_eq!(harness.state().docs.active_doc().unwrap().editor.caret_line_col().0, 3);
         assert!(harness.state().dialog.is_none());
+        let original = app.settings.tab_colors;
+        let mut harness = crate::screens::harness(app, vec2(1000.0, 700.0));
+        let draft = Dialog::settings(&harness.state().settings);
+        harness.state_mut().dialog = Some(draft);
+        harness.run_steps(3);
+        harness.get_by_label(tr("Editor")).click();
+        harness.run_steps(2);
+        harness.get_by_label(tr("Color tabs by kind of file")).click();
+        harness.get_by_label(tr("OK")).click();
+        harness.run_steps(3);
+        assert_eq!(harness.state().settings.tab_colors, !original);
+        assert_eq!(Settings::load().tab_colors, !original);
+        assert_eq!(harness.state().workspace.as_ref().unwrap().solution.as_ref().unwrap().projects().len(), 6);
+
+        let draft = Dialog::settings(&harness.state().settings);
+        harness.state_mut().dialog = Some(draft);
+        harness.run_steps(3);
+        harness.get_by_label(tr("Editor")).click();
+        harness.run_steps(2);
+        harness.get_by_label(tr("Color tabs by kind of file")).click();
+        harness.get_by_label(tr("Cancel")).click();
+        harness.run_steps(3);
+        assert_eq!(harness.state().settings.tab_colors, !original);
+        assert_eq!(Settings::load().tab_colors, !original);
     }
 
     #[test]
