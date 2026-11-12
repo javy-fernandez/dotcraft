@@ -3,7 +3,7 @@
 
 use crate::docs::Docs;
 use crate::insight::{Insight, InsightOutput, NavKind, Target};
-use crate::runner::Runner;
+use crate::runner::{ConfigKind, RunConfig, Runner};
 use crate::native_menu::{MenuCommand, NativeMenu};
 use crate::toolwindow::{Dock, ToolWindow};
 use crate::ui::dialogs::Dialog;
@@ -187,6 +187,8 @@ pub struct DotCraftApp {
     pub last_session_save: f64,
     /// Editor keeps the focus when the window regains it.
     pub had_focus: bool,
+    /// A Godot C# configuration waiting for its build before the debugger launches the engine.
+    godot_debug_build: Option<RunConfig>,
 }
 
 impl DotCraftApp {
@@ -203,12 +205,16 @@ impl DotCraftApp {
             app.update_check = Some((crate::update::check(cc.egui_ctx.clone(), std::time::Duration::from_secs(5)), false));
         }
         crate::open_files::set_context(&cc.egui_ctx);
+        crate::godot_cli::set_context(&cc.egui_ctx);
         // Files sent by Finder at launch arrive before the first frame: open them instead of
         // the last project.
         let mut from_system = crate::open_files::take();
         from_system.extend(open);
         for path in startup_paths(&app.settings, from_system) {
             app.open_path(&path);
+        }
+        for request in crate::godot_cli::take() {
+            app.open_godot_request(request);
         }
         app
     }
@@ -288,6 +294,7 @@ impl DotCraftApp {
             session_dirty: false,
             last_session_save: 0.0,
             had_focus: true,
+            godot_debug_build: None,
             settings,
         }
     }
@@ -410,12 +417,52 @@ impl DotCraftApp {
         self.ef_options = session.ef.clone();
         self.ef = None;
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
+        if let Some(root) = ws.godot_project().and_then(Path::parent) {
+            self.runner.add_godot_project(root, self.settings.godot_path.as_deref());
+            if let Some(scene) = session.godot_scene.as_deref() {
+                self.runner.select_godot_scene(scene);
+            }
+            if let Some(name) = session.run_configuration.as_deref()
+                && let Some(index) = self.runner.configs.iter().position(|config| config.name == name)
+            {
+                self.runner.selected = index;
+            }
+        }
         let root = ws.root.clone();
         self.workspace = Some(WorkspaceState { ws, solution });
         self.packages.set_workspace(&root, self.solution_projects());
         self.appsettings.set_workspace(&root);
         self.refresh_endpoints();
         self.restore_session(session);
+    }
+
+    fn open_godot_request(&mut self, request: crate::godot_cli::OpenRequest) {
+        if let Some(project) = request.project
+            && self.workspace.as_ref().is_none_or(|workspace| workspace.ws.root != project)
+        {
+            self.open_workspace(&project);
+        }
+        self.open_at(&request.file, request.line, request.col);
+        self.focus_editor = true;
+    }
+
+    pub fn workspace_build_target(&self) -> Option<PathBuf> {
+        let workspace = self.workspace.as_ref()?;
+        if workspace.ws.godot_project().is_some() {
+            self.runner.godot_csharp_project().map(Path::to_path_buf)
+        } else {
+            Some(workspace.ws.key_path().to_path_buf())
+        }
+    }
+
+    pub fn build_workspace(&mut self, action: rc_dotnet::BuildAction) {
+        self.godot_debug_build = None;
+        if let Some(target) = self.workspace_build_target() {
+            let outs = self.runner.build(&target, action);
+            crate::ui::run_windows::handle_outputs(self, outs);
+        } else if self.workspace.as_ref().is_some_and(|workspace| workspace.ws.godot_project().is_some()) {
+            self.notify(tr("This Godot project has no C# project to build"), false);
+        }
     }
 
     fn watch_workspace(&mut self, ws: &Workspace) {
@@ -550,6 +597,7 @@ impl DotCraftApp {
         self._watcher = None;
         self._filter_watcher = None;
         self.insight.stop();
+        self.godot_debug_build = None;
         self.debugger.stop();
         self.runner.stop_all();
         self.runner.clear();
@@ -669,6 +717,10 @@ impl DotCraftApp {
                 m
             },
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
+            godot_scene: self.runner.selected_config().and_then(|config| match &config.kind {
+                ConfigKind::Godot { scene, .. } => scene.clone(),
+                _ => None,
+            }),
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
             ef: self.ef_options.clone(),
@@ -1094,13 +1146,11 @@ impl DotCraftApp {
             Action::OpenFolder => self.pick_and_open(),
             Action::Build => {
                 self.save_all_docs();
-                if let Some(target) = self.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                    let outs = self.runner.build(&target, rc_dotnet::BuildAction::Build);
-                    crate::ui::run_windows::handle_outputs(self, outs);
-                }
+                self.build_workspace(rc_dotnet::BuildAction::Build);
             }
             Action::Run => {
                 self.save_all_docs();
+                self.godot_debug_build = None;
                 let outs = self.runner.run_selected();
                 crate::ui::run_windows::handle_outputs(self, outs);
             }
@@ -1112,7 +1162,10 @@ impl DotCraftApp {
                 }
             }
             Action::StopRun => {
-                if self.debugger.active() || self.debugger.downloading.is_some() {
+                if self.godot_debug_build.take().is_some() {
+                    self.runner.cancel_build();
+                    self.debugger.stop();
+                } else if self.debugger.active() || self.debugger.downloading.is_some() {
                     self.debugger.stop();
                 } else {
                     self.runner.stop_all();
@@ -1130,6 +1183,26 @@ impl DotCraftApp {
             Action::Debug => {
                 self.save_all_docs();
                 match self.runner.selected_config().cloned() {
+                    Some(config @ RunConfig { kind: ConfigKind::Godot { editor: false, .. }, .. }) => {
+                        if let Some(target) = self.runner.godot_csharp_project().map(Path::to_path_buf) {
+                            match self.runner.godot_debug_plan(&config) {
+                                Ok(_) => {
+                                    self.debugger.stop();
+                                    let outs = self.runner.build(&target, rc_dotnet::BuildAction::Build);
+                                    crate::ui::run_windows::handle_outputs(self, outs);
+                                    if self.runner.build.as_ref().is_some_and(|build| build.handle.is_some()) {
+                                        self.godot_debug_build = Some(config);
+                                    }
+                                }
+                                Err(error) => self.notify(error, true),
+                            }
+                        } else {
+                            self.notify(tr("C# debugging requires a Godot .NET project"), true);
+                        }
+                    }
+                    Some(RunConfig { kind: ConfigKind::Godot { editor: true, .. }, .. }) => {
+                        self.notify(tr("Choose a Godot game or scene configuration to debug"), false);
+                    }
                     Some(config) => {
                         let dotnet = dotnet_path(&self.settings);
                         let request = self.runner.request_for(&config);
@@ -1379,7 +1452,7 @@ impl DotCraftApp {
     /// (without a workspace it is edited on its own, like Rider's LightEdit).
     pub fn open_path(&mut self, path: &Path) {
         use rc_core::workspace::{is_project, is_solution};
-        if path.is_dir() || is_solution(path) || is_project(path) {
+        if path.is_dir() || is_solution(path) || is_project(path) || path.file_name().is_some_and(|name| name == "project.godot") {
             self.open_workspace(path);
         } else if path.is_file() {
             self.open_file(path);
@@ -1442,7 +1515,7 @@ impl DotCraftApp {
     /// files in the editor (dropped files, Open…).
     pub fn open_paths(&mut self, paths: Vec<PathBuf>) {
         use rc_core::workspace::{is_project, is_solution};
-        let (workspaces, files): (Vec<_>, Vec<_>) = paths.into_iter().partition(|p| p.is_dir() || is_solution(p) || is_project(p));
+        let (workspaces, files): (Vec<_>, Vec<_>) = paths.into_iter().partition(|p| p.is_dir() || is_solution(p) || is_project(p) || p.file_name().is_some_and(|name| name == "project.godot"));
         if let Some(ws) = workspaces.first() {
             self.open_workspace(ws);
         }
@@ -1461,7 +1534,13 @@ impl DotCraftApp {
     pub fn apply_settings(&mut self, ctx: &Context, new: Settings) {
         let lang_changed = new.language != self.settings.language;
         let keymap_changed = new.keymap != self.settings.keymap;
+        let godot_changed = new.godot_path != self.settings.godot_path;
         self.settings = new;
+        if godot_changed
+            && let Some(root) = self.workspace.as_ref().and_then(|workspace| workspace.ws.godot_project()).and_then(Path::parent)
+        {
+            self.runner.add_godot_project(root, self.settings.godot_path.as_deref());
+        }
         self.editor_config = editor_config(&self.settings);
         if self.focus_mode == FocusMode::Presentation {
             self.editor_config.font.size = presentation_font_size(self.settings.editor_font_size);
@@ -1712,6 +1791,10 @@ impl eframe::App for DotCraftApp {
             self.open_path(&path);
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
+        for request in crate::godot_cli::take() {
+            self.open_godot_request(request);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
         if let Some(menu) = &self.native_menu {
             for cmd in menu.poll() {
                 match cmd {
@@ -1799,6 +1882,23 @@ impl eframe::App for DotCraftApp {
         self.appsettings.update(&mut self.docs, &mut self.insight.problems);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
+        let build_finished = self.runner.build.as_ref().and_then(|build| {
+            build.result.as_ref().map(|result| result.success && !result.cancelled)
+                .or_else(|| build.failed.as_ref().map(|_| false))
+        });
+        if let Some(success) = build_finished
+            && let Some(config) = self.godot_debug_build.take()
+            && success
+        {
+            match self.runner.godot_debug_plan(&config) {
+                Ok(plan) => {
+                    let launch = rc_dap::LaunchConfig::from(&plan);
+                    let outs = self.debugger.launch_godot(config.name, launch, self.settings.netcoredbg_path.as_deref(), &self.docs);
+                    self.handle_debug(outs);
+                }
+                Err(error) => self.notify(error, true),
+            }
+        }
         // Monitoring follows the selected Run tab's process (or the last one started).
         let target = self.runner.runs.get(self.runner.active_run).filter(|r| r.running()).or_else(|| self.runner.runs.iter().rev().find(|r| r.running()));
         self.monitor.follow(target.and_then(|r| Some((r.name.clone(), r.handle.as_ref()?.pid()?))));

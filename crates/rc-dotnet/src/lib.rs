@@ -18,6 +18,7 @@ pub mod cpm;
 pub mod diagnostics;
 pub mod ef;
 pub mod global_json;
+pub mod godot;
 pub mod endpoints;
 pub mod http_file;
 pub mod openapi;

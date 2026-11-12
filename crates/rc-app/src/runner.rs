@@ -13,6 +13,8 @@ use std::time::Instant;
 pub enum ConfigKind {
     /// An executable project, with an optional launch profile.
     App { project: PathBuf, profile: Option<String>, web: bool },
+    /// A Godot project, its editor, or one scene.
+    Godot { project_root: PathBuf, scene: Option<PathBuf>, editor: bool },
     /// Every test of a solution or test project.
     Tests { target: PathBuf },
     /// Several application configurations started together (by name).
@@ -30,6 +32,7 @@ impl RunConfig {
         match &self.kind {
             ConfigKind::App { web: true, .. } => rc_kit::ico::CONFIG_WEB,
             ConfigKind::App { .. } => rc_kit::ico::CONFIG_APP,
+            ConfigKind::Godot { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Tests { .. } => rc_kit::ico::RUN_ALL,
             ConfigKind::Compound { .. } => rc_kit::ico::TW_SERVICES,
         }
@@ -173,6 +176,8 @@ pub struct Runner {
     pub test_outcomes: BTreeMap<String, TestState>,
     waker: Waker,
     dotnet: Option<Dotnet>,
+    godot_executable: Option<PathBuf>,
+    godot_csharp_project: Option<PathBuf>,
     /// Compound configurations of the workspace (name, member names), kept in the session.
     pub compounds: Vec<(String, Vec<String>)>,
     /// Edited application configurations, by name (kept in the session).
@@ -181,13 +186,14 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, compounds: Vec::new(), options: BTreeMap::new() }
+        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, godot_executable: None, godot_csharp_project: None, compounds: Vec::new(), options: BTreeMap::new() }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
     /// profile of type `Project`), then "All tests" for the solution and each test project.
     pub fn set_workspace(&mut self, solution: Option<&Solution>, projects: &[PathBuf], dotnet: &Path, remembered: Option<&str>) {
         self.dotnet = Dotnet::locate(Some(dotnet)).or_else(|| Dotnet::locate(None));
+        self.godot_csharp_project = None;
         self.configs.clear();
         let paths: Vec<PathBuf> = match solution {
             Some(s) => s.projects().into_iter().map(|p| p.path.clone()).collect(),
@@ -196,6 +202,10 @@ impl Runner {
         let mut test_projects = Vec::new();
         for path in &paths {
             let Ok(info) = ProjectInfo::load(path) else { continue };
+            if info.is_godot() {
+                self.godot_csharp_project.get_or_insert_with(|| path.clone());
+                continue;
+            }
             if info.is_test {
                 test_projects.push(path.clone());
                 continue;
@@ -229,8 +239,97 @@ impl Runner {
         self.selected = remembered.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
     }
 
+    /// Adds Godot project and editor configurations after the .NET workspace is loaded.
+    /// A C# project is optional: GDScript-only projects can still be launched.
+    pub fn add_godot_project(&mut self, project_root: &Path, configured_executable: Option<&Path>) {
+        self.godot_executable = rc_dotnet::godot::find_godot_executable(configured_executable);
+        self.godot_csharp_project = self
+            .godot_csharp_project
+            .take()
+            .filter(|project| project.starts_with(project_root));
+        let remembered = self.selected_config().map(|config| config.name.clone());
+        let scenes: Vec<RunConfig> = self.configs.iter().filter(|config| {
+            matches!(&config.kind, ConfigKind::Godot { project_root: root, scene: Some(_), .. } if root == project_root)
+        }).cloned().collect();
+        self.configs.retain(|config| !matches!(config.kind, ConfigKind::Godot { .. }));
+        let project = RunConfig {
+            name: tr("Run Godot Project").to_string(),
+            kind: ConfigKind::Godot {
+                project_root: project_root.to_path_buf(),
+                scene: None,
+                editor: false,
+            },
+        };
+        let editor = RunConfig {
+            name: tr("Open Godot Editor").to_string(),
+            kind: ConfigKind::Godot {
+                project_root: project_root.to_path_buf(),
+                scene: None,
+                editor: true,
+            },
+        };
+        self.configs.insert(0, editor);
+        self.configs.insert(0, project);
+        for (index, scene) in scenes.into_iter().enumerate() {
+            self.configs.insert(index + 2, scene);
+        }
+        self.selected = remembered
+            .and_then(|name| self.configs.iter().position(|config| config.name == name))
+            .unwrap_or(0);
+    }
+
+    /// Creates and selects a run configuration for a scene inside the current Godot project.
+    pub fn select_godot_scene(&mut self, scene: &Path) -> bool {
+        let Some(root) = self.configs.iter().find_map(|config| match &config.kind {
+            ConfigKind::Godot { project_root, .. } => Some(project_root.clone()),
+            _ => None,
+        }) else {
+            return false;
+        };
+        let relative = if scene.is_absolute() {
+            let Ok(relative) = scene.strip_prefix(&root) else {
+                return false;
+            };
+            relative.to_path_buf()
+        } else {
+            scene.to_path_buf()
+        };
+        if relative
+            .extension()
+            .is_none_or(|extension| extension != "tscn" && extension != "scn")
+            || relative.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                )
+            })
+        {
+            return false;
+        }
+        let name = trf(
+            "Run Godot Scene: {scene}",
+            &[("scene", &relative.display())],
+        );
+        let kind = ConfigKind::Godot {
+            project_root: root,
+            scene: Some(relative),
+            editor: false,
+        };
+        if let Some(index) = self.configs.iter().position(|config| config.kind == kind) {
+            self.selected = index;
+        } else {
+            self.configs.insert(1, RunConfig { name, kind });
+            self.selected = 1;
+        }
+        true
+    }
+
     pub fn clear(&mut self) {
         self.configs.clear();
+        self.godot_executable = None;
+        self.godot_csharp_project = None;
         self.build = None;
         self.runs.clear();
         self.tests = None;
@@ -239,6 +338,24 @@ impl Runner {
 
     pub fn selected_config(&self) -> Option<&RunConfig> {
         self.configs.get(self.selected)
+    }
+
+    pub fn godot_csharp_project(&self) -> Option<&Path> {
+        self.godot_csharp_project.as_deref()
+    }
+
+    /// Godot is a native host for C#; netcoredbg must launch the engine after a separate build.
+    pub fn godot_debug_plan(&self, config: &RunConfig) -> Result<rc_dotnet::LaunchPlan, String> {
+        let ConfigKind::Godot { project_root, scene, editor: false } = &config.kind else {
+            return Err(tr("Choose a Godot game or scene configuration to debug").into());
+        };
+        let executable = self.godot_executable.clone().ok_or_else(|| tr("Godot was not found. Install Godot .NET or configure its executable in Settings › Tools.").to_string())?;
+        let dotnet = self.dotnet.as_ref().ok_or_else(|| tr("The .NET SDK was not found. Install it or set its path in Settings › Tools.").to_string())?;
+        let mut request = rc_dotnet::godot::GodotRunRequest::new(executable, project_root.clone());
+        request.scene = scene.clone();
+        request.require_dotnet = true;
+        request.dotnet_root = dotnet.root().map(Path::to_path_buf);
+        request.plan().map_err(|error| error.to_string())
     }
 
     pub fn busy(&self) -> bool {
@@ -304,6 +421,7 @@ impl Runner {
         };
         match cfg.kind.clone() {
             ConfigKind::App { .. } => self.run_app(cfg),
+            ConfigKind::Godot { .. } => self.run_godot(cfg),
             ConfigKind::Tests { target } => self.run_tests(&target, None),
             ConfigKind::Compound { members } => {
                 let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::App { .. })).cloned()).collect();
@@ -399,6 +517,61 @@ impl Runner {
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
         let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
         self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.active_run = self.runs.len() - 1;
+        vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
+    }
+
+    fn run_godot(&mut self, cfg: RunConfig) -> Vec<RunnerOutput> {
+        let ConfigKind::Godot {
+            project_root,
+            scene,
+            editor,
+        } = &cfg.kind
+        else {
+            return Vec::new();
+        };
+        let Some(executable) = self.godot_executable.clone() else {
+            return vec![RunnerOutput::Notify(tr("Godot was not found. Install Godot .NET or configure its executable in Settings › Tools.").to_string(), true)];
+        };
+        if self.godot_csharp_project.is_some() && self.dotnet.is_none() {
+            return vec![RunnerOutput::Notify(
+                tr("The .NET SDK was not found. Install it or set its path in Settings › Tools.")
+                    .to_string(),
+                true,
+            )];
+        }
+        if let Some(index) = self.runs.iter().position(|run| run.config == cfg) {
+            let old = self.runs.remove(index);
+            if let Some(handle) = old.handle {
+                handle.stop();
+            }
+        }
+        let mut request = rc_dotnet::godot::GodotRunRequest::new(executable, project_root.clone());
+        request.scene = scene.clone();
+        request.editor = *editor;
+        request.require_dotnet = self.godot_csharp_project.is_some();
+        request.dotnet_root = self.dotnet.as_ref().and_then(|dotnet| dotnet.root()).map(Path::to_path_buf);
+        request.build = if *editor {
+            None
+        } else {
+            self.godot_csharp_project
+                .clone()
+                .zip(self.dotnet.clone())
+                .map(|(project, dotnet)| (dotnet, project))
+        };
+        let inbox = Inbox::new(self.waker.clone());
+        let console = Console::new(&self.waker);
+        console.note(&trf("Starting {name}…", &[("name", &cfg.name)]));
+        let handle = rc_dotnet::godot::start_godot(request, inbox.sender());
+        self.runs.push(RunTab {
+            name: cfg.name.clone(),
+            config: cfg,
+            handle: Some(handle),
+            inbox,
+            console,
+            exit: None,
+            urls: Vec::new(),
+        });
         self.active_run = self.runs.len() - 1;
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
     }
@@ -587,6 +760,7 @@ impl Runner {
         for r in &mut self.runs {
             for ev in r.inbox.drain() {
                 match ev {
+                    RunEvent::Build(BuildEvent::Output(line)) => r.console.line(&line),
                     RunEvent::Build(BuildEvent::Diagnostic(d)) => {
                         if d.severity == rc_dotnet::Severity::Error {
                             r.console.note(&format!("{}({},{}): {}", d.file.as_ref().map(|f| f.display().to_string()).unwrap_or_default(), d.line.unwrap_or(0), d.column.unwrap_or(0), d.message));
@@ -805,6 +979,44 @@ pub fn project_of(file: &Path, configs: &[RunConfig]) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn godot_configs_select_a_scene_within_the_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut runner = Runner::new(Waker::noop());
+        runner.add_godot_project(dir.path(), None);
+        assert_eq!(runner.configs.len(), 2);
+        assert!(matches!(
+            runner.selected_config().unwrap().kind,
+            ConfigKind::Godot {
+                editor: false,
+                scene: None,
+                ..
+            }
+        ));
+
+        assert!(runner.select_godot_scene(Path::new("scenes/main.tscn")));
+        assert!(matches!(
+            runner.selected_config().unwrap().kind,
+            ConfigKind::Godot {
+                scene: Some(_),
+                editor: false,
+                ..
+            }
+        ));
+        let count = runner.configs.len();
+        assert!(runner.select_godot_scene(Path::new("scenes/main.tscn")));
+        assert_eq!(runner.configs.len(), count);
+        assert!(!runner.select_godot_scene(Path::new("../other.tscn")));
+        assert!(!runner.select_godot_scene(Path::new("scripts/player.cs")));
+        assert!(runner.select_godot_scene(Path::new("scenes/binary.scn")));
+        assert!(!runner.select_godot_scene(&dir.path().parent().unwrap().join("other.tscn")));
+        let selected = runner.selected_config().unwrap().name.clone();
+        let count = runner.configs.len();
+        runner.add_godot_project(dir.path(), None);
+        assert_eq!(runner.configs.len(), count);
+        assert_eq!(runner.selected_config().unwrap().name, selected);
+    }
 
     #[test]
     fn finds_xunit_nunit_and_mstest_markers() {

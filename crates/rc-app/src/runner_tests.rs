@@ -6,6 +6,45 @@ use crate::runner::ConfigKind;
 use rc_core::{Settings, Waker};
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
+#[test]
+fn godot_workspace_builds_csharp_before_debug_launch() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let dotnet = home.path().join("dotnet");
+    let engine = home.path().join("godot-mono");
+    for path in [&dotnet, &engine] {
+        std::fs::write(path, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/godot-dotnet");
+    let settings = Settings {
+        dotnet_path: Some(dotnet),
+        godot_path: Some(engine),
+        roslyn_path: Some("/nonexistent".into()),
+        ..Settings::default()
+    };
+    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&fixture);
+    assert!(app.runner.godot_csharp_project().is_some());
+    assert!(matches!(app.runner.selected_config().map(|config| &config.kind), Some(ConfigKind::Godot { editor: false, .. })));
+    assert_eq!(app.workspace_build_target().as_deref(), app.runner.godot_csharp_project());
+    assert!(app.runner.select_godot_scene(std::path::Path::new("Main.tscn")));
+    assert_eq!(app.session().godot_scene.as_deref(), Some(std::path::Path::new("Main.tscn")));
+    app.save_session();
+    app.open_workspace(&fixture);
+    assert!(matches!(app.runner.selected_config().map(|config| &config.kind), Some(ConfigKind::Godot { scene: Some(scene), .. }) if scene == std::path::Path::new("Main.tscn")));
+    let plan = app.runner.godot_debug_plan(app.runner.selected_config().unwrap()).unwrap();
+    assert!(plan.env.iter().any(|(key, _)| key == "DOTNET_ROOT"));
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Debug);
+    assert!(app.runner.build.as_ref().is_some_and(|build| build.handle.is_some()));
+    app.runner.cancel_build();
+}
+
 fn pump(app: &mut DotCraftApp, what: &str, mut done: impl FnMut(&mut DotCraftApp) -> bool) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(300) {

@@ -19,6 +19,8 @@ pub struct Workspace {
     pub kind: WorkspaceKind,
     /// Session and recent-entry key; folder-opened projects retain the folder key.
     key: PathBuf,
+    /// The Godot manifest found while opening the workspace, if present.
+    godot_project: Option<PathBuf>,
 }
 
 impl Workspace {
@@ -48,18 +50,25 @@ impl Workspace {
                 WorkspaceKind::Solution(solution) => solution.clone(),
                 _ => path.clone(),
             };
-            return Ok(Workspace { root: path, kind, key });
+            let godot_project = path.join("project.godot");
+            let godot_project = godot_project.is_file().then_some(godot_project);
+            return Ok(Workspace { root: path, kind, key, godot_project });
         }
         let root = path.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
-        let key = path.clone();
+        let is_godot_manifest = path.file_name().is_some_and(|name| name == "project.godot");
+        let key = if is_godot_manifest { root.clone() } else { path.clone() };
         let kind = if is_solution(&path) {
             WorkspaceKind::Solution(path)
         } else if is_project(&path) {
             WorkspaceKind::Project(path)
+        } else if is_godot_manifest {
+            WorkspaceKind::Folder
         } else {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a folder, solution or project"));
         };
-        Ok(Workspace { root, kind, key })
+        let godot_project = root.join("project.godot");
+        let godot_project = godot_project.is_file().then_some(godot_project);
+        Ok(Workspace { root, kind, key, godot_project })
     }
 
     /// Display name: the solution / project name or the folder name.
@@ -82,6 +91,11 @@ impl Workspace {
             _ => None,
         }
     }
+
+    /// Godot manifest present at the workspace root when it was opened.
+    pub fn godot_project(&self) -> Option<&Path> {
+        self.godot_project.as_deref()
+    }
 }
 
 pub fn is_solution(p: &Path) -> bool {
@@ -97,7 +111,7 @@ fn ext(p: &Path) -> String {
 }
 
 /// Folders never shown in the explorer.
-pub const HIDDEN_DIRS: &[&str] = &["bin", "obj", ".git", ".vs", ".idea", "node_modules", ".dotcraft", "TestResults"];
+pub const HIDDEN_DIRS: &[&str] = &["bin", "obj", ".git", ".vs", ".idea", ".godot", "node_modules", ".dotcraft", "TestResults"];
 const HIDDEN_FILES: &[&str] = &[".DS_Store", "Thumbs.db"];
 
 pub fn is_hidden(name: &str, is_dir: bool) -> bool {
@@ -196,5 +210,24 @@ mod tests {
         let workspace = Workspace::open(&root).unwrap();
         assert_eq!(workspace.kind, WorkspaceKind::Folder);
         assert_eq!(workspace.key_path(), root);
+    }
+
+    #[test]
+    fn godot_manifest_opens_as_a_folder_and_hides_generated_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let manifest = root.join("project.godot");
+        std::fs::write(&manifest, "config_version=5\n").unwrap();
+        std::fs::create_dir(root.join(".godot")).unwrap();
+        let folder = Workspace::open(&root).unwrap();
+        let file = Workspace::open(&manifest).unwrap();
+        assert_eq!(folder.kind, WorkspaceKind::Folder);
+        assert_eq!(file.kind, WorkspaceKind::Folder);
+        assert_eq!(folder.key_path(), root);
+        assert_eq!(file.key_path(), root);
+        assert_eq!(file.godot_project(), Some(manifest.as_path()));
+        assert_eq!(folder.godot_project(), Some(manifest.as_path()));
+        assert!(!list_dir(&root).iter().any(|entry| entry.name == ".godot"));
+        assert!(list_dir_with(&root, true).iter().any(|entry| entry.name == ".godot"));
     }
 }

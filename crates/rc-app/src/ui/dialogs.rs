@@ -327,6 +327,7 @@ fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
     for (label, value) in [
         (tr(".NET CLI"), &mut draft.dotnet_path),
+        (tr("Godot .NET executable"), &mut draft.godot_path),
         (tr("Roslyn language server"), &mut draft.roslyn_path),
         (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),
     ] {
