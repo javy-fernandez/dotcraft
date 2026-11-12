@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 55 |
-| 🚧 In progress | 30 |
-| 🟢 Existing | 56 |
+| ✅ Verified | 58 |
+| 🚧 In progress | 28 |
+| 🟢 Existing | 55 |
 | 🔁 Reuse candidate | 20 |
 | ⬜ Backlog | 212 |
 | 🚫 Out of scope | 0 |
@@ -121,7 +121,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | --- | --- | --- | --- |
 | A-01 | Native desktop workspace | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-02 | Light and dark themes | ✅ | [PR 191](https://github.com/javy-fernandez/dotcraft/pull/191) verifies live light → dark → light egui visual changes while six-project `Shop.sln` remains open on Linux. System-theme notifications, native chrome and other platforms remain untested. |
-| A-03 | Tool window stripes | 🚧 | Existing stripes plus verified overflow scrolling; PR 7. Wider UI audit remains pending. |
+| A-03 | Tool window stripes | ✅ | Existing compact overflow scrolling passes; [PR 197](https://github.com/javy-fernandez/dotcraft/pull/197) verifies Problems/Notifications stripe toggles and dock sides in real `Shop.sln` egui UI on Linux. Context-menu Move To, native chrome and other platforms remain untested. |
 | A-04 | Docked tool windows | ✅ | [PR 193](https://github.com/javy-fernandez/dotcraft/pull/193) verifies Explorer stripe hide/reopen, left-to-right dock move and session-map round-trip in a real `Shop.sln` egui UI harness on Linux. Pointer drag, context-menu Move To and other platforms remain untested. |
 | A-05 | Editor tabs | ✅ | [PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) names close controls for accessibility; egui UI harness activates and closes C# tabs from real `Shop.sln` on Linux. Pinned/preview tabs, drag ordering, compact widths and other platforms remain untested. |
 | A-06 | Split editors | ✅ | [PR 179](https://github.com/javy-fernandez/dotcraft/pull/179) tests tab split commands in both orientations and Unsplit in an egui UI harness with real `Shop.sln` C# files on Linux. Divider drag, context-menu pointer flow, narrow layouts and persistence remain untested. |
@@ -199,7 +199,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-05 | Quick documentation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-06 | Automatic brackets | ✅ | [PR 168](https://github.com/javy-fernandez/dotcraft/pull/168) fixes C# comment/string context and verifies pairing, type-over, selection wrapping, and undo through egui editor events on a real Shop C# fixture; 17 rc-editor unit and one fixture test pass. No SDK build or broader Rider parity claim. |
 | C-07 | Multiple carets | ✅ | [PR 178](https://github.com/javy-fernandez/dotcraft/pull/178) fixes data loss with mixed selection and empty caret during bracket typing; 27 rc-text, 17 rc-editor and one real Shop C# editor-event test verify per-range edits and one-step undo. No SDK build or broader input matrix claim. |
-| C-08 | Code folding | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-08 | Code folding | ✅ | [PR 196](https://github.com/javy-fernandez/dotcraft/pull/196) fixes Fold All when the caret is on a visible fold-start line; real Shop C# EditorView test covers Fold/Unfold/Fold All/Unfold All, caret relocation and unchanged buffer, plus 17 unit tests. No SDK build or other-language claim. |
 | C-09 | Inlay hints | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-10 | Line and block comments | ✅ | [PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) fixes repeated block-comment toggle and verifies Rider line/block shortcuts, selection and undo through editor events on a real Shop C# file; 17 unit and two fixture tests pass. No SDK build or broader Rider parity claim. |
 | C-11 | Indentation | ✅ | [PR 189](https://github.com/javy-fernandez/dotcraft/pull/189) indents C# `case`/`default` statements one level on Enter as one undoable edit; real Shop C# EditorView event and guard tests pass (18 unit, one fixture). Other language-specific indentation remains outside this scope. |
@@ -432,7 +432,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-12 | History editing | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-13 | Hosting CLI integration | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-14 | Git log and graph | ✅ | [PR 165](https://github.com/javy-fernandez/dotcraft/pull/165) draws real branch and merge lanes and supports commit selection; a real local Git merge fixture and egui UI harness passed on Linux. The local log is limited to 500 commits; pagination, huge histories, and other platforms remain untested. |
-| I-15 | Fetch pull and push workflow audit | 🚧 | Real-Git fetch/pull/push backend tests pass; a complete hosting/UI workflow audit remains pending. |
+| I-15 | Fetch pull and push workflow audit | ✅ | [PR 194](https://github.com/javy-fernandez/dotcraft/pull/194) verifies initial Push, peer Fetch/Pull, local Push, ahead/behind, divergent Push rejection and recovery through egui Git UI against a local bare remote with `Shop.sln` on Linux; targeted app and rc-vcs tests pass. Hosted auth, network cancellation and other platforms remain untested. |
 | I-16 | Interactive rebase | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-17 | Cherry-pick | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-18 | Three-way merge editor | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -464,7 +464,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-03 | JSON syntax parsing | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | J-04 | Markdown preview | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | J-05 | HTTP client | 🚧 | PRs 13 and 15 verify basic HTTP execution, cancellation and inline variables; advanced HTTP integrations remain pending. |
-| J-06 | HTTP environment variables | 🚧 | Inline variables were tested in fork PR 15; upstream source also has environment files and dynamic values, which need scoped validation. |
+| J-06 | HTTP environment variables | 🚧 | Inline variables were tested in fork PR 15. [PR 195](https://github.com/javy-fernandez/dotcraft/pull/195) combines parent public and child private/user files with documented precedence; real `Shop.Api.http`/`Shop.sln` integration and 132 rc-dotnet unit tests pass. Environment UI, dynamic values and live requests remain. |
 | J-07 | Database connections and SQL console | 🚧 | PR 16 verifies read-only SQLite connections and explicit bounded SQL; writes, persistent sessions and other engines remain pending. |
 | J-08 | SQL injection support | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | J-09 | ASP.NET endpoints explorer | 🚧 | [PR 184](https://github.com/javy-fernandez/dotcraft/pull/184) excludes nested C#, F#, and VB projects from endpoint scan; Shop.Api still yields four endpoints and 12 rc-dotnet tests pass. Endpoints UI and live server acceptance remain. |

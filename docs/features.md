@@ -26,6 +26,7 @@ Reference: [Rider features](https://www.jetbrains.com/rider/features/).
 - [x] Type brackets with mixed selected and empty C# carets without losing selected text. Validated through editor events and undo on a real Shop C# file.
 - [x] Undo and redo C# edits while restoring caret, diagnostic and inlay positions. Validated through editor events on a real Shop C# file.
 - [x] Indent the next C# line after `case` and `default` labels as one undoable edit. Validated through editor events on a real Shop C# file.
+- [x] Fold and unfold C# scopes, including Fold All, without changing source text. Validated through editor events on a real Shop C# file.
 - [ ] Provide live templates and postfix templates.
 - [ ] Support multiple selections and caret editing.
 - [ ] Generate common code constructs and rearrange code.
@@ -124,6 +125,7 @@ Rider uses dotCover for its coverage integration. Select a suitable DotCraft cov
 - [ ] Highlight changes in the editor and provide blame annotations.
 - [ ] Stage changes, commit, push, and manage branches.
 - [x] Clone and open a local Git repository containing `Shop.sln` on Linux. Remote authentication, large clones and cancellation remain untested.
+- [x] Fetch, Pull and Push a `Shop.sln` repository through the Git UI against a local bare remote, including divergent Push rejection. Validated on Linux; hosted authentication remains untested.
 - [ ] Organize changes into changelists and shelve work.
 - [x] Shelve and restore local changes from the Git UI, including unsaved and untracked C# files. Validated with `Shop.sln` on Linux; changelists and conflict restoration remain in the unchecked item above.
 - [ ] Compare file revisions and resolve merge conflicts visually.
@@ -220,6 +222,7 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 - [x] Show status notifications and expire information and errors at their respective intervals. Validated with `Shop.sln` on Linux.
 - [x] Switch light and dark themes without closing a .NET solution. Validated with `Shop.sln` on Linux.
 - [x] Hide, reopen and move the docked Explorer while preserving its session state. Validated with `Shop.sln` on Linux.
+- [x] Use left and right tool-window stripes, including compact overflow scrolling. Validated with `Shop.sln` on Linux.
 
 ## Implementation progress
 
@@ -283,6 +286,10 @@ additional scope is pending.
 | Light and dark theme switching (A-02) | [Original PR 191](https://github.com/javy-fernandez/dotcraft/pull/191) | [Theme evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/theme-dotnet-acceptance/docs/implementation/theme-shop-workspace.md) |
 | Nested CPM PackageVersion updates (B-23, partial) | [Original PR 192](https://github.com/javy-fernandez/dotcraft/pull/192) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/192/files) |
 | Docked Explorer workspace behavior (A-04) | [Original PR 193](https://github.com/javy-fernandez/dotcraft/pull/193) | [Dock evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dock-dotnet-acceptance/docs/implementation/docked-explorer-shop.md) |
+| Local Git Fetch/Pull/Push (I-15) | [Original PR 194](https://github.com/javy-fernandez/dotcraft/pull/194) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/194/files) |
+| HTTP parent environment resolution (J-06, partial) | [Original PR 195](https://github.com/javy-fernandez/dotcraft/pull/195) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/195/files) |
+| C# code folding (C-08) | [Original PR 196](https://github.com/javy-fernandez/dotcraft/pull/196) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/196/files) |
+| Tool-window stripes (A-03) | [Original PR 197](https://github.com/javy-fernandez/dotcraft/pull/197) | [Stripe evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/tool-stripes-dotnet-acceptance/docs/implementation/tool-stripes-shop.md) |
 
 ## Completion criteria
 
