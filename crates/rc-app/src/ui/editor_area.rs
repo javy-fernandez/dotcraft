@@ -797,3 +797,42 @@ pub fn floating_windows(app: &mut DotCraftApp, ctx: &egui::Context) {
         }
     }
 }
+
+#[cfg(test)]
+mod razor_shop_tests {
+    use super::*;
+    use rc_syntax::Lang;
+
+    #[test]
+    fn razor_component_in_shop_workspace_paints_and_edits() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let shop = crate::screens::fixtures().join("Shop");
+        let temp = tempfile::Builder::new().prefix("razor-").tempdir_in(shop.join("src/Shop.Api")).unwrap();
+        let component = temp.path().join("Orders.razor");
+        let source = "@page \"/orders\"\n@using Shop.Core\n<h1>Orders</h1>\n@if (selected is not null)\n{\n    <p>@selected.Customer</p>\n}\n@code {\n    private Order? selected;\n}\n";
+        std::fs::write(&component, source).unwrap();
+
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&shop.join("Shop.sln"));
+        app.open_file(&component);
+        let mut harness = crate::screens::harness(app, vec2(1200.0, 800.0));
+        let doc = harness.state().docs.active_doc().unwrap();
+        assert_eq!(doc.editor.lang(), Lang::Razor);
+        assert!(doc.editor.syntax.is_current());
+        assert!(!doc.editor.syntax.tree().unwrap().root_node().has_error());
+        assert!(harness.output().shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text().contains("Orders"))));
+
+        let start = source.find("Orders</h1>").unwrap();
+        let editor = &mut harness.state_mut().docs.active_doc_mut().unwrap().editor;
+        editor.replace(start, start + "Orders".len(), "Shop Orders");
+        editor.parse_blocking();
+        harness.run_steps(3);
+        let doc = harness.state().docs.active_doc().unwrap();
+        assert!(doc.editor.buffer.rope().to_string().contains("<h1>Shop Orders</h1>"));
+        assert!(doc.editor.syntax.is_current());
+        assert!(!doc.editor.syntax.tree().unwrap().root_node().has_error());
+        assert!(harness.output().shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text().contains("Shop Orders"))));
+    }
+}
