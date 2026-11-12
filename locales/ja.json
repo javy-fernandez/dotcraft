@@ -1125,6 +1125,7 @@
     "Use controllers (instead of minimal APIs)": "コントローラーを使用 (最小 API の代わりに)"
   },
   "additems": {
+    "Search file type": "Search file type",
     "Add": "追加",
     "New {item}": "新規: {item}",
     "Class": "クラス",
