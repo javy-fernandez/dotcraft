@@ -25,8 +25,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 108 |
-| 🚧 In progress | 42 |
+| ✅ Verified | 109 |
+| 🚧 In progress | 41 |
 | 🟢 Existing | 4 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
@@ -174,7 +174,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-17 | Project references editor | 🚧 | [PR 204](https://github.com/javy-fernandez/dotcraft/pull/204) adds bounded backend add/remove with canonical path checks and formatting preservation, tested on Shop projects. UI, disk write, MSBuild evaluation and cycle detection remain. |
 | B-18 | Target frameworks editor | 🚧 | [PR 200](https://github.com/javy-fernandez/dotcraft/pull/200) adds a bounded backend edit for one unconditional SDK-style project property, tested with Shop.Core and Shop.Api; UI integration, disk write, and SDK build acceptance remain. |
 | B-19 | Build configurations and platforms | 🚧 | [PR 156](https://github.com/javy-fernandez/dotcraft/pull/156) parses `.sln` / `.slnf` configuration-platform pairs and lets the backend pass an explicit platform; 134 rc-dotnet unit tests pass. UI selection, persistence, `.slnx` discovery, and a real nondefault-platform build remain. |
-| B-20 | global.json SDK management | 🚧 | PR 5 verifies real SDK 8.0.427/10.0.403 selection and builds; ancestor policy display, UI installation and language-service restart remain pending. |
+| B-20 | global.json SDK management | ✅ | PR 5 verifies real SDK 8.0.427/10.0.403 version switching and policy preservation; [PR 270](https://github.com/javy-fernandez/dotcraft/pull/270) selects installed SDK 8.0.428 in the native Shop.Core chooser, writes project-local `global.json`, and builds successfully on Linux. SDK installation, ancestor policy display, language-server restart and other platforms remain untested. |
 | B-21 | .NET workload management | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-22 | NuGet dependency graph | 🚧 | [PR 216](https://github.com/javy-fernandez/dotcraft/pull/216) builds a bounded static graph of direct packages with CPM, override and unresolved versions, tested on CentralShop and Shop.Api. Restore assets/transitives, MSBuild evaluation, UI and SDK validation remain. |
 | B-23 | Central package management | 🚧 | [PR 192](https://github.com/javy-fernandez/dotcraft/pull/192) resolves parent CPM imports and child `PackageVersion Update` without inventing missing packages; CentralShop fixture and 132 rc-dotnet unit tests pass. SDK/MSBuild evaluation, arbitrary import order and UI acceptance remain. |
