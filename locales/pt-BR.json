@@ -1118,5 +1118,10 @@
     "Route may conflict with {handler} at {file}:{line}": "Route may conflict with {handler} at {file}:{line}",
     "Search routes, handlers and files": "Search routes, handlers and files",
     "{n} route conflicts": "{n} route conflicts"
+  },
+  "rc-app": {
+    "Distraction-free Mode": "Distraction-free Mode",
+    "Zen Mode": "Zen Mode",
+    "Exit Focus Mode": "Exit Focus Mode"
   }
 }
