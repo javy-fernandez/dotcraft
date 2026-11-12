@@ -162,8 +162,10 @@ pub fn parse_runtimes(text: &str) -> Vec<RuntimeInfo> {
     text.lines()
         .filter_map(|l| {
             let (head, path) = split_bracket(l)?;
-            let (name, version) = head.split_once(' ')?;
-            Some(RuntimeInfo { name: name.to_string(), version: version.trim().to_string(), path })
+            let mut parts = head.split_whitespace();
+            let (name, version) = (parts.next()?, parts.next()?);
+            if parts.next().is_some() { return None; }
+            Some(RuntimeInfo { name: name.to_string(), version: version.to_string(), path })
         })
         .collect()
 }
