@@ -25,11 +25,11 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 60 |
-| 🚧 In progress | 32 |
+| ✅ Verified | 61 |
+| 🚧 In progress | 33 |
 | 🟢 Existing | 51 |
-| 🔁 Reuse candidate | 19 |
-| ⬜ Backlog | 211 |
+| 🔁 Reuse candidate | 18 |
+| ⬜ Backlog | 210 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -138,7 +138,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-17 | Scrollable main menu | ✅ | PR 17 verifies compact category/command/tool scrolling, real TenProjects integration, clipboard actions and project-gated attachment. |
 | A-18 | Tab docking previews | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | A-19 | Background document saving | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| A-20 | Safe reload from disk | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| A-20 | Safe reload from disk | ✅ | [PR 205](https://github.com/javy-fernandez/dotcraft/pull/205) routes conflict-banner disk loading through parse/style refresh and verifies both Load from Disk and Keep Mine in the open Shop solution egui UI on Linux. Watcher timing, large/binary files and other platforms remain untested. |
 | A-21 | Accessible keyboard navigation | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | A-22 | Distraction-free and Zen modes | ✅ | [PR 161](https://github.com/javy-fernandez/dotcraft/pull/161) provides View-menu toggles, a visible exit control, and dock-preserving layout changes. Two rc-app UI harness tests passed with `Shop.sln` on Linux. Modes are process-local; native window chrome and other platforms remain untested. |
 | A-23 | Presentation mode | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -172,7 +172,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-14 | JSON .slnf solution filters | 🚧 | Parser, explorer, SDK build and test-project selection are verified; filter-specific Roslyn and actual test execution remain pending. |
 | B-15 | Interactive filter creation and editing | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-16 | Unload and reload individual projects | ⬜ | Implement with integration and UI acceptance evidence. |
-| B-17 | Project references editor | ⬜ | Implement with integration and UI acceptance evidence. |
+| B-17 | Project references editor | 🚧 | [PR 204](https://github.com/javy-fernandez/dotcraft/pull/204) adds bounded backend add/remove with canonical path checks and formatting preservation, tested on Shop projects. UI, disk write, MSBuild evaluation and cycle detection remain. |
 | B-18 | Target frameworks editor | 🚧 | [PR 200](https://github.com/javy-fernandez/dotcraft/pull/200) adds a bounded backend edit for one unconditional SDK-style project property, tested with Shop.Core and Shop.Api; UI integration, disk write, and SDK build acceptance remain. |
 | B-19 | Build configurations and platforms | 🚧 | [PR 156](https://github.com/javy-fernandez/dotcraft/pull/156) parses `.sln` / `.slnf` configuration-platform pairs and lets the backend pass an explicit platform; 134 rc-dotnet unit tests pass. UI selection, persistence, `.slnx` discovery, and a real nondefault-platform build remain. |
 | B-20 | global.json SDK management | 🚧 | PR 5 verifies real SDK 8.0.427/10.0.403 selection and builds; ancestor policy display, UI installation and language-service restart remain pending. |

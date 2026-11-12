@@ -297,6 +297,8 @@ additional scope is pending.
 | Shop Git Amend and saved editor changes (I-12) | [Original PR 201](https://github.com/javy-fernandez/dotcraft/pull/201) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/201/files) |
 | C# inlay hint padding (C-09, partial) | [Original PR 202](https://github.com/javy-fernandez/dotcraft/pull/202) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/202/files) |
 | Live locale switch in Shop (A-13, partial) | [Original PR 203](https://github.com/javy-fernandez/dotcraft/pull/203) | [Locale evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/localization-dotnet-acceptance/docs/implementation/localization-shop.md) |
+| Project reference editing (B-17, partial) | [Original PR 204](https://github.com/javy-fernandez/dotcraft/pull/204) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/204/files) |
+| Safe C# reload conflict choices (A-20) | [Original PR 205](https://github.com/javy-fernandez/dotcraft/pull/205) | [Reload evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/safe-reload-shop-conflict/docs/implementation/safe-reload-shop.md) |
 
 ## Completion criteria
 
