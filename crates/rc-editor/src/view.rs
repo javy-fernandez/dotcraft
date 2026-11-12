@@ -1139,11 +1139,12 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
     let rope = state.buffer.rope().clone();
     let mut chars = text.chars();
     if let (Some(ch), None) = (chars.next(), chars.next()) {
+        let auto_pair = config.auto_pair && !csharp_noncode_at_caret(state);
         // Typing `}` on a blank line re-indents it to its block (electric brace).
         let edited = if ch == '}' && state.selection.len() == 1 && state.selection.primary().is_empty() {
-            electric_close_brace(&rope, state).unwrap_or_else(|| commands::type_char(&rope, &state.selection, ch, config.auto_pair))
+            electric_close_brace(&rope, state).unwrap_or_else(|| commands::type_char(&rope, &state.selection, ch, auto_pair))
         } else {
-            commands::type_char(&rope, &state.selection, ch, config.auto_pair)
+            commands::type_char(&rope, &state.selection, ch, auto_pair)
         };
         state.apply(edited, EditKind::Insert);
         markup_assist(state, ch);
@@ -1162,6 +1163,36 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
         let edited = commands::replace_selections(&state.selection, text, None);
         state.apply(edited, EditKind::Other);
     }
+}
+
+fn csharp_noncode_at_caret(state: &EditorState) -> bool {
+    if state.lang() != rc_syntax::Lang::CSharp || state.selection.len() != 1 || !state.selection.primary().is_empty() {
+        return false;
+    }
+    let rope = state.buffer.rope();
+    let caret = state.caret();
+    if caret == 0 { return false; }
+    if state.syntax.is_current() {
+        let byte = rope.char_to_byte(caret - 1);
+        let caret_byte = rope.char_to_byte(caret);
+        let mut node = state.syntax.tree().and_then(|tree| tree.root_node().descendant_for_byte_range(byte, byte));
+        while let Some(current) = node {
+            if current.kind().contains("comment") ||
+                ((current.kind().contains("string") || current.kind() == "character_literal") && caret_byte < current.end_byte()) {
+                return true;
+            }
+            node = current.parent();
+        }
+        return false;
+    }
+    // Until a fresh parse arrives, keep typing inside an inline comment literal.
+    let line = rope.char_to_line(caret);
+    let mut previous = '\0';
+    for ch in rope.slice(rope.line_to_char(line)..caret).chars() {
+        if previous == '/' && ch == '/' { return true; }
+        previous = ch;
+    }
+    false
 }
 
 /// Markup typing assists (Razor/HTML/XML), with one caret: `>` closes the tag, `</` completes
