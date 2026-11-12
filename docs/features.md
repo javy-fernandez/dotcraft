@@ -20,6 +20,7 @@ Reference: [Rider features](https://www.jetbrains.com/rider/features/).
 - [ ] Provide contextual completion and automatic namespace imports.
 - [ ] Match delimiters and insert closing braces automatically.
 - [x] Pair C# brackets during typing, respect comments and strings, and preserve undo. Validated through editor input events on a real Shop C# file; broader delimiter behavior remains in the unchecked item above.
+- [x] Toggle selected C# line and block comments with Rider shortcuts and undo. Validated on a real Shop C# file.
 - [ ] Provide live templates and postfix templates.
 - [ ] Support multiple selections and caret editing.
 - [ ] Generate common code constructs and rearrange code.
@@ -78,7 +79,7 @@ References: [Refactorings](https://www.jetbrains.com/help/rider/Refactorings__In
 - [ ] Create and manage multiple run and debug configurations.
 - [ ] Run executable projects and application launch profiles.
 - [ ] Manage NuGet dependencies.
-- [ ] Provide an integrated terminal for development commands.
+- [x] Provide an integrated local terminal for development commands on Linux. `Shop.sln` workspace cwd, output, process exit and a second tab were validated; SDK commands and other platforms remain untested.
 
 References: [First steps with Rider](https://www.jetbrains.com/help/rider/First_Steps.html), [existing DotCraft capabilities](../README.md).
 
@@ -206,6 +207,7 @@ Reference: [Rider plugins](https://www.jetbrains.com/rider/features/). IntelliJ 
 - [x] Show the active .NET file, encoding, line ending and caret position in the status bar, with an accessible Go to Line control. Validated with `Shop.sln` on Linux.
 - [x] Reopen a filtered recent C# file with the keyboard while keeping the selection valid. Validated with `Shop.sln` on Linux.
 - [x] Return to a recent C# source location by line number with the keyboard. Validated with `Shop.sln` on Linux.
+- [x] Activate and close C# editor tabs with accessible controls. Validated with `Shop.sln` on Linux.
 
 ## Implementation progress
 
@@ -247,6 +249,9 @@ additional scope is pending.
 | Standalone project folder discovery (B-04, partial) | [Original PR 169](https://github.com/javy-fernandez/dotcraft/pull/169) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/169/files) |
 | Filtered Recent Files selection (A-09) | [Original PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) | [Recent Files evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/recent-files-filter-selection/docs/implementation/recent-files-filter.md) |
 | Recent Locations source navigation (A-10) | [Original PR 171](https://github.com/javy-fernandez/dotcraft/pull/171) | [Recent Locations evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/recent-locations-navigation/docs/implementation/recent-locations-dotnet.md) |
+| C# line and block comments (C-10) | [Original PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/172/files) |
+| Integrated local terminal (L-01) | [Original PR 173](https://github.com/javy-fernandez/dotcraft/pull/173) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/173/files) |
+| Accessible C# editor tabs (A-05) | [Original PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) | [Editor tabs evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/accessible-editor-tabs/docs/implementation/editor-tabs-dotnet.md) |
 
 ## Completion criteria
 

@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 39 |
+| ✅ Verified | 42 |
 | 🚧 In progress | 26 |
-| 🟢 Existing | 73 |
+| 🟢 Existing | 70 |
 | 🔁 Reuse candidate | 22 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
@@ -123,7 +123,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-02 | Light and dark themes | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-03 | Tool window stripes | 🚧 | Existing stripes plus verified overflow scrolling; PR 7. Wider UI audit remains pending. |
 | A-04 | Docked tool windows | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| A-05 | Editor tabs | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-05 | Editor tabs | ✅ | [PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) names close controls for accessibility; egui UI harness activates and closes C# tabs from real `Shop.sln` on Linux. Pinned/preview tabs, drag ordering, compact widths and other platforms remain untested. |
 | A-06 | Split editors | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-07 | Search Everywhere | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-08 | Recent projects | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -201,7 +201,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-07 | Multiple carets | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-08 | Code folding | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-09 | Inlay hints | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| C-10 | Line and block comments | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-10 | Line and block comments | ✅ | [PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) fixes repeated block-comment toggle and verifies Rider line/block shortcuts, selection and undo through editor events on a real Shop C# file; 17 unit and two fixture tests pass. No SDK build or broader Rider parity claim. |
 | C-11 | Indentation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-12 | Undo and redo | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | C-13 | Code actions and quick fixes | 🟢 | Exercise on a real .NET fixture; record evidence. |
@@ -541,7 +541,7 @@ Source / reuse boundary: `crates/rc-term; crates/rc-core; CrabCraft shared modul
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| L-01 | Integrated terminal | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| L-01 | Integrated terminal | ✅ | [PR 173](https://github.com/javy-fernandez/dotcraft/pull/173) verifies a PTY in the real `Shop.sln` workspace cwd, terminal output/exit, and a second egui terminal tab on Linux; 25 rc-term tests and one targeted rc-app UI test pass. SDK commands, other platforms and GPU rendering remain untested. |
 | L-02 | Persistent workspace sessions | 🚧 | [PR 159](https://github.com/javy-fernandez/dotcraft/pull/159) hardens concurrent atomic saves and round-trips complete session state in two .NET fixtures; 13 rc-core tests pass. Live UI restoration, crash durability, and other platforms remain unverified. |
 | L-03 | File system watching | 🚧 | [PR 155](https://github.com/javy-fernandez/dotcraft/pull/155) classifies renames and atomic saves as source removal plus destination creation; 13 rc-core tests pass, including a real filesystem .NET-project fixture. UI, index/LSP integration, and other platforms remain unverified. |
 | L-04 | Background task runtime | 🚧 | [PR 164](https://github.com/javy-fernandez/dotcraft/pull/164) adds `spawn_blocking`; four concurrent `.csproj` reads do not starve an async task, and pending async cancellation is tested. 13 rc-core tests pass. UI callers, process cancellation, and running blocking-task cancellation remain. |
