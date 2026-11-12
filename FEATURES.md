@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 76 |
+| ✅ Verified | 77 |
 | 🚧 In progress | 44 |
-| 🟢 Existing | 34 |
+| 🟢 Existing | 33 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -310,7 +310,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/build.rs; crates/rc-app/src/runne
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
 | F-01 | Build solution or project | ✅ | Live Shop solution build and inherited CLI/API debugger project builds pass; see live-dotnet.md. |
-| F-02 | Rebuild | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| F-02 | Rebuild | ✅ | [PR 233](https://github.com/javy-fernandez/dotcraft/pull/233) verifies a Linux Shop.Core project Rebuild with official .NET SDK 8.0.428: deliberately corrupted final and intermediate assemblies are restored, `--no-incremental --no-restore` is issued, and streamed output and success are observed. Solution rebuild, UI, other runtimes and platforms remain untested. |
 | F-03 | Clean | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-04 | Cancel build | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-05 | Streamed build output | 🟢 | Exercise on a real .NET fixture; record evidence. |

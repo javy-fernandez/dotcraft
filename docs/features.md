@@ -327,6 +327,7 @@ additional scope is pending.
 | Linux MSBuild property evaluation (B-10) | [Original PR 230](https://github.com/javy-fernandez/dotcraft/pull/230) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/230/files) |
 | Live Stop of Shop.Api (F-09) | [Original PR 231](https://github.com/javy-fernandez/dotcraft/pull/231) | [Stop evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/stop-shop-api-process/docs/implementation/stop-shop-api.md) |
 | Shop Replace in Files with background writes (D-08) | [Original PR 232](https://github.com/javy-fernandez/dotcraft/pull/232) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/232/files) |
+| Linux Shop.Core project Rebuild (F-02) | [Original PR 233](https://github.com/javy-fernandez/dotcraft/pull/233) | [Rebuild evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-rebuild-live/docs/implementation/rebuild-linux.md) |
 
 ## Completion criteria
 
