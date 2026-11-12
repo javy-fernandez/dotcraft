@@ -26,8 +26,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 65 |
-| 🚧 In progress | 40 |
-| 🟢 Existing | 48 |
+| 🚧 In progress | 41 |
+| 🟢 Existing | 47 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 203 |
 | 🚫 Out of scope | 0 |
@@ -213,7 +213,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-20 | Web language editor improvements | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | C-21 | Smart and type-matching completion | ⬜ | Implement with integration and UI acceptance evidence. |
 | C-22 | Import completion | ⬜ | Implement with integration and UI acceptance evidence. |
-| C-23 | Live templates editor | 🟢 | Source located in `rc-editor/templates.rs`; repeat application acceptance checks. |
+| C-23 | Live templates editor | 🚧 | [PR 218](https://github.com/javy-fernandez/dotcraft/pull/218) expands `cw` in Shop C# code with undo and preserves literals in comments/strings through EditorView. App popup, custom templates, advanced strings and very long lines remain unverified. |
 | C-24 | Postfix templates | 🟢 | Existing C# postfix expansion is in `rc-editor/src/templates.rs` and invoked by Tab in `view.rs`; unit tests cover the supported forms. Live .NET UI acceptance remains. |
 | C-25 | Surround with templates | 🚧 | [PR 210](https://github.com/javy-fernandez/dotcraft/pull/210) verifies Ctrl+Alt+T, built-in `if` surround, indentation, snippet field and undo in Shop C# EditorView; read-only phantom snippets are prevented. App popup and other templates remain untested. |
 | C-26 | Generate constructors and members | ⬜ | Implement with integration and UI acceptance evidence. |

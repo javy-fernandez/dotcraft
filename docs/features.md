@@ -312,6 +312,7 @@ additional scope is pending.
 | Shop Git worktree lifecycle (I-22) | [Original PR 215](https://github.com/javy-fernandez/dotcraft/pull/215) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/215/files) |
 | Static direct NuGet graph (B-22, partial) | [Original PR 216](https://github.com/javy-fernandez/dotcraft/pull/216) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/216/files) |
 | Shop class template creation (B-07, partial) | [Original PR 217](https://github.com/javy-fernandez/dotcraft/pull/217) | [Template evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/file-template-shop-acceptance/docs/implementation/file-template-shop.md) |
+| C# live-template context guard (C-23, partial) | [Original PR 218](https://github.com/javy-fernandez/dotcraft/pull/218) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/218/files) |
 
 ## Completion criteria
 
