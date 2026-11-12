@@ -133,3 +133,34 @@ fn a_new_solution_starts_with_the_last_layout() {
     assert_eq!(app.dock.side_of(crate::toolwindow::ToolWindow::Explorer), crate::toolwindow::Side::Right);
     assert_eq!(app.dock.right, Some(crate::toolwindow::ToolWindow::Explorer));
 }
+
+#[test]
+#[ignore = "requires a local .NET SDK and restored Shop fixture packages"]
+fn shop_test_gutter_reflects_live_test_outcomes() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    let file = crate::screens::fixtures().join("Shop/tests/Shop.Core.XunitTests/PriceCalculatorTests.cs");
+    app.open_file(&file);
+    let mut harness = crate::screens::harness(app, egui::vec2(1400.0, 900.0));
+    let method = "Shop.Core.XunitTests.PriceCalculatorTests.SampleOrderGetsFreeShipping";
+    let marker = harness.state().test_markers.iter().find(|m| m.name == method).unwrap();
+    let line = marker.line;
+    let active = harness.state().docs.active_doc().unwrap();
+    assert_eq!(active.editor.gutter_icons.get(&line), Some(&rc_editor::GutterIcon::RunTest));
+
+    let target = harness.state().workspace.as_ref().unwrap().ws.key_path().to_path_buf();
+    let outputs = harness.state_mut().runner.run_tests(&target, None);
+    crate::ui::run_windows::handle_outputs(harness.state_mut(), outputs);
+    pump(harness.state_mut(), "Shop tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let tests = harness.state().runner.tests.as_ref().unwrap();
+    assert_eq!(tests.failed, 0, "{:?}", tests.failure);
+    assert!(harness.state().runner.test_outcomes.contains_key(method));
+    harness.run_steps(3);
+    let active = harness.state().docs.active_doc().unwrap();
+    assert_eq!(active.editor.gutter_icons.get(&line), Some(&rc_editor::GutterIcon::TestPassed));
+}
