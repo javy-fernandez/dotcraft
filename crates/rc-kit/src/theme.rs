@@ -832,6 +832,8 @@ pub fn tab_ex(ui: &mut Ui, selected: bool, ico: Option<Ico>, text: &str, closabl
     if closable || style.pinned {
         let cr = Rect::from_min_size(egui::pos2(x, rect.center().y - 8.0), Vec2::splat(16.0));
         let cresp = ui.interact(cr, resp.id.with("close"), Sense::click());
+        let close_label = format!("{}: {text}", crate::i18n::tr("Close Tab"));
+        cresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &close_label));
         if cresp.hovered() {
             ui.painter().rect_filled(cr.expand(1.0), 4.0, p.hover);
         }

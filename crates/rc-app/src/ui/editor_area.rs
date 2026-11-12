@@ -804,3 +804,33 @@ pub fn floating_windows(app: &mut DotCraftApp, ctx: &egui::Context) {
         }
     }
 }
+
+#[cfg(test)]
+mod tab_tests {
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn dotnet_editor_tabs_activate_and_close_with_accessible_controls() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let fixtures = crate::screens::fixtures().join("Shop");
+        let solution = fixtures.join("Shop.sln");
+        let order = fixtures.join("src/Shop.Core/Order.cs");
+        let program = fixtures.join("src/Shop.Cli/Program.cs");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState {
+            ws: rc_core::Workspace::open(&solution).unwrap(),
+            solution: Some(rc_dotnet::Solution::load(&solution).unwrap()),
+        });
+        app.open_file(&order);
+        app.open_file(&program);
+        let mut harness = crate::screens::harness(app, egui::vec2(1000.0, 700.0));
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Order.cs").click();
+        harness.run_steps(3);
+        assert_eq!(harness.state().docs.active_doc().unwrap().path, order);
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Close Tab: Order.cs").click();
+        harness.run_steps(3);
+        assert_eq!(harness.state().docs.list.len(), 1);
+        assert_eq!(harness.state().docs.active_doc().unwrap().path, program);
+    }
+}
