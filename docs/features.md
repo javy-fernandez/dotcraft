@@ -349,6 +349,7 @@ additional scope is pending.
 | Shop.Cli debugger thread list (G-09) | [Original PR 252](https://github.com/javy-fernandez/dotcraft/pull/252) | [Thread evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-debugger-thread-list-live/docs/implementation/shop-debugger-thread-list.md) |
 | Shop Go to Type with fixture symbols (D-02, partial) | [Original PR 253](https://github.com/javy-fernandez/dotcraft/pull/253) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/253/files) |
 | Shop C# postfix Tab and Undo (C-24) | [Original PR 254](https://github.com/javy-fernandez/dotcraft/pull/254) | [Postfix evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/postfix-shop-editor/docs/implementation/c24-postfix-shop-editor.md) |
+| Shop.Api debugger Pause and Continue (G-08) | [Original PR 255](https://github.com/javy-fernandez/dotcraft/pull/255) | [Pause evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-debugger-pause-resume-live/docs/implementation/shop-debugger-pause-resume.md) |
 
 ## Completion criteria
 

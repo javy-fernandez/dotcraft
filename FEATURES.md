@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 94 |
+| ✅ Verified | 95 |
 | 🚧 In progress | 47 |
-| 🟢 Existing | 13 |
+| 🟢 Existing | 12 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -346,7 +346,7 @@ Source / reuse boundary: `crates/rc-dap; crates/rc-app/src/debugger.rs`.
 | G-05 | Step into | ✅ | [PR 249](https://github.com/javy-fernandez/dotcraft/pull/249) records the existing real Shop.Cli debugger regression, rerun with .NET SDK 8.0.428/netcoredbg 3.2.0-1092 on Linux: DAP Step In moves from the DiscountFor call into that method at its opening brace. UI dispatch, async/framework code and other platforms remain untested. |
 | G-06 | Step out | ✅ | [PR 250](https://github.com/javy-fernandez/dotcraft/pull/250) records the same live Shop.Cli regression: DAP Step Out returns from DiscountFor to PriceCalculator.Calculate at the call line. UI dispatch, async methods, exception unwinding and other platforms remain untested. |
 | G-07 | Run to cursor | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
-| G-08 | Pause and resume | 🟢 | Resume is exercised live; explicit pause validation remains pending. |
+| G-08 | Pause and resume | ✅ | [PR 255](https://github.com/javy-fernandez/dotcraft/pull/255) verifies DAP Pause stops live Shop.Api with reason Pause, Continue restores HTTP 200 service, and Stop closes its listener with .NET SDK 8.0.428/netcoredbg 3.2.0-1092 on Linux. UI controls, multiple threads, pause during requests and other platforms remain untested. |
 | G-09 | Thread list | ✅ | [PR 252](https://github.com/javy-fernandez/dotcraft/pull/252) verifies the stopped Shop.Cli thread appears in DotCraft's DAP thread list with valid ID/name at a real breakpoint using .NET SDK 8.0.428/netcoredbg 3.2.0-1092 on Linux. Multiple threads, switching, UI rendering and other platforms remain untested. |
 | G-10 | Stack frames | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
 | G-11 | Variables tree | ✅ | Verified on .NET 8 Linux by the real CLI/API debugger regression; see docs/implementation/attach-debugger.md. |
