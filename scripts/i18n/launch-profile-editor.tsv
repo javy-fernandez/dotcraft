@@ -1,0 +1,18 @@
+# Launch profile editor. English fallback values are intentional until translations are added.
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Add profile	Add profile	Add profile	Add profile	Add profile	Add profile	Add profile	Add profile
+Application URLs	Application URLs	Application URLs	Application URLs	Application URLs	Application URLs	Application URLs	Application URLs
+Command	Command	Command	Command	Command	Command	Command	Command
+Delete profile	Delete profile	Delete profile	Delete profile	Delete profile	Delete profile	Delete profile	Delete profile
+Edit launch profiles	Edit launch profiles	Edit launch profiles	Edit launch profiles	Edit launch profiles	Edit launch profiles	Edit launch profiles	Edit launch profiles
+Edit launch profiles…	Edit launch profiles…	Edit launch profiles…	Edit launch profiles…	Edit launch profiles…	Edit launch profiles…	Edit launch profiles…	Edit launch profiles…
+Enter a command name	Enter a command name	Enter a command name	Enter a command name	Enter a command name	Enter a command name	Enter a command name	Enter a command name
+Enter a profile name	Enter a profile name	Enter a profile name	Enter a profile name	Enter a profile name	Enter a profile name	Enter a profile name	Enter a profile name
+Environment variable names must be unique and nonempty	Environment variable names must be unique and nonempty	Environment variable names must be unique and nonempty	Environment variable names must be unique and nonempty	Environment variable names must be unique and nonempty	Environment variable names must be unique and nonempty	Environment variable names must be unique and nonempty	Environment variable names must be unique and nonempty
+Executable path	Executable path	Executable path	Executable path	Executable path	Executable path	Executable path	Executable path
+Launch URL	Launch URL	Launch URL	Launch URL	Launch URL	Launch URL	Launch URL	Launch URL
+Launch browser	Launch browser	Launch browser	Launch browser	Launch browser	Launch browser	Launch browser	Launch browser
+Loading launch profiles…	Loading launch profiles…	Loading launch profiles…	Loading launch profiles…	Loading launch profiles…	Loading launch profiles…	Loading launch profiles…	Loading launch profiles…
+New profile	New profile	New profile	New profile	New profile	New profile	New profile	New profile
+Profile name	Profile name	Profile name	Profile name	Profile name	Profile name	Profile name	Profile name
+Use NAME=value for each environment variable	Use NAME=value for each environment variable	Use NAME=value for each environment variable	Use NAME=value for each environment variable	Use NAME=value for each environment variable	Use NAME=value for each environment variable	Use NAME=value for each environment variable	Use NAME=value for each environment variable
