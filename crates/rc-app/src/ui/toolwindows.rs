@@ -919,7 +919,7 @@ fn structure(app: &mut DotCraftApp, ui: &mut Ui) {
         empty_state(ui, ToolWindow::Structure.icon(), title, hint);
         return;
     };
-    let Some(tree) = app.insight.structure.get(&doc.editor.id).cloned() else {
+    let Some(tree) = app.insight.structure.get(&doc.editor.id).filter(|tree| !tree.is_empty()).cloned() else {
         let (title, hint) = empty_text(ToolWindow::Structure);
         empty_state(ui, ToolWindow::Structure.icon(), title, hint);
         return;
@@ -944,6 +944,65 @@ fn structure(app: &mut DotCraftApp, ui: &mut Ui) {
     {
         d.editor.goto(line, col);
         app.focus_editor = true;
+    }
+}
+
+#[cfg(test)]
+mod structure_window_tests {
+    use super::*;
+    use crate::insight::SymbolNode;
+    use egui_kittest::{Harness, kittest::Queryable};
+    use rc_lsp::lsp_types::SymbolKind;
+
+    #[test]
+    fn shop_order_structure_shows_empty_state_and_navigates_members() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let shop = crate::screens::fixtures().join("Shop");
+        let order = shop.join("src/Shop.Core/Order.cs");
+        let source = std::fs::read_to_string(&order).unwrap();
+        let line_of = |needle: &str| source.lines().position(|line| line.contains(needle)).unwrap();
+        let class_line = line_of("public sealed class Order");
+        let add_line = line_of("public Order Add(");
+        let sample_line = line_of("public static Order Sample(");
+
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&shop.join("Shop.sln"));
+        app.open_file(&order);
+        let doc_id = app.docs.active_doc().unwrap().editor.id;
+        app.insight.structure.insert(doc_id, Vec::new());
+
+        let mut first = true;
+        let mut harness = Harness::builder().with_size(vec2(500.0, 600.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            show(app, ui, ToolWindow::Structure);
+        }, app);
+        harness.run_steps(3);
+        harness.get_by_label(tr("No structure"));
+
+        harness.state_mut().insight.structure.insert(doc_id, vec![SymbolNode {
+            name: "Order".into(),
+            detail: String::new(),
+            kind: SymbolKind::CLASS,
+            line: class_line,
+            col: 0,
+            children: vec![
+                SymbolNode { name: "Add".into(), detail: String::new(), kind: SymbolKind::METHOD, line: add_line, col: 0, children: Vec::new() },
+                SymbolNode { name: "Sample".into(), detail: String::new(), kind: SymbolKind::METHOD, line: sample_line, col: 0, children: Vec::new() },
+            ],
+        }]);
+        harness.run_steps(2);
+        assert!(harness.query_by_label(tr("No structure")).is_none());
+        harness.get_by_label("Order");
+        harness.get_by_label("Sample");
+        harness.get_by_label("Add").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().docs.active_doc().unwrap().editor.caret_line_col().0, add_line);
+        assert!(harness.state().focus_editor);
     }
 }
 
@@ -1150,7 +1209,8 @@ pub fn empty_state_with(ui: &mut Ui, icon: Ico, title: &str, hint: &str, button:
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(r).layout(egui::Layout::top_down(egui::Align::Center)));
         clicked = theme::primary_button(&mut child, label).clicked();
     }
-    ui.allocate_rect(rect, Sense::hover());
+    ui.allocate_rect(rect, Sense::hover())
+        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title));
     clicked
 }
 
