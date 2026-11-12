@@ -158,13 +158,8 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         icons::image(&mut b, ico::WARNING, 16.0);
         b.label(tr("The file was changed on disk. Keep your version or load the one on disk?"));
         if b.button(tr("Load from Disk")).clicked() {
-            let path = app.docs.list[active].path.clone();
-            if let Ok((text, bom, mtime)) = crate::docs::read_text(&path) {
-                let d = &mut app.docs.list[active];
-                d.editor.reload(&text);
-                d.bom = bom;
-                d.mtime = mtime;
-                d.conflict = false;
+            if let Err(error) = app.docs.discard_and_reload(active) {
+                app.notify(error, true);
             }
         }
         if b.button(tr("Keep Mine")).clicked() {
