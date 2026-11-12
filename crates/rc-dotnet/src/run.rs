@@ -367,6 +367,25 @@ async fn run_watch(dotnet: &Dotnet, req: &RunRequest, cancel: &CancelToken, inpu
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    #[ignore = "requires a local .NET SDK for Shop MSBuild evaluation"]
+    async fn plans_the_real_shop_api_launch_profile_with_sdk() {
+        let dotnet = Dotnet::locate(None).expect("install a .NET SDK for this acceptance test");
+        let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/Shop/src/Shop.Api/Shop.Api.csproj");
+        let props = crate::msbuild::evaluate(&dotnet, &project, "Debug", None).await.unwrap();
+        let settings = LaunchSettings::load(&project).unwrap().unwrap();
+        let mut request = RunRequest::new(&project);
+        request.launch_profile = Some("http".into());
+        let plan = plan_launch(&dotnet, &request, &props, Some(&settings)).unwrap();
+        assert_eq!(plan.profile.as_deref(), Some("http"));
+        assert_eq!(plan.program, dotnet.path);
+        assert_eq!(plan.env_var("ASPNETCORE_ENVIRONMENT"), Some("Development"));
+        assert_eq!(plan.env_var("ASPNETCORE_URLS"), Some("http://localhost:5112"));
+        assert_eq!(plan.urls, ["http://localhost:5112"]);
+        assert_eq!(plan.browser_url.as_deref(), Some("http://localhost:5112/swagger"));
+        assert!(plan.working_dir.is_dir());
+    }
+
     fn props() -> ProjectProperties {
         ProjectProperties {
             target_framework: "net8.0".into(),
