@@ -9,6 +9,7 @@ pub mod index;
 pub mod mask;
 pub mod query;
 pub mod replace;
+pub mod structural;
 
 pub use files::{Boost, FileMatch, FileQuery, FileSearchRequest, FileSearchResults, FileSearchWorker, search_files};
 pub use find::{FileMatches, FindEvent, FindOptions, FindSummary, Finder, LineMatch, SearchHandle, find_in_files};

@@ -97,6 +97,7 @@ pub enum Action {
     GotoClass,
     FindInFiles,
     ReplaceInFiles,
+    StructuralSearch,
     RecentFiles,
     RecentLocations,
     NavigateBack,
@@ -184,6 +185,7 @@ impl Action {
                 | GotoClass
                 | FindInFiles
                 | ReplaceInFiles
+                | StructuralSearch
                 | RecentFiles
                 | RecentLocations
                 | NavigateBack

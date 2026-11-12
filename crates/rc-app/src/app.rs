@@ -154,6 +154,7 @@ pub struct DotCraftApp {
     pub search_everywhere: Option<crate::search::SearchEverywhere>,
     pub find_bar: Option<crate::search::FindBar>,
     pub find_in_files: Option<crate::search::FindInFiles>,
+    pub structural: crate::structural_search::StructuralSearch,
     pub terminals: rc_term::Terminals,
     pub focus_terminal: bool,
     /// Results shown in the Find tool window (usages, implementations…).
@@ -264,6 +265,7 @@ impl DotCraftApp {
             search_everywhere: None,
             find_bar: None,
             find_in_files: None,
+            structural: crate::structural_search::StructuralSearch::new(waker.clone()),
             terminals: rc_term::Terminals::new(),
             focus_terminal: false,
             find_results: None,
@@ -1190,6 +1192,9 @@ impl DotCraftApp {
                     self.find_results = None;
                     self.dock.show(ToolWindow::Find);
                 }
+            }
+            Action::StructuralSearch => {
+                self.structural.visible = true;
             }
             Action::ZoomIn => self.set_zoom(ctx, self.settings.ui_zoom + 0.1),
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),

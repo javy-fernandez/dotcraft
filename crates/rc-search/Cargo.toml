@@ -7,6 +7,8 @@ license.workspace = true
 [dependencies]
 dunce.workspace = true
 rc-core = { path = "../rc-core" }
+rc-syntax = { path = "../rc-syntax" }
+rc-text = { path = "../rc-text" }
 crossbeam-channel = "0.5"
 parking_lot = "0.12"
 ignore = "0.4.33"
