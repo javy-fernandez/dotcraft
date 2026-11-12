@@ -195,21 +195,29 @@ fn paint_code_vision(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m:
     let font = egui::FontId::monospace(config.font.size * 0.82);
     let painter = ui.painter_at(text_rect);
     let mut clicked = Vec::new();
-    let mut visions = std::collections::BTreeMap::<usize, Vec<crate::state::CodeVision>>::new();
+    let mut visions = std::collections::BTreeMap::<(usize, usize), Vec<crate::state::CodeVision>>::new();
     for vision in &state.code_vision {
-        visions.entry(vision.line).or_default().push(vision.clone());
+        visions.entry((vision.line, vision.position)).or_default().push(vision.clone());
     }
-    let visible_lines = vision_lines(state);
-    for (line, labels) in visions {
-        if visible_lines.binary_search(&line).is_err() {
+    let visible = vision_positions(state);
+    for ((line, position), labels) in visions {
+        if visible.binary_search(&(line, position)).is_err() {
             continue;
         }
-        let row = row_of_line(state, line);
-        let y = text_rect.top() + row.saturating_sub(1) as f32 * m.row_h - state.scroll.y;
+        let before = visible.partition_point(|&(other_line, other_position)| (other_line, other_position) < (line, position));
+        let row = source_row_of_line(state, line) + before;
+        let y = text_rect.top() + row as f32 * m.row_h - state.scroll.y;
         if y + m.row_h < text_rect.top() || y > text_rect.bottom() {
             continue;
         }
         let mut x = text_rect.left() + 6.0;
+        let (name_start, name_end) = commands::word_at(state.buffer.rope(), position);
+        if name_start < name_end {
+            let name = state.buffer.rope().slice(name_start..name_end).to_string();
+            let prefix = ui.fonts_mut(|fonts| fonts.layout_no_wrap(format!("{name}:"), font.clone(), pal.text));
+            painter.galley(pos2(x, y + (m.row_h - prefix.size().y) / 2.0), prefix.clone(), pal.text);
+            x += prefix.size().x + 10.0;
+        }
         for (index, vision) in labels.iter().enumerate() {
             let galley = ui.fonts_mut(|fonts| fonts.layout_no_wrap(vision.title.clone(), font.clone(), pal.muted));
             let available = text_rect.right() - 6.0 - x;
@@ -218,7 +226,7 @@ fn paint_code_vision(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m:
             }
             let width = (galley.size().x + 10.0).min(available);
             let rect = Rect::from_min_size(pos2(x, y + 1.0), vec2(width, m.row_h - 2.0));
-            let response = ui.interact(rect, Id::new(("code_vision", state.id, line, index)), Sense::click());
+            let response = ui.interact(rect, Id::new(("code_vision", state.id, line, position, index)), Sense::click());
             painter.rect_filled(rect, 3.0, if response.hovered() { pal.row_hover } else { pal.editor_bg });
             painter.galley(rect.min + vec2(5.0, (rect.height() - galley.size().y) / 2.0), galley, pal.muted);
             if response.hovered() {
@@ -260,7 +268,7 @@ pub(crate) fn metrics(ui: &Ui, state: &EditorState, config: &EditorConfig, rect:
 
 fn display_row_count(state: &mut EditorState) -> usize {
     let n = state.buffer.len_lines();
-    state.display_rows().map_or(n, |r| r.len()) + vision_lines(state).len()
+    state.display_rows().map_or(n, |r| r.len()) + vision_positions(state).len()
 }
 
 fn source_row_of_line(state: &mut EditorState, line: usize) -> usize {
@@ -273,21 +281,21 @@ fn source_row_of_line(state: &mut EditorState, line: usize) -> usize {
     }
 }
 
-fn vision_lines(state: &mut EditorState) -> Vec<usize> {
-    let mut lines = state.code_vision.iter().map(|vision| vision.line).collect::<Vec<_>>();
-    lines.sort_unstable();
-    lines.dedup();
-    lines.retain(|&line| line < state.buffer.len_lines() && {
+fn vision_positions(state: &mut EditorState) -> Vec<(usize, usize)> {
+    let mut positions = state.code_vision.iter().map(|vision| (vision.line, vision.position)).collect::<Vec<_>>();
+    positions.sort_unstable();
+    positions.dedup();
+    positions.retain(|&(line, _)| line < state.buffer.len_lines() && {
         let row = source_row_of_line(state, line);
         state.display_rows().is_none_or(|rows| rows.get(row) == Some(&line))
     });
-    lines
+    positions
 }
 
 /// Display row of buffer line `line` (the fold's first line when it is hidden).
 pub(crate) fn row_of_line(state: &mut EditorState, line: usize) -> usize {
     let source_row = source_row_of_line(state, line);
-    source_row + vision_lines(state).partition_point(|&vision_line| vision_line <= line)
+    source_row + vision_positions(state).partition_point(|&(vision_line, _)| vision_line <= line)
 }
 
 pub(crate) fn line_of_row(state: &mut EditorState, row: usize) -> usize {
@@ -310,7 +318,7 @@ pub(crate) fn line_of_row(state: &mut EditorState, row: usize) -> usize {
 
 fn is_vision_row(state: &mut EditorState, row: usize) -> bool {
     let line = line_of_row(state, row);
-    row_of_line(state, line) == row + 1
+    row < row_of_line(state, line)
 }
 
 #[cfg(test)]
@@ -334,6 +342,23 @@ mod code_vision_layout_tests {
         assert!(is_vision_row(&mut state, 0));
         assert!(is_vision_row(&mut state, 2));
         assert!(!is_vision_row(&mut state, 3));
+    }
+
+    #[test]
+    fn declarations_on_one_line_get_separate_label_rows() {
+        let mut state = EditorState::new(1, Some("A.cs".into()), "interface I { void M(); }\n");
+        state.code_vision = vec![
+            CodeVision { line: 0, position: 10, title: "2 references".into(), kind: CodeVisionKind::Usages },
+            CodeVision { line: 0, position: 10, title: "1 implementation".into(), kind: CodeVisionKind::Implementations },
+            CodeVision { line: 0, position: 19, title: "3 references".into(), kind: CodeVisionKind::Usages },
+        ];
+        assert_eq!(display_row_count(&mut state), 4);
+        assert_eq!(row_of_line(&mut state, 0), 2);
+        assert_eq!(line_of_row(&mut state, 0), 0);
+        assert_eq!(line_of_row(&mut state, 1), 0);
+        assert!(is_vision_row(&mut state, 0));
+        assert!(is_vision_row(&mut state, 1));
+        assert!(!is_vision_row(&mut state, 2));
     }
 }
 
