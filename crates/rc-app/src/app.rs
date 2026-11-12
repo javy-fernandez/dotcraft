@@ -106,6 +106,7 @@ pub struct DotCraftApp {
     /// Whether the window was already full screen when a full-screen focus mode began.
     pub fullscreen_before_focus: bool,
     pub explorer: ExplorerState,
+    pub dependency_diagram: crate::dependency_diagram::DependencyDiagram,
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
     /// Monitoring: CPU and memory of the program in the selected Run tab.
@@ -232,6 +233,7 @@ impl DotCraftApp {
             focus_mode: FocusMode::Normal,
             fullscreen_before_focus: false,
             explorer: ExplorerState::default(),
+            dependency_diagram: crate::dependency_diagram::DependencyDiagram::new(waker.clone()),
             dialog: None,
             notices: Vec::new(),
             monitor: crate::monitor::Monitor::new(waker.clone()),
@@ -412,7 +414,9 @@ impl DotCraftApp {
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         let root = ws.root.clone();
         self.workspace = Some(WorkspaceState { ws, solution });
-        self.packages.set_workspace(&root, self.solution_projects());
+        let workspace_projects = self.solution_projects();
+        self.dependency_diagram.request(workspace_projects.clone());
+        self.packages.set_workspace(&root, workspace_projects);
         self.appsettings.set_workspace(&root);
         self.refresh_endpoints();
         self.restore_session(session);
@@ -545,6 +549,7 @@ impl DotCraftApp {
             self.save_session();
         }
         self.workspace = None;
+        self.dependency_diagram.request(Vec::new());
         self.editor_workflows = Default::default();
         self.endpoints = crate::web::Endpoints::new();
         self._watcher = None;
