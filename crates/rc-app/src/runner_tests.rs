@@ -133,3 +133,34 @@ fn a_new_solution_starts_with_the_last_layout() {
     assert_eq!(app.dock.side_of(crate::toolwindow::ToolWindow::Explorer), crate::toolwindow::Side::Right);
     assert_eq!(app.dock.right, Some(crate::toolwindow::ToolWindow::Explorer));
 }
+
+#[test]
+#[ignore = "requires a local .NET SDK and restored Shop fixture packages"]
+fn shop_test_output_streams_into_the_tests_console() {
+    use egui_kittest::kittest::Queryable;
+
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    let target = app.workspace.as_ref().unwrap().ws.key_path().to_path_buf();
+    let outputs = app.runner.run_tests(&target, None);
+    crate::ui::run_windows::handle_outputs(&mut app, outputs);
+    pump(&mut app, "Shop test output", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let tests = app.runner.tests.as_ref().unwrap();
+    assert_eq!(tests.failed, 0, "{:?}", tests.failure);
+    let output = tests.console.term.screen_lines().join("\n");
+    assert!(output.contains("Test Run Successful."), "{output}");
+    assert!(output.contains("Tests passed: 13"), "{output}");
+    assert!(output.contains("Shop.Core.XunitTests"), "{output}");
+    assert!(output.contains("Shop.Core.NunitTests"), "{output}");
+    assert!(output.contains("Shop.Core.MSTests"), "{output}");
+    app.dock.show(crate::toolwindow::ToolWindow::Tests);
+    let harness = crate::screens::harness(app, egui::vec2(1400.0, 900.0));
+    harness.get_by_label("PriceBreakdownTests");
+    assert!(harness.state().runner.tests.as_ref().unwrap().selected.is_none());
+    assert!(harness.state().runner.tests.as_ref().unwrap().console.term.screen_lines().join("\n").contains("Test Run Successful."));
+}
