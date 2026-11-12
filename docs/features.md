@@ -358,6 +358,7 @@ additional scope is pending.
 | Shop.Api application monitoring charts (H-24) | [Original PR 261](https://github.com/javy-fernandez/dotcraft/pull/261) | [Monitoring evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-monitoring-live/docs/implementation/shop-monitoring-linux.md) |
 | Shop.Api launch settings plan (B-11) | [Original PR 262](https://github.com/javy-fernandez/dotcraft/pull/262) | [Plan evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-launch-settings-plan-live/docs/implementation/shop-launch-settings-plan.md) |
 | Shop.Api memory snapshot in native app (H-22) | [Original PR 263](https://github.com/javy-fernandez/dotcraft/pull/263) | [Memory evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-memory-snapshot-live/docs/implementation/memory-snapshot-linux.md) |
+| Shop.Api HTTP client live request (J-05) | [Original PR 264](https://github.com/javy-fernandez/dotcraft/pull/264) | [HTTP evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-http-client-live/docs/implementation/shop-http-client-linux.md) |
 
 ## Completion criteria
 
