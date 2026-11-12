@@ -306,6 +306,34 @@ impl Dock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn explorer_dock_toggles_and_moves_with_shop_solution_open() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let solution = crate::screens::fixtures().join("Shop/Shop.sln");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState {
+            ws: rc_core::Workspace::open(&solution).unwrap(),
+            solution: Some(rc_dotnet::Solution::load(&solution).unwrap()),
+        });
+        let mut harness = crate::screens::harness(app, egui::vec2(1100.0, 700.0));
+        assert!(harness.state().dock.is_open(ToolWindow::Explorer));
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, ToolWindow::Explorer.title()).click();
+        harness.run_steps(2);
+        assert!(!harness.state().dock.is_open(ToolWindow::Explorer));
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, ToolWindow::Explorer.title()).click();
+        harness.run_steps(2);
+        assert!(harness.state().dock.is_open(ToolWindow::Explorer));
+        harness.state_mut().dock.move_to(ToolWindow::Explorer, Side::Right);
+        harness.run_steps(2);
+        assert_eq!(harness.state().dock.right, Some(ToolWindow::Explorer));
+        assert_eq!(harness.state().dock.left, None);
+        let restored = Dock::from_session(&harness.state().dock.to_session());
+        assert_eq!(restored.side_of(ToolWindow::Explorer), Side::Right);
+        assert!(restored.is_open(ToolWindow::Explorer));
+    }
 
     #[test]
     fn merged_tools_keep_distinct_session_identities() {
