@@ -3,7 +3,7 @@
 DotCraft recognizes source locations printed by .NET stack traces, including
 `at Namespace.Type.Method() in /repo/Program.cs:line 42` and Windows paths.
 The file and location become one terminal link. Ctrl+click (Cmd+click on macOS) uses the
-existing run, test-console, and terminal navigation path to open the source at
+existing Build, Run, and Terminal navigation path to open the source at
 the reported line. URL and existing compiler-style file links remain available.
 
 ## Validation
