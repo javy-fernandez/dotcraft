@@ -272,6 +272,26 @@ fn scroll_caret_into_view(state: &mut EditorState, m: &Metrics, text_rect: Rect)
 /// Lays out buffer line `line` with its decorations.
 pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &EditorConfig, scheme: &Scheme, line: usize, spans: &[rc_syntax::Span]) -> LineLayout {
     let rope = state.buffer.rope();
+    let line_len = rc_text::buffer::line_len(rope, line);
+    // Keep one pathological line from creating a multi-megabyte galley every frame.
+    // The window follows horizontal scroll and the caret; the buffer remains intact.
+    const MAX_LAYOUT_CHARS: usize = 4096;
+    if line_len > MAX_LAYOUT_CHARS {
+        let line_start = rope.line_to_char(line);
+        let char_width = (config.font.size * 0.6).max(1.0);
+        let mut first = ((state.scroll.x / char_width) as usize).min(line_len - MAX_LAYOUT_CHARS);
+        let caret = state.caret();
+        if line_start <= caret && caret <= line_start + line_len {
+            let col = caret - line_start;
+            if col < first || col >= first + MAX_LAYOUT_CHARS {
+                first = col.saturating_sub(MAX_LAYOUT_CHARS / 2).min(line_len - MAX_LAYOUT_CHARS);
+            }
+        }
+        let text = rope.slice(line_start + first..line_start + first + MAX_LAYOUT_CHARS).to_string();
+        let input = LineInput { text: &text, spans: &[], dimmed: &[], virtuals: &[], suffix: None, tab_width: state.indent.tab_width };
+        return layout_line(&input, scheme, &config.font, |job| ui.painter().layout_job(job))
+            .with_window(first, line_len, first as f32 * char_width);
+    }
     let text = state.buffer.line_text(line);
     let line_start = rope.line_to_char(line);
     let line_end = line_start + text.chars().count();
@@ -462,7 +482,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
     // Text and virtual-text boxes.
     for (i, lay) in layouts.iter().enumerate() {
         let y = y_of_row(first_row + i);
-        let origin = pos2(x0, y + m.text_dy);
+        let origin = pos2(x0 + lay.origin_x(), y + m.text_dy);
         for (r, kind) in &lay.virtuals {
             let xa = lay.galley.pos_from_cursor(egui::text::CCursor::new(r.start)).min.x;
             let xb = lay.galley.pos_from_cursor(egui::text::CCursor::new(r.end)).min.x;
@@ -1706,5 +1726,30 @@ mod csharp_case_indent_tests {
             let caret = Selection::point(rope.len_chars());
             assert!(csharp_case_newline(&rope, &caret, &indent).is_none(), "{line}");
         }
+    }
+}
+
+#[cfg(test)]
+mod large_line_tests {
+    use super::*;
+
+    #[test]
+    fn long_line_keeps_a_bounded_galley_near_the_caret() {
+        let source = "x".repeat(100_000);
+        let mut state = EditorState::new(1, Some("large.cs".into()), &source);
+        state.selection = Selection::point(50_000);
+        state.scroll.x = 50_000.0 * 7.8;
+        let context = egui::Context::default();
+        let mut result = None;
+        let mut output = context.run_ui(Default::default(), |ui| {
+            let layout = layout_buffer_line(ui, &mut state, &EditorConfig::default(), &rc_kit::theme::SCHEME_DARK, 0, &[]);
+            assert_eq!(layout.len, 100_000);
+            assert_eq!(layout.galley.text().chars().count(), 4096);
+            let caret_x = layout.x_of_col(50_000);
+            result = Some(layout.col_at_x(caret_x));
+        });
+        output.textures_delta.clear();
+        assert_eq!(result, Some(50_000));
+        assert_eq!(state.buffer.rope().to_string(), source);
     }
 }

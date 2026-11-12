@@ -42,6 +42,10 @@ pub struct LineLayout {
     pub galley: Arc<Galley>,
     /// Galley char index of each buffer column (`len + 1` entries).
     col_to_char: Vec<usize>,
+    /// First buffer column represented by this galley.
+    window_start: usize,
+    /// Horizontal position of the first represented column in buffer coordinates.
+    origin_x: f32,
     /// Buffer columns of the line (without the fold suffix).
     pub len: usize,
     /// Galley char ranges of virtual text (hints, placeholders), for painting boxes.
@@ -52,28 +56,38 @@ pub struct LineLayout {
 }
 
 impl LineLayout {
+    /// Places a bounded layout at its corresponding buffer columns.
+    pub(crate) fn with_window(mut self, start: usize, full_len: usize, origin_x: f32) -> Self {
+        self.window_start = start;
+        self.len = full_len;
+        self.origin_x = origin_x;
+        self
+    }
+
+    pub(crate) fn origin_x(&self) -> f32 { self.origin_x }
+
     pub fn char_of_col(&self, col: usize) -> usize {
-        self.col_to_char.get(col).copied().unwrap_or_else(|| *self.col_to_char.last().unwrap_or(&0))
+        self.col_to_char.get(col.saturating_sub(self.window_start)).copied().unwrap_or_else(|| *self.col_to_char.last().unwrap_or(&0))
     }
 
     /// X offset of buffer column `col` from the line's left edge.
     pub fn x_of_col(&self, col: usize) -> f32 {
-        self.galley.pos_from_cursor(CCursor::new(self.char_of_col(col))).min.x
+        self.origin_x + self.galley.pos_from_cursor(CCursor::new(self.char_of_col(col))).min.x
     }
 
     /// Buffer column nearest to x (virtual text snaps to its edges).
     pub fn col_at_x(&self, x: f32) -> usize {
-        let c = self.galley.cursor_from_pos(egui::vec2(x, self.galley.rect.center().y)).index.0;
+        let c = self.galley.cursor_from_pos(egui::vec2(x - self.origin_x, self.galley.rect.center().y)).index.0;
         match self.col_to_char.binary_search(&c) {
-            Ok(col) => col,
+            Ok(col) => self.window_start + col,
             Err(col) => {
                 // Inside virtual text: pick the nearer edge.
-                let col = col.min(self.len);
+                let col = col.min(self.col_to_char.len() - 1);
                 if col == 0 {
-                    return 0;
+                    return self.window_start;
                 }
                 let (a, b) = (self.col_to_char[col - 1], self.col_to_char[col]);
-                if c.saturating_sub(a) <= b.saturating_sub(c) { col - 1 } else { col }
+                self.window_start + if c.saturating_sub(a) <= b.saturating_sub(c) { col - 1 } else { col }
             }
         }
     }
@@ -293,7 +307,7 @@ pub fn layout_line(input: &LineInput, scheme: &Scheme, font: &EditorFont, layout
         job.sections.push(LayoutSection { leading_space: 0.0, byte_range: br(0, 0), format: format_for(Hl::Plain, scheme, size) });
     }
     let galley = layout(job);
-    LineLayout { galley, col_to_char, len, virtuals, suffix_start }
+    LineLayout { galley, col_to_char, window_start: 0, origin_x: 0.0, len, virtuals, suffix_start }
 }
 
 /// Placeholder of a collapsed fold.
