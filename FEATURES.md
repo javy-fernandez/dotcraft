@@ -25,8 +25,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 104 |
-| 🚧 In progress | 45 |
+| ✅ Verified | 105 |
+| 🚧 In progress | 44 |
 | 🟢 Existing | 5 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
@@ -463,7 +463,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-03 | JSON syntax parsing | ✅ | [PR 240](https://github.com/javy-fernandez/dotcraft/pull/240) verifies Shop.Api appsettings JSON parse trees, key/value paint in both built-in EditorView themes, and typed edit/reparse on Linux; it removes duplicate key captures. JSON Schema, formatting, JSONC and custom themes remain untested. |
 | J-04 | Markdown preview | ✅ | [PR 248](https://github.com/javy-fernandez/dotcraft/pull/248) verifies a rendered Markdown heading and Split/Preview Only/Editor Only mode switching in the native egui app inside real Shop.sln on Linux. Live edit synchronization, links, images, long documents, custom themes and other platforms remain untested. |
 | J-05 | HTTP client | ✅ | PRs 13 and 15 verify basic execution, cancellation and inline variables; [PR 264](https://github.com/javy-fernandez/dotcraft/pull/264) reruns real Shop.Api with SDK 8.0.428 on Linux and verifies a variable-based `.http` GET from the editor gutter, HTTP 200 JSON response and native response pane. Authentication, cookies, redirects, streaming/upload flows and other platforms remain untested. |
-| J-06 | HTTP environment variables | 🚧 | Inline variables were tested in fork PR 15. [PR 195](https://github.com/javy-fernandez/dotcraft/pull/195) combines parent public and child private/user files with documented precedence; real `Shop.Api.http`/`Shop.sln` integration and 132 rc-dotnet unit tests pass. Environment UI, dynamic values and live requests remain. |
+| J-06 | HTTP environment variables | ✅ | PR 15 verifies inline variables; [PR 195](https://github.com/javy-fernandez/dotcraft/pull/195) verifies public/private/user precedence; [PR 265](https://github.com/javy-fernandez/dotcraft/pull/265) selects a public `dev` environment in native egui and sends a resolved variable-based request to live Shop.Api with SDK 8.0.428 on Linux, receiving HTTP 200 JSON. Secret handling, dynamic values, active-request switching and other platforms remain untested. |
 | J-07 | Database connections and SQL console | 🚧 | PR 16 verifies read-only SQLite connections and explicit bounded SQL; writes, persistent sessions and other engines remain pending. |
 | J-08 | SQL injection support | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | J-09 | ASP.NET endpoints explorer | 🚧 | [PR 184](https://github.com/javy-fernandez/dotcraft/pull/184) excludes nested C#, F#, and VB projects from endpoint scan; Shop.Api still yields four endpoints and 12 rc-dotnet tests pass. Endpoints UI and live server acceptance remain. |
