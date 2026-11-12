@@ -1873,6 +1873,7 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
         font: rc_editor::layout::EditorFont { size: s.editor_font_size.clamp(8.0, 32.0), line_spacing: s.editor_line_spacing.clamp(1.0, 2.0) },
         show_indent_guides: s.show_indent_guides,
         show_inlays: s.show_inlay_hints,
+        show_debug_inline_values: s.show_debug_inline_values,
         right_margin: (s.right_margin > 0).then_some(s.right_margin),
         ..EditorConfig::default()
     }

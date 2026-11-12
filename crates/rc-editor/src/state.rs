@@ -39,6 +39,14 @@ pub struct InlayHint {
     pub pad_right: bool,
 }
 
+/// A debugger value painted after a source line without changing its text layout.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InlineDebugValue {
+    pub name: String,
+    pub value: String,
+    pub changed: bool,
+}
+
 /// Coverage of a line (gutter bar while coverage is shown).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoverageMark {
@@ -142,6 +150,7 @@ pub struct EditorState {
     // --- decorations
     pub diagnostics: Vec<Diagnostic>,
     pub inlays: Vec<InlayHint>,
+    pub debug_inline_values: BTreeMap<usize, Vec<InlineDebugValue>>,
     /// Semantic colours per line (from the language server), char columns.
     pub semantic: Vec<Vec<Span>>,
     pub breakpoints: BTreeMap<usize, BreakpointKind>,
@@ -209,6 +218,7 @@ impl EditorState {
             select_stack: Vec::new(),
             diagnostics: Vec::new(),
             inlays: Vec::new(),
+            debug_inline_values: BTreeMap::new(),
             semantic: Vec::new(),
             breakpoints: BTreeMap::new(),
             bookmarks: BTreeMap::new(),

@@ -7,7 +7,7 @@ use crate::runner::{ConfigKind, RunConfig};
 use rc_core::{Inbox, Waker};
 use rc_dap::{BreakpointSpec, Breakpoints, DebugEvent, DebugOptions, DebugSession, DebugTarget, DownloadEvent, EvalContext, EvalValue, OutputCategory, SessionState};
 use rc_kit::i18n::{tr, trf};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 /// What the debugger asks the rest of the UI to do.
@@ -52,6 +52,9 @@ pub struct Debugger {
     pub urls: Vec<String>,
     /// Extra environment for the debugged program (tests pick free ports with it).
     pub env: Vec<(String, String)>,
+    /// Values from the last two stops, used to highlight changes in source.
+    previous_inline: HashMap<(PathBuf, String), String>,
+    current_inline: HashMap<(PathBuf, String), String>,
 }
 
 impl Debugger {
@@ -75,6 +78,8 @@ impl Debugger {
             temp: None,
             urls: Vec::new(),
             env: Vec::new(),
+            previous_inline: HashMap::new(),
+            current_inline: HashMap::new(),
         }
     }
 
@@ -108,6 +113,8 @@ impl Debugger {
             return vec![DebugOutput::Notify(tr("Choose an application run configuration to debug").into(), false)];
         };
         self.pending = None;
+        self.previous_inline.clear();
+        self.current_inline.clear();
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -156,6 +163,8 @@ impl Debugger {
             return vec![DebugOutput::Notify(tr("Downloading the netcoredbg debugger (first use)…").into(), false)];
         };
         self.pending = None;
+        self.previous_inline.clear();
+        self.current_inline.clear();
         self.urls.clear();
         self.expanded.clear();
         self.eval = None;
@@ -177,6 +186,8 @@ impl Debugger {
 
     pub fn stop(&mut self) {
         self.pending = None;
+        self.previous_inline.clear();
+        self.current_inline.clear();
         if let Some(download) = self.download.take() {
             download.cancel();
         }
@@ -308,6 +319,7 @@ impl Debugger {
                     }
                 }
                 DebugEvent::Stopped(info) => {
+                    self.previous_inline = std::mem::take(&mut self.current_inline);
                     if let Some((p, l)) = &temp {
                         let user = docs.list.iter().any(|d| d.path == *p && d.editor.breakpoints.contains_key(&(*l as usize - 1)));
                         if !user {
@@ -372,10 +384,44 @@ impl Debugger {
                 _ => {}
             }
         }
+        let inline_variables = if session.state().is_stopped() {
+            session.selected_frame().map(|frame| frame.id).and_then(|frame_id| {
+                session.request_scopes(frame_id);
+                let references: Vec<i64> = session.scopes(frame_id)?.iter()
+                    .filter(|scope| {
+                        let name = scope.name.to_ascii_lowercase();
+                        name.contains("local") || name.contains("argument") || name.contains("parameter")
+                    })
+                    .map(|scope| scope.variables_reference)
+                    .filter(|reference| *reference > 0)
+                    .collect();
+                for reference in &references {
+                    session.request_variables(*reference);
+                }
+                Some(references.into_iter().filter_map(|reference| session.variables(reference)).flatten().cloned().collect::<Vec<_>>())
+            })
+        } else {
+            None
+        };
         // Execution point and breakpoint state in the editors.
         let exec = if session.state().is_stopped() { session.execution_point() } else { None };
         for d in &mut docs.list {
             d.editor.execution_line = exec.as_ref().filter(|(p, _)| *p == d.path).map(|(_, l)| l.saturating_sub(1) as usize);
+            d.editor.debug_inline_values.clear();
+            if let (Some((path, line)), Some(variables)) = (&exec, &inline_variables)
+                && path == &d.path
+            {
+                let stop_line = line.saturating_sub(1) as usize;
+                let rope = d.editor.buffer.rope();
+                let end = stop_line.min(rope.len_lines().saturating_sub(1));
+                let source: Vec<_> = (end.saturating_sub(24)..=end)
+                    .map(|index| (index, rope.line(index).to_string()))
+                    .collect();
+                d.editor.debug_inline_values = inline_values_for_lines(&source, variables, path, &self.previous_inline);
+                for variable in variables {
+                    self.current_inline.insert((path.clone(), variable.name.clone()), variable.value.clone());
+                }
+            }
             for st in session.breakpoints().in_file(&d.path) {
                 let line = st.spec.line.saturating_sub(1) as usize;
                 if temp.as_ref().is_some_and(|(p, l)| *p == d.path && *l == st.spec.line) && !d.editor.breakpoints.contains_key(&line) {
@@ -429,6 +475,38 @@ impl Debugger {
 
 /// The expression under `pos` for hover values: the identifier with its member-access chain
 /// (`order.Customer`), without calls.
+fn inline_values_for_lines(
+    lines: &[(usize, String)],
+    variables: &[rc_dap::Variable],
+    path: &Path,
+    previous: &HashMap<(PathBuf, String), String>,
+) -> BTreeMap<usize, Vec<rc_editor::InlineDebugValue>> {
+    let mut result = BTreeMap::<usize, Vec<rc_editor::InlineDebugValue>>::new();
+    for variable in variables.iter().take(40) {
+        let name = variable.name.as_str();
+        if name.is_empty() || !name.chars().all(|ch| ch == '_' || ch.is_alphanumeric()) {
+            continue;
+        }
+        let Some((line, _)) = lines.iter().rev().find(|(_, text)| contains_identifier(text, name)) else { continue };
+        let entry = result.entry(*line).or_default();
+        if entry.len() >= 3 { continue; }
+        let value = variable.value.replace(['\n', '\r'], " ");
+        let value = if value.chars().count() > 60 { format!("{}…", value.chars().take(59).collect::<String>()) } else { value };
+        let changed = previous.get(&(path.to_path_buf(), variable.name.clone())).is_some_and(|old| old != &variable.value);
+        entry.push(rc_editor::InlineDebugValue { name: variable.name.clone(), value, changed });
+    }
+    result
+}
+
+fn contains_identifier(line: &str, name: &str) -> bool {
+    line.match_indices(name).any(|(at, _)| {
+        let before = line[..at].chars().next_back();
+        let after = line[at + name.len()..].chars().next();
+        let boundary = |ch: Option<char>| ch.is_none_or(|ch| ch != '_' && !ch.is_alphanumeric());
+        boundary(before) && boundary(after)
+    })
+}
+
 pub fn expression_at(rope: &rc_text::Rope, pos: usize) -> String {
     let (s, e) = rc_text::commands::word_at(rope, pos);
     if s == e {
@@ -448,6 +526,24 @@ pub fn expression_at(rope: &rc_text::Rope, pos: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inline_values_follow_identifier_boundaries_and_mark_changes() {
+        let path = Path::new("/work/Program.cs");
+        let lines = vec![
+            (4, "var total = 1;".to_string()),
+            (5, "var subtotal = total + 2;".to_string()),
+        ];
+        let variables = vec![
+            rc_dap::Variable { name: "total".into(), value: "3".into(), ..Default::default() },
+            rc_dap::Variable { name: "other".into(), value: "4".into(), ..Default::default() },
+        ];
+        let previous = HashMap::from([((path.to_path_buf(), "total".into()), "1".into())]);
+        let result = inline_values_for_lines(&lines, &variables, path, &previous);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[&5][0], rc_editor::InlineDebugValue { name: "total".into(), value: "3".into(), changed: true });
+        assert!(!contains_identifier("subtotal", "total"));
+    }
 
     #[test]
     fn closing_workspace_cancels_deferred_attach_and_discards_download_events() {
