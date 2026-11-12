@@ -61,6 +61,7 @@ pub struct DotCraftApp {
     pub settings: Settings,
     pub keymap: Keymap,
     pub editor_config: EditorConfig,
+    pub presentation_mode: bool,
     pub workspace: Option<WorkspaceState>,
     pub docs: Docs,
     pub editor_workflows: crate::ui::editor_workflows::EditorWorkflows,
@@ -182,6 +183,7 @@ impl DotCraftApp {
         DotCraftApp {
             keymap,
             editor_config,
+            presentation_mode: false,
             workspace: None,
             docs: {
                 let mut d = Docs::with_waker(pool, waker.clone());
@@ -1422,6 +1424,9 @@ impl DotCraftApp {
         let keymap_changed = new.keymap != self.settings.keymap;
         self.settings = new;
         self.editor_config = editor_config(&self.settings);
+        if self.presentation_mode {
+            self.editor_config.font.size = presentation_font_size(self.settings.editor_font_size);
+        }
         if keymap_changed {
             self.keymap = Keymap::new(keymap_kind(self.settings.keymap));
             if self.native_menu.is_some() {
@@ -1438,6 +1443,19 @@ impl DotCraftApp {
             self.notify(trf("Could not save the settings: {error}", &[("error", &e)]), true);
         }
         self.applied_dark = None;
+        ctx.request_repaint();
+    }
+
+    /// Enlarges the editor and gives it the full work area while preserving the dock layout.
+    pub fn toggle_presentation_mode(&mut self, ctx: &Context) {
+        self.presentation_mode = !self.presentation_mode;
+        self.editor_config.font.size = if self.presentation_mode {
+            presentation_font_size(self.settings.editor_font_size)
+        } else {
+            editor_config(&self.settings).font.size
+        };
+        self.focus_editor = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.presentation_mode));
         ctx.request_repaint();
     }
 
@@ -1804,6 +1822,10 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
         right_margin: (s.right_margin > 0).then_some(s.right_margin),
         ..EditorConfig::default()
     }
+}
+
+fn presentation_font_size(configured: f32) -> f32 {
+    (configured * 1.5).max(24.0).min(40.0)
 }
 
 /// The configured `dotnet`, or the default install location, or `dotnet` from PATH.

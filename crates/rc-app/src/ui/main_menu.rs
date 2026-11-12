@@ -145,6 +145,8 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
             app.focus_mode = app.focus_mode.toggle(FocusMode::Zen);
             app.focus_editor = true;
         }
+        let label = if app.presentation_mode { tr("Exit Presentation Mode") } else { tr("Presentation Mode") };
+        if command(ui, label, None, app.workspace.is_some() || app.presentation_mode) { app.toggle_presentation_mode(ui.ctx()); }
         if theme::menu_entry(ui, None, tr("Tool Windows"), Some("›"), false, true).clicked() { *page = Page::ToolWindows; }
     }
     if category == tr("File") {

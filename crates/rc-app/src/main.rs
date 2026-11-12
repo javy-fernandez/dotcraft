@@ -54,6 +54,8 @@ mod file_template_acceptance_tests;
 #[cfg(test)]
 mod run_config_acceptance_tests;
 #[cfg(test)]
+mod presentation_acceptance_tests;
+#[cfg(test)]
 mod screens;
 #[cfg(test)]
 mod standalone_project_tests;

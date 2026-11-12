@@ -74,7 +74,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     }
     // Files on their own (no workspace): only the editor, like Rider's LightEdit.
     let light = app.workspace.is_none();
-    let margin = if light {
+    let margin = if light || app.presentation_mode {
         Margin { left: 6, right: 6, top: 0, bottom: 0 }
     } else if app.focus_mode == FocusMode::Normal {
         tool_windows(app, ui, &p, bar)
