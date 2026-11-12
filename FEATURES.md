@@ -26,9 +26,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 33 |
-| 🚧 In progress | 14 |
+| 🚧 In progress | 15 |
 | 🟢 Existing | 81 |
-| 🔁 Reuse candidate | 27 |
+| 🔁 Reuse candidate | 26 |
 | ⬜ Backlog | 218 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
@@ -79,6 +79,16 @@ source solution root; the filter remains its session identity and command target
 [Solution-filter evidence](docs/implementation/solution-filters.md) records commands and
 remaining filter-specific Roslyn, test-execution, dependency-closure, and platform checks.
 B-14 remains 🚧 for that broader scope.
+
+The current-upstream follow-up accepts `.slnf` in test-project selection and checks
+that only selected test projects are returned. Actual .NET test execution with a
+filter remains unvalidated; this does not change B-14's partial status.
+
+L-05: the Terminal tool window searches the newest 4,000 retained lines on a
+cancellable worker, highlights at most 1,000 matches, and navigates to offscreen
+results. `rc-term` unit and session tests cover search behavior; the desktop app
+compiles with the search controls. Split terminal panes remain unimplemented, so
+L-05 remains 🚧. See [terminal search evidence](docs/implementation/terminal-search.md).
 
 
 ## Current delivery evidence
@@ -153,7 +163,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-11 | Launch settings profiles | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-12 | NuGet search | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-13 | NuGet installation and removal | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| B-14 | JSON .slnf solution filters | 🚧 | PR 2 verifies parser, explorer, external-filter lifecycle and SDK build context; filter-specific Roslyn and test execution remain pending. |
+| B-14 | JSON .slnf solution filters | 🚧 | Parser, explorer, SDK build and test-project selection are verified; filter-specific Roslyn and actual test execution remain pending. |
 | B-15 | Interactive filter creation and editing | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-16 | Unload and reload individual projects | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-17 | Project references editor | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -529,7 +539,7 @@ Source / reuse boundary: `crates/rc-term; crates/rc-core; CrabCraft shared modul
 | L-02 | Persistent workspace sessions | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | L-03 | File system watching | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | L-04 | Background task runtime | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| L-05 | Terminal search and split panes | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| L-05 | Terminal search and split panes | 🚧 | Bounded, cancellable terminal search is tested; split panes and cross-platform UI validation remain pending. |
 | L-06 | Terminal completion | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | L-07 | Remote SSH workflows | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | L-08 | WSL workspace workflows | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |

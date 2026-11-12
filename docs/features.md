@@ -211,12 +211,14 @@ additional scope is pending.
 | Slice | Delivery | Evidence |
 | --- | --- | --- |
 | Solution-filter loading and SDK build context | Original merge `a0f31fb`; [fork PR 2](https://github.com/RafaelMendes1407/dotcraft/pull/2) | [Solution filters](implementation/solution-filters.md) |
+| Filtered test-project selection | [Source branch for upstream PR](https://github.com/RafaelMendes1407/dotcraft/tree/feat/slnf-test-selection-upstream-pr) | [Solution filters](implementation/solution-filters.md) |
 | Live .NET build, run, test, and Roslyn checks | Original merge `a0f31fb` | [Live .NET validation](implementation/live-dotnet.md) |
 | Debugger attachment | Original merge `a0f31fb` | [Attach debugger](implementation/attach-debugger.md) |
 | EditorConfig indentation | Original merge `a0f31fb` | [EditorConfig](implementation/editorconfig.md) |
 | Installed SDK selection | Original merge `a0f31fb` | [SDK selection](implementation/sdk-selection.md) |
 | Responsive settings and compact menu | Original merge `a0f31fb` | [Settings](implementation/responsive-settings.md), [menu](implementation/scrollable-menu.md) |
 | Read-only SQLite browsing | Original merge `a0f31fb` | [SQLite](implementation/sqlite-browser.md) |
+| Terminal scrollback search | [Source branch for upstream PR](https://github.com/RafaelMendes1407/dotcraft/tree/feat/terminal-search-upstream-pr) | [Terminal search](implementation/terminal-search.md) |
 
 ## Completion criteria
 
