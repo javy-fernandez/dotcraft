@@ -2,10 +2,10 @@
 
 ## Behavior
 
-When a workspace is open, the title bar draws a soft color wash behind the
-project widget. The color follows the existing project badge selection and
-fades toward the run controls. The no-workspace title bar keeps its current
-appearance.
+The title bar draws a soft color wash behind the project widget. Its color
+follows the existing project badge selection and fades toward the run
+controls. The welcome screen uses the DotCraft name as a stable fallback, so
+the effect remains visible before a workspace is opened.
 
 ## Provenance
 

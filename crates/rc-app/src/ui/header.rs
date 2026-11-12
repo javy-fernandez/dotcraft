@@ -98,9 +98,8 @@ fn project_glow(ui: &Ui, name: &str) {
 
 pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     let rect = ui.max_rect();
-    if let Some(workspace) = &app.workspace {
-        project_glow(ui, &workspace.ws.name());
-    }
+    let project_name = app.workspace.as_ref().map(|workspace| workspace.ws.name());
+    project_glow(ui, project_name.as_deref().unwrap_or("DotCraft"));
     // The whole bar drags the window (behind the widgets).
     let drag = ui.interact(rect, ui.id().with("title_drag"), Sense::click_and_drag());
     if drag.drag_started() {
