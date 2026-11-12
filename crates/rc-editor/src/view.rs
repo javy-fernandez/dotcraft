@@ -931,7 +931,11 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
                 }
             } else if p.x >= m.icons_x - 2.0 && p.x < m.vcs_x {
                 if let Some(icon) = state.gutter_icons.get(&line) {
-                    out.events.push(EditorEvent::GutterIconClicked { line, icon: *icon });
+                    if mods.shift && matches!(icon, GutterIcon::RunTest | GutterIcon::TestPassed | GutterIcon::TestFailed) {
+                        out.events.push(EditorEvent::GutterTestDebugClicked { line });
+                    } else {
+                        out.events.push(EditorEvent::GutterIconClicked { line, icon: *icon });
+                    }
                 } else {
                     out.events.push(EditorEvent::GutterClicked { line });
                 }

@@ -148,6 +148,7 @@ pub struct TestsState {
     pub duration: Option<std::time::Duration>,
     pub failure: Option<String>,
     pub request: TestRequest,
+    pub debug_host_attached: bool,
     pub selected: Option<String>,
     pub show_passed: bool,
 }
@@ -156,6 +157,7 @@ pub struct TestsState {
 pub enum RunnerOutput {
     ShowTool(crate::toolwindow::ToolWindow),
     Notify(String, bool),
+    AttachTestHost(u32),
     /// A build finished: its diagnostics for the Problems window.
     BuildDiagnostics(Vec<rc_dotnet::Diagnostic>),
     /// A tool command finished (with its output lines).
@@ -465,6 +467,14 @@ impl Runner {
     // ------------------------------------------------------------------ tests
 
     pub fn run_tests(&mut self, target: &Path, filter: Option<TestFilter>) -> Vec<RunnerOutput> {
+        self.start_tests(target, filter, false)
+    }
+
+    pub fn debug_test(&mut self, target: &Path, filter: TestFilter) -> Vec<RunnerOutput> {
+        self.start_tests(target, Some(filter), true)
+    }
+
+    fn start_tests(&mut self, target: &Path, filter: Option<TestFilter>, debug_host: bool) -> Vec<RunnerOutput> {
         let dotnet = match self.dotnet() {
             Ok(d) => d,
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
@@ -476,6 +486,7 @@ impl Runner {
         }
         let mut req = TestRequest::new(target);
         req.filter = filter;
+        req.debug_host = debug_host;
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         let handle = rc_dotnet::start_tests(&dotnet, req.clone(), inbox.sender());
@@ -498,6 +509,7 @@ impl Runner {
             duration: None,
             failure: None,
             request: req,
+            debug_host_attached: false,
             selected: None,
             show_passed,
         });
@@ -632,7 +644,15 @@ impl Runner {
                     }
                     TestEvent::Build(_) => {}
                     TestEvent::ProjectStarted { project } => t.console.note(&trf("Running tests of {project}…", &[("project", &project.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default())])),
-                    TestEvent::Output { line, .. } => t.console.line(&line),
+                    TestEvent::Output { line, .. } => {
+                        if t.request.debug_host && !t.debug_host_attached
+                            && let Some(pid) = test_host_pid(&line.text)
+                        {
+                            t.debug_host_attached = true;
+                            out.push(RunnerOutput::AttachTestHost(pid));
+                        }
+                        t.console.line(&line);
+                    }
                     TestEvent::Progress(p) => match p.outcome {
                         TestOutcome::Passed => t.passed += 1,
                         TestOutcome::Failed => t.failed += 1,
@@ -706,6 +726,11 @@ fn build_summary(r: &BuildResult) -> String {
     } else {
         trf("Build failed: {errors} errors, {warnings} warnings", &[("errors", &r.errors), ("warnings", &r.warnings)])
     }
+}
+
+fn test_host_pid(line: &str) -> Option<u32> {
+    let value = line.trim().strip_prefix("Process Id: ")?.split_once(", Name:")?.0.trim();
+    value.parse().ok().filter(|pid| *pid > 0)
 }
 
 fn tool_summary(title: &str, r: &BuildResult) -> String {
@@ -805,6 +830,14 @@ pub fn project_of(file: &Path, configs: &[RunConfig]) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_only_vstest_debug_host_pid_lines() {
+        assert_eq!(test_host_pid("Process Id: 865761, Name: dotnet"), Some(865761));
+        assert_eq!(test_host_pid("Host debugging is enabled. Please attach debugger to testhost process to continue."), None);
+        assert_eq!(test_host_pid("Process Id: 0, Name: dotnet"), None);
+        assert_eq!(test_host_pid("Process Id: other, Name: dotnet"), None);
+    }
 
     #[test]
     fn finds_xunit_nunit_and_mstest_markers() {

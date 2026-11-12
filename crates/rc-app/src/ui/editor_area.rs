@@ -265,7 +265,8 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
             // Editing a preview tab keeps it.
             EditorEvent::Changed => doc.preview = false,
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunApp } if crate::web::is_http_file(&doc.path) => http_line = Some(line),
-            EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
+            EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some((line, false)),
+            EditorEvent::GutterTestDebugClicked { line } => run_test_line = Some((line, true)),
             _ => {}
         }
     }
@@ -349,8 +350,8 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     {
         app.send_http_request(i, line);
     }
-    if let Some(line) = run_test_line {
-        app.run_test_at(line);
+    if let Some((line, debug)) = run_test_line {
+        app.run_test_at(line, debug);
     }
     app.handle_packages(package_outputs);
     app.handle_appsettings(settings_outputs);

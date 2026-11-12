@@ -1,0 +1,9 @@
+# Debug a test from the gutter (#127, partial)
+
+Shift-click a C# test method's gutter icon to run its fully qualified test filter with `VSTEST_HOST_DEBUG=1`. DotCraft builds the test project through its existing test runner, shows output and results in the Tests window, parses the VSTest testhost PID, and attaches the existing netcoredbg DAP session with the editor's breakpoints. A class marker uses the class filter. A normal click still runs tests without debugging. Stopping the test run cancels the runner and testhost; stopping the debug session detaches.
+
+The testhost pause and PID output follow the official [VSTest diagnosis guide](https://github.com/microsoft/vstest/blob/main/docs/diagnose.md) and [VSTest environment-variable reference](https://learn.microsoft.com/en-us/visualstudio/test/vstest-console-options?view=vs-2022). The implementation is original DotCraft Rust code; no external code or assets were copied.
+
+Validation on Linux used .NET SDK 10.0.404, the real Shop xUnit fixture targeting .NET 8, and netcoredbg 3.2.0-1092. VSTest emitted a paused testhost PID. A direct DAP probe attached to that PID, accepted `configurationDone`, verified a breakpoint at `PriceCalculatorTests.cs:10`, and emitted a `stopped` event with reason `breakpoint`. Compact application compilation and focused parser tests are recorded in the PR. A full graphical click-through and Windows/macOS runs remain untested.
+
+This is a partial implementation of #127. Data breakpoints, raw memory, and side-effect-free Evaluate remain. The current workflow depends on the VSTest debug-host PID line; if a different test platform does not emit it, the test host may wait until the run is cancelled. The pinned netcoredbg release does not advertise DAP `supportsReadMemoryRequest`, so the Memory view remains separate work.
