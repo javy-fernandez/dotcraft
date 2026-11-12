@@ -84,6 +84,44 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
     }
 }
 
+#[cfg(test)]
+mod shop_coverage_report_tests {
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    #[ignore = "requires a local .NET SDK and restored Shop Coverlet packages"]
+    fn shop_coverage_report_groups_assembly_and_classes() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+        if app.dock.is_open(crate::toolwindow::ToolWindow::Explorer) {
+            app.dock.toggle(crate::toolwindow::ToolWindow::Explorer);
+        }
+        app.run_coverage();
+        let mut harness = crate::screens::harness(app, egui::vec2(1440.0, 900.0));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
+        while harness.state().coverage.running {
+            assert!(std::time::Instant::now() < deadline, "coverage timed out");
+            harness.run_steps(2);
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        assert!(harness.state().coverage.error.is_none(), "{:?}", harness.state().coverage.error);
+        let report = harness.state().coverage.report.as_ref().unwrap();
+        let shop = report.assemblies.iter().find(|assembly| assembly.name == "Shop.Core").unwrap();
+        assert!(shop.ratio.covered > 0 && shop.ratio.total > shop.ratio.covered, "{:?}", shop.ratio);
+        assert!(report.classes.iter().any(|class| class.assembly == "Shop.Core" && class.name.ends_with("PriceCalculator") && class.ratio.covered > 0));
+        harness.get_by_label("Shop.Core").click();
+        harness.run_steps(2);
+        assert!(!harness.state().coverage.expanded.contains("Shop.Core"));
+        harness.get_by_label("Shop.Core").click();
+        harness.run_steps(2);
+        assert!(harness.state().coverage.expanded.contains("Shop.Core"));
+        harness.get_by_label("PriceCalculator");
+    }
+}
+
 /// A clickable list row: icon, main text, grey secondary text.
 fn list_row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, selected: bool) -> egui::Response {
     let p = rc_kit::pal(ui);
