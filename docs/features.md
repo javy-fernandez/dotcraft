@@ -299,6 +299,7 @@ additional scope is pending.
 | Live locale switch in Shop (A-13, partial) | [Original PR 203](https://github.com/javy-fernandez/dotcraft/pull/203) | [Locale evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/localization-dotnet-acceptance/docs/implementation/localization-shop.md) |
 | Project reference editing (B-17, partial) | [Original PR 204](https://github.com/javy-fernandez/dotcraft/pull/204) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/204/files) |
 | Safe C# reload conflict choices (A-20) | [Original PR 205](https://github.com/javy-fernandez/dotcraft/pull/205) | [Reload evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/safe-reload-shop-conflict/docs/implementation/safe-reload-shop.md) |
+| Native Shop workspace lifecycle (A-01) | [Original PR 206](https://github.com/javy-fernandez/dotcraft/pull/206) | [Workspace evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/native-workspace-shop-acceptance/docs/implementation/native-workspace-shop.md) |
 
 ## Completion criteria
 

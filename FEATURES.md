@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 61 |
+| ✅ Verified | 62 |
 | 🚧 In progress | 33 |
-| 🟢 Existing | 51 |
+| 🟢 Existing | 50 |
 | 🔁 Reuse candidate | 18 |
 | ⬜ Backlog | 210 |
 | 🚫 Out of scope | 0 |
@@ -119,7 +119,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| A-01 | Native desktop workspace | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-01 | Native desktop workspace | ✅ | [PR 206](https://github.com/javy-fernandez/dotcraft/pull/206) verifies Welcome drop of six-project Shop.sln, C# tab opening, Close Project, and recent-project reopen with tab restoration in egui on Linux. Native title bars, OS file associations and other platforms remain untested. |
 | A-02 | Light and dark themes | ✅ | [PR 191](https://github.com/javy-fernandez/dotcraft/pull/191) verifies live light → dark → light egui visual changes while six-project `Shop.sln` remains open on Linux. System-theme notifications, native chrome and other platforms remain untested. |
 | A-03 | Tool window stripes | ✅ | Existing compact overflow scrolling passes; [PR 197](https://github.com/javy-fernandez/dotcraft/pull/197) verifies Problems/Notifications stripe toggles and dock sides in real `Shop.sln` egui UI on Linux. Context-menu Move To, native chrome and other platforms remain untested. |
 | A-04 | Docked tool windows | ✅ | [PR 193](https://github.com/javy-fernandez/dotcraft/pull/193) verifies Explorer stripe hide/reopen, left-to-right dock move and session-map round-trip in a real `Shop.sln` egui UI harness on Linux. Pointer drag, context-menu Move To and other platforms remain untested. |
