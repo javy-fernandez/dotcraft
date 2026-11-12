@@ -279,11 +279,83 @@ pub fn html_spans(text: &[u8]) -> Vec<(usize, usize, Hl)> {
 
 /// Highlighting of languages without a grammar (`.sln`); `None` for the others.
 pub fn highlight_lexical(lang: Lang, rope: &Rope, first: usize, count: usize) -> Option<Vec<Vec<Span>>> {
-    if lang != Lang::Sln {
-        return None;
-    }
     let last = (first + count).min(rope.len_lines());
-    Some((first..last).map(|l| sln_line(&rope.line(l).to_string())).collect())
+    match lang {
+        Lang::Sln => Some((first..last).map(|l| sln_line(&rope.line(l).to_string())).collect()),
+        Lang::Proto => {
+            let mut in_block_comment = false;
+            Some((0..last).map(|l| proto_line(&rope.line(l).to_string(), &mut in_block_comment)).skip(first).collect())
+        }
+        _ => None,
+    }
+}
+
+/// Highlights Protocol Buffer declarations, scalar types, strings, numbers and comments.
+fn proto_line(line: &str, in_block_comment: &mut bool) -> Vec<Span> {
+    let chars: Vec<char> = line.trim_end_matches(['\n', '\r']).chars().collect();
+    let mut roles = vec![Hl::Plain; chars.len()];
+    let mut i = 0;
+    let mut declaration: Option<&str> = None;
+    while i < chars.len() {
+        let start = i;
+        if *in_block_comment {
+            while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') { i += 1; }
+            if i + 1 < chars.len() { i += 2; *in_block_comment = false; } else { i = chars.len(); }
+            roles[start..i].fill(Hl::Comment);
+            continue;
+        }
+        if chars[i] == '/' && chars.get(i + 1) == Some(&'/') {
+            roles[i..].fill(Hl::Comment);
+            break;
+        }
+        if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+            *in_block_comment = true;
+            continue;
+        }
+        if chars[i] == '"' || chars[i] == '\'' {
+            let quote = chars[i];
+            i += 1;
+            while i < chars.len() {
+                if chars[i] == '\\' { i = (i + 2).min(chars.len()); continue; }
+                if chars[i] == quote { i += 1; break; }
+                i += 1;
+            }
+            roles[start..i].fill(Hl::String);
+            continue;
+        }
+        if chars[i].is_ascii_alphabetic() || chars[i] == '_' {
+            i += 1;
+            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') { i += 1; }
+            let word: String = chars[start..i].iter().collect();
+            const KEYWORDS: &[&str] = &["syntax", "edition", "package", "import", "option", "message", "service", "rpc", "returns", "enum", "oneof", "repeated", "optional", "required", "map", "reserved", "extensions", "extend", "stream", "public", "weak", "to", "max", "group"];
+            const SCALARS: &[&str] = &["double", "float", "int32", "int64", "uint32", "uint64", "sint32", "sint64", "fixed32", "fixed64", "sfixed32", "sfixed64", "bool", "string", "bytes"];
+            if KEYWORDS.contains(&word.as_str()) {
+                roles[start..i].fill(Hl::Keyword);
+                declaration = match word.as_str() { "message" => Some("message"), "service" => Some("service"), "enum" => Some("enum"), "oneof" => Some("oneof"), "rpc" => Some("rpc"), "package" => Some("package"), _ => None };
+            } else if SCALARS.contains(&word.as_str()) {
+                roles[start..i].fill(Hl::Class);
+            } else if let Some(kind) = declaration.take() {
+                roles[start..i].fill(match kind { "rpc" => Hl::Method, "package" => Hl::Namespace, _ => Hl::Class });
+            }
+            continue;
+        }
+        if chars[i].is_ascii_digit() {
+            i += 1;
+            while i < chars.len() && chars[i].is_ascii_digit() { i += 1; }
+            roles[start..i].fill(Hl::Number);
+            continue;
+        }
+        i += 1;
+    }
+    let mut spans: Vec<Span> = Vec::new();
+    for (col, hl) in roles.into_iter().enumerate() {
+        match spans.last_mut() {
+            Some(sp) if sp.hl == hl && sp.end == col => sp.end = col + 1,
+            _ => spans.push(Span { start: col, end: col + 1, hl }),
+        }
+    }
+    spans.retain(|s| s.hl != Hl::Plain);
+    spans
 }
 
 /// One line of a `.sln`: comments, section keywords, strings, GUIDs and version numbers.
@@ -361,6 +433,30 @@ fn sln_line(line: &str) -> Vec<Span> {
 mod tests {
     use super::*;
     use crate::parse::parse_now;
+
+    #[test]
+    fn proto_lexical_roles() {
+        let rope = Rope::from_str("syntax = \"proto3\";\npackage shop.api;\nservice Orders { rpc Get (Request) returns (Response); }\nmessage Request { string id = 1; } // key\n");
+        let lines = highlight_lexical(Lang::Proto, &rope, 0, 4).unwrap();
+        let has = |line: usize, text: &str, role: Hl| lines[line].iter().any(|span| {
+            span.hl == role && rope.line(line).to_string().chars().skip(span.start).take(span.end - span.start).collect::<String>() == text
+        });
+        assert!(has(0, "syntax", Hl::Keyword));
+        assert!(has(0, "\"proto3\"", Hl::String));
+        assert!(has(2, "Orders", Hl::Class));
+        assert!(has(2, "Get", Hl::Method));
+        assert!(has(3, "string", Hl::Class));
+        assert!(has(3, "// key", Hl::Comment));
+    }
+
+    #[test]
+    fn proto_block_comment_spans_lines() {
+        let rope = Rope::from_str("/* message Hidden\nservice Fake */ message Real {}\n");
+        let lines = highlight_lexical(Lang::Proto, &rope, 1, 1).unwrap();
+        let text = rope.line(1).to_string();
+        assert!(lines[0].iter().any(|span| span.hl == Hl::Comment && text.chars().skip(span.start).take(span.end - span.start).collect::<String>() == "service Fake */"));
+        assert!(lines[0].iter().any(|span| span.hl == Hl::Class && text.chars().skip(span.start).take(span.end - span.start).collect::<String>() == "Real"));
+    }
 
     fn roles_of(lang: Lang, src: &str) -> Vec<(String, Hl)> {
         let rope = Rope::from_str(src);

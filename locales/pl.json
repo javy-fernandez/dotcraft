@@ -1463,5 +1463,33 @@
   },
   "rc-app": {
     "Exit Focus Mode": "Exit Focus Mode"
+  },
+  "grpc": {
+    "No .proto declarations": "No .proto declarations",
+    "Messages, enums, services and RPCs appear here.": "Messages, enums, services and RPCs appear here.",
+    "gRPC Client": "gRPC Client",
+    "No gRPC request": "No gRPC request",
+    "Enter an endpoint and method to call a gRPC service.": "Enter an endpoint and method to call a gRPC service.",
+    "Send gRPC Request": "Send gRPC Request",
+    "Choose RPC from .proto": "Choose RPC from .proto",
+    "Plaintext (no TLS)": "Plaintext (no TLS)",
+    "Use active .proto": "Use active .proto",
+    "Import path": "Import path",
+    "Metadata (Key: Value per line)": "Metadata (Key: Value per line)",
+    "Request JSON": "Request JSON",
+    "Sending gRPC request…": "Sending gRPC request…",
+    "Send a request to see the gRPC response.": "Send a request to see the gRPC response.",
+    "Enter a gRPC host and port, such as localhost:5000.": "Enter a gRPC host and port, such as localhost:5000.",
+    "Enter a gRPC method as package.Service/Method.": "Enter a gRPC method as package.Service/Method.",
+    "gRPC request exceeds 1 MiB.": "gRPC request exceeds 1 MiB.",
+    "Invalid request JSON: {error}": "Invalid request JSON: {error}",
+    "Metadata must use one Key: Value entry per line.": "Metadata must use one Key: Value entry per line.",
+    "Install grpcurl to send gRPC requests.": "Install grpcurl to send gRPC requests.",
+    "Could not start grpcurl: {error}": "Could not start grpcurl: {error}",
+    "gRPC request was cancelled or timed out.": "gRPC request was cancelled or timed out.",
+    "gRPC request failed.": "gRPC request failed.",
+    "Save the .proto file before sending to use its latest schema.": "Save the .proto file before sending to use its latest schema.",
+    "Open a .proto file for a local schema; otherwise server reflection is used.": "Open a .proto file for a local schema; otherwise server reflection is used.",
+    "Call with gRPC Client": "Call with gRPC Client"
   }
 }

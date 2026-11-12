@@ -13,6 +13,7 @@ pub mod main_menu;
 pub mod markdown;
 pub mod merge;
 pub mod monitoring;
+pub mod grpc_client;
 pub mod new_project;
 pub mod rebase;
 pub mod nuget;

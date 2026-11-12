@@ -118,6 +118,7 @@ pub struct DotCraftApp {
     pub history_file: Option<std::path::PathBuf>,
     /// HTTP Client: `.http` requests and their responses.
     pub http: crate::web::HttpClient,
+    pub grpc: crate::grpc::GrpcClient,
     /// Endpoints window.
     pub endpoints: crate::web::Endpoints,
     /// Test coverage run and report.
@@ -239,6 +240,7 @@ impl DotCraftApp {
             hierarchy: None,
             history_file: None,
             http: crate::web::HttpClient::new(waker.clone()),
+            grpc: crate::grpc::GrpcClient::new(waker.clone()),
             endpoints: crate::web::Endpoints::new(),
             coverage: crate::coverage::Coverage::new(waker.clone()),
             history_selected: None,
@@ -557,6 +559,7 @@ impl DotCraftApp {
         self.todos = None;
         self.vcs.close();
         self.http = crate::web::HttpClient::new(self.waker.clone());
+        self.grpc.cancel();
         self.database.disconnect();
         self.database.mssql.disconnect();
         self.find_in_files = None;
@@ -1816,6 +1819,7 @@ impl eframe::App for DotCraftApp {
         self.update_test_markers();
         self.update_http_markers();
         self.http.poll();
+        self.grpc.poll();
         self.endpoints.poll();
         if self.coverage.poll() {
             self.dock.show(ToolWindow::Coverage);
