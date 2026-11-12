@@ -2306,6 +2306,29 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires network access to nuget.org"]
+    fn shop_nuget_browse_shows_a_live_package_search_result() {
+        let _lock = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut harness = harness_at(&fixtures().join("Shop/Shop.sln"), home.path());
+        {
+            let nuget = &mut harness.state_mut().nuget;
+            nuget.tab = Tab::Browse;
+            nuget.query = "Newtonsoft.Json".into();
+            nuget.edited = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !harness.state().nuget.results.iter().any(|package| package.id == "Newtonsoft.Json") {
+            assert!(std::time::Instant::now() < deadline, "NuGet search timed out: {:?}", harness.state().nuget.message);
+            harness.run_steps(2);
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let result = harness.state().nuget.results.iter().find(|package| package.id == "Newtonsoft.Json").unwrap();
+        assert!(!result.version.is_empty() && !result.versions.is_empty());
+        harness.get_by_label("Newtonsoft.Json");
+    }
+
+    #[test]
     fn open_editors_with_unsaved_changes_are_edited_not_overwritten() {
         let _lock = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
