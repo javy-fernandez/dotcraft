@@ -41,7 +41,7 @@ fn resolves_shop_api_package_edges_after_real_restore() {
     )
     .unwrap();
     let api = shop.join("src/Shop.Api/Shop.Api.csproj");
-    assert!(nuget_assets::load(&api).is_err());
+    assert!(nuget_assets::load(&api).unwrap().is_none());
     let output = dotnet
         .std_command()
         .arg("restore")
@@ -55,7 +55,8 @@ fn resolves_shop_api_package_edges_after_real_restore() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let graph = nuget_assets::load(&api).unwrap();
+    let graph = nuget_assets::load(&api).unwrap().unwrap();
+    let graph = &graph.frameworks[0];
     assert_eq!(graph.framework, "net8.0");
     let swashbuckle = graph
         .packages
