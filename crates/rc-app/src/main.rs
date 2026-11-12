@@ -27,6 +27,8 @@ mod insight_tests;
 #[cfg(test)]
 mod package_insight_tests;
 #[cfg(test)]
+mod go_to_file_acceptance_tests;
+#[cfg(test)]
 mod screens;
 mod docs;
 mod native_menu;
