@@ -26,9 +26,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 33 |
-| 🚧 In progress | 15 |
+| 🚧 In progress | 16 |
 | 🟢 Existing | 81 |
-| 🔁 Reuse candidate | 26 |
+| 🔁 Reuse candidate | 25 |
 | ⬜ Backlog | 218 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
@@ -89,6 +89,12 @@ cancellable worker, highlights at most 1,000 matches, and navigates to offscreen
 results. `rc-term` unit and session tests cover search behavior; the desktop app
 compiles with the search controls. Split terminal panes remain unimplemented, so
 L-05 remains 🚧. See [terminal search evidence](docs/implementation/terminal-search.md).
+
+D-14: the terminal parser now recognizes canonical `.NET` stack-trace file and line
+locations in Build, Run, and Terminal output. Parser and terminal tests pass, and the
+desktop app compiles with the existing Ctrl/Cmd+click navigation route. Wrapped
+frames, remote source mapping, symbol-only frames, and live cross-platform UI
+validation remain pending. D-14 remains 🚧. See [stack-trace evidence](docs/implementation/stack-trace-navigation.md).
 
 
 ## Current delivery evidence
@@ -247,7 +253,7 @@ Source / reuse boundary: `crates/rc-app/src/search.rs; crates/rc-search; crates/
 | D-11 | Type hierarchy | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | D-12 | Call hierarchy | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | D-13 | Scope-aware search | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| D-14 | Stack trace navigation | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| D-14 | Stack trace navigation | 🚧 | Canonical .NET file-and-line links are tested; wrapped frames, remote source mapping and live UI validation remain pending. |
 | D-15 | Navigate to base and derived symbols | ⬜ | Implement with integration and UI acceptance evidence. |
 | D-16 | Related files navigation | ⬜ | Implement with integration and UI acceptance evidence. |
 | D-17 | Bookmarks and favorites | ⬜ | Implement with integration and UI acceptance evidence. |

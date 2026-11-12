@@ -220,6 +220,7 @@ additional scope is pending.
 | Responsive settings and compact menu | Original merge `a0f31fb` | [Settings](implementation/responsive-settings.md), [menu](implementation/scrollable-menu.md) |
 | Read-only SQLite browsing | Original merge `a0f31fb` | [SQLite](implementation/sqlite-browser.md) |
 | Terminal scrollback search | [Original PR 152](https://github.com/javy-fernandez/dotcraft/pull/152) | [Terminal search](implementation/terminal-search.md) |
+| .NET stack-trace source links | [Original PR 154](https://github.com/javy-fernandez/dotcraft/pull/154) | [Stack-trace navigation](implementation/stack-trace-navigation.md) |
 
 ## Completion criteria
 
