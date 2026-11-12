@@ -23,6 +23,7 @@ pub mod launch;
 pub mod msbuild;
 pub mod new_project;
 pub mod nuget;
+pub mod nuget_assets;
 pub mod nuget_auth;
 pub mod process;
 pub mod project;

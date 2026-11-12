@@ -29,6 +29,7 @@ enum Tab {
     Installed,
     Updates,
     Consolidate,
+    Graph,
     /// Central Package Management issues (only when the solution uses CPM).
     Central,
     /// Vulnerable and deprecated packages (`dotnet list package`, run on demand).
@@ -52,6 +53,7 @@ enum Event {
     Audit(u64, Result<AuditReport, String>),
     /// The first version without known vulnerabilities (lowercase id).
     Safe(String, Option<String>),
+    Graph(u64, Vec<(PathBuf, Result<rc_dotnet::nuget_assets::AssetsGraph, String>)>),
 }
 
 /// Signing in to a private feed through its credential provider (device flow).
@@ -187,6 +189,11 @@ pub struct NugetManager {
     /// Migrate when the window opens (from the explorer).
     migrate_requested: bool,
     audit: Audit,
+    graph: Vec<(PathBuf, Result<rc_dotnet::nuget_assets::AssetsGraph, String>)>,
+    graph_loading: bool,
+    graph_loaded: bool,
+    graph_generation: u64,
+    graph_project: usize,
 }
 
 fn project_name(p: &Path) -> String {
@@ -238,6 +245,11 @@ impl NugetManager {
             migration: None,
             migrate_requested: false,
             audit: Audit::default(),
+            graph: Vec::new(),
+            graph_loading: false,
+            graph_loaded: false,
+            graph_generation: 0,
+            graph_project: 0,
         }
     }
 
@@ -421,6 +433,11 @@ impl NugetManager {
 
     /// The solution's projects (re-read when the window opens or after a change).
     pub fn set_projects(&mut self, projects: Vec<PathBuf>, dotnet: Option<rc_dotnet::Dotnet>) {
+        self.graph.clear();
+        self.graph_loading = false;
+        self.graph_loaded = false;
+        self.graph_generation += 1;
+        self.graph_project = 0;
         if let Some(dir) = projects.first().and_then(|p| p.parent()) {
             let root = common_root(&projects).unwrap_or_else(|| dir.to_path_buf());
             self.sources = rc_dotnet::nuget::package_sources(&root).into_iter().filter(|s| s.enabled).collect();
@@ -491,6 +508,27 @@ impl NugetManager {
             self.tab = Tab::Installed;
         }
         self.rebuild_installed();
+    }
+
+    fn load_graph(&mut self) {
+        if self.graph_loading {
+            return;
+        }
+        self.graph_loading = true;
+        self.graph_generation += 1;
+        let generation = self.graph_generation;
+        let projects = self.projects.clone();
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            if let Ok(graphs) = tokio::task::spawn_blocking(move || {
+                projects.into_iter().map(|project| {
+                    let result = rc_dotnet::nuget_assets::load(&project).map_err(|e| format!("{e:#}"));
+                    (project, result)
+                }).collect()
+            }).await {
+                out.send(Event::Graph(generation, graphs));
+            }
+        });
     }
 
     fn rebuild_installed(&mut self) {
@@ -737,7 +775,7 @@ impl NugetManager {
         // (id, version shown, description)
         match self.tab {
             Tab::Browse => self.results.iter().map(|r| (r.id.clone(), r.version.clone(), r.description.lines().next().unwrap_or("").to_string())).collect(),
-            Tab::Central | Tab::Audit => Vec::new(),
+            Tab::Central | Tab::Audit | Tab::Graph => Vec::new(),
             Tab::Installed | Tab::Updates | Tab::Consolidate => self
                 .installed
                 .iter()
@@ -1039,7 +1077,7 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
     }
     pump(app);
     let m = &mut app.nuget;
-    if m.busy.is_some() || m.searching || m.cpm_evaluating || m.audit.running.is_some() {
+    if m.busy.is_some() || m.searching || m.cpm_evaluating || m.audit.running.is_some() || m.graph_loading {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(150));
     }
     // Search as you type in Browse (debounced); empty shows the most downloaded.
@@ -1086,6 +1124,7 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
         }
         m.cpm_cache.clear();
         m.reload_installed();
+        if m.tab == Tab::Graph { m.load_graph(); }
     }
     if m.cpm_evaluating {
         hu.add(egui::Spinner::new().size(12.0));
@@ -1109,6 +1148,7 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
             (Tab::Installed, trf("Installed ({n})", &[("n", &m.installed.len())])),
             (Tab::Updates, trf("Updates ({n})", &[("n", &updates)])),
             (Tab::Consolidate, trf("Consolidate ({n})", &[("n", &consolidate)])),
+            (Tab::Graph, tr("Dependency graph").to_string()),
         ];
         if m.cpm.in_use() {
             tabs.push((Tab::Central, trf("Central issues ({n})", &[("n", &issues)])));
@@ -1124,6 +1164,7 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
             if theme::tab(ui, m.tab == tab && m.migration.is_none(), None, &label, false).0.clicked() {
                 m.tab = tab;
                 m.migration = None;
+                if tab == Tab::Graph && !m.graph_loaded { m.load_graph(); }
             }
         }
         // Solutions without CPM: move every version to a Directory.Packages.props.
@@ -1137,6 +1178,11 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
     });
     ui.add_space(4.0);
     let avail = ui.available_rect_before_wrap();
+    if m.tab == Tab::Graph {
+        graph_view(ui, m, avail);
+        ui.advance_cursor_after_rect(avail);
+        return;
+    }
     if m.migration.is_some() {
         let action = migration_view(ui, m, avail);
         ui.advance_cursor_after_rect(avail);
@@ -1202,6 +1248,60 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
     }
 }
 
+fn graph_view(ui: &mut Ui, m: &mut NugetManager, rect: Rect) {
+    let mut body = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink2(vec2(12.0, 4.0))));
+    body.horizontal(|ui| {
+        ui.label(egui::RichText::new(tr("Resolved dependencies")).font(theme::bold(13.0)));
+        if theme::secondary_button(ui, tr("Reload graph")).clicked() {
+            m.graph_loading = false;
+            m.load_graph();
+        }
+    });
+    if m.graph_loading {
+        body.spinner();
+        return;
+    }
+    if !m.graph_loaded {
+        body.label(tr("Restore the project to view its dependencies"));
+        return;
+    }
+    if m.graph.is_empty() {
+        body.label(tr("No projects in the workspace"));
+        return;
+    }
+    m.graph_project = m.graph_project.min(m.graph.len() - 1);
+    egui::ComboBox::from_id_salt("nuget_graph_project")
+        .selected_text(project_name(&m.graph[m.graph_project].0))
+        .show_ui(&mut body, |ui| {
+            for (i, (project, _)) in m.graph.iter().enumerate() {
+                ui.selectable_value(&mut m.graph_project, i, project_name(project));
+            }
+        });
+    match &m.graph[m.graph_project].1 {
+        Err(error) => { body.label(error); }
+        Ok(graph) => {
+            body.label(format!("{} · {}", graph.framework, trf("{packages} packages, {edges} dependencies", &[("packages", &graph.packages.len()), ("edges", &graph.edges.len())])));
+            let mut children = vec![Vec::new(); graph.packages.len()];
+            for edge in &graph.edges { children[edge.from].push(&graph.packages[edge.to]); }
+            egui::ScrollArea::vertical().id_salt("nuget_graph_packages").show(&mut body, |ui| {
+                for (index, package) in graph.packages.iter().enumerate() {
+                    let kind = if package.direct { tr("Direct") } else { tr("Transitive") };
+                    let label = format!("{} {} ({kind})", package.id, package.version);
+                    if children[index].is_empty() {
+                        ui.label(label);
+                    } else {
+                        ui.collapsing(label, |ui| {
+                            for child in &children[index] {
+                                ui.label(format!("{} {}", child.id, child.version));
+                            }
+                        });
+                    }
+                }
+            });
+        }
+    }
+}
+
 fn package_list(ui: &mut Ui, m: &NugetManager, pick: &mut Option<String>, sign_in_clicked: &mut bool) {
     let p = rc_kit::pal(ui);
     let rows = m.rows();
@@ -1227,7 +1327,7 @@ fn package_list(ui: &mut Ui, m: &NugetManager, pick: &mut Option<String>, sign_i
             let msg = match m.tab {
                 Tab::Browse if m.searching => tr("Searching…"),
                 Tab::Browse => tr("No packages found"),
-                Tab::Installed | Tab::Central | Tab::Audit => tr("The solution has no package references"),
+                Tab::Installed | Tab::Central | Tab::Audit | Tab::Graph => tr("The solution has no package references"),
                 Tab::Updates => tr("Every package is up to date"),
                 Tab::Consolidate => tr("Every project uses the same versions"),
             };
@@ -2091,9 +2191,20 @@ fn poll(m: &mut NugetManager) -> bool {
                     changed = true;
                 }
             }
+            Event::Graph(generation, graphs) => {
+                if generation == m.graph_generation {
+                    m.graph = graphs;
+                    m.graph_loading = false;
+                    m.graph_loaded = true;
+                }
+            }
             Event::Done(r) => {
                 m.busy = None;
                 changed = true;
+                m.graph_loaded = false;
+                m.graph_loading = false;
+                m.graph_generation += 1;
+                if m.tab == Tab::Graph { m.load_graph(); }
                 m.message = Some(match r {
                     Ok(msg) => (false, msg),
                     Err(e) => {
@@ -2482,6 +2593,47 @@ mod tests {
         h.run_steps(2);
         assert!(h.state().nuget.audit.running.is_none() && h.state().nuget.audit.report.is_none());
         h.get_by_label("Run audit");
+    }
+
+    #[test]
+    #[ignore = "requires a local .NET 8 SDK and cached Shop packages"]
+    fn dependency_graph_tab_shows_resolved_shop_edges() {
+        let host = std::env::var_os("DOTCRAFT_TEST_DOTNET").expect("set DOTCRAFT_TEST_DOTNET");
+        let _lock = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let shop = dir.path().join("Shop");
+        copy(&fixtures().join("Shop"), &shop);
+        std::fs::write(shop.join("NuGet.Config"), "<configuration><packageSources><clear/></packageSources></configuration>\n").unwrap();
+        let dotnet = rc_dotnet::Dotnet::new(host.clone());
+        let restored = dotnet.std_command().arg("restore").arg(shop.join("Shop.sln")).args(["-p:NuGetAudit=false", "--ignore-failed-sources", "-v:quiet"]).output().unwrap();
+        assert!(restored.status.success(), "{}\n{}", String::from_utf8_lossy(&restored.stdout), String::from_utf8_lossy(&restored.stderr));
+        let mut app = test_app(&dir.path().join("home"), true);
+        app.settings.dotnet_path = Some(PathBuf::from(host));
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&shop.join("Shop.sln"));
+        let mut first = true;
+        let mut h = Harness::builder().with_size(vec2(1100.0, 700.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) { rc_kit::theme::install_fonts(ui.ctx()); return; }
+            window(app, ui);
+        }, app);
+        h.run_steps(3);
+        h.get_by_label("Dependency graph").click();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !h.state().nuget.graph_loaded && std::time::Instant::now() < deadline {
+            h.run_steps(1);
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(h.state().nuget.graph_loaded);
+        let api = shop.join("src/Shop.Api/Shop.Api.csproj");
+        let index = h.state().nuget.graph.iter().position(|(project, _)| project == &api).unwrap();
+        h.state_mut().nuget.graph_project = index;
+        h.run_steps(3);
+        let graph = h.state().nuget.graph[index].1.as_ref().unwrap();
+        assert!(graph.edges.len() >= 5);
+        h.get_by_label("Swashbuckle.AspNetCore 6.6.2 (Direct)").click();
+        h.run_steps(2);
+        h.get_by_label("Swashbuckle.AspNetCore.Swagger 6.6.2");
+        h.get_by_label("Microsoft.OpenApi 1.6.14 (Transitive)");
     }
 }
 
