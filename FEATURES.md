@@ -25,8 +25,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 109 |
-| 🚧 In progress | 41 |
+| ✅ Verified | 111 |
+| 🚧 In progress | 39 |
 | 🟢 Existing | 4 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
@@ -167,7 +167,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-10 | MSBuild property evaluation | ✅ | [PR 230](https://github.com/javy-fernandez/dotcraft/pull/230) rejects undeclared target frameworks and verifies Debug/Release, single/multi-target outer and inner property evaluation on Shop.Core/Shop.Api with official SDK 8.0.428 on Linux. UI, other platforms and build/restore behavior remain separate. |
 | B-11 | Launch settings profiles | ✅ | [PR 181](https://github.com/javy-fernandez/dotcraft/pull/181) validates profile parsing and URL schemes; [PR 236](https://github.com/javy-fernandez/dotcraft/pull/236) verifies native picker selection; [PR 262](https://github.com/javy-fernandez/dotcraft/pull/262) verifies Shop.Api's real http profile produces the Development environment, ASP.NET URL and browser target after SDK 8.0.428 evaluation on Linux. Automatic browser opening, changes during a running process, IIS Express and other platforms remain untested. |
 | B-12 | NuGet search | ✅ | [PR 221](https://github.com/javy-fernandez/dotcraft/pull/221) bounds NuGet V3 query/page/response handling; [PR 269](https://github.com/javy-fernandez/dotcraft/pull/269) verifies live nuget.org Newtonsoft.Json search/version data and an accessible result in the native Shop.sln NuGet window on Linux. Private feeds, authentication, pagination UI, offline behavior and other platforms remain untested. |
-| B-13 | NuGet installation and removal | 🚧 | [PR 219](https://github.com/javy-fernandez/dotcraft/pull/219) preflights project path, bounded package ID and version before add/update/remove process spawn; a copied Shop.Api project and fake host verify valid arguments and no spawn on invalid input. Real SDK restore, project modification and UI remain. |
+| B-13 | NuGet installation and removal | ✅ | [PR 219](https://github.com/javy-fernandez/dotcraft/pull/219) preflights package commands; [PR 271](https://github.com/javy-fernandez/dotcraft/pull/271) uses SDK 8.0.428 and a local feed to install/update/remove Newtonsoft.Json in a temporary Shop project, builds code using JsonConvert, and verifies native NuGet Install/Remove UI on Linux. CPM, authentication, other feeds/platforms remain untested. |
 | B-14 | JSON .slnf solution filters | 🚧 | Parser, explorer and SDK build are verified in the original baseline; filter-specific Roslyn, test-project selection and actual test execution remain pending. The test-selection [PR 153](https://github.com/javy-fernandez/dotcraft/pull/153) was closed without merge. |
 | B-15 | Interactive filter creation and editing | 🚧 | [PR 209](https://github.com/javy-fernandez/dotcraft/pull/209) adds bounded `.slnf` create/update backend API, preserving unknown JSON fields and BOM, tested on TenProjects.slnx. UI workflow, persistence, SDK build and language-service update remain. |
 | B-16 | Unload and reload individual projects | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -177,7 +177,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-20 | global.json SDK management | ✅ | PR 5 verifies real SDK 8.0.427/10.0.403 version switching and policy preservation; [PR 270](https://github.com/javy-fernandez/dotcraft/pull/270) selects installed SDK 8.0.428 in the native Shop.Core chooser, writes project-local `global.json`, and builds successfully on Linux. SDK installation, ancestor policy display, language-server restart and other platforms remain untested. |
 | B-21 | .NET workload management | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-22 | NuGet dependency graph | 🚧 | [PR 216](https://github.com/javy-fernandez/dotcraft/pull/216) builds a bounded static graph of direct packages with CPM, override and unresolved versions, tested on CentralShop and Shop.Api. Restore assets/transitives, MSBuild evaluation, UI and SDK validation remain. |
-| B-23 | Central package management | 🚧 | [PR 192](https://github.com/javy-fernandez/dotcraft/pull/192) resolves parent CPM imports and child `PackageVersion Update` without inventing missing packages; CentralShop fixture and 132 rc-dotnet unit tests pass. SDK/MSBuild evaluation, arbitrary import order and UI acceptance remain. |
+| B-23 | Central package management | ✅ | [PR 192](https://github.com/javy-fernandez/dotcraft/pull/192) verifies imported and updated central versions; [PR 272](https://github.com/javy-fernandez/dotcraft/pull/272) verifies real CentralShop project MSBuild evaluation/restore with SDK 8.0.428 and native NuGet ownership/override editing on Linux. SDK 8 does not restore `.slnx` directly; arbitrary imports, conflicts and other platforms remain untested. |
 | B-24 | NuGet feed credentials | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-25 | Vulnerable and outdated packages | ⬜ | Implement with integration and UI acceptance evidence. |
 | B-26 | NuGet Package Manager Console | ⬜ | Implement with integration and UI acceptance evidence. |
