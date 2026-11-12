@@ -353,6 +353,8 @@ additional scope is pending.
 | Shop coverage report in native app (H-18) | [Original PR 256](https://github.com/javy-fernandez/dotcraft/pull/256) | [Report evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-coverage-report-ui/docs/implementation/shop-coverage-report-ui.md) |
 | Shop.Cli exception breakpoint filters (G-14) | [Original PR 257](https://github.com/javy-fernandez/dotcraft/pull/257) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/257/files) |
 | Shop coverage gutter marks and toggle (H-17) | [Original PR 258](https://github.com/javy-fernandez/dotcraft/pull/258) | [Gutter evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/coverage-gutter-live/docs/implementation/coverage-gutter-linux.md) |
+| Shop.Api CPU profiling (H-20) | [Original PR 259](https://github.com/javy-fernandez/dotcraft/pull/259) | [CPU evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-cpu-profile-live/docs/implementation/shop-cpu-profile-linux.md) |
+| Razor syntax in Shop workspace (J-01) | [Original PR 260](https://github.com/javy-fernandez/dotcraft/pull/260) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/260/files) |
 
 ## Completion criteria
 

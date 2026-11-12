@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 98 |
+| ✅ Verified | 100 |
 | 🚧 In progress | 47 |
-| 🟢 Existing | 9 |
+| 🟢 Existing | 7 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -403,7 +403,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/test.rs; crates/rc-app/src/ui/run
 | H-17 | Coverage gutter | ✅ | [PR 258](https://github.com/javy-fernandez/dotcraft/pull/258) verifies green covered/red uncovered editor bars from real Shop/Coverlet coverage, hide/restore toggle, and an amber partial bar from a controlled branch in the real report at 1440×900 on Linux. Other sizes/themes/platforms and VCS gutter precedence remain untested. |
 | H-18 | Coverage reports | ✅ | [PR 256](https://github.com/javy-fernandez/dotcraft/pull/256) verifies a partially covered Shop.Core assembly and covered PriceCalculator class after a live SDK 8.0.428/Coverlet 6.0.0 run, then collapses and reopens the assembly row in egui on Linux. Branch metrics, exports, multiple assemblies, MTP v2 and other platforms remain untested. |
 | H-19 | Coverage thresholds | ⬜ | Implement with integration and UI acceptance evidence. |
-| H-20 | CPU profiling | 🟢 | Source located in `rc-dotnet/cpu_profile.rs`; repeat real .NET acceptance checks. |
+| H-20 | CPU profiling | ✅ | [PR 259](https://github.com/javy-fernandez/dotcraft/pull/259) records the existing live Shop.Api test rerun with SDK 8.0.428 on Linux: Monitoring starts/stops CPU profiling during concurrent HTTP load, obtains 4,343 samples and renders call tree/hot spots in egui. Other runtimes, accuracy under idle/large loads and other platforms remain untested. |
 | H-21 | Allocation profiling | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-22 | Memory snapshots | 🟢 | Source located in `rc-dotnet/gcdump.rs`; repeat real .NET acceptance checks. |
 | H-23 | Profiling comparison | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -458,7 +458,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| J-01 | Razor syntax parsing | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| J-01 | Razor syntax parsing | ✅ | [PR 260](https://github.com/javy-fernandez/dotcraft/pull/260) verifies a temporary `.razor` in real Shop.Api parses directive/HTML/C# constructs and paints/reparses after edit in the native egui editor on Linux. Live Razor LSP, all syntax variants, SDK compilation and other platforms remain untested. |
 | J-02 | XML syntax parsing | ✅ | [PR 246](https://github.com/javy-fernandez/dotcraft/pull/246) verifies Shop.Core.csproj with UTF-8 BOM and Shop.Api.csproj parse without errors, tag/attribute/value paint in both EditorView themes, and TargetFramework typed edit/reparse on Linux. Schema, namespaces, entities and custom themes remain untested. |
 | J-03 | JSON syntax parsing | ✅ | [PR 240](https://github.com/javy-fernandez/dotcraft/pull/240) verifies Shop.Api appsettings JSON parse trees, key/value paint in both built-in EditorView themes, and typed edit/reparse on Linux; it removes duplicate key captures. JSON Schema, formatting, JSONC and custom themes remain untested. |
 | J-04 | Markdown preview | ✅ | [PR 248](https://github.com/javy-fernandez/dotcraft/pull/248) verifies a rendered Markdown heading and Split/Preview Only/Editor Only mode switching in the native egui app inside real Shop.sln on Linux. Live edit synchronization, links, images, long documents, custom themes and other platforms remain untested. |
