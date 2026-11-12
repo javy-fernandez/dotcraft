@@ -119,6 +119,8 @@ pub struct RunTab {
     pub console: Console,
     pub exit: Option<Option<i32>>,
     pub urls: Vec<String>,
+    pub dashboard_url: Option<String>,
+    pub aspire_host: bool,
 }
 
 impl RunTab {
@@ -164,6 +166,7 @@ pub enum RunnerOutput {
 
 pub struct Runner {
     pub configs: Vec<RunConfig>,
+    pub aspire_hosts: Vec<PathBuf>,
     pub selected: usize,
     pub build: Option<BuildState>,
     pub runs: Vec<RunTab>,
@@ -181,7 +184,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, compounds: Vec::new(), options: BTreeMap::new() }
+        Runner { configs: Vec::new(), aspire_hosts: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, compounds: Vec::new(), options: BTreeMap::new() }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -189,6 +192,7 @@ impl Runner {
     pub fn set_workspace(&mut self, solution: Option<&Solution>, projects: &[PathBuf], dotnet: &Path, remembered: Option<&str>) {
         self.dotnet = Dotnet::locate(Some(dotnet)).or_else(|| Dotnet::locate(None));
         self.configs.clear();
+        self.aspire_hosts.clear();
         let paths: Vec<PathBuf> = match solution {
             Some(s) => s.projects().into_iter().map(|p| p.path.clone()).collect(),
             None => projects.to_vec(),
@@ -203,6 +207,7 @@ impl Runner {
             if !info.is_executable() {
                 continue;
             }
+            if info.aspire_host { self.aspire_hosts.push(path.clone()); }
             let profiles: Vec<String> = rc_dotnet::LaunchSettings::load(path)
                 .ok()
                 .flatten()
@@ -231,6 +236,7 @@ impl Runner {
 
     pub fn clear(&mut self) {
         self.configs.clear();
+        self.aspire_hosts.clear();
         self.build = None;
         self.runs.clear();
         self.tests = None;
@@ -398,9 +404,12 @@ impl Runner {
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
         let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
-        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        let aspire_host = matches!(&cfg.kind, ConfigKind::App { project, .. } if self.aspire_hosts.contains(project));
+        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new(), dashboard_url: None, aspire_host });
         self.active_run = self.runs.len() - 1;
-        vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
+        let mut out = vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)];
+        if aspire_host { out.push(RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::AspireResources)); }
+        out
     }
 
     pub fn stop_all(&mut self) {
@@ -603,7 +612,12 @@ impl Runner {
                         }
                         r.urls = plan.urls.clone();
                     }
-                    RunEvent::Output(line) => r.console.line(&line),
+                    RunEvent::Output(line) => {
+                        if r.aspire_host && let Some(url) = crate::aspire::dashboard_url(&line.text) {
+                            r.dashboard_url = Some(url);
+                        }
+                        r.console.line(&line);
+                    }
                     RunEvent::Exited { code, cancelled, .. } => {
                         r.console.note(&match (cancelled, code) {
                             (true, _) => tr("Process stopped").to_string(),

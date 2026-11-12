@@ -1463,5 +1463,28 @@
   },
   "rc-app": {
     "Exit Focus Mode": "Exit Focus Mode"
+  },
+  "aspire": {
+    "Aspire Resources": "Aspire Resources",
+    "Run AppHost": "Run AppHost",
+    "Debug AppHost": "Debug AppHost",
+    "Refresh Resources": "Refresh Resources",
+    "Open Aspire Dashboard": "Open Aspire Dashboard",
+    "No Aspire AppHost": "No Aspire AppHost",
+    "Open a solution with an Aspire AppHost project.": "Open a solution with an Aspire AppHost project.",
+    "Run the AppHost to see live resource state and logs.": "Run the AppHost to see live resource state and logs.",
+    "No Aspire resources": "No Aspire resources",
+    "Start the AppHost and refresh to list its resources.": "Start the AppHost and refresh to list its resources.",
+    "Resource Logs": "Resource Logs",
+    "Refresh Logs": "Refresh Logs",
+    "Loading logs…": "Loading logs…",
+    "Run an Aspire AppHost to inspect its resources.": "Run an Aspire AppHost to inspect its resources.",
+    "Aspire CLI could not start: {error}": "Aspire CLI could not start: {error}",
+    "Aspire CLI request was cancelled or timed out": "Aspire CLI request was cancelled or timed out",
+    "Aspire CLI request failed": "Aspire CLI request failed",
+    "Invalid Aspire resource response: {error}": "Invalid Aspire resource response: {error}",
+    "Aspire response has no resources array": "Aspire response has no resources array",
+    "Aspire resource has no name": "Aspire resource has no name",
+    "Install Aspire CLI to inspect resources and logs.": "Install Aspire CLI to inspect resources and logs."
   }
 }
