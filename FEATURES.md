@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 77 |
-| 🚧 In progress | 44 |
-| 🟢 Existing | 33 |
+| ✅ Verified | 79 |
+| 🚧 In progress | 45 |
+| 🟢 Existing | 30 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -195,7 +195,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-02 | Roslyn semantic highlighting | ✅ | Live C# application regression verifies Roslyn semantic color for a class; see live-dotnet.md. |
 | C-03 | Code completion | ✅ | Live Roslyn and application regressions verify C# completion; advanced completion variants remain separate inventory targets. |
 | C-04 | Signature help | 🚧 | [PR 224](https://github.com/javy-fernandez/dotcraft/pull/224) updates the active argument at the caret in Shop C# EditorView, including nested and quoted commas. Metadata is supplied directly; Roslyn/app delivery and other C# forms remain unverified. |
-| C-05 | Quick documentation | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-05 | Quick documentation | 🚧 | [PR 234](https://github.com/javy-fernandez/dotcraft/pull/234) keeps F1 quick documentation visible at all four viewport corners and verifies Escape using the real Shop PriceBreakdown summary in EditorView on Linux. Live Roslyn hover delivery and app mapping remain untested. |
 | C-06 | Automatic brackets | ✅ | [PR 168](https://github.com/javy-fernandez/dotcraft/pull/168) fixes C# comment/string context and verifies pairing, type-over, selection wrapping, and undo through egui editor events on a real Shop C# fixture; 17 rc-editor unit and one fixture test pass. No SDK build or broader Rider parity claim. |
 | C-07 | Multiple carets | ✅ | [PR 178](https://github.com/javy-fernandez/dotcraft/pull/178) fixes data loss with mixed selection and empty caret during bracket typing; 27 rc-text, 17 rc-editor and one real Shop C# editor-event test verify per-range edits and one-step undo. No SDK build or broader input matrix claim. |
 | C-08 | Code folding | ✅ | [PR 196](https://github.com/javy-fernandez/dotcraft/pull/196) fixes Fold All when the caret is on a visible fold-start line; real Shop C# EditorView test covers Fold/Unfold/Fold All/Unfold All, caret relocation and unchanged buffer, plus 17 unit tests. No SDK build or other-language claim. |
@@ -311,12 +311,12 @@ Source / reuse boundary: `crates/rc-dotnet/src/build.rs; crates/rc-app/src/runne
 | --- | --- | --- | --- |
 | F-01 | Build solution or project | ✅ | Live Shop solution build and inherited CLI/API debugger project builds pass; see live-dotnet.md. |
 | F-02 | Rebuild | ✅ | [PR 233](https://github.com/javy-fernandez/dotcraft/pull/233) verifies a Linux Shop.Core project Rebuild with official .NET SDK 8.0.428: deliberately corrupted final and intermediate assemblies are restored, `--no-incremental --no-restore` is issued, and streamed output and success are observed. Solution rebuild, UI, other runtimes and platforms remain untested. |
-| F-03 | Clean | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| F-03 | Clean | ✅ | [PR 235](https://github.com/javy-fernandez/dotcraft/pull/235) verifies Linux Shop.Core project Clean with official .NET SDK 8.0.428 across Debug and Release: each clean removes only its own final/intermediate assemblies, and Debug builds again. Solution/multi-target clean, UI and other platforms remain untested. |
 | F-04 | Cancel build | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-05 | Streamed build output | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-06 | Compiler diagnostics links | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | F-07 | Run configurations | ✅ | [PR 227](https://github.com/javy-fernandez/dotcraft/pull/227) exposes the toolbar selection to accessibility and verifies choosing Shop.Cli plus session restoration after reopening real Shop.sln in egui on Linux. Launch profiles, SDK execution, compound editing and other platforms remain separate acceptance scope. |
-| F-08 | Launch profile selection | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| F-08 | Launch profile selection | ✅ | [PR 236](https://github.com/javy-fernandez/dotcraft/pull/236) verifies two Project profiles from the real Shop.Api launch settings in the egui toolbar and checks that the selected profile reaches RunRequest; IIS Express is excluded. Live process launch with the alternate profile, session restoration and other platforms remain untested. |
 | F-09 | Stop running processes | ✅ | [PR 231](https://github.com/javy-fernandez/dotcraft/pull/231) verifies live Shop.Api startup on ephemeral loopback, process ID, Stop exit and Run-console report using official .NET SDK 8.0.428 on Linux. Debugger stop, hot reload, other runtimes and platforms remain untested. |
 | F-10 | Incremental build scheduling | ⬜ | Implement with integration and UI acceptance evidence. |
 | F-11 | Build dependency visualization | ⬜ | Implement with integration and UI acceptance evidence. |

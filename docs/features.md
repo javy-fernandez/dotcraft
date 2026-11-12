@@ -328,6 +328,9 @@ additional scope is pending.
 | Live Stop of Shop.Api (F-09) | [Original PR 231](https://github.com/javy-fernandez/dotcraft/pull/231) | [Stop evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/stop-shop-api-process/docs/implementation/stop-shop-api.md) |
 | Shop Replace in Files with background writes (D-08) | [Original PR 232](https://github.com/javy-fernandez/dotcraft/pull/232) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/232/files) |
 | Linux Shop.Core project Rebuild (F-02) | [Original PR 233](https://github.com/javy-fernandez/dotcraft/pull/233) | [Rebuild evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-rebuild-live/docs/implementation/rebuild-linux.md) |
+| Viewport-safe Shop C# quick documentation (C-05, partial) | [Original PR 234](https://github.com/javy-fernandez/dotcraft/pull/234) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/234/files) |
+| Linux Shop.Core project Clean (F-03) | [Original PR 235](https://github.com/javy-fernandez/dotcraft/pull/235) | [Clean evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-clean-live/docs/implementation/clean-linux.md) |
+| Shop.Api launch profile selection (F-08) | [Original PR 236](https://github.com/javy-fernandez/dotcraft/pull/236) | [Launch profile evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/launch-profile-shop-selection/docs/implementation/shop-launch-profile-selection.md) |
 
 ## Completion criteria
 
