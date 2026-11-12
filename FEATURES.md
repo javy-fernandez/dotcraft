@@ -25,8 +25,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 111 |
-| 🚧 In progress | 39 |
+| ✅ Verified | 112 |
+| 🚧 In progress | 38 |
 | 🟢 Existing | 4 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
@@ -466,7 +466,7 @@ Source / reuse boundary: `crates/rc-syntax; crates/rc-app/src/ui`.
 | J-06 | HTTP environment variables | ✅ | PR 15 verifies inline variables; [PR 195](https://github.com/javy-fernandez/dotcraft/pull/195) verifies public/private/user precedence; [PR 265](https://github.com/javy-fernandez/dotcraft/pull/265) selects a public `dev` environment in native egui and sends a resolved variable-based request to live Shop.Api with SDK 8.0.428 on Linux, receiving HTTP 200 JSON. Secret handling, dynamic values, active-request switching and other platforms remain untested. |
 | J-07 | Database connections and SQL console | 🚧 | PR 16 verifies read-only SQLite connections and explicit bounded SQL; writes, persistent sessions and other engines remain pending. |
 | J-08 | SQL injection support | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
-| J-09 | ASP.NET endpoints explorer | 🚧 | [PR 184](https://github.com/javy-fernandez/dotcraft/pull/184) excludes nested C#, F#, and VB projects from endpoint scan; Shop.Api still yields four endpoints and 12 rc-dotnet tests pass. Endpoints UI and live server acceptance remain. |
+| J-09 | ASP.NET endpoints explorer | ✅ | [PR 184](https://github.com/javy-fernandez/dotcraft/pull/184) guards project boundaries; [PR 273](https://github.com/javy-fernandez/dotcraft/pull/273) verifies four Shop.Api routes in native egui async scan/filter, exact handler navigation, generated GET request, and HTTP 200 from each live route with SDK 8.0.428 on Linux. Dynamic routes, Razor Pages and other platforms remain untested. |
 | J-10 | Container tools | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | J-11 | ASP.NET MVC navigation | ⬜ | Implement with integration and UI acceptance evidence. |
 | J-12 | ASP.NET route analysis | ⬜ | Implement with integration and UI acceptance evidence. |

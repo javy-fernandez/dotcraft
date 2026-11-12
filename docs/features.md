@@ -367,6 +367,7 @@ additional scope is pending.
 | Shop global.json SDK chooser and build (B-20) | [Original PR 270](https://github.com/javy-fernandez/dotcraft/pull/270) | [SDK evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/shop-global-json-sdk-ui-live/docs/implementation/shop-global-json-sdk-ui.md) |
 | Shop NuGet install/update/remove (B-13) | [Original PR 271](https://github.com/javy-fernandez/dotcraft/pull/271) | [NuGet operation evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/dotnet-nuget-install-live/docs/implementation/nuget-install-linux.md) |
 | CentralShop CPM evaluation, restore and UI (B-23) | [Original PR 272](https://github.com/javy-fernandez/dotcraft/pull/272) | [CPM evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/central-shop-cpm-live/docs/implementation/central-shop-cpm-sdk8.md) |
+| Shop.Api endpoints explorer and live routes (J-09) | [Original PR 273](https://github.com/javy-fernandez/dotcraft/pull/273) | [Endpoint evidence](https://github.com/RafaelMendes1407/dotcraft/blob/test/endpoints-explorer-shop/docs/implementation/j-09-endpoints-explorer-shop.md) |
 
 ## Completion criteria
 
