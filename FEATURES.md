@@ -26,8 +26,8 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 65 |
-| 🚧 In progress | 41 |
-| 🟢 Existing | 47 |
+| 🚧 In progress | 42 |
+| 🟢 Existing | 46 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 203 |
 | 🚫 Out of scope | 0 |
@@ -167,7 +167,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-10 | MSBuild property evaluation | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-11 | Launch settings profiles | 🚧 | [PR 181](https://github.com/javy-fernandez/dotcraft/pull/181) fixes URL scheme detection and verifies Shop.Api profile order, URL, and environment in four rc-dotnet tests. Browser opening, SDK run, and UI profile selection remain unverified. |
 | B-12 | NuGet search | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| B-13 | NuGet installation and removal | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| B-13 | NuGet installation and removal | 🚧 | [PR 219](https://github.com/javy-fernandez/dotcraft/pull/219) preflights project path, bounded package ID and version before add/update/remove process spawn; a copied Shop.Api project and fake host verify valid arguments and no spawn on invalid input. Real SDK restore, project modification and UI remain. |
 | B-14 | JSON .slnf solution filters | 🚧 | Parser, explorer and SDK build are verified in the original baseline; filter-specific Roslyn, test-project selection and actual test execution remain pending. The test-selection [PR 153](https://github.com/javy-fernandez/dotcraft/pull/153) was closed without merge. |
 | B-15 | Interactive filter creation and editing | 🚧 | [PR 209](https://github.com/javy-fernandez/dotcraft/pull/209) adds bounded `.slnf` create/update backend API, preserving unknown JSON fields and BOM, tested on TenProjects.slnx. UI workflow, persistence, SDK build and language-service update remain. |
 | B-16 | Unload and reload individual projects | ⬜ | Implement with integration and UI acceptance evidence. |
