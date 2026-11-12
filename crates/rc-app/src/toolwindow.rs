@@ -30,6 +30,7 @@ pub enum ToolWindow {
     Endpoints,
     Coverage,
     PullRequests,
+    Resources,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,7 +66,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 23] = [
+    pub const ALL: [ToolWindow; 24] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -87,6 +88,7 @@ impl ToolWindow {
         ToolWindow::Hierarchy,
         ToolWindow::LocalHistory,
         ToolWindow::Nuget,
+        ToolWindow::Resources,
         ToolWindow::Database,
         ToolWindow::Notifications,
     ];
@@ -116,6 +118,7 @@ impl ToolWindow {
             ToolWindow::Endpoints => "endpoints",
             ToolWindow::Coverage => "coverage",
             ToolWindow::PullRequests => "pull_requests",
+            ToolWindow::Resources => "resources",
         }
     }
 
@@ -144,6 +147,7 @@ impl ToolWindow {
             ToolWindow::Endpoints => tr("Endpoints"),
             ToolWindow::Coverage => tr("Coverage"),
             ToolWindow::PullRequests => tr("Pull Requests"),
+            ToolWindow::Resources => tr("Resources"),
         }
     }
 
@@ -172,6 +176,7 @@ impl ToolWindow {
             ToolWindow::Endpoints => ico::TW_ENDPOINTS,
             ToolWindow::Coverage => ico::RUN_COVERAGE,
             ToolWindow::PullRequests => ico::TW_PULL_REQUESTS,
+            ToolWindow::Resources => ico::FILE_XML,
         }
     }
 

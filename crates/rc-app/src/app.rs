@@ -106,6 +106,7 @@ pub struct DotCraftApp {
     /// Whether the window was already full screen when a full-screen focus mode began.
     pub fullscreen_before_focus: bool,
     pub explorer: ExplorerState,
+    pub resource_editor: crate::resource_editor::ResourceEditor,
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
     /// Monitoring: CPU and memory of the program in the selected Run tab.
@@ -232,6 +233,7 @@ impl DotCraftApp {
             focus_mode: FocusMode::Normal,
             fullscreen_before_focus: false,
             explorer: ExplorerState::default(),
+            resource_editor: crate::resource_editor::ResourceEditor::new(waker.clone()),
             dialog: None,
             notices: Vec::new(),
             monitor: crate::monitor::Monitor::new(waker.clone()),
@@ -931,6 +933,24 @@ impl DotCraftApp {
 
     /// Opens a file in an editor tab, remembering the current place for "Back".
     pub fn open_file(&mut self, path: &Path) {
+        if path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("resx")) {
+            if self.docs.index_of(path).is_some_and(|index| self.docs.list[index].is_modified()) {
+                self.notify(tr("Save the XML document before opening the resource grid"), true);
+                return;
+            }
+            self.resource_editor.open(path);
+            self.dock.show(ToolWindow::Resources);
+            self.session_dirty = true;
+            if self.settings.add_recent_file(path.to_path_buf()) {
+                let _ = self.settings.save();
+            }
+            return;
+        }
+        self.open_text_file(path);
+    }
+
+    /// Opens XML as a regular text document when the resource grid cannot represent it.
+    pub fn open_text_file(&mut self, path: &Path) {
         self.push_nav();
         match self.docs.open(path) {
             Ok(i) => {
@@ -1053,6 +1073,9 @@ impl DotCraftApp {
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
         match action {
             Action::Save => {
+                if self.dock.is_open(ToolWindow::Resources) {
+                    self.resource_editor.save();
+                }
                 if let Some(i) = self.docs.active && !self.docs.list[i].editor.read_only {
                     let path = self.docs.list[i].path.clone();
                     match self.docs.save(i) {
@@ -1063,6 +1086,7 @@ impl DotCraftApp {
                 self.save_session();
             }
             Action::SaveAll => {
+                self.resource_editor.save();
                 self.save_all_docs();
                 self.save_session();
             }

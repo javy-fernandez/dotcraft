@@ -64,6 +64,7 @@ mod history_tests;
 mod docs;
 mod native_menu;
 mod open_files;
+mod resource_editor;
 mod toolwindow;
 mod ui;
 
