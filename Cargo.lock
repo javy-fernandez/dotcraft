@@ -3900,6 +3900,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rc-remote"
+version = "0.6.1"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "rc-search"
 version = "0.6.1"
 dependencies = [
