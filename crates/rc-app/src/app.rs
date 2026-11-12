@@ -960,17 +960,22 @@ impl DotCraftApp {
     }
 
     pub fn navigate(&mut self, back: bool) {
-        let (from, to) = if back { (&mut self.nav_back, &mut self.nav_forward) } else { (&mut self.nav_forward, &mut self.nav_back) };
-        let Some((path, pos)) = from.pop() else { return };
-        if let Some(d) = self.docs.active_doc() {
-            to.push((d.path.clone(), d.editor.caret()));
-        }
-        if self.docs.open(&path).is_ok()
-            && let Some(d) = self.docs.active_doc_mut()
-        {
+        let here = self.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret()));
+        while let Some((path, pos)) = if back { self.nav_back.pop() } else { self.nav_forward.pop() } {
+            if !path.is_file() {
+                continue;
+            }
+            if self.docs.open(&path).is_err() {
+                continue; // Skip a file removed since this location was recorded.
+            }
+            if let Some(here) = &here {
+                if back { &mut self.nav_forward } else { &mut self.nav_back }.push(here.clone());
+            }
+            let Some(d) = self.docs.active_doc_mut() else { return };
             let pos = pos.min(d.editor.buffer.len_chars());
             d.editor.set_selection(rc_text::Selection::point(pos));
             self.focus_editor = true;
+            return;
         }
     }
 
