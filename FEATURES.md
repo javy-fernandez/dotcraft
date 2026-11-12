@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 71 |
+| ✅ Verified | 72 |
 | 🚧 In progress | 44 |
-| 🟢 Existing | 39 |
+| 🟢 Existing | 38 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -239,7 +239,7 @@ Source / reuse boundary: `crates/rc-app/src/search.rs; crates/rc-search; crates/
 
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
-| D-01 | Go to file | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| D-01 | Go to file | ✅ | [PR 228](https://github.com/javy-fernandez/dotcraft/pull/228) verifies indexed `PriceCalculator.cs:12` Go to File selection and exact C# caret position in the real Shop.sln egui UI on Linux. Duplicate basenames, live index updates, remote paths and other platforms remain untested. |
 | D-02 | Go to type | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-03 | Go to symbol | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | D-04 | Go to definition | 🟢 | Exercise on a real .NET fixture; record evidence. |
