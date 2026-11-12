@@ -21,6 +21,14 @@ pub const PROTOCOL_VERSION: u32 = 1;
 const MAX_BYTES: usize = 1024 * 1024;
 const MAX_LINE_BYTES: usize = 2 * 1024 * 1024;
 
+pub fn decode_data(data: &str) -> Result<Vec<u8>> {
+    let bytes = STANDARD.decode(data).context("invalid base64 data")?;
+    if bytes.len() > MAX_BYTES {
+        bail!("data exceeds 1 MiB limit");
+    }
+    Ok(bytes)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
     pub version: u32,

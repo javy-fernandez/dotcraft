@@ -15,6 +15,7 @@ pub mod merge;
 pub mod monitoring;
 pub mod new_project;
 pub mod rebase;
+pub mod remote_explorer;
 pub mod nuget;
 pub mod pull_requests;
 pub mod header;
@@ -39,12 +40,13 @@ pub const STATUS_H: f32 = 30.0;
 
 pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     let ctx = ui.ctx().clone();
+    app.remote.pump();
     status::tick_notices(app, &ctx);
     let p = rc_kit::pal(ui);
     let bar = egui::Frame::NONE.fill(p.main_bg);
     let title_h = TITLE_H.max(32.0 / ctx.zoom_factor().max(0.1));
     // The focus modes need an editor: the welcome screen leaves them.
-    if app.workspace.is_none() && app.docs.list.is_empty() {
+    if app.workspace.is_none() && app.docs.list.is_empty() && !app.remote.visible() {
         app.set_focus_mode(&ctx, FocusMode::Normal);
     }
     if !app.focus_mode.hides_chrome() {
@@ -65,7 +67,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
             });
     }
     // Without a workspace: the welcome screen, unless files are open on their own.
-    if app.workspace.is_none() && app.docs.list.is_empty() {
+    if app.workspace.is_none() && app.docs.list.is_empty() && !app.remote.visible() {
         egui::CentralPanel::default().frame(bar.inner_margin(Margin { left: 6, right: 6, top: 0, bottom: 0 })).show(ui, |ui| welcome::show(app, ui));
         dialogs::show(app, &ctx);
         if let Some(mut d) = app.new_project.take()
@@ -79,7 +81,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         return;
     }
     // Files on their own (no workspace): only the editor, like Rider's LightEdit.
-    let light = app.workspace.is_none();
+    let light = app.workspace.is_none() && !app.remote.visible();
     let margin = if app.focus_mode.hides_chrome() {
         Margin::same(6)
     } else if light || app.focus_mode != FocusMode::Normal {
