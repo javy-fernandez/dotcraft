@@ -224,6 +224,8 @@ additional scope is pending.
 | File watcher rename and atomic-save handling (L-03, partial) | [Original PR 155](https://github.com/javy-fernandez/dotcraft/pull/155) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/155/files) |
 | Solution build configurations and platforms (B-19, partial) | [Original PR 156](https://github.com/javy-fernandez/dotcraft/pull/156) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/156/files) |
 | C# complete statement (C-17, partial) | [Original PR 157](https://github.com/javy-fernandez/dotcraft/pull/157) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/157/files) |
+| Git submodule status and cancellation (I-23, partial) | [Original PR 158](https://github.com/javy-fernandez/dotcraft/pull/158) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/158/files) |
+| Concurrent workspace session saves (L-02, partial) | [Original PR 159](https://github.com/javy-fernandez/dotcraft/pull/159) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/159/files) |
 
 ## Completion criteria
 

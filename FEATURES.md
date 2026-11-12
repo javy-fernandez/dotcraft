@@ -26,10 +26,10 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 33 |
-| 🚧 In progress | 19 |
-| 🟢 Existing | 81 |
+| 🚧 In progress | 21 |
+| 🟢 Existing | 80 |
 | 🔁 Reuse candidate | 24 |
-| ⬜ Backlog | 216 |
+| ⬜ Backlog | 215 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
 <!-- summary:end -->
@@ -440,7 +440,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-20 | Changelists | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-21 | Partial commit | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-22 | Git worktrees | ⬜ | Implement with integration and UI acceptance evidence. |
-| I-23 | Submodules | ⬜ | Implement with integration and UI acceptance evidence. |
+| I-23 | Submodules | 🚧 | [PR 158](https://github.com/javy-fernandez/dotcraft/pull/158) adds typed recursive status and cancellable update; 47 rc-vcs tests pass. UI, nested/network cases, and cross-platform acceptance remain. |
 | I-24 | Git LFS | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-25 | GitHub pull requests | ⬜ | Implement with integration and UI acceptance evidence. |
 | I-26 | GitLab merge requests | ⬜ | Implement with integration and UI acceptance evidence. |
@@ -542,7 +542,7 @@ Source / reuse boundary: `crates/rc-term; crates/rc-core; CrabCraft shared modul
 | ID | Capability | Status | Next acceptance step |
 | --- | --- | --- | --- |
 | L-01 | Integrated terminal | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| L-02 | Persistent workspace sessions | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| L-02 | Persistent workspace sessions | 🚧 | [PR 159](https://github.com/javy-fernandez/dotcraft/pull/159) hardens concurrent atomic saves and round-trips complete session state in two .NET fixtures; 13 rc-core tests pass. Live UI restoration, crash durability, and other platforms remain unverified. |
 | L-03 | File system watching | 🚧 | [PR 155](https://github.com/javy-fernandez/dotcraft/pull/155) classifies renames and atomic saves as source removal plus destination creation; 13 rc-core tests pass, including a real filesystem .NET-project fixture. UI, index/LSP integration, and other platforms remain unverified. |
 | L-04 | Background task runtime | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | L-05 | Terminal search and split panes | 🚧 | Bounded, cancellable terminal search is tested; split panes and cross-platform UI validation remain pending. |
