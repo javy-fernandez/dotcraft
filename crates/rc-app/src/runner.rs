@@ -81,6 +81,7 @@ pub struct BuildState {
     pub failed: Option<String>,
     pub started: Instant,
     pub title: String,
+    pub action: Option<BuildAction>,
     /// A command that is not a build (`dotnet ef`, a tool install): its own summary text and
     /// what to do once it succeeds.
     pub tool: Option<ToolFollowup>,
@@ -266,7 +267,7 @@ impl Runner {
         }
         .to_string();
         let handle = rc_dotnet::start_build(&dotnet, BuildRequest::new(target, action), inbox.sender());
-        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, tool: None, lines: Vec::new() });
+        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, action: Some(action), tool: None, lines: Vec::new() });
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Build)]
     }
 
@@ -283,7 +284,7 @@ impl Runner {
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         let handle = rc_dotnet::ef::start(&dotnet, args, dir, inbox.sender());
-        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, tool: Some(followup), lines: Vec::new() });
+        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, action: None, tool: Some(followup), lines: Vec::new() });
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Build)]
     }
 

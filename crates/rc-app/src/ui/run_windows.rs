@@ -6,6 +6,7 @@ use crate::toolwindow::ToolWindow;
 use crate::ui::toolwindows::{HEADER_H, empty_state};
 use egui::{Align2, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_dotnet::TestOutcome;
+use rc_core::session::{ContinuousMode, ContinuousScope};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{Ico, ico, icons, theme};
 
@@ -302,6 +303,47 @@ pub fn tests(app: &mut DotCraftApp, ui: &mut Ui) {
         (ico::RUN_COVERAGE, tr("Run All Tests with Coverage"), ws && !running && !app.coverage.running),
     ];
     let mut clicked = header(ui, tr("Tests"), &actions);
+    ui.horizontal(|ui| {
+        let mut mode = app.continuous.options.mode;
+        egui::ComboBox::from_id_salt("continuous_mode")
+            .selected_text(match mode {
+                ContinuousMode::Off => tr("Continuous testing: Off"),
+                ContinuousMode::OnSave => tr("Continuous testing: On Save"),
+                ContinuousMode::OnBuild => tr("Continuous testing: On Build"),
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut mode, ContinuousMode::Off, tr("Continuous testing: Off"));
+                ui.selectable_value(&mut mode, ContinuousMode::OnSave, tr("Continuous testing: On Save"));
+                ui.selectable_value(&mut mode, ContinuousMode::OnBuild, tr("Continuous testing: On Build"));
+            });
+        if mode != app.continuous.options.mode {
+            app.continuous.options.mode = mode;
+            app.session_dirty = true;
+        }
+        let mut scope = app.continuous.options.scope;
+        egui::ComboBox::from_id_salt("continuous_scope")
+            .selected_text(match scope {
+                ContinuousScope::Affected => tr("Affected test projects"),
+                ContinuousScope::Session => tr("Current test session"),
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut scope, ContinuousScope::Affected, tr("Affected test projects"));
+                ui.selectable_value(&mut scope, ContinuousScope::Session, tr("Current test session"));
+            });
+        if scope != app.continuous.options.scope {
+            app.continuous.options.scope = scope;
+            app.session_dirty = true;
+        }
+        if let Some(request) = app.runner.tests.as_ref().map(|tests| tests.request.clone())
+            && ui.button(tr("Use current test run")).clicked()
+        {
+            app.continuous.select_session(&request);
+            app.session_dirty = true;
+        }
+    });
+    if !app.continuous.status.is_empty() {
+        ui.label(&app.continuous.status);
+    }
     if app.runner.tests.is_none() {
         let hint = tr("Run the tests of a project or file to see the results.");
         if crate::ui::toolwindows::empty_state_with(ui, ToolWindow::Tests.icon(), tr("No tests run yet"), hint, ws.then_some(tr("Run All Tests"))) {
@@ -322,6 +364,7 @@ pub fn tests(app: &mut DotCraftApp, ui: &mut Ui) {
             handle_outputs(app, outs);
         }
         Some(3) => {
+            app.continuous.cancel();
             if let Some(t) = &mut app.runner.tests
                 && let Some(h) = t.handle.take()
             {

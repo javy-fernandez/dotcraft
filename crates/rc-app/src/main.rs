@@ -9,6 +9,7 @@ mod monitor;
 mod update;
 mod convert;
 mod debugger;
+mod continuous_testing;
 mod database;
 mod insight;
 mod package_insight;
