@@ -26,9 +26,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 | Status | Items |
 | --- | --- |
 | ✅ Verified | 64 |
-| 🚧 In progress | 37 |
+| 🚧 In progress | 38 |
 | 🟢 Existing | 49 |
-| 🔁 Reuse candidate | 18 |
+| 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 205 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
@@ -138,7 +138,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-18 | Tab docking previews | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | A-19 | Background document saving | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | A-20 | Safe reload from disk | ✅ | [PR 205](https://github.com/javy-fernandez/dotcraft/pull/205) routes conflict-banner disk loading through parse/style refresh and verifies both Load from Disk and Keep Mine in the open Shop solution egui UI on Linux. Watcher timing, large/binary files and other platforms remain untested. |
-| A-21 | Accessible keyboard navigation | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| A-21 | Accessible keyboard navigation | 🚧 | [PR 214](https://github.com/javy-fernandez/dotcraft/pull/214) verifies Enter on the accessible recent Shop solution and Space to hide/reopen Explorer in egui on Linux. Editor tabs, dialogs, menus, screen readers and other platforms need broader acceptance. |
 | A-22 | Distraction-free and Zen modes | ✅ | [PR 161](https://github.com/javy-fernandez/dotcraft/pull/161) provides View-menu toggles, a visible exit control, and dock-preserving layout changes. Two rc-app UI harness tests passed with `Shop.sln` on Linux. Modes are process-local; native window chrome and other platforms remain untested. |
 | A-23 | Presentation mode | ✅ | [PR 211](https://github.com/javy-fernandez/dotcraft/pull/211) adds View-menu entry/exit, larger editor text, fullscreen request and full editor area while preserving the dock; Shop.sln egui flow passes on Linux, including settings changes and exit after Close Project. OS fullscreen, display scaling and other platforms remain untested. |
 | A-24 | Customizable toolbar | ⬜ | Implement with integration and UI acceptance evidence. |

@@ -308,6 +308,7 @@ additional scope is pending.
 | Presentation mode with Shop (A-23) | [Original PR 211](https://github.com/javy-fernandez/dotcraft/pull/211) | [Presentation evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/presentation-mode-shop/docs/implementation/presentation-mode-shop.md) |
 | Solution dependency graph backend (B-28, partial) | [Original PR 212](https://github.com/javy-fernandez/dotcraft/pull/212) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/212/files) |
 | Shop.Api OpenAPI export backend (J-24, partial) | [Original PR 213](https://github.com/javy-fernandez/dotcraft/pull/213) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/213/files) |
+| Shop keyboard navigation (A-21, partial) | [Original PR 214](https://github.com/javy-fernandez/dotcraft/pull/214) | [Keyboard evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/keyboard-navigation-shop/docs/implementation/keyboard-navigation-shop.md) |
 
 ## Completion criteria
 
