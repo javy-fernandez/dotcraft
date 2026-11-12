@@ -539,6 +539,49 @@ mod tests {
     }
 
     #[test]
+    fn go_to_symbol_opens_shop_order_constructor_not_class() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let shop = crate::screens::fixtures().join("Shop");
+        let order = shop.join("src/Shop.Core/Order.cs");
+        let source = std::fs::read_to_string(&order).unwrap();
+        let class_line = source.lines().position(|line| line.contains("public sealed class Order")).unwrap();
+        let class_col = source.lines().nth(class_line).unwrap().find("Order").unwrap();
+        let constructor_line = source.lines().position(|line| line.contains("public Order(string customer)")).unwrap();
+        let constructor_col = source.lines().nth(constructor_line).unwrap().find("Order").unwrap();
+
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&shop.join("Shop.sln"));
+        let mut search = SearchEverywhere::new(SeTab::Symbols, "Order".into());
+        search.symbols = vec![
+            crate::search::SymbolHit { name: "Order".into(), container: "Shop.Core".into(), kind: rc_lsp::lsp_types::SymbolKind::CLASS, path: order.clone(), line: class_line, col: class_col },
+            crate::search::SymbolHit { name: "Order".into(), container: "Shop.Core.Order".into(), kind: rc_lsp::lsp_types::SymbolKind::CONSTRUCTOR, path: order.clone(), line: constructor_line, col: constructor_col },
+        ];
+        assert_eq!(collect(&app, &search).len(), 1, "Go to Symbol must exclude the class result");
+        app.search_everywhere = Some(search);
+
+        let mut first = true;
+        let mut harness = Harness::builder().with_size(vec2(900.0, 600.0)).build_ui_state(move |ui, app: &mut DotCraftApp| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            show(app, ui.ctx());
+        }, app);
+        harness.run_steps(3);
+        harness.get_by_label("Order").click();
+        harness.run_steps(2);
+
+        let app = harness.state();
+        assert!(app.search_everywhere.is_none());
+        let doc = app.docs.active_doc().unwrap();
+        assert_eq!(doc.path, order);
+        assert_eq!(doc.editor.caret_line_col(), (constructor_line, constructor_col));
+        assert!(app.focus_editor);
+    }
+
+    #[test]
     fn settings_results_open_each_existing_page_from_search_everywhere() {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
