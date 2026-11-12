@@ -9,6 +9,7 @@ pub mod editor_area;
 pub mod ef_core;
 pub mod explorer;
 pub mod git;
+pub mod generate;
 pub mod main_menu;
 pub mod markdown;
 pub mod merge;
@@ -92,6 +93,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     });
     dialogs::show(app, &ctx);
     nuget::sign_in_dialog(app, &ctx);
+    generate::show(app, &ctx);
     search_popup::show(app, &ctx);
     editor_area::floating_windows(app, &ctx);
     if let Some(mut d) = app.new_project.take()

@@ -301,6 +301,10 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
             Action::InsertLiveTemplate | Action::SurroundWith => {
                 app.dialog = Some(crate::ui::dialogs::Dialog::Templates { surround: a == Action::SurroundWith, filter: String::new(), selected: 0 });
             }
+            Action::Generate => {
+                app.generate = crate::generate::Dialog::from_doc(doc);
+                app.focus_editor = false;
+            }
             Action::ToggleBookmarkMnemonic => {
                 let line = doc.editor.caret_line_col().0;
                 app.dialog = Some(crate::ui::dialogs::Dialog::BookmarkMnemonic { path: doc.path.clone(), line });
@@ -381,6 +385,7 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
             }
         };
         if csharp {
+            entry(ui, None, tr("Generate…"), Action::Generate);
             entry(ui, Some(ico::BULB), tr("Show Context Actions"), Action::ShowIntentions);
             entry(ui, None, tr("Go to Declaration"), Action::GotoDeclaration);
             entry(ui, None, tr("Go to Implementation"), Action::GotoImplementation);
