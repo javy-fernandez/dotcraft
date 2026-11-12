@@ -1338,6 +1338,9 @@ impl DotCraftApp {
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
             self.keymap = Keymap::new(keymap_kind(self.settings.keymap));
+            if self.native_menu.is_some() {
+                self.native_menu = NativeMenu::install(ctx, &self.keymap);
+            }
         }
         if lang_changed {
             i18n::set_lang(self.settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
