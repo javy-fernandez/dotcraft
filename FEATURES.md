@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 95 |
+| ✅ Verified | 96 |
 | 🚧 In progress | 47 |
-| 🟢 Existing | 12 |
+| 🟢 Existing | 11 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -401,7 +401,7 @@ Source / reuse boundary: `crates/rc-dotnet/src/test.rs; crates/rc-app/src/ui/run
 | H-15 | Test impact analysis | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-16 | Code coverage collection | ✅ | [PR 251](https://github.com/javy-fernandez/dotcraft/pull/251) verifies Shop.Core xUnit Coverlet 6.0.0 collection with official SDK 8.0.428 plus the full Shop Coverage UI test on Linux; the report shows 52/60 covered Shop.Core lines. MSTest lacks a collector and is skipped; MTP v2 and other platforms remain untested. |
 | H-17 | Coverage gutter | 🟢 | Source located in `rc-app/coverage.rs`; repeat application acceptance checks. |
-| H-18 | Coverage reports | 🟢 | Source located in the coverage window; repeat real .NET acceptance checks. |
+| H-18 | Coverage reports | ✅ | [PR 256](https://github.com/javy-fernandez/dotcraft/pull/256) verifies a partially covered Shop.Core assembly and covered PriceCalculator class after a live SDK 8.0.428/Coverlet 6.0.0 run, then collapses and reopens the assembly row in egui on Linux. Branch metrics, exports, multiple assemblies, MTP v2 and other platforms remain untested. |
 | H-19 | Coverage thresholds | ⬜ | Implement with integration and UI acceptance evidence. |
 | H-20 | CPU profiling | 🟢 | Source located in `rc-dotnet/cpu_profile.rs`; repeat real .NET acceptance checks. |
 | H-21 | Allocation profiling | ⬜ | Implement with integration and UI acceptance evidence. |
