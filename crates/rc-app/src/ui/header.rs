@@ -170,6 +170,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                         None => (ico::CONFIG_APP, tr("No run configurations").to_string()),
                     };
                     let resp = theme::flat_button(ui, Some(icon), &label, FontId::proportional(13.0), true, true).on_hover_text(tr("Choose what Run and Debug start"));
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &trf("Run configuration: {name}", &[("name", &label)])));
                     egui::Popup::menu(&resp).show(|ui| {
                         ui.set_min_width(240.0);
                         if app.runner.configs.is_empty() {
