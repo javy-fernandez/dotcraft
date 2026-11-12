@@ -131,13 +131,27 @@ mod tests {
         unsafe { std::env::set_var("DOTCRAFT_HOME", dir.path()) };
         let ws = dir.path().join("MySolution");
         std::fs::create_dir_all(&ws).unwrap();
+        std::fs::write(ws.join("MySolution.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />\n").unwrap();
+        std::fs::write(ws.join("Program.cs"), "class Program {}\n").unwrap();
         let mut s = Session::default();
         s.files.push(OpenFile { path: ws.join("Program.cs"), line: 12, col: 4, scroll_y: 120.0, folded: vec![3], pinned: false });
         s.active = Some(0);
         s.favorites.push(ws.join("Program.cs"));
+        s.bookmarks.insert(ws.join("Program.cs"), vec![(3, Some('A'))]);
+        s.tool_windows.insert("Explorer".into(), ToolWindowState { visible: true, size: 320.0, side: Some("left".into()) });
+        s.run_options.insert("MySolution".into(), RunOptions { args: "--verbose".into(), build_first: false, ..Default::default() });
         s.custom_templates.insert("greet".into(), "Console.WriteLine(${1:name});$0".into());
         s.save(&ws).unwrap();
         assert_eq!(Session::load(&ws), s);
-        assert_eq!(Session::load(&dir.path().join("Other")), Session::default());
+
+        let other = dir.path().join("OtherSolution");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("OtherSolution.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />\n").unwrap();
+        let mut other_session = Session::default();
+        other_session.files.push(OpenFile { path: other.join("Other.cs"), ..Default::default() });
+        other_session.save(&other).unwrap();
+        assert_ne!(Session::file_for(&ws), Session::file_for(&other));
+        assert_eq!(Session::load(&other), other_session);
+        assert_eq!(Session::load(&ws), s);
     }
 }
