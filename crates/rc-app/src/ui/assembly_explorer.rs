@@ -11,6 +11,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
     let mut open = true;
     let mut select_type = None;
     let mut change_mode = None;
+    let mut open_framework = None;
     egui::Window::new(tr("Assembly Explorer"))
         .open(&mut open)
         .default_size(egui::vec2(1050.0, 700.0))
@@ -28,6 +29,34 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
                     if ui.button(tr("Cancel")).clicked() {
                         explorer.cancel();
                     }
+                });
+            }
+            ui.separator();
+            if ui.button(tr("Browse .NET reference assemblies")).clicked() {
+                explorer.list_framework_assemblies();
+            }
+            if !explorer.framework_assemblies.is_empty() {
+                ui.collapsing(tr("Reference assemblies"), |ui| {
+                    ui.text_edit_singleline(&mut explorer.framework_filter);
+                    let filter = explorer.framework_filter.to_lowercase();
+                    ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
+                        for path in &explorer.framework_assemblies {
+                            let label = path.file_name().unwrap_or_default().to_string_lossy();
+                            if !filter.is_empty() && !label.to_lowercase().contains(&filter) {
+                                continue;
+                            }
+                            if ui
+                                .selectable_label(
+                                    explorer.path.as_ref() == Some(path),
+                                    label.as_ref(),
+                                )
+                                .on_hover_text(path.display().to_string())
+                                .clicked()
+                            {
+                                open_framework = Some(path.clone());
+                            }
+                        }
+                    });
                 });
             }
             ui.separator();
@@ -112,6 +141,9 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         });
     if let Some(name) = select_type {
         explorer.select(name, explorer.show_il);
+    }
+    if let Some(path) = open_framework {
+        explorer.open(path);
     }
     if let (Some(mode), Some(name)) = (change_mode, explorer.selected.clone()) {
         explorer.select(name, mode);

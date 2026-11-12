@@ -22,6 +22,7 @@ pub struct Member {
 
 enum ResultEvent {
     Package(u64, PathBuf),
+    Frameworks(u64, Vec<PathBuf>),
     Types(u64, Vec<AssemblyType>),
     Source(u64, String, bool, String, Vec<Member>),
     Error(u64, String),
@@ -32,6 +33,8 @@ pub struct AssemblyExplorer {
     pub path: Option<PathBuf>,
     pub types: Vec<AssemblyType>,
     pub filter: String,
+    pub framework_assemblies: Vec<PathBuf>,
+    pub framework_filter: String,
     pub selected: Option<String>,
     pub members: Vec<Member>,
     pub selected_member: Option<usize>,
@@ -50,6 +53,8 @@ impl AssemblyExplorer {
             path: None,
             types: Vec::new(),
             filter: String::new(),
+            framework_assemblies: Vec::new(),
+            framework_filter: String::new(),
             selected: None,
             members: Vec::new(),
             selected_member: None,
@@ -128,6 +133,28 @@ impl AssemblyExplorer {
         });
     }
 
+    pub fn list_framework_assemblies(&mut self) {
+        self.visible = true;
+        self.error = None;
+        self.busy = true;
+        let generation = self.generation.fetch_add(1, Ordering::Relaxed) + 1;
+        let out = self.inbox.sender();
+        std::thread::spawn(move || {
+            let Some(dotnet) = rc_dotnet::sdk::Dotnet::locate(None) else {
+                out.send(ResultEvent::Error(
+                    generation,
+                    tr(".NET SDK was not found").into(),
+                ));
+                return;
+            };
+            let assemblies = dotnet
+                .root()
+                .map(framework_assemblies_in)
+                .unwrap_or_default();
+            out.send(ResultEvent::Frameworks(generation, assemblies));
+        });
+    }
+
     pub fn select(&mut self, full_name: String, show_il: bool) {
         let Some(path) = self.path.clone() else {
             return;
@@ -193,6 +220,10 @@ impl AssemblyExplorer {
                 ResultEvent::Package(generation, path) if generation == active => {
                     package = Some(path)
                 }
+                ResultEvent::Frameworks(generation, paths) if generation == active => {
+                    self.framework_assemblies = paths;
+                    self.busy = false;
+                }
                 ResultEvent::Types(generation, types) if generation == active => {
                     self.types = types;
                     self.busy = false;
@@ -219,6 +250,37 @@ impl AssemblyExplorer {
             self.open(path);
         }
     }
+}
+
+fn framework_assemblies_in(root: &Path) -> Vec<PathBuf> {
+    let mut assemblies = Vec::new();
+    let Ok(packs) = std::fs::read_dir(root.join("packs")) else {
+        return assemblies;
+    };
+    for pack in packs
+        .flatten()
+        .filter(|entry| entry.file_name().to_string_lossy().ends_with(".Ref"))
+    {
+        let Ok(versions) = std::fs::read_dir(pack.path()) else {
+            continue;
+        };
+        for version in versions.flatten() {
+            let Ok(frameworks) = std::fs::read_dir(version.path().join("ref")) else {
+                continue;
+            };
+            for framework in frameworks.flatten() {
+                let Ok(files) = std::fs::read_dir(framework.path()) else {
+                    continue;
+                };
+                assemblies.extend(files.flatten().map(|file| file.path()).filter(|path| {
+                    path.extension()
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("dll"))
+                }));
+            }
+        }
+    }
+    assemblies.sort();
+    assemblies
 }
 
 fn find_package_assembly(name: &str, version: &str) -> Option<PathBuf> {
@@ -435,6 +497,17 @@ mod tests {
             find_package_assembly_in(root.path(), "Newtonsoft.Json", "13.0.3"),
             Some(dll)
         );
+    }
+
+    #[test]
+    fn lists_reference_pack_assemblies() {
+        let root = tempfile::tempdir().unwrap();
+        let assembly = root
+            .path()
+            .join("packs/Microsoft.NETCore.App.Ref/10.0.0/ref/net10.0/System.Text.Json.dll");
+        std::fs::create_dir_all(assembly.parent().unwrap()).unwrap();
+        std::fs::write(&assembly, []).unwrap();
+        assert_eq!(framework_assemblies_in(root.path()), vec![assembly]);
     }
 
     #[test]
