@@ -811,6 +811,11 @@ mod tab_tests {
 
     #[test]
     fn dotnet_editor_tabs_activate_and_close_with_accessible_controls() {
+mod split_tests {
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn split_dotnet_editors_render_and_unsplit_in_both_orientations() {
         let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
         let fixtures = crate::screens::fixtures().join("Shop");
@@ -832,5 +837,28 @@ mod tab_tests {
         harness.run_steps(3);
         assert_eq!(harness.state().docs.list.len(), 1);
         assert_eq!(harness.state().docs.active_doc().unwrap().path, program);
+        for vertical in [true, false] {
+            let mut app = crate::screens::test_app(home.path(), true);
+            app.workspace = Some(crate::app::WorkspaceState {
+                ws: rc_core::Workspace::open(&solution).unwrap(),
+                solution: Some(rc_dotnet::Solution::load(&solution).unwrap()),
+            });
+            app.open_file(&order);
+            app.open_file(&program);
+            let main = app.docs.list[0].editor.id;
+            let other = app.docs.list[1].editor.id;
+            let ctx = egui::Context::default();
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                super::run_tab_commands(&mut app, ui, vec![super::TabCommand::Split(1, vertical)]);
+            });
+            output.textures_delta.clear();
+            assert_eq!(app.split.as_ref().map(|split| (split.main, split.other)), Some((main, other)));
+            let mut harness = crate::screens::harness(app, egui::vec2(1100.0, 700.0));
+            assert_eq!(harness.state().split.as_ref().unwrap().vertical, vertical);
+            harness.get_by_label(rc_kit::i18n::tr("Unsplit")).click();
+            harness.run_steps(3);
+            assert!(harness.state().split.is_none());
+            assert_eq!(harness.state().docs.list.len(), 2);
+        }
     }
 }
