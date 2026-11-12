@@ -25,10 +25,10 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 46 |
-| 🚧 In progress | 27 |
-| 🟢 Existing | 65 |
-| 🔁 Reuse candidate | 22 |
+| ✅ Verified | 47 |
+| 🚧 In progress | 29 |
+| 🟢 Existing | 63 |
+| 🔁 Reuse candidate | 21 |
 | ⬜ Backlog | 213 |
 | 🚫 Out of scope | 0 |
 | **Total** | **373** |
@@ -125,7 +125,7 @@ Source / reuse boundary: `crates/rc-app/src/ui; crates/rc-kit`.
 | A-04 | Docked tool windows | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | A-05 | Editor tabs | ✅ | [PR 174](https://github.com/javy-fernandez/dotcraft/pull/174) names close controls for accessibility; egui UI harness activates and closes C# tabs from real `Shop.sln` on Linux. Pinned/preview tabs, drag ordering, compact widths and other platforms remain untested. |
 | A-06 | Split editors | ✅ | [PR 179](https://github.com/javy-fernandez/dotcraft/pull/179) tests tab split commands in both orientations and Unsplit in an egui UI harness with real `Shop.sln` C# files on Linux. Divider drag, context-menu pointer flow, narrow layouts and persistence remain untested. |
-| A-07 | Search Everywhere | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| A-07 | Search Everywhere | 🚧 | [PR 182](https://github.com/javy-fernandez/dotcraft/pull/182) disambiguates accessible file results and verifies `Shop.Cli/Program.cs` selection from a real `Shop.sln` index in egui on Linux. Type/symbol search, live index updates and larger workspaces remain unverified. |
 | A-08 | Recent projects | ✅ | [PR 176](https://github.com/javy-fernandez/dotcraft/pull/176) exposes full recent paths to accessibility; egui UI harness opens real `Shop.sln` from Welcome and verifies recent-history order on Linux. Missing-path removal, compact widths and other platforms remain untested. |
 | A-09 | Recent files | ✅ | [PR 170](https://github.com/javy-fernandez/dotcraft/pull/170) keeps filtered selection valid and exposes file rows to accessibility; egui UI harness opens three real `Shop.sln` C# files and selects one with Enter on Linux. Missing files and native menus remain untested. |
 | A-10 | Recent locations | ✅ | [PR 171](https://github.com/javy-fernandez/dotcraft/pull/171) bounds dialog selection and exposes path/line to accessibility; egui UI harness navigates to line four of real `Shop.sln` C# source on Linux. Closed/deleted files and native menus remain untested. |
@@ -166,7 +166,7 @@ Source / reuse boundary: `crates/rc-dotnet; crates/rc-core/src/workspace.rs`.
 | B-08 | .NET SDK discovery | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-09 | Runtime discovery | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-10 | MSBuild property evaluation | 🟢 | Exercise on a real .NET fixture; record evidence. |
-| B-11 | Launch settings profiles | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| B-11 | Launch settings profiles | 🚧 | [PR 181](https://github.com/javy-fernandez/dotcraft/pull/181) fixes URL scheme detection and verifies Shop.Api profile order, URL, and environment in four rc-dotnet tests. Browser opening, SDK run, and UI profile selection remain unverified. |
 | B-12 | NuGet search | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-13 | NuGet installation and removal | 🟢 | Exercise on a real .NET fixture; record evidence. |
 | B-14 | JSON .slnf solution filters | 🚧 | Parser, explorer, SDK build and test-project selection are verified; filter-specific Roslyn and actual test execution remain pending. |
@@ -426,7 +426,7 @@ Source / reuse boundary: `crates/rc-vcs; crates/rc-app/src/vcs.rs`.
 | I-06 | Side-by-side diff | ✅ | Verified by real-Git backend and app VCS tests; scope is local Git workflows on Linux. |
 | I-07 | Gutter change markers | ✅ | Verified by real-Git backend and app VCS tests; scope is local Git workflows on Linux. |
 | I-08 | Git blame | ✅ | Verified by real-Git backend and app VCS tests; scope is local Git workflows on Linux. |
-| I-09 | Clone repositories | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
+| I-09 | Clone repositories | ✅ | [PR 180](https://github.com/javy-fernandez/dotcraft/pull/180) validates local clone and opening a six-project `Shop.sln` from the Git UI, including path-with-spaces and option-shaped source rejection; one rc-app UI and 45 rc-vcs tests pass on Linux. Remote auth, large clones and cancellation remain untested. |
 | I-10 | Git read safety | 🚧 | [PR 160](https://github.com/javy-fernandez/dotcraft/pull/160) resolves caller revisions to verified commit hashes for blame and file reads; 46 rc-vcs tests pass. Other Git read operations still need audit. |
 | I-11 | Shelves | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |
 | I-12 | History editing | 🔁 | Inspect sibling implementation, adapt and verify in .NET. |

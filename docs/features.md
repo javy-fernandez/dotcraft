@@ -119,6 +119,7 @@ Rider uses dotCover for its coverage integration. Select a suitable DotCraft cov
 - [x] Draw branch and merge lanes in the local Git history and select a commit. Validated with a real local merge fixture on Linux; the view loads the first 500 commits.
 - [ ] Highlight changes in the editor and provide blame annotations.
 - [ ] Stage changes, commit, push, and manage branches.
+- [x] Clone and open a local Git repository containing `Shop.sln` on Linux. Remote authentication, large clones and cancellation remain untested.
 - [ ] Organize changes into changelists and shelve work.
 - [ ] Compare file revisions and resolve merge conflicts visually.
 - [ ] Define optional integrations for Subversion, Mercurial, Perforce, and TFS.
@@ -260,6 +261,9 @@ additional scope is pending.
 | Solution folders and loose items (B-05) | [Original PR 177](https://github.com/javy-fernandez/dotcraft/pull/177) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/177/files) |
 | Mixed selection and caret typing (C-07) | [Original PR 178](https://github.com/javy-fernandez/dotcraft/pull/178) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/178/files) |
 | Split C# editors (A-06) | [Original PR 179](https://github.com/javy-fernandez/dotcraft/pull/179) | [Split editor evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/split-editor-dotnet-acceptance/docs/implementation/split-editor-shop.md) |
+| Local Git clone and open (I-09) | [Original PR 180](https://github.com/javy-fernandez/dotcraft/pull/180) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/180/files) |
+| Launch profile URL classification (B-11, partial) | [Original PR 181](https://github.com/javy-fernandez/dotcraft/pull/181) | [PR evidence](https://github.com/javy-fernandez/dotcraft/pull/181/files) |
+| Search Everywhere .NET file results (A-07, partial) | [Original PR 182](https://github.com/javy-fernandez/dotcraft/pull/182) | [File search evidence](https://github.com/RafaelMendes1407/dotcraft/blob/feat/search-everywhere-dotnet-files/docs/implementation/search-everywhere-dotnet-files.md) |
 
 ## Completion criteria
 
