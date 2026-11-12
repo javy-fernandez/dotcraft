@@ -352,17 +352,29 @@ pub fn type_char(rope: &Rope, sel: &Selection, ch: char, auto_pair: bool) -> Edi
             }
         }
         if let Some(&(open, close)) = PAIRS.iter().find(|&&(o, _)| o == ch) {
-            // Wrap selections.
-            if sel.ranges().iter().all(|r| !r.is_empty()) {
+            // Wrap selected text while typing at any empty carets independently.
+            if sel.ranges().iter().any(|r| !r.is_empty()) {
                 let mut changes = Vec::new();
                 for r in sel.ranges() {
-                    changes.push(Change::insert(r.start(), open.to_string()));
-                    changes.push(Change::insert(r.end(), close.to_string()));
+                    if r.is_empty() {
+                        let next = char_at(rope, r.head);
+                        let next_ok = next.is_none_or(|c| c.is_whitespace() || ")]};,".contains(c));
+                        let quote_ok = open != close || char_before(rope, r.head).is_none_or(|c| !(c.is_alphanumeric() || c == '_' || c == open));
+                        changes.push(Change::insert(r.head, if next_ok && quote_ok { format!("{open}{close}") } else { open.to_string() }));
+                    } else {
+                        changes.push(Change::insert(r.start(), open.to_string()));
+                        changes.push(Change::insert(r.end(), close.to_string()));
+                    }
                 }
                 let cs = ChangeSet::new(changes);
                 let selection = sel.transform(|r| {
-                    let shift = 1 + 2 * sel.ranges().iter().filter(|o| o.start() < r.start()).count();
-                    Range::new(r.anchor + shift, r.head + shift)
+                    if r.is_empty() {
+                        Range::point(cs.map_pos(r.head, Assoc::Before) + 1)
+                    } else {
+                        let start = cs.map_pos(r.start(), Assoc::After);
+                        let end = cs.map_pos(r.end(), Assoc::Before);
+                        if r.anchor <= r.head { Range::new(start, end) } else { Range::new(end, start) }
+                    }
                 });
                 return Edited { changes: cs, selection };
             }
@@ -740,6 +752,18 @@ mod tests {
         // No pairing before a word.
         let (t, _) = run("abc", Selection::point(0), |r, s| type_char(r, s, '(', true));
         assert_eq!(t, "(abc");
+    }
+
+    #[test]
+    fn opening_bracket_preserves_mixed_selection_and_caret() {
+        let source = "var taxable = subtotal - discount;\nvar tax = 1;";
+        let start = source.find("subtotal").unwrap();
+        let caret = source.chars().count();
+        let selection = Selection::new([Range::new(start, start + "subtotal".len()), Range::point(caret)], 0);
+        let (text, after) = run(source, selection, |rope, selection| type_char(rope, selection, '(', true));
+        assert_eq!(text, "var taxable = (subtotal) - discount;\nvar tax = 1;()");
+        assert_eq!(after.ranges()[0], Range::new(start + 1, start + 1 + "subtotal".len()));
+        assert_eq!(after.ranges()[1].head, text.chars().count() - 1);
     }
 
     #[test]
