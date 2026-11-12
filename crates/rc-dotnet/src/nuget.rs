@@ -12,6 +12,7 @@ use crate::sdk::Dotnet;
 
 /// The nuget.org v3 service index.
 pub const NUGET_ORG: &str = "https://api.nuget.org/v3/index.json";
+const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
 /// A resource of the service index.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -106,6 +107,8 @@ impl NugetClient {
 
     /// Searches packages (`SearchQueryService`), `skip`/`take` for paging.
     pub async fn search(&self, query: &str, prerelease: bool, skip: usize, take: usize) -> anyhow::Result<SearchResults> {
+        anyhow::ensure!(query.len() <= 256 && !query.chars().any(char::is_control), "NuGet search query is invalid or oversized");
+        anyhow::ensure!(skip <= 3000 && (1..=1000).contains(&take), "NuGet search page is outside supported bounds");
         let base = self.service_index().await?.find("SearchQueryService").ok_or_else(|| anyhow::anyhow!("the source has no SearchQueryService"))?.to_string();
         let url = reqwest::Url::parse_with_params(
             &base,
@@ -122,10 +125,16 @@ impl NugetClient {
     }
 
     async fn get_text(&self, url: &str) -> anyhow::Result<String> {
-        let resp = crate::nuget_auth::get(&self.http, &self.index_url, self.auth.as_ref(), url).await?;
+        let mut resp = crate::nuget_auth::get(&self.http, &self.index_url, self.auth.as_ref(), url).await?;
         let status = resp.status();
         anyhow::ensure!(status.is_success(), "GET {url}: {status}");
-        Ok(resp.text().await?)
+        anyhow::ensure!(resp.content_length().is_none_or(|len| len <= MAX_RESPONSE_BYTES as u64), "NuGet response exceeds 4 MiB");
+        let mut bytes = Vec::new();
+        while let Some(chunk) = resp.chunk().await? {
+            anyhow::ensure!(chunk.len() <= MAX_RESPONSE_BYTES - bytes.len(), "NuGet response exceeds 4 MiB");
+            bytes.extend_from_slice(&chunk);
+        }
+        Ok(String::from_utf8(bytes)?)
     }
 }
 
