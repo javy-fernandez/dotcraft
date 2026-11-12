@@ -269,35 +269,42 @@ fn scroll_caret_into_view(state: &mut EditorState, m: &Metrics, text_rect: Rect)
 // Painting
 // =====================================================================================
 
+/// Lines with more columns than this are laid out in a window of this many columns that
+/// follows the horizontal scroll, so a minified file doesn't build a huge galley every frame.
+pub(crate) const MAX_LAYOUT_COLS: usize = 4096;
+/// Columns the window keeps left of the first visible one.
+const LAYOUT_WINDOW_LEAD: usize = 256;
+
+/// First column of the layout window of a line with `shown` visible columns.
+fn layout_window_start(scroll_x: f32, char_w: f32, shown: usize) -> usize {
+    if shown <= MAX_LAYOUT_COLS {
+        return 0;
+    }
+    let scroll_col = (scroll_x.max(0.0) / char_w.max(1.0)) as usize;
+    scroll_col.saturating_sub(LAYOUT_WINDOW_LEAD).min(shown - MAX_LAYOUT_COLS)
+}
+
 /// Lays out buffer line `line` with its decorations.
 pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &EditorConfig, scheme: &Scheme, line: usize, spans: &[rc_syntax::Span]) -> LineLayout {
     let rope = state.buffer.rope();
-    let line_len = rc_text::buffer::line_len(rope, line);
-    // Keep one pathological line from creating a multi-megabyte galley every frame.
-    // The window follows horizontal scroll and the caret; the buffer remains intact.
-    const MAX_LAYOUT_CHARS: usize = 4096;
-    if line_len > MAX_LAYOUT_CHARS {
-        let line_start = rope.line_to_char(line);
-        let char_width = (config.font.size * 0.6).max(1.0);
-        let mut first = ((state.scroll.x / char_width) as usize).min(line_len - MAX_LAYOUT_CHARS);
-        let caret = state.caret();
-        if line_start <= caret && caret <= line_start + line_len {
-            let col = caret - line_start;
-            if col < first || col >= first + MAX_LAYOUT_CHARS {
-                first = col.saturating_sub(MAX_LAYOUT_CHARS / 2).min(line_len - MAX_LAYOUT_CHARS);
-            }
-        }
-        let text = rope.slice(line_start + first..line_start + first + MAX_LAYOUT_CHARS).to_string();
-        let input = LineInput { text: &text, spans: &[], dimmed: &[], virtuals: &[], suffix: None, tab_width: state.indent.tab_width };
-        return layout_line(&input, scheme, &config.font, |job| ui.painter().layout_job(job))
-            .with_window(first, line_len, first as f32 * char_width);
-    }
-    let text = state.buffer.line_text(line);
     let line_start = rope.line_to_char(line);
-    let line_end = line_start + text.chars().count();
+    let line_len = rc_text::buffer::line_len(rope, line);
+    let fold = state.collapsed_at(line);
+    // Columns shown before a collapsed fold's placeholder cuts the line.
+    let shown = fold.map_or(line_len, |f| f.start_col.min(line_len));
+    let windowed = shown > MAX_LAYOUT_COLS;
+    // Same glyph width as `metrics`, so the window lines up with the scroll and the caret.
+    let char_w = if windowed { ui.fonts_mut(|f| f.glyph_width(&mono(config.font.size), 'M')) } else { 0.0 };
+    let first = layout_window_start(state.scroll.x, char_w, shown);
+    let end = if windowed { first + MAX_LAYOUT_COLS } else { line_len };
+    let (from, to) = (line_start + first, line_start + end);
+    let text = if windowed { rope.slice(from..to).to_string() } else { state.buffer.line_text(line) };
+    let tab_width = state.indent.tab_width;
+    let visual_start = if windowed { commands::visual_col(rope, from, tab_width) } else { 0 };
+
     let mut virtuals: Vec<Virtual> = Vec::new();
     if config.show_inlays {
-        for h in state.inlays.iter().filter(|h| h.pos >= line_start && h.pos <= line_end) {
+        for h in state.inlays.iter().filter(|h| h.pos >= from && h.pos <= to) {
             let mut label = h.label.clone();
             if h.pad_left {
                 label.insert(0, ' ');
@@ -305,12 +312,13 @@ pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &Edit
             if h.pad_right {
                 label.push(' ');
             }
-            virtuals.push(Virtual { col: h.pos - line_start, text: label.trim().to_string(), kind: VirtualKind::InlayHint });
+            virtuals.push(Virtual { col: h.pos - from, text: label.trim().to_string(), kind: VirtualKind::InlayHint });
         }
     }
     let mut suffix: Option<(String, Vec<rc_syntax::Span>)> = None;
-    if let Some(f) = state.collapsed_at(line) {
-        virtuals.push(Virtual { col: f.start_col.min(text.chars().count()), text: fold_placeholder(f.kind, &text, f.start_col), kind: VirtualKind::FoldPlaceholder });
+    if let Some(f) = fold.filter(|f| (first..=end).contains(&f.start_col.min(line_len))) {
+        let col = f.start_col.min(line_len) - first;
+        virtuals.push(Virtual { col, text: fold_placeholder(f.kind, &text, col), kind: VirtualKind::FoldPlaceholder });
         let end_text = state.buffer.line_text(f.end_line.min(state.buffer.len_lines() - 1));
         let rest: String = end_text.chars().skip(f.end_col).collect();
         if f.kind == rc_syntax::FoldKind::Block && !rest.trim().is_empty() {
@@ -318,21 +326,41 @@ pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &Edit
         }
     }
     virtuals.sort_by_key(|v| (v.col, v.kind == VirtualKind::FoldPlaceholder));
+    let text_len = end - first;
     let dimmed: Vec<(usize, usize)> = state
         .diagnostics
         .iter()
-        .filter(|d| d.unnecessary && d.start < line_end.max(line_start + 1) && d.end > line_start)
-        .map(|d| (d.start.saturating_sub(line_start), (d.end - line_start).min(text.chars().count())))
+        .filter(|d| d.unnecessary && d.start < to.max(from + 1) && d.end > from)
+        .map(|d| (d.start.saturating_sub(from), (d.end - from).min(text_len)))
         .collect();
+    // Spans are line columns: shift (and clip) them into the window.
+    let window_spans: Vec<rc_syntax::Span>;
+    let spans = if windowed {
+        window_spans = spans
+            .iter()
+            .filter(|s| s.end > first && s.start < end)
+            .map(|s| rc_syntax::Span { start: s.start.max(first) - first, end: s.end.min(end) - first, hl: s.hl })
+            .collect();
+        window_spans.as_slice()
+    } else {
+        spans
+    };
     let input = LineInput {
         text: &text,
         spans,
         dimmed: &dimmed,
         virtuals: &virtuals,
         suffix: suffix.as_ref().map(|(s, sp)| (s.as_str(), sp.as_slice())),
-        tab_width: state.indent.tab_width,
+        tab_width,
+        visual_start,
     };
-    layout_line(&input, scheme, &config.font, |job| ui.painter().layout_job(job))
+    let lay = layout_line(&input, scheme, &config.font, |job| ui.painter().layout_job(job));
+    if !windowed {
+        return lay;
+    }
+    let cut = lay.virtuals.iter().any(|(_, k)| *k == VirtualKind::FoldPlaceholder);
+    let len = if cut { first + lay.len } else { line_len };
+    lay.with_window(first, len, visual_start as f32 * char_w)
 }
 
 fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, scheme: &Scheme, m: &Metrics, text_rect: Rect, focused: bool) {
@@ -484,8 +512,8 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
         let y = y_of_row(first_row + i);
         let origin = pos2(x0 + lay.origin_x(), y + m.text_dy);
         for (r, kind) in &lay.virtuals {
-            let xa = lay.galley.pos_from_cursor(egui::text::CCursor::new(r.start)).min.x;
-            let xb = lay.galley.pos_from_cursor(egui::text::CCursor::new(r.end)).min.x;
+            let xa = lay.origin_x() + lay.galley.pos_from_cursor(egui::text::CCursor::new(r.start)).min.x;
+            let xb = lay.origin_x() + lay.galley.pos_from_cursor(egui::text::CCursor::new(r.end)).min.x;
             let bx = Rect::from_min_max(pos2(x0 + xa, y + 2.0), pos2(x0 + xb, y + m.row_h - 2.0));
             match kind {
                 VirtualKind::FoldPlaceholder => {
@@ -1159,13 +1187,7 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
     let rope = state.buffer.rope().clone();
     let mut chars = text.chars();
     if let (Some(ch), None) = (chars.next(), chars.next()) {
-        let auto_pair = config.auto_pair && !csharp_noncode_at_caret(state);
-        // Typing `}` on a blank line re-indents it to its block (electric brace).
-        let edited = if ch == '}' && state.selection.len() == 1 && state.selection.primary().is_empty() {
-            electric_close_brace(&rope, state).unwrap_or_else(|| commands::type_char(&rope, &state.selection, ch, auto_pair))
-        } else {
-            commands::type_char(&rope, &state.selection, ch, auto_pair)
-        };
+        let edited = typed_char_edit(&rope, state, config, ch);
         state.apply(edited, EditKind::Insert);
         markup_assist(state, ch);
         out.events.push(EditorEvent::Typed(ch));
@@ -1185,34 +1207,153 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
     }
 }
 
-fn csharp_noncode_at_caret(state: &EditorState) -> bool {
+/// The edit typing `ch` makes. In C# comments and strings brackets and quotes don't pair (an
+/// interpolated string's `{` still does), but typing over a closing char works everywhere.
+fn typed_char_edit(rope: &rc_text::Rope, state: &EditorState, config: &EditorConfig, ch: char) -> commands::Edited {
+    // Typing `}` on a blank line re-indents it to its block (electric brace).
+    if ch == '}'
+        && state.selection.len() == 1
+        && state.selection.primary().is_empty()
+        && let Some(edited) = electric_close_brace(rope, state)
+    {
+        return edited;
+    }
+    let edited = commands::type_char(rope, &state.selection, ch, config.auto_pair);
+    let pairs = match csharp_context_at_caret(state) {
+        CsContext::Code => true,
+        CsContext::Comment => false,
+        CsContext::String { interpolated } => interpolated && ch == '{',
+    };
+    // A type-over changes nothing, it only moves the caret.
+    if !config.auto_pair || pairs || edited.changes.is_empty() {
+        return edited;
+    }
+    commands::type_char(rope, &state.selection, ch, false)
+}
+
+/// What surrounds the caret in C# source, for typing assists.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CsContext {
+    Code,
+    Comment,
+    /// Inside a string or char literal (an interpolation hole counts as code).
+    String { interpolated: bool },
+}
+
+/// Context of the single empty caret in a C# file (`Code` for other files and multi-carets).
+/// Uses the syntax tree when it describes the current text, else scans the caret's line.
+pub(crate) fn csharp_context_at_caret(state: &EditorState) -> CsContext {
     if state.lang() != rc_syntax::Lang::CSharp || state.selection.len() != 1 || !state.selection.primary().is_empty() {
-        return false;
+        return CsContext::Code;
     }
     let rope = state.buffer.rope();
     let caret = state.caret();
-    if caret == 0 { return false; }
-    if state.syntax.is_current() {
-        let byte = rope.char_to_byte(caret - 1);
+    if caret == 0 {
+        return CsContext::Code;
+    }
+    if state.syntax.is_current()
+        && let Some(tree) = state.syntax.tree()
+    {
         let caret_byte = rope.char_to_byte(caret);
-        let mut node = state.syntax.tree().and_then(|tree| tree.root_node().descendant_for_byte_range(byte, byte));
-        while let Some(current) = node {
-            if current.kind().contains("comment") ||
-                ((current.kind().contains("string") || current.kind() == "character_literal") && caret_byte < current.end_byte()) {
-                return true;
+        let byte = rope.char_to_byte(caret - 1);
+        let mut node = tree.root_node().descendant_for_byte_range(byte, byte);
+        while let Some(n) = node {
+            let inside = n.start_byte() < caret_byte && caret_byte < n.end_byte();
+            match n.kind() {
+                "comment" => {
+                    // A line comment runs to the end of its line, past the node's end.
+                    let line_comment = rope.get_byte_slice(n.start_byte()..n.end_byte()).is_some_and(|t| t.chars().take(2).eq("//".chars()));
+                    if inside || line_comment {
+                        return CsContext::Comment;
+                    }
+                }
+                "interpolation" if inside => return CsContext::Code,
+                "interpolated_string_expression" if inside => return CsContext::String { interpolated: true },
+                "string_literal" | "verbatim_string_literal" | "raw_string_literal" | "character_literal" if inside => {
+                    return CsContext::String { interpolated: false };
+                }
+                _ => {}
             }
-            node = current.parent();
+            node = n.parent();
         }
-        return false;
+        return CsContext::Code;
     }
-    // Until a fresh parse arrives, keep typing inside an inline comment literal.
-    let line = rope.char_to_line(caret);
-    let mut previous = '\0';
-    for ch in rope.slice(rope.line_to_char(line)..caret).chars() {
-        if previous == '/' && ch == '/' { return true; }
-        previous = ch;
+    let line_start = rope.line_to_char(rope.char_to_line(caret));
+    if caret - line_start > 4096 {
+        // Too long to scan every keystroke: stay on the safe side.
+        return CsContext::Comment;
     }
-    false
+    scan_csharp_line(&rope.slice(line_start..caret).to_string())
+}
+
+/// Context at the end of `prefix`, a C# line up to the caret (no tree yet): comments, plain,
+/// verbatim and interpolated strings with their holes, char literals.
+fn scan_csharp_line(prefix: &str) -> CsContext {
+    let chars: Vec<char> = prefix.chars().collect();
+    // Open literal: (quote, verbatim, interpolated).
+    let mut literal: Option<(char, bool, bool)> = None;
+    // Interpolation holes we are in: (verbatim string, nested brace depth).
+    let mut holes: Vec<(bool, usize)> = Vec::new();
+    let mut block_comment = false;
+    let mut i = 0;
+    while i < chars.len() {
+        let (c, next) = (chars[i], chars.get(i + 1).copied());
+        i += 1;
+        if block_comment {
+            if c == '*' && next == Some('/') {
+                block_comment = false;
+                i += 1;
+            }
+            continue;
+        }
+        if let Some((quote, verbatim, interpolated)) = literal {
+            // `\x` escapes in plain strings, `""` in verbatim ones.
+            if (c == '\\' && !verbatim) || (c == quote && verbatim && next == Some(quote)) {
+                i += 1;
+            } else if c == quote {
+                literal = None;
+            } else if c == '{' && interpolated {
+                if next == Some('{') {
+                    i += 1;
+                } else {
+                    holes.push((verbatim, 0));
+                    literal = None;
+                }
+            }
+            continue;
+        }
+        match c {
+            '/' if next == Some('/') => return CsContext::Comment,
+            '/' if next == Some('*') => {
+                block_comment = true;
+                i += 1;
+            }
+            '\'' => literal = Some(('\'', false, false)),
+            '"' => {
+                let marks: Vec<char> = chars[..i - 1].iter().rev().take_while(|&&m| m == '@' || m == '$').copied().collect();
+                literal = Some(('"', marks.contains(&'@'), marks.contains(&'$')));
+            }
+            '{' => {
+                if let Some(h) = holes.last_mut() {
+                    h.1 += 1;
+                }
+            }
+            '}' => match holes.last_mut() {
+                Some(h) if h.1 > 0 => h.1 -= 1,
+                Some(&mut (verbatim, _)) => {
+                    holes.pop();
+                    literal = Some(('"', verbatim, true));
+                }
+                None => {}
+            },
+            _ => {}
+        }
+    }
+    match literal {
+        _ if block_comment => CsContext::Comment,
+        Some((_, _, interpolated)) => CsContext::String { interpolated },
+        None => CsContext::Code,
+    }
 }
 
 /// Markup typing assists (Razor/HTML/XML), with one caret: `>` closes the tag, `</` completes
@@ -1582,17 +1723,23 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
 
 /// A C# switch label starts its statement one indentation level deeper.
 fn csharp_case_newline(rope: &rc_text::Rope, sel: &Selection, indent: &commands::Indent) -> Option<commands::Edited> {
-    if sel.len() != 1 || !sel.primary().is_empty() { return None; }
+    if sel.len() != 1 || !sel.primary().is_empty() {
+        return None;
+    }
     let caret = sel.primary().head;
     let line = rope.char_to_line(caret);
     let start = rope.line_to_char(line);
     let end = start + rc_text::buffer::line_len(rope, line);
-    if caret != end { return None; }
+    if caret != end {
+        return None;
+    }
     let text = rope.slice(start..end).to_string();
     let content = text.trim_end_matches([' ', '\t']);
     let label = content.trim_start();
     let is_case = label.ends_with(':') && (label.starts_with("case ") || label.starts_with("case\t") || label == "default:");
-    if !is_case { return None; }
+    if !is_case {
+        return None;
+    }
     let base = commands::line_indent(rope, line);
     let deeper = indent.whitespace(0, indent.columns(&base) + indent.width());
     let inserted = format!("\n{deeper}");
@@ -1674,7 +1821,9 @@ fn expand_template(state: &mut EditorState) -> bool {
     if state.lang() != rc_syntax::Lang::CSharp || state.selection.len() != 1 || !state.selection.primary().is_empty() {
         return false;
     }
-    if csharp_template_noncode(state) { return false; }
+    if csharp_context_at_caret(state) != CsContext::Code {
+        return false;
+    }
     let rope = state.buffer.rope();
     let caret = state.caret();
     let mut start = caret;
@@ -1704,47 +1853,6 @@ fn expand_template(state: &mut EditorState) -> bool {
     true
 }
 
-fn csharp_template_noncode(state: &EditorState) -> bool {
-    let rope = state.buffer.rope();
-    let caret = state.caret();
-    if caret == 0 { return false; }
-    if let Some(tree) = state.syntax.tree() {
-        let byte = rope.char_to_byte(caret - 1);
-        let mut node = tree.root_node().descendant_for_byte_range(byte, byte);
-        while let Some(current) = node {
-            if current.kind().contains("comment") || current.kind().contains("string") || current.kind() == "character_literal" {
-                return true;
-            }
-            node = current.parent();
-        }
-    }
-    // The syntax tree may still describe the previous keystroke. Scan the current
-    // line so a newly typed abbreviation in a comment or ordinary string stays literal.
-    let line = rope.char_to_line(caret);
-    let line_start = rope.line_to_char(line);
-    if caret - line_start > 4096 { return true; }
-    let mut chars = rope.slice(line_start..caret).chars().peekable();
-    let mut quote = None;
-    let mut escaped = false;
-    let mut block_comment = false;
-    while let Some(ch) = chars.next() {
-        if block_comment {
-            if ch == '*' && chars.peek() == Some(&'/') { chars.next(); block_comment = false; }
-            continue;
-        }
-        if let Some(delimiter) = quote {
-            if escaped { escaped = false; }
-            else if ch == '\\' { escaped = true; }
-            else if ch == delimiter { quote = None; }
-            continue;
-        }
-        if ch == '/' && chars.peek() == Some(&'/') { return true; }
-        if ch == '/' && chars.peek() == Some(&'*') { chars.next(); block_comment = true; continue; }
-        if ch == '"' || ch == '\'' { quote = Some(ch); }
-    }
-    block_comment || quote.is_some()
-}
-
 #[cfg(test)]
 mod csharp_case_indent_tests {
     use super::*;
@@ -1763,24 +1871,201 @@ mod csharp_case_indent_tests {
 #[cfg(test)]
 mod large_line_tests {
     use super::*;
+    use crate::state::{Diagnostic, InlayHint};
+    use rc_syntax::{Hl, Span};
+
+    /// Runs `f` inside a frame with the editor fonts installed.
+    fn in_frame(f: impl FnOnce(&Ui)) {
+        let ctx = egui::Context::default();
+        rc_kit::theme::install_fonts(&ctx);
+        let mut f = Some(f);
+        ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
+        let mut output = ctx.run_ui(Default::default(), |ui| (f.take().expect("one frame"))(ui));
+        output.textures_delta.clear();
+    }
+
+    fn char_w(ui: &Ui, config: &EditorConfig) -> f32 {
+        ui.fonts_mut(|f| f.glyph_width(&mono(config.font.size), 'M'))
+    }
+
+    /// Colour of the galley section that paints buffer column `col`.
+    fn color_at(lay: &LineLayout, col: usize) -> Color32 {
+        let ch = lay.char_of_col(col);
+        let byte = lay.galley.text().char_indices().nth(ch).map(|(b, _)| b).expect("char in galley");
+        lay.galley.job.sections.iter().find(|s| s.byte_range.start.0 <= byte && byte < s.byte_range.end.0).expect("section").format.color
+    }
 
     #[test]
-    fn long_line_keeps_a_bounded_galley_near_the_caret() {
+    fn long_line_window_follows_the_scroll_with_the_real_char_width() {
         let source = "x".repeat(100_000);
         let mut state = EditorState::new(1, Some("large.cs".into()), &source);
-        state.selection = Selection::point(50_000);
-        state.scroll.x = 50_000.0 * 7.8;
-        let context = egui::Context::default();
-        let mut result = None;
-        let mut output = context.run_ui(Default::default(), |ui| {
-            let layout = layout_buffer_line(ui, &mut state, &EditorConfig::default(), &rc_kit::theme::SCHEME_DARK, 0, &[]);
-            assert_eq!(layout.len, 100_000);
-            assert_eq!(layout.galley.text().chars().count(), 4096);
-            let caret_x = layout.x_of_col(50_000);
-            result = Some(layout.col_at_x(caret_x));
+        let config = EditorConfig::default();
+        in_frame(|ui| {
+            let w = char_w(ui, &config);
+            state.scroll.x = 50_000.0 * w;
+            state.selection = Selection::point(50_000);
+            let lay = layout_buffer_line(ui, &mut state, &config, &rc_kit::theme::SCHEME_DARK, 0, &[]);
+            assert_eq!(lay.len, 100_000);
+            assert_eq!(lay.galley.text().chars().count(), MAX_LAYOUT_COLS);
+            assert_eq!(lay.origin_x(), (50_000 - LAYOUT_WINDOW_LEAD) as f32 * w);
+            // Columns sit where the scroll and the horizontal scrollbar expect them.
+            for col in [50_000, 50_037, 52_000] {
+                let x = lay.x_of_col(col);
+                assert!((x - col as f32 * w).abs() < 1.0, "col {col}: {x} vs {}", col as f32 * w);
+                assert_eq!(lay.col_at_x(x), col);
+            }
+            // A click on the screen lands on the column under it.
+            let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 400.0));
+            let m = metrics(ui, &state, &config, rect);
+            assert!((m.char_w - w).abs() < f32::EPSILON);
+            let text_rect = Rect::from_min_max(pos2(m.gutter_w, 0.0), rect.max);
+            let click = pos2(text_rect.left() + TEXT_PAD - state.scroll.x + lay.x_of_col(50_010) + 1.0, m.row_h / 2.0);
+            assert_eq!(pos_at(ui, &mut state, &config, &m, text_rect, click), (50_010, false));
+            // Scrolled to the end, the window ends with the line.
+            state.scroll.x = 100_000.0 * w;
+            let lay = layout_buffer_line(ui, &mut state, &config, &rc_kit::theme::SCHEME_DARK, 0, &[]);
+            assert_eq!(lay.x_of_col(100_000), lay.origin_x() + lay.width());
+            assert_eq!(lay.col_at_x(lay.x_of_col(100_000) + 50.0), 100_000);
         });
-        output.textures_delta.clear();
-        assert_eq!(result, Some(50_000));
         assert_eq!(state.buffer.rope().to_string(), source);
+    }
+
+    #[test]
+    fn long_line_window_keeps_colours_inlays_and_dimmed_code() {
+        let source = format!("{}\n{}", "a".repeat(20), "b".repeat(10_000));
+        let mut state = EditorState::new(1, Some("large.cs".into()), &source);
+        let line_start = 21;
+        state.inlays = vec![InlayHint { pos: line_start + 5005, label: "name:".into(), pad_left: false, pad_right: true }];
+        state.diagnostics = vec![Diagnostic {
+            start: line_start + 5020,
+            end: line_start + 5030,
+            severity: Severity::Hint,
+            message: String::new(),
+            code: None,
+            unnecessary: true,
+            deprecated: false,
+        }];
+        // Spans start before the window and run into it, or lie past it.
+        let spans = [Span { start: 100, end: 5010, hl: Hl::String }, Span { start: 9_990, end: 10_000, hl: Hl::Keyword }];
+        let config = EditorConfig::default();
+        let scheme = &rc_kit::theme::SCHEME_DARK;
+        in_frame(|ui| {
+            state.scroll.x = 5000.0 * char_w(ui, &config);
+            let lay = layout_buffer_line(ui, &mut state, &config, scheme, 1, &spans);
+            assert_eq!(lay.len, 10_000);
+            assert!(lay.galley.text().contains("name:"));
+            assert_eq!(lay.virtuals.len(), 1);
+            assert_eq!(color_at(&lay, 5000), scheme.string);
+            assert_eq!(color_at(&lay, 5015), scheme.identifier);
+            assert_eq!(color_at(&lay, 5025), scheme.dimmed);
+            // The hint sits before column 5005 and pushes it right, and they still map back.
+            assert!(lay.x_of_col(5005) - lay.x_of_col(5004) > 2.0 * (lay.x_of_col(5006) - lay.x_of_col(5005)));
+            for col in [5004, 5005, 5006, 5025] {
+                assert_eq!(lay.col_at_x(lay.x_of_col(col)), col);
+            }
+        });
+    }
+
+    #[test]
+    fn long_line_window_keeps_tab_stops() {
+        let source = format!("\t{}", "x".repeat(9_999));
+        let mut state = EditorState::new(1, Some("large.cs".into()), &source);
+        state.indent.tab_width = 4;
+        let config = EditorConfig::default();
+        in_frame(|ui| {
+            let w = char_w(ui, &config);
+            state.scroll.x = 3000.0 * w;
+            let lay = layout_buffer_line(ui, &mut state, &config, &rc_kit::theme::SCHEME_DARK, 0, &[]);
+            // Column 3000 is visual column 3003 (the tab takes four).
+            assert!((lay.x_of_col(3000) - 3003.0 * w).abs() < 1.0);
+        });
+    }
+}
+
+#[cfg(test)]
+mod csharp_typing_tests {
+    use super::*;
+
+    /// Types `ch` at the `|` of `text` in a parsed C# file and returns the new text with `|`.
+    fn type_at(text: &str, ch: char) -> String {
+        let caret = text.find('|').expect("caret marker");
+        let source = text.replacen('|', "", 1);
+        let mut state = EditorState::new(1, Some("Program.cs".into()), &source);
+        state.parse_blocking();
+        state.selection = Selection::point(source[..caret].chars().count());
+        let rope = state.buffer.rope().clone();
+        let edited = typed_char_edit(&rope, &state, &EditorConfig::default(), ch);
+        state.apply(edited, EditKind::Insert);
+        let mut out = state.buffer.rope().to_string();
+        let at = out.char_indices().nth(state.caret()).map_or(out.len(), |(b, _)| b);
+        out.insert(at, '|');
+        out
+    }
+
+    fn context(text: &str, parsed: bool) -> CsContext {
+        let caret = text.find('|').expect("caret marker");
+        let source = text.replacen('|', "", 1);
+        let mut state = EditorState::new(1, Some("Program.cs".into()), &source);
+        if parsed {
+            state.parse_blocking();
+        }
+        state.selection = Selection::point(source[..caret].chars().count());
+        csharp_context_at_caret(&state)
+    }
+
+    const INTERPOLATED: CsContext = CsContext::String { interpolated: true };
+    const PLAIN: CsContext = CsContext::String { interpolated: false };
+
+    #[test]
+    fn context_from_tree_and_line_scan_agree() {
+        let cases = [
+            ("var a = 1; // note |\n", CsContext::Comment),
+            ("var a = 1; /* note | */\n", CsContext::Comment),
+            ("var a = 1; /* note */|\n", CsContext::Code),
+            ("var s = \"abc|\";\n", PLAIN),
+            ("var s = \"abc\"|;\n", CsContext::Code),
+            ("var s = \"a\\\"b|\";\n", PLAIN),
+            ("var s = @\"C:\\dir\\|\";\n", PLAIN),
+            ("var s = @\"say \"\"hi|\"\"\";\n", PLAIN),
+            ("var s = @\"C:\\\"; var t = (|);\n", CsContext::Code),
+            ("var c = 'a|';\n", PLAIN),
+            ("var s = $\"total {|}\";\n", CsContext::Code),
+            ("var s = $\"total {Sum(a, b|)}\";\n", CsContext::Code),
+            ("var s = $\"total {sum} |\";\n", INTERPOLATED),
+            ("var s = $@\"C:\\{dir}\\|\";\n", INTERPOLATED),
+            ("var s = $\"{{literal|}}\";\n", INTERPOLATED),
+            ("Call(|);\n", CsContext::Code),
+        ];
+        for (text, want) in cases {
+            assert_eq!(context(text, true), want, "tree: {text}");
+            assert_eq!(context(text, false), want, "scan: {text}");
+        }
+    }
+
+    #[test]
+    fn brackets_and_quotes_do_not_pair_in_comments_and_strings() {
+        assert_eq!(type_at("var a = 1; // see |\n", '('), "var a = 1; // see (|\n");
+        assert_eq!(type_at("var a = 1; // see |\n", '"'), "var a = 1; // see \"|\n");
+        assert_eq!(type_at("var s = \"see | \";\n", '('), "var s = \"see (| \";\n");
+        assert_eq!(type_at("var s = @\"C:\\| \";\n", '['), "var s = @\"C:\\[| \";\n");
+        assert_eq!(type_at("var s = \"see | \";\n", '\''), "var s = \"see '| \";\n");
+    }
+
+    #[test]
+    fn code_and_interpolation_holes_still_pair() {
+        assert_eq!(type_at("Call|\n", '('), "Call(|)\n");
+        assert_eq!(type_at("var s = |\n", '"'), "var s = \"|\"\n");
+        assert_eq!(type_at("var s = $\"total {Sum|}\";\n", '('), "var s = $\"total {Sum(|)}\";\n");
+        assert_eq!(type_at("var s = $\"total | \";\n", '{'), "var s = $\"total {|} \";\n");
+        // A plain string's brace is just text.
+        assert_eq!(type_at("var s = \"total | \";\n", '{'), "var s = \"total {| \";\n");
+    }
+
+    #[test]
+    fn closing_quotes_and_brackets_are_typed_over_in_strings() {
+        assert_eq!(type_at("var s = \"abc|\";\n", '"'), "var s = \"abc\"|;\n");
+        assert_eq!(type_at("var c = '|';\n", '\''), "var c = ''|;\n");
+        assert_eq!(type_at("var s = \"f(a|)\";\n", ')'), "var s = \"f(a)|\";\n");
+        assert_eq!(type_at("// f(a|)\n", ')'), "// f(a)|\n");
     }
 }

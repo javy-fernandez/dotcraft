@@ -232,14 +232,11 @@ pub fn expand_postfix(state: &mut crate::EditorState) -> bool {
     if state.read_only || state.lang() != rc_syntax::Lang::CSharp || state.selection.len() != 1 || !state.selection.primary().is_empty() { return false; }
     // An edited but not yet reparsed tree cannot prove we are outside a multiline string/comment.
     if !state.syntax.is_current() { return false; }
+    if crate::view::csharp_context_at_caret(state) != crate::view::CsContext::Code {
+        return false;
+    }
     let rope = state.buffer.rope();
     let caret = state.caret();
-    let byte = rope.char_to_byte(caret.saturating_sub(1));
-    let mut node = state.syntax.tree().and_then(|tree| tree.root_node().descendant_for_byte_range(byte, byte));
-    while let Some(current) = node {
-        if current.kind().contains("comment") || current.kind().contains("string") || current.kind() == "character_literal" { return false; }
-        node = current.parent();
-    }
     let line = rope.char_to_line(caret);
     let start = rope.line_to_char(line);
     if caret - start > 4096 { return false; }

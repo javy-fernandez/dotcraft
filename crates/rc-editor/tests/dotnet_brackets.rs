@@ -44,16 +44,18 @@ fn csharp_brackets_in_shop_fixture_follow_editor_typing_path() {
     harness.state_mut().undo();
     assert_eq!(harness.state().buffer.rope().to_string(), SHOP_CALCULATOR);
 
-    let code_end = char_at(SHOP_CALCULATOR, "ThrowIfNull(order);") + "ThrowIfNull(order);".chars().count();
-    harness.state_mut().selection = Selection::point(code_end);
+    // Inside a string `(` stays single and the closing quote is typed over.
+    let in_string = char_at(SHOP_CALCULATOR, "SAVE10\"") + "SAVE10".chars().count();
+    harness.state_mut().selection = Selection::point(in_string);
     harness.state_mut().parse_blocking();
     harness.event(egui::Event::Text("(".into()));
     harness.run_steps(1);
-    assert!(harness.state().buffer.rope().to_string().contains("ThrowIfNull(order);()\n"));
-    harness.event(egui::Event::Text(")".into()));
+    assert!(harness.state().buffer.rope().to_string().contains("case \"SAVE10(\":\n"));
+    harness.state_mut().parse_blocking();
+    harness.event(egui::Event::Text("\"".into()));
     harness.run_steps(1);
-    assert!(harness.state().buffer.rope().to_string().contains("ThrowIfNull(order);()\n"));
-    assert_eq!(harness.state().caret(), code_end + 2);
+    assert!(harness.state().buffer.rope().to_string().contains("case \"SAVE10(\":\n"));
+    assert_eq!(harness.state().caret(), in_string + 2);
     harness.state_mut().undo();
     assert_eq!(harness.state().buffer.rope().to_string(), SHOP_CALCULATOR);
 

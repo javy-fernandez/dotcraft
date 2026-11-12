@@ -64,7 +64,10 @@ impl LineLayout {
         self
     }
 
-    pub(crate) fn origin_x(&self) -> f32 { self.origin_x }
+    /// X of the galley's first char from the line's left edge (non-zero for a window).
+    pub(crate) fn origin_x(&self) -> f32 {
+        self.origin_x
+    }
 
     pub fn char_of_col(&self, col: usize) -> usize {
         self.col_to_char.get(col.saturating_sub(self.window_start)).copied().unwrap_or_else(|| *self.col_to_char.last().unwrap_or(&0))
@@ -96,8 +99,8 @@ impl LineLayout {
     pub fn placeholder_at_x(&self, x: f32) -> bool {
         self.virtuals.iter().any(|(r, k)| {
             *k == VirtualKind::FoldPlaceholder && {
-                let x0 = self.galley.pos_from_cursor(CCursor::new(r.start)).min.x;
-                let x1 = self.galley.pos_from_cursor(CCursor::new(r.end)).min.x;
+                let x0 = self.origin_x + self.galley.pos_from_cursor(CCursor::new(r.start)).min.x;
+                let x1 = self.origin_x + self.galley.pos_from_cursor(CCursor::new(r.end)).min.x;
                 x >= x0 && x < x1
             }
         })
@@ -161,6 +164,9 @@ pub struct LineInput<'a> {
     /// Text shown after a fold placeholder (the rest of the fold's end line), with its spans.
     pub suffix: Option<(&'a str, &'a [Span])>,
     pub tab_width: usize,
+    /// Visual column of the first char of `text` (non-zero for a window of a long line), so
+    /// tabs keep their stops.
+    pub visual_start: usize,
 }
 
 /// Builds the layout job of a line and lays it out with `layout`.
@@ -171,7 +177,7 @@ pub fn layout_line(input: &LineInput, scheme: &Scheme, font: &EditorFont, layout
     let mut col_to_char = Vec::with_capacity(input.text.len() + 1);
     let mut virtuals = Vec::new();
     let mut nchars = 0usize;
-    let mut visual = 0usize;
+    let mut visual = input.visual_start;
     let hint_fmt = TextFormat {
         font_id: mono(size - 1.0),
         color: scheme.hint_fg,
@@ -369,7 +375,7 @@ mod tests {
     #[test]
     fn tabs_and_hints_keep_columns_aligned() {
         let virtuals = [Virtual { col: 4, text: "name:".into(), kind: VirtualKind::InlayHint }];
-        let l = lay(&LineInput { text: "\tf(x);", spans: &[], dimmed: &[], virtuals: &virtuals, suffix: None, tab_width: 4 });
+        let l = lay(&LineInput { text: "\tf(x);", spans: &[], dimmed: &[], virtuals: &virtuals, suffix: None, tab_width: 4, visual_start: 0 });
         assert_eq!(l.char_of_col(0), 0);
         assert_eq!(l.char_of_col(1), 4); // after the tab
         assert_eq!(l.char_of_col(3), 6);
@@ -384,7 +390,7 @@ mod tests {
     #[test]
     fn fold_placeholder_cuts_the_line_and_shows_the_suffix() {
         let virtuals = [Virtual { col: 9, text: "{...}".into(), kind: VirtualKind::FoldPlaceholder }];
-        let l = lay(&LineInput { text: "void M() {", spans: &[], dimmed: &[], virtuals: &virtuals, suffix: Some((");", &[])), tab_width: 4 });
+        let l = lay(&LineInput { text: "void M() {", spans: &[], dimmed: &[], virtuals: &virtuals, suffix: Some((");", &[])), tab_width: 4, visual_start: 0 });
         assert_eq!(l.galley.text(), "void M() {...});");
         assert_eq!(l.len, 9);
         assert!(l.placeholder_at_x(l.x_of_col(9) + 3.0));
