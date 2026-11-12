@@ -1578,7 +1578,13 @@ fn toggle_block_comment(rope: &rc_text::Rope, sel: &Selection, open: &str, close
         }
     }
     let cs = rc_text::ChangeSet::new(changes);
-    let selection = sel.map(&cs);
+    // Keep the inserted delimiters selected so the same shortcut can unwrap them.
+    let selection = sel.transform(|r| {
+        if r.is_empty() { return r.map(&cs); }
+        let start = cs.map_pos(r.start(), rc_text::Assoc::Before);
+        let end = cs.map_pos(r.end(), rc_text::Assoc::After);
+        if r.anchor <= r.head { Range::new(start, end) } else { Range::new(end, start) }
+    });
     commands::Edited { changes: cs, selection }
 }
 
