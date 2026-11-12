@@ -25,9 +25,9 @@ A source implementation or passing parser test alone does not establish Rider pa
 <!-- summary:start -->
 | Status | Items |
 | --- | --- |
-| ✅ Verified | 112 |
+| ✅ Verified | 113 |
 | 🚧 In progress | 38 |
-| 🟢 Existing | 4 |
+| 🟢 Existing | 3 |
 | 🔁 Reuse candidate | 17 |
 | ⬜ Backlog | 202 |
 | 🚫 Out of scope | 0 |
@@ -203,7 +203,7 @@ Source / reuse boundary: `crates/rc-editor; crates/rc-text; crates/rc-syntax; cr
 | C-10 | Line and block comments | ✅ | [PR 172](https://github.com/javy-fernandez/dotcraft/pull/172) fixes repeated block-comment toggle and verifies Rider line/block shortcuts, selection and undo through editor events on a real Shop C# file; 17 unit and two fixture tests pass. No SDK build or broader Rider parity claim. |
 | C-11 | Indentation | ✅ | [PR 189](https://github.com/javy-fernandez/dotcraft/pull/189) indents C# `case`/`default` statements one level on Enter as one undoable edit; real Shop C# EditorView event and guard tests pass (18 unit, one fixture). Other language-specific indentation remains outside this scope. |
 | C-12 | Undo and redo | ✅ | [PR 183](https://github.com/javy-fernandez/dotcraft/pull/183) restores diagnostic/inlay anchors on history edits and clears stale search highlights; real Shop C# EditorView test verifies text, caret, undo/redo and divergent-edit invalidation. 17 unit and one fixture test pass. No SDK build claim. |
-| C-13 | Code actions and quick fixes | 🟢 | Exercise on a real .NET fixture; record evidence. |
+| C-13 | Code actions and quick fixes | ✅ | [PR 274](https://github.com/javy-fernandez/dotcraft/pull/274) verifies real Shop C# CS0246 from StringBuilder, Roslyn 5.13.0 System.Text import via native Code Actions/Enter, cleared diagnostic and intact editor line with SDK 8.0.428/runtime 10.0.15 on Linux. It fixes Enter also inserting a newline into the focused editor. Other actions, multi-file edits and platforms remain untested. |
 | C-14 | Rename symbol | ✅ | Live C# application and Roslyn tests rename symbols across App and Lib projects; see live-dotnet.md. |
 | C-15 | Diagnostics in editor | ✅ | Live application verifies CS0103 ranges; Roslyn regression verifies diagnostics; see live-dotnet.md. |
 | C-16 | Large-file safeguards | 🚧 | [PR 163](https://github.com/javy-fernandez/dotcraft/pull/163) bounds editor line layout to 4,096 characters while preserving the full buffer; 18 rc-editor unit tests pass, including a 100,000-character line. Decorations, exact horizontal placement, and live UI acceptance remain. |
