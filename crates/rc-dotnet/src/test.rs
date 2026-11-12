@@ -157,7 +157,7 @@ pub struct DiscoveredTest {
 /// The test projects of a solution (by their package references), or the project itself.
 pub fn test_projects(target: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let ext = target.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-    if ext == "sln" || ext == "slnx" {
+    if matches!(ext.as_str(), "sln" | "slnx" | "slnf") {
         let sln = Solution::load(target)?;
         Ok(sln
             .projects()

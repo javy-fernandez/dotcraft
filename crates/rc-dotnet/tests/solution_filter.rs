@@ -3,7 +3,33 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use rc_core::{Inbox, Waker};
+use rc_dotnet::test::test_projects;
 use rc_dotnet::{BuildAction, BuildEvent, BuildRequest, Dotnet, Solution};
+
+#[test]
+fn solution_filter_selects_only_included_test_projects() {
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/Shop/Shop.sln")
+        .canonicalize()
+        .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let filter = dir.path().join("Selected.slnf");
+    std::fs::write(
+        &filter,
+        serde_json::json!({"solution": {
+            "path": source,
+            "projects": [
+                "tests/Shop.Core.XunitTests/Shop.Core.XunitTests.csproj",
+                "src/Shop.Core/Shop.Core.csproj"
+            ]
+        }})
+        .to_string(),
+    )
+    .unwrap();
+
+    let projects = test_projects(&filter).unwrap();
+    assert_eq!(projects, vec![source.parent().unwrap().join("tests/Shop.Core.XunitTests/Shop.Core.XunitTests.csproj")]);
+}
 
 #[test]
 #[ignore = "Requires a locally installed .NET SDK and net8.0 reference pack"]
