@@ -40,6 +40,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/DotCraft"
 cp assets/DotCraft.icns "$APP/Contents/Resources/DotCraft.icns"
+cp assets/fonts/NotoSansCJK-LICENSE.txt "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -151,7 +152,7 @@ if (( WINDOWS )); then
     STAGE=$(mktemp -d)
     mkdir "$STAGE/DotCraft"
     cp "target/$target/release/dotcraft.exe" "$STAGE/DotCraft/DotCraft.exe"
-    cp LICENSE-MIT LICENSE-APACHE "$STAGE/DotCraft/"
+    cp LICENSE-MIT LICENSE-APACHE assets/fonts/NotoSansCJK-LICENSE.txt "$STAGE/DotCraft/"
     ZIP_FILE="$PWD/target/release/DotCraft-${VERSION}-windows-${WARCH}.zip"
     rm -f "$ZIP_FILE"
     (cd "$STAGE" && zip -qr "$ZIP_FILE" DotCraft)
