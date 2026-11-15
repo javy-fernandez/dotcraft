@@ -45,6 +45,8 @@ mod log_graph_tests {
     }
 
     #[tokio::test]
+    // HOME_LOCK serializes tests that redirect DOTCRAFT_HOME; this test owns it until the end.
+    #[allow(clippy::await_holding_lock)]
     async fn real_merge_log_draws_branch_lanes_and_selects_a_commit() {
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();

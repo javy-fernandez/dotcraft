@@ -621,7 +621,7 @@ impl Vcs {
         let hash = stash.hash.clone();
         let restore_index = self.stash_restore_index;
         self.op(if pop { "stash_pop" } else { "stash_apply" }, async move {
-            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash).ok_or_else(|| rc_vcs::GitError::NotFound(hash))?;
+            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash).ok_or(rc_vcs::GitError::NotFound(hash))?;
             if pop { repo.stash_pop(entry.index, restore_index).await } else { repo.stash_apply(entry.index, restore_index).await }
         });
     }
@@ -630,7 +630,7 @@ impl Vcs {
         let Some(repo) = self.repo.clone() else { return };
         let hash = stash.hash.clone();
         self.op("stash_drop", async move {
-            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash).ok_or_else(|| rc_vcs::GitError::NotFound(hash))?;
+            let entry = repo.stashes().await?.into_iter().find(|s| s.hash == hash).ok_or(rc_vcs::GitError::NotFound(hash))?;
             repo.stash_drop(entry.index).await
         });
     }

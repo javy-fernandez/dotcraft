@@ -161,10 +161,10 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         let mut b = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
         icons::image(&mut b, ico::WARNING, 16.0);
         b.label(tr("The file was changed on disk. Keep your version or load the one on disk?"));
-        if b.button(tr("Load from Disk")).clicked() {
-            if let Err(error) = app.docs.discard_and_reload(active) {
-                app.notify(error, true);
-            }
+        if b.button(tr("Load from Disk")).clicked()
+            && let Err(error) = app.docs.discard_and_reload(active)
+        {
+            app.notify(error, true);
         }
         if b.button(tr("Keep Mine")).clicked() {
             app.docs.list[active].conflict = false;

@@ -82,6 +82,29 @@ fn reject_symlink(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Load the workspace policy and enumerate installed SDKs with timeout and cancellation.
+pub fn start_load(root: PathBuf, dotnet: PathBuf, out: rc_core::inbox::Outbox<Result<(GlobalJson, Vec<crate::SdkInfo>), String>>) -> crate::OpHandle {
+    let cancel = crate::CancelToken::new();
+    let token = cancel.clone();
+    let task = rc_core::Runtime::spawn(async move {
+        let result: Result<(GlobalJson, Vec<crate::SdkInfo>)> = async {
+            let file = tokio::task::spawn_blocking(move || GlobalJson::load(&root)).await??;
+            let host = tokio::task::spawn_blocking(move || crate::Dotnet::locate(Some(&dotnet))).await?.context("The .NET SDK was not found")?;
+            let mut cmd = host.command();
+            cmd.arg("--list-sdks").kill_on_drop(true);
+            let output = tokio::select! {
+                _ = token.cancelled() => anyhow::bail!("SDK discovery cancelled"),
+                output = tokio::time::timeout(std::time::Duration::from_secs(10), cmd.output()) => output.context("SDK discovery timed out")??,
+            };
+            ensure!(output.status.success(), "SDK discovery failed: {}", String::from_utf8_lossy(&output.stderr));
+            Ok((file, crate::sdk::parse_sdks(&String::from_utf8_lossy(&output.stdout))))
+        }
+        .await;
+        out.send(result.map_err(|e| format!("{e:#}")));
+    });
+    crate::OpHandle::new(cancel, task)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,27 +185,4 @@ mod tests {
         assert!(GlobalJson::load(root.path()).is_err());
         assert_eq!(std::fs::read_to_string(target).unwrap(), "{}");
     }
-}
-
-/// Load the workspace policy and enumerate installed SDKs with timeout and cancellation.
-pub fn start_load(root: PathBuf, dotnet: PathBuf, out: rc_core::inbox::Outbox<Result<(GlobalJson, Vec<crate::SdkInfo>), String>>) -> crate::OpHandle {
-    let cancel = crate::CancelToken::new();
-    let token = cancel.clone();
-    let task = rc_core::Runtime::spawn(async move {
-        let result: Result<(GlobalJson, Vec<crate::SdkInfo>)> = async {
-            let file = tokio::task::spawn_blocking(move || GlobalJson::load(&root)).await??;
-            let host = tokio::task::spawn_blocking(move || crate::Dotnet::locate(Some(&dotnet))).await?.context("The .NET SDK was not found")?;
-            let mut cmd = host.command();
-            cmd.arg("--list-sdks").kill_on_drop(true);
-            let output = tokio::select! {
-                _ = token.cancelled() => anyhow::bail!("SDK discovery cancelled"),
-                output = tokio::time::timeout(std::time::Duration::from_secs(10), cmd.output()) => output.context("SDK discovery timed out")??,
-            };
-            ensure!(output.status.success(), "SDK discovery failed: {}", String::from_utf8_lossy(&output.stderr));
-            Ok((file, crate::sdk::parse_sdks(&String::from_utf8_lossy(&output.stdout))))
-        }
-        .await;
-        out.send(result.map_err(|e| format!("{e:#}")));
-    });
-    crate::OpHandle::new(cancel, task)
 }

@@ -21,6 +21,7 @@ pub fn take() -> Vec<PathBuf> {
     std::mem::take(&mut *PENDING.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn push(paths: Vec<PathBuf>) {
     if paths.is_empty() {
         return;

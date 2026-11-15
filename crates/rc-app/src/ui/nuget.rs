@@ -2166,7 +2166,6 @@ fn audit_details(ui: &mut Ui, m: &mut NugetManager) {
     m.ops.extend(ops);
 }
 
-
 /// Takes finished work; true when references changed (the explorer reloads them).
 fn poll(m: &mut NugetManager) -> bool {
     let mut changed = false;
@@ -2310,6 +2309,131 @@ fn poll(m: &mut NugetManager) -> bool {
         }
     }
     changed
+}
+
+/// Icon and short label for a source's status.
+fn status_look(s: Option<&SourceStatus>) -> (rc_kit::Ico, &'static str) {
+    match s {
+        Some(SourceStatus::Ok) => (ico::SUCCESS, tr("OK")),
+        Some(SourceStatus::NeedsSignIn(_)) => (ico::USER, tr("Sign-in required")),
+        Some(SourceStatus::Failed(_)) => (ico::ERROR, tr("Failed")),
+        Some(SourceStatus::Checking) | None => (ico::REFRESH, tr("Checking…")),
+    }
+}
+
+/// The source drop-down: each source with its status (the reason on hover); returns a pick.
+fn source_picker(ui: &mut Ui, m: &NugetManager) -> Option<usize> {
+    let current = m.sources.get(m.source).map_or("nuget.org", |s| s.name.as_str());
+    let (icon, _) = status_look(m.current_status());
+    let resp = ui.push_id("nuget_source", |ui| theme::flat_button(ui, Some(icon), current, FontId::proportional(12.5), true, true)).inner;
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, current));
+    let mut picked = None;
+    egui::Popup::menu(&resp).show(|ui| {
+        ui.set_min_width(280.0);
+        for (i, s) in m.sources.iter().enumerate() {
+            let status = m.status.get(&s.url);
+            let (icon, label) = status_look(status);
+            let r = theme::menu_entry(ui, Some(icon), &s.name, Some(label), i == m.source, true);
+            let r = match status {
+                Some(SourceStatus::NeedsSignIn(why) | SourceStatus::Failed(why)) if !why.is_empty() => r.on_hover_text(format!("{}\n{why}", s.url)),
+                _ => r.on_hover_text(&s.url),
+            };
+            if r.clicked() {
+                picked = Some(i);
+                ui.close();
+            }
+        }
+    });
+    picked
+}
+
+/// The Sign in dialog: the credential provider's device flow instructions (page and code) while
+/// it waits, or why signing in failed.
+pub fn sign_in_dialog(app: &mut DotCraftApp, ctx: &egui::Context) {
+    if app.nuget.sign_in.is_none() {
+        return;
+    }
+    pump(app);
+    let m = &mut app.nuget;
+    let Some(d) = m.sign_in.as_ref() else { return };
+    let running = d.task.is_some();
+    if running {
+        ctx.request_repaint_after(std::time::Duration::from_millis(250));
+    }
+    // The device flow message gives the page and the code; other messages are shown as notes.
+    let (mut link, mut code) = (None, None);
+    for msg in &d.messages {
+        let (l, c) = nuget_auth::device_code(msg);
+        link = l.or(link);
+        code = c.or(code);
+    }
+    let (mut cancel, mut retry, mut open) = (false, false, false);
+    let resp = egui::Modal::new(egui::Id::new("nuget_sign_in")).show(ctx, |ui| {
+        ui.set_width(460.0);
+        let p = rc_kit::pal(ui);
+        ui.horizontal(|ui| {
+            icons::image(ui, ico::USER, 16.0);
+            ui.label(egui::RichText::new(trf("Sign in to {source}", &[("source", &d.name)])).font(theme::bold(15.0)));
+        });
+        ui.add_space(2.0);
+        crate::ui::kit::note(ui, &d.url);
+        ui.add_space(10.0);
+        if let Some(code) = &code {
+            ui.label(egui::RichText::new(tr("Open the sign-in page in a browser and enter this code:")).size(13.0));
+            ui.add_space(6.0);
+            egui::Frame::new().fill(p.control_bg).stroke(egui::Stroke::new(1.0, p.control_border)).corner_radius(6).inner_margin(egui::Margin::symmetric(12, 8)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(code).font(theme::mono_bold(18.0)).color(p.text));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if theme::icon_button(ui, ico::COPY, true, tr("Copy Code")).clicked() {
+                            ui.ctx().copy_text(code.clone());
+                        }
+                    });
+                });
+            });
+            if let Some(link) = &link {
+                ui.add_space(4.0);
+                crate::ui::kit::note(ui, link);
+            }
+        }
+        for msg in d.messages.iter().filter(|m| nuget_auth::device_code(m).1.is_none()) {
+            crate::ui::kit::note(ui, msg);
+        }
+        ui.add_space(8.0);
+        if running {
+            ui.horizontal(|ui| {
+                ui.add(egui::Spinner::new().size(14.0));
+                crate::ui::kit::note(ui, if code.is_some() { tr("Waiting for you to sign in…") } else { tr("Asking the credential provider…") });
+            });
+        } else if let Some(e) = &d.error {
+            crate::ui::kit::message(ui, &trf("Could not sign in: {error}", &[("error", e)]), true);
+        }
+        ui.add_space(6.0);
+        crate::ui::kit::note(ui, tr("The token stays in memory until DotCraft closes; it is never saved."));
+        ui.add_space(14.0);
+        // Fixed height, so the dialog shrinks when its content does.
+        ui.allocate_ui_with_layout(vec2(ui.available_width(), 28.0), egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if running {
+                if link.is_some() && theme::primary_button(ui, tr("Open Browser")).clicked() {
+                    open = true;
+                }
+                cancel = theme::secondary_button(ui, tr("Cancel")).clicked();
+            } else {
+                retry = theme::primary_button(ui, tr("Try Again")).clicked();
+                cancel = theme::secondary_button(ui, tr("Close")).clicked();
+            }
+        });
+    });
+    if open && let Some(link) = &link {
+        crate::ui::run_windows::open_url(link);
+    }
+    if retry {
+        let (name, url) = (d.name.clone(), d.url.clone());
+        m.start_sign_in(name, url);
+    } else if cancel || resp.should_close() {
+        m.cancel_sign_in();
+    }
 }
 
 #[cfg(test)]
@@ -2809,130 +2933,5 @@ mod tests {
             h.run_steps(3);
             h.render().unwrap().save(out.join(format!("nuget-graph-{suffix}.png"))).unwrap();
         }
-    }
-}
-
-/// Icon and short label for a source's status.
-fn status_look(s: Option<&SourceStatus>) -> (rc_kit::Ico, &'static str) {
-    match s {
-        Some(SourceStatus::Ok) => (ico::SUCCESS, tr("OK")),
-        Some(SourceStatus::NeedsSignIn(_)) => (ico::USER, tr("Sign-in required")),
-        Some(SourceStatus::Failed(_)) => (ico::ERROR, tr("Failed")),
-        Some(SourceStatus::Checking) | None => (ico::REFRESH, tr("Checking…")),
-    }
-}
-
-/// The source drop-down: each source with its status (the reason on hover); returns a pick.
-fn source_picker(ui: &mut Ui, m: &NugetManager) -> Option<usize> {
-    let current = m.sources.get(m.source).map_or("nuget.org", |s| s.name.as_str());
-    let (icon, _) = status_look(m.current_status());
-    let resp = ui.push_id("nuget_source", |ui| theme::flat_button(ui, Some(icon), current, FontId::proportional(12.5), true, true)).inner;
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, current));
-    let mut picked = None;
-    egui::Popup::menu(&resp).show(|ui| {
-        ui.set_min_width(280.0);
-        for (i, s) in m.sources.iter().enumerate() {
-            let status = m.status.get(&s.url);
-            let (icon, label) = status_look(status);
-            let r = theme::menu_entry(ui, Some(icon), &s.name, Some(label), i == m.source, true);
-            let r = match status {
-                Some(SourceStatus::NeedsSignIn(why) | SourceStatus::Failed(why)) if !why.is_empty() => r.on_hover_text(format!("{}\n{why}", s.url)),
-                _ => r.on_hover_text(&s.url),
-            };
-            if r.clicked() {
-                picked = Some(i);
-                ui.close();
-            }
-        }
-    });
-    picked
-}
-
-/// The Sign in dialog: the credential provider's device flow instructions (page and code) while
-/// it waits, or why signing in failed.
-pub fn sign_in_dialog(app: &mut DotCraftApp, ctx: &egui::Context) {
-    if app.nuget.sign_in.is_none() {
-        return;
-    }
-    pump(app);
-    let m = &mut app.nuget;
-    let Some(d) = m.sign_in.as_ref() else { return };
-    let running = d.task.is_some();
-    if running {
-        ctx.request_repaint_after(std::time::Duration::from_millis(250));
-    }
-    // The device flow message gives the page and the code; other messages are shown as notes.
-    let (mut link, mut code) = (None, None);
-    for msg in &d.messages {
-        let (l, c) = nuget_auth::device_code(msg);
-        link = l.or(link);
-        code = c.or(code);
-    }
-    let (mut cancel, mut retry, mut open) = (false, false, false);
-    let resp = egui::Modal::new(egui::Id::new("nuget_sign_in")).show(ctx, |ui| {
-        ui.set_width(460.0);
-        let p = rc_kit::pal(ui);
-        ui.horizontal(|ui| {
-            icons::image(ui, ico::USER, 16.0);
-            ui.label(egui::RichText::new(trf("Sign in to {source}", &[("source", &d.name)])).font(theme::bold(15.0)));
-        });
-        ui.add_space(2.0);
-        crate::ui::kit::note(ui, &d.url);
-        ui.add_space(10.0);
-        if let Some(code) = &code {
-            ui.label(egui::RichText::new(tr("Open the sign-in page in a browser and enter this code:")).size(13.0));
-            ui.add_space(6.0);
-            egui::Frame::new().fill(p.control_bg).stroke(egui::Stroke::new(1.0, p.control_border)).corner_radius(6).inner_margin(egui::Margin::symmetric(12, 8)).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(code).font(theme::mono_bold(18.0)).color(p.text));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if theme::icon_button(ui, ico::COPY, true, tr("Copy Code")).clicked() {
-                            ui.ctx().copy_text(code.clone());
-                        }
-                    });
-                });
-            });
-            if let Some(link) = &link {
-                ui.add_space(4.0);
-                crate::ui::kit::note(ui, link);
-            }
-        }
-        for msg in d.messages.iter().filter(|m| nuget_auth::device_code(m).1.is_none()) {
-            crate::ui::kit::note(ui, msg);
-        }
-        ui.add_space(8.0);
-        if running {
-            ui.horizontal(|ui| {
-                ui.add(egui::Spinner::new().size(14.0));
-                crate::ui::kit::note(ui, if code.is_some() { tr("Waiting for you to sign in…") } else { tr("Asking the credential provider…") });
-            });
-        } else if let Some(e) = &d.error {
-            crate::ui::kit::message(ui, &trf("Could not sign in: {error}", &[("error", e)]), true);
-        }
-        ui.add_space(6.0);
-        crate::ui::kit::note(ui, tr("The token stays in memory until DotCraft closes; it is never saved."));
-        ui.add_space(14.0);
-        // Fixed height, so the dialog shrinks when its content does.
-        ui.allocate_ui_with_layout(vec2(ui.available_width(), 28.0), egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if running {
-                if link.is_some() && theme::primary_button(ui, tr("Open Browser")).clicked() {
-                    open = true;
-                }
-                cancel = theme::secondary_button(ui, tr("Cancel")).clicked();
-            } else {
-                retry = theme::primary_button(ui, tr("Try Again")).clicked();
-                cancel = theme::secondary_button(ui, tr("Close")).clicked();
-            }
-        });
-    });
-    if open && let Some(link) = &link {
-        crate::ui::run_windows::open_url(link);
-    }
-    if retry {
-        let (name, url) = (d.name.clone(), d.url.clone());
-        m.start_sign_in(name, url);
-    } else if cancel || resp.should_close() {
-        m.cancel_sign_in();
     }
 }

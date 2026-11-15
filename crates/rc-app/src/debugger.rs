@@ -22,7 +22,8 @@ pub enum DebugOutput {
 pub type Evaluation = (u64, String, Option<Result<EvalValue, String>>);
 
 enum PendingStart {
-    Launch(RunConfig, rc_dotnet::RunRequest, PathBuf),
+    // Boxed: the launch request is much larger than an attach target.
+    Launch(Box<(RunConfig, rc_dotnet::RunRequest, PathBuf)>),
     Attach(u32),
 }
 
@@ -116,7 +117,7 @@ impl Debugger {
                 self.downloading = Some((0, None));
                 self.download = Some(rc_dap::netcoredbg::start_download(self.downloads.sender()));
             }
-            self.pending = Some(PendingStart::Launch(config.clone(), run, dotnet.to_path_buf()));
+            self.pending = Some(PendingStart::Launch(Box::new((config.clone(), run, dotnet.to_path_buf()))));
             return vec![DebugOutput::Notify(tr("Downloading the netcoredbg debugger (first use)…").into(), false)];
         };
         let Some(dotnet) = rc_dotnet::Dotnet::locate(Some(dotnet)) else {
@@ -262,7 +263,10 @@ impl Debugger {
                     out.push(DebugOutput::Notify(tr("netcoredbg is ready").into(), false));
                     if let Some(pending) = self.pending.take() {
                         out.extend(match pending {
-                            PendingStart::Launch(cfg, run, dotnet) => self.start(cfg, Some(run), &dotnet, None, docs),
+                            PendingStart::Launch(launch) => {
+                                let (cfg, run, dotnet) = *launch;
+                                self.start(cfg, Some(run), &dotnet, None, docs)
+                            }
                             PendingStart::Attach(pid) => self.attach(pid, None, docs),
                         });
                     }

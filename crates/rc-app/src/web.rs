@@ -142,8 +142,11 @@ pub struct Endpoints {
     scan_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     import_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     pending_import: Option<Receiver<Result<(PathBuf, usize), String>>>,
-    pending: Option<Receiver<(Vec<ProjectEndpoints>, Vec<(String, Endpoint, Endpoint)>)>>,
+    pending: Option<Receiver<ScanResult>>,
 }
+
+/// Endpoints by project and the conflicting routes found by one scan.
+type ScanResult = (Vec<ProjectEndpoints>, Vec<(String, Endpoint, Endpoint)>);
 
 impl Endpoints {
     pub fn new() -> Self {

@@ -849,13 +849,12 @@ pub fn tab_ex(ui: &mut Ui, selected: bool, ico: Option<Ico>, text: &str, closabl
     (resp, close)
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
 mod tests {
     use super::*;
 
     /// Issue #4: CJK, Hangul and Thai in the grid and the UI used to show as boxes.
     #[test]
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn system_fonts_cover_cjk_hangul_and_thai() {
         assert!(!system_fonts().is_empty(), "no system fallback font found");
         let ctx = egui::Context::default();

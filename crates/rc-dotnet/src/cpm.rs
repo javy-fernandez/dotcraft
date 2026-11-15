@@ -571,7 +571,7 @@ pub fn set_central_version(text: &str, id: &str, condition: Option<&str>, versio
         Some(c) => items.iter().find(|n| condition_of(**n).as_deref() == Some(c.trim())).copied(),
         None => items.iter().find(|n| condition_of(**n).is_none()).copied().or_else(|| (items.len() == 1).then(|| items[0])),
     }
-    .or_else(|| doc.descendants().find(|n| n.has_tag_name("GlobalPackageReference") && central_item_matches(&n, id)))
+    .or_else(|| doc.descendants().find(|n| n.has_tag_name("GlobalPackageReference") && central_item_matches(n, id)))
     .ok_or_else(|| anyhow::anyhow!("{id} has no PackageVersion to update"))?;
     set_version_on(&doc, text, item, "Version", version)
 }

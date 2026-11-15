@@ -48,7 +48,7 @@ impl Indent {
 
     pub fn previous_stop(&self, column: usize) -> usize {
         let width = self.width();
-        column.saturating_sub(if column % width == 0 { width } else { column % width })
+        column.saturating_sub(if column.is_multiple_of(width) { width } else { column % width })
     }
 
     /// Whitespace advancing from `from` to `to`, without overshooting a tab stop.

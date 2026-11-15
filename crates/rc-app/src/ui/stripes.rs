@@ -136,7 +136,7 @@ mod tests {
                 }
             }
             let last_side = if side == Side::Left { Side::Bottom } else { side };
-            let last = ToolWindow::ALL.into_iter().filter(|window| app.dock.side_of(*window) == last_side).last().unwrap();
+            let last = ToolWindow::ALL.into_iter().rfind(|window| app.dock.side_of(*window) == last_side).unwrap();
             let mut harness = Harness::builder().with_size(vec2(42.0, 120.0)).build_ui_state(
                 move |ui, app: &mut DotCraftApp| show(app, ui, side),
                 app,
