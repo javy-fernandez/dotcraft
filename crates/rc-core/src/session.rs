@@ -127,6 +127,14 @@ impl Session {
         paths::write_atomic(&Self::file_for(workspace), serde_json::to_string_pretty(self)?.as_bytes())?;
         Ok(())
     }
+
+    /// Deletes this workspace's persisted session. An absent session is already cleared.
+    pub fn clear(workspace: &Path) -> std::io::Result<()> {
+        match std::fs::remove_file(Self::file_for(workspace)) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    }
 }
 
 /// FNV-1a: a stable hash for file names (std's hasher is not stable across runs).
@@ -140,8 +148,9 @@ mod tests {
 
     #[test]
     fn sessions_round_trip_per_workspace() {
+        let _home = paths::TEST_HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let dir = tempfile::tempdir().unwrap();
-        // SAFETY: tests in this crate do not read DOTCRAFT_HOME concurrently with other values.
+        // SAFETY: TEST_HOME_LOCK keeps other tests in this crate from using DOTCRAFT_HOME meanwhile.
         unsafe { std::env::set_var("DOTCRAFT_HOME", dir.path()) };
         let ws = dir.path().join("MySolution");
         std::fs::create_dir_all(&ws).unwrap();
@@ -167,5 +176,10 @@ mod tests {
         assert_ne!(Session::file_for(&ws), Session::file_for(&other));
         assert_eq!(Session::load(&other), other_session);
         assert_eq!(Session::load(&ws), s);
+
+        Session::clear(&ws).unwrap();
+        assert_eq!(Session::load(&ws), Session::default());
+        assert_eq!(Session::load(&other), other_session);
+        Session::clear(&ws).unwrap();
     }
 }

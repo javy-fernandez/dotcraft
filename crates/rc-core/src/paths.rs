@@ -6,6 +6,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_TEMP_FILE: AtomicU64 = AtomicU64::new(0);
 
+/// Serializes tests in this crate that redirect `DOTCRAFT_HOME`.
+#[cfg(test)]
+pub(crate) static TEST_HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub fn data_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("DOTCRAFT_HOME").filter(|v| !v.is_empty()) {
         return PathBuf::from(dir);

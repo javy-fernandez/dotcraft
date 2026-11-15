@@ -134,6 +134,17 @@ impl Settings {
         Ok(())
     }
 
+    /// Deletes persisted preferences and the backup of an unreadable settings file.
+    pub fn clear() -> std::io::Result<()> {
+        for file in [Self::file(), Self::file().with_extension("json.bak")] {
+            match std::fs::remove_file(file) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                result => result?,
+            }
+        }
+        Ok(())
+    }
+
     /// Moves `path` to the top of the recent list (max 15 entries).
     pub fn add_recent(&mut self, path: PathBuf) {
         self.recent_workspaces.retain(|p| p != &path);
@@ -156,6 +167,20 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clear_removes_preferences_and_the_unreadable_backup() {
+        let _home = paths::TEST_HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        // SAFETY: TEST_HOME_LOCK keeps other tests in this crate from using DOTCRAFT_HOME meanwhile.
+        unsafe { std::env::set_var("DOTCRAFT_HOME", dir.path()) };
+        Settings::default().save().unwrap();
+        std::fs::write(Settings::file().with_extension("json.bak"), "{ unreadable").unwrap();
+        Settings::clear().unwrap();
+        assert!(!Settings::file().exists());
+        assert!(!Settings::file().with_extension("json.bak").exists());
+        Settings::clear().unwrap();
+    }
 
     #[test]
     fn missing_fields_take_defaults() {
