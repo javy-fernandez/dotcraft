@@ -42,6 +42,11 @@ pub fn record(path: &Path, text: &str, label: &str) -> std::io::Result<()> {
 }
 
 fn record_in(root: &Path, path: &Path, text: &str, label: &str) -> std::io::Result<()> {
+    let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+    record_at(root, path, text, label, millis)
+}
+
+fn record_at(root: &Path, path: &Path, text: &str, label: &str, millis: u128) -> std::io::Result<()> {
     let dir = dir_of(root, path);
     if let Some(last) = revisions_in(root, path).first()
         && last.read().is_ok_and(|t| t == text)
@@ -50,18 +55,18 @@ fn record_in(root: &Path, path: &Path, text: &str, label: &str) -> std::io::Resu
     }
     std::fs::create_dir_all(&dir)?;
     std::fs::write(dir.join("path.txt"), path.to_string_lossy().as_bytes())?;
-    let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
     // Labels are short ASCII words; keep them safe for a file name.
     let label: String = label.chars().map(|c| if c.is_ascii_alphanumeric() || c == ' ' { c } else { '_' }).collect();
-    // Exclusive creation keeps simultaneous saves in the same millisecond separate.
+    // Exclusive creation keeps simultaneous saves in the same millisecond separate. A revision
+    // with the same stamp but another label also takes a new counter, so the order stays exact.
     let mut n = 0;
     loop {
-        let name = if n == 0 {
-            format!("{millis}-{label}.txt")
-        } else {
-            format!("{millis}{n:03}-{label}.txt")
-        };
-        let path = dir.join(name);
+        let stamp = if n == 0 { millis.to_string() } else { format!("{millis}{n:03}") };
+        if stamp_taken(&dir, &stamp) {
+            n += 1;
+            continue;
+        }
+        let path = dir.join(format!("{stamp}-{label}.txt"));
         match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
             Ok(mut file) => {
                 if let Err(error) = file.write_all(text.as_bytes()) {
@@ -77,6 +82,12 @@ fn record_in(root: &Path, path: &Path, text: &str, label: &str) -> std::io::Resu
     }
     prune(root, path);
     Ok(())
+}
+
+/// Whether a revision in `dir` already uses `stamp`, whatever its label.
+fn stamp_taken(dir: &Path, stamp: &str) -> bool {
+    let prefix = format!("{stamp}-");
+    std::fs::read_dir(dir).is_ok_and(|entries| entries.flatten().any(|e| e.file_name().to_string_lossy().starts_with(&prefix)))
 }
 
 /// Revisions of `path`, newest first.
@@ -135,6 +146,28 @@ mod tests {
         assert_eq!(revs[0].label, "External change");
         assert_eq!(revs[1].read().unwrap(), "one");
         assert!(revisions_in(&root, &home.path().join("B.cs")).is_empty());
+    }
+
+    #[test]
+    fn revisions_in_the_same_millisecond_keep_their_order_whatever_the_label() {
+        let home = tempfile::tempdir().unwrap();
+        let root = home.path().join("history");
+        let file = home.path().join("Program.cs");
+        let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        let labels = ["Saved", "External change", "Before restore", "Saved", "External change"];
+        for (i, label) in labels.iter().enumerate() {
+            record_at(&root, &file, &format!("revision {i}"), label, millis).unwrap();
+        }
+        let revisions = revisions_in(&root, &file);
+        // Distinct stamps make the order exact, independent of the directory listing order.
+        let stamps: BTreeSet<String> = revisions
+            .iter()
+            .map(|r| r.file.file_name().unwrap().to_string_lossy().split_once('-').unwrap().0.to_string())
+            .collect();
+        assert_eq!(stamps.len(), labels.len());
+        let texts: Vec<String> = revisions.iter().map(|r| r.read().unwrap()).collect();
+        let expected: Vec<String> = (0..labels.len()).rev().map(|i| format!("revision {i}")).collect();
+        assert_eq!(texts, expected);
     }
 
     #[test]
