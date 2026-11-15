@@ -1,6 +1,9 @@
 /target
+/security/reports/*
+!/security/reports/README.md
 .DS_Store
 **/bin/
 **/obj/
 *.trx
 /.claude/
+__pycache__/
