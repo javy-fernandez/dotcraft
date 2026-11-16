@@ -1125,6 +1125,7 @@
     "Use controllers (instead of minimal APIs)": "Utiliser des contrôleurs (au lieu des API minimales)"
   },
   "additems": {
+    "Search file type": "Search file type",
     "Add": "Ajouter",
     "New {item}": "Nouveau : {item}",
     "Class": "Classe",
