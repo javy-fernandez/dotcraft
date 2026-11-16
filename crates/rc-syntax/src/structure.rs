@@ -129,7 +129,7 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                 out.push(FoldRange { start_line: sr, end_line: er, kind: fold, start_col: char_col(rope, node), end_col: end_col(rope, node) });
             }
         }),
-        Lang::Sln | Lang::Plain => {}
+        Lang::Sln | Lang::Dockerfile | Lang::Plain => {}
     }
     out.sort_by_key(|f| (f.start_line, std::cmp::Reverse(f.end_line)));
     // One fold per start line (the outermost), like IntelliJ.

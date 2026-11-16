@@ -19,12 +19,19 @@ pub enum Lang {
     Razor,
     /// Visual Studio solution files (`.sln`), highlighted by a small lexer (no grammar).
     Sln,
+    Dockerfile,
     Plain,
 }
 
 impl Lang {
     pub fn from_path(path: &Path) -> Lang {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name.eq_ignore_ascii_case("Dockerfile") || name.to_ascii_lowercase().starts_with("dockerfile.")
+            || name.eq_ignore_ascii_case("Containerfile") || name.to_ascii_lowercase().starts_with("containerfile.")
+        {
+            return Lang::Dockerfile;
+        }
         match ext.as_str() {
             "cs" | "csx" => Lang::CSharp,
             "csproj" | "props" | "targets" | "xml" | "config" | "resx" | "xaml" | "axaml" | "nuspec" | "slnx" | "fsproj"
@@ -39,7 +46,6 @@ impl Lang {
             "razor" | "cshtml" => Lang::Razor,
             "sln" => Lang::Sln,
             _ => {
-                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 if name.eq_ignore_ascii_case("Directory.Packages.props") { Lang::Xml } else { Lang::Plain }
             }
         }
@@ -49,7 +55,7 @@ impl Lang {
     pub fn line_comment(self) -> Option<&'static str> {
         match self {
             Lang::CSharp | Lang::JavaScript | Lang::TypeScript | Lang::Tsx | Lang::Json => Some("//"),
-            Lang::Sln => Some("#"),
+            Lang::Sln | Lang::Dockerfile => Some("#"),
             _ => None,
         }
     }
@@ -77,6 +83,7 @@ impl Lang {
             Lang::Markdown => "Markdown",
             Lang::Razor => "Razor",
             Lang::Sln => "Solution",
+            Lang::Dockerfile => "Dockerfile",
             Lang::Plain => "Plain text",
         }
     }
@@ -93,7 +100,7 @@ impl Lang {
             Lang::Json => tree_sitter_json::LANGUAGE.into(),
             Lang::Markdown => tree_sitter_md::LANGUAGE.into(),
             Lang::Razor => tree_sitter_razor_modern::LANGUAGE.into(),
-            Lang::Sln | Lang::Plain => return None,
+            Lang::Sln | Lang::Dockerfile | Lang::Plain => return None,
         })
     }
 
@@ -125,9 +132,21 @@ impl Lang {
             Lang::Json => (&JSON, include_str!("../queries/json.scm")),
             Lang::Markdown => (&MD, include_str!("../queries/markdown.scm")),
             Lang::Razor => (&RAZOR, RAZOR_SOURCE.get_or_init(|| format!("{}\n{}", include_str!("../queries/csharp.scm"), include_str!("../queries/razor.scm"))).as_str()),
-            Lang::Sln | Lang::Plain => return None,
+            Lang::Sln | Lang::Dockerfile | Lang::Plain => return None,
         };
         let language = self.language()?;
         Some(cell.get_or_init(|| Query::new(&language, source).unwrap_or_else(|e| panic!("bad {self:?} query: {e}"))))
+    }
+}
+
+#[cfg(test)]
+mod dockerfile_tests {
+    use super::*;
+
+    #[test]
+    fn detects_dockerfile_variants() {
+        assert_eq!(Lang::from_path(Path::new("Dockerfile")), Lang::Dockerfile);
+        assert_eq!(Lang::from_path(Path::new("Dockerfile.dev")), Lang::Dockerfile);
+        assert_eq!(Lang::from_path(Path::new("Containerfile")), Lang::Dockerfile);
     }
 }
