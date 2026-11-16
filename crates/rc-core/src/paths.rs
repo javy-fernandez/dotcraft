@@ -28,6 +28,11 @@ pub fn logs_dir() -> PathBuf {
     data_dir().join("logs")
 }
 
+/// User-owned scratch files, shared across workspaces and sessions.
+pub fn scratches_dir() -> PathBuf {
+    data_dir().join("scratches")
+}
+
 /// Writes `bytes` atomically: a crash halfway never leaves a truncated file.
 pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::{ErrorKind, Write};
