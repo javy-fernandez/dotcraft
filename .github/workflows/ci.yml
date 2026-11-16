@@ -1,6 +1,7 @@
 # Builds DotCraft and runs the workspace tests on every pull request and push to main.
-# The tests that talk to the real .NET SDK, Roslyn and netcoredbg run too: the SDKs are
-# installed below and the language server and debugger are downloaded on first use.
+# The tests that talk to the real .NET SDK and netcoredbg run too: the SDKs are installed
+# below and the debugger is downloaded on first use. Ubuntu 24.04 because the netcoredbg
+# Linux build needs glibc 2.38.
 # Tests marked #[ignore] (GPU captures, git-lfs, network-only NuGet checks) are skipped.
 name: CI
 
@@ -18,7 +19,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -46,33 +47,10 @@ jobs:
           git config --global user.name "DotCraft CI"
           git config --global user.email "ci@dotcraft.invalid"
 
-      # Skipped here: tests that need the Roslyn language server already installed, the
-      # netcoredbg sessions (the adapter stops at launch on this runner, see the next step)
-      # and the SDK chooser dialog test, which fails on Linux runners.
+      # Skipped here: tests that need the Roslyn language server already installed and the
+      # SDK chooser dialog test, which fails on Linux runners.
       - name: Test
         run: >
           cargo test --workspace --locked --no-fail-fast --
-          --skip debugger_tests::
           --skip insight_tests::
           --skip sdk_settings_return_tests::
-          --skip stops_on_exceptions_with_exception_info
-          --skip debugs_the_api_through_an_http_request_and_stops_cleanly
-          --skip debugs_the_cli_breakpoints_stack_variables_watches_steps_and_output
-          --skip attaches_to_a_running_api_and_detaches
-
-      # Informational until netcoredbg starts on Linux: runs its sessions and shows why the
-      # adapter stops, without failing the build.
-      - name: netcoredbg sessions (informational)
-        if: always()
-        continue-on-error: true
-        run: |
-          cargo test --locked -p rc-dap --test netcoredbg -- --test-threads=1 || status=$?
-          adapter=$(find target/test-home -type f -name netcoredbg | head -1)
-          if [ -n "$adapter" ]; then
-            echo "adapter: $adapter"
-            ls -l "$adapter"
-            ldd "$adapter" || true
-            "$adapter" --version || true
-            printf 'Content-Length: 2\r\n\r\n{}' | timeout 10 "$adapter" --interpreter=vscode; echo "exit: $?"
-          fi
-          exit "${status:-0}"
