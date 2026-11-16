@@ -1346,17 +1346,21 @@ impl DotCraftApp {
         self.test_markers = markers;
     }
 
-    /// Click on a test's gutter icon: runs that test (or class) in its project.
-    pub fn run_test_at(&mut self, line: usize) {
+    /// Click on a test's gutter icon: run it, or debug it with Shift held.
+    pub fn run_test_at(&mut self, line: usize, debug: bool) {
         let Some(m) = self.test_markers.iter().find(|m| m.line == line).cloned() else { return };
         let Some(path) = self.docs.active_doc().map(|d| d.path.clone()) else { return };
         let Some(project) = crate::runner::project_of(&path, &self.runner.configs) else {
             self.notify(tr("This file is not part of a test project"), false);
             return;
         };
+        if debug && self.debugger.active() {
+            self.notify(tr("Stop the current debug session before attaching"), true);
+            return;
+        }
         self.save_all_docs();
         let filter = if m.is_class { rc_dotnet::TestFilter::Class(m.name.clone()) } else { rc_dotnet::TestFilter::Tests(vec![m.name.clone()]) };
-        let outs = self.runner.run_tests(&project, Some(filter));
+        let outs = if debug { self.runner.debug_test(&project, filter) } else { self.runner.run_tests(&project, Some(filter)) };
         crate::ui::run_windows::handle_outputs(self, outs);
     }
 

@@ -95,6 +95,8 @@ pub enum EditorEvent {
     GutterSecondaryClicked { line: usize, screen: egui::Pos2 },
     /// Click on an icon of the gutter's icon column.
     GutterIconClicked { line: usize, icon: GutterIcon },
+    /// Shift-click on a test icon to debug that test or class.
+    GutterTestDebugClicked { line: usize },
     /// ⌘/Ctrl+click on a char offset.
     NavigateAt(usize),
     /// The mouse rests over a char offset (after the hover delay).

@@ -45,6 +45,15 @@ pub fn handle_outputs(app: &mut DotCraftApp, outputs: Vec<RunnerOutput>) {
         match o {
             RunnerOutput::ShowTool(tw) => app.dock.show(tw),
             RunnerOutput::Notify(m, err) => app.notify(m, err),
+            RunnerOutput::AttachTestHost(pid) => {
+                let outs = app.debugger.attach(pid, app.settings.netcoredbg_path.as_deref(), &app.docs);
+                if outs.iter().any(|o| matches!(o, crate::debugger::DebugOutput::Notify(_, true)))
+                    && let Some(handle) = app.runner.tests.as_ref().and_then(|t| t.handle.as_ref())
+                {
+                    handle.cancel();
+                }
+                app.handle_debug(outs);
+            }
             RunnerOutput::BuildDiagnostics(list) => app.set_build_problems(list),
             RunnerOutput::ToolFinished { followup, success, lines } => crate::ui::ef_core::tool_finished(app, followup, success, &lines),
         }
