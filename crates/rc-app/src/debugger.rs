@@ -46,6 +46,7 @@ pub struct Debugger {
     /// Breakpoint conditions by (file, 0-based line).
     pub conditions: HashMap<(PathBuf, usize), String>,
     pub show_console: bool,
+    pub show_parallel_stacks: bool,
     /// Breakpoint set by Run to Cursor, removed at the next stop (file, 1-based line).
     temp: Option<(PathBuf, u32)>,
     /// URLs the debugged web app listens on.
@@ -72,6 +73,7 @@ impl Debugger {
             hover_result: None,
             conditions: HashMap::new(),
             show_console: false,
+            show_parallel_stacks: false,
             temp: None,
             urls: Vec::new(),
             env: Vec::new(),

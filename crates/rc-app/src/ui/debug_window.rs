@@ -84,9 +84,15 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         ui.add_space(8.0);
         if theme::tab(ui, !app.debugger.show_console, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked() {
             app.debugger.show_console = false;
+            app.debugger.show_parallel_stacks = false;
+        }
+        if theme::tab(ui, app.debugger.show_parallel_stacks, Some(ico::THREADS), tr("Parallel Stacks"), false).0.clicked() {
+            app.debugger.show_console = false;
+            app.debugger.show_parallel_stacks = true;
         }
         if theme::tab(ui, app.debugger.show_console, Some(ico::FILE_SHELL), tr("Console"), false).0.clicked() {
             app.debugger.show_console = true;
+            app.debugger.show_parallel_stacks = false;
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(12.0);
@@ -105,6 +111,10 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         }
         return;
     }
+    if app.debugger.show_parallel_stacks {
+        parallel_stacks(ui, &mut app.debugger);
+        return;
+    }
     let avail = ui.available_rect_before_wrap();
     let split = (avail.width() * 0.34).clamp(200.0, 420.0);
     let left = Rect::from_min_size(avail.min, vec2(split, avail.height()));
@@ -115,6 +125,59 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right));
     variables(&mut ru, &mut app.debugger);
     ui.advance_cursor_after_rect(avail);
+}
+
+fn parallel_stacks(ui: &mut Ui, dbg: &mut Debugger) {
+    let p = rc_kit::pal(ui);
+    let Some(s) = &mut dbg.session else { return };
+    let Some(stop) = s.stop_info() else {
+        ui.add_space(12.0);
+        ui.label(egui::RichText::new(tr("The program is running")).color(p.muted));
+        return;
+    };
+    let stopped_thread = stop.thread_id;
+    let selected = s.selected_frame().map(|f| f.id);
+    let threads = s.threads().to_vec();
+    let mut picked = None;
+    egui::ScrollArea::vertical().id_salt("dbg_parallel_stacks").auto_shrink([false, false]).show(ui, |ui| {
+        if threads.is_empty() {
+            ui.label(egui::RichText::new(tr("No threads available")).color(p.muted));
+        }
+        for thread in threads {
+            let title = format!("{} ({})", thread.name, thread.id);
+            egui::CollapsingHeader::new(title)
+                .id_salt(("dbg_parallel_thread", thread.id))
+                .default_open(thread.id == stopped_thread)
+                .show(ui, |ui| {
+                    if s.frames(thread.id).is_none() {
+                        s.request_frames(thread.id);
+                    }
+                    let list = s.frames(thread.id).cloned().unwrap_or_default();
+                    if list.loading && list.frames.is_empty() {
+                        ui.add(egui::Spinner::new().size(12.0));
+                    }
+                    if !list.loading && list.frames.is_empty() {
+                        ui.label(egui::RichText::new(tr("No stack frames")).color(p.muted));
+                    }
+                    for frame in &list.frames {
+                        let location = frame.path().and_then(|path| path.file_name()).map(|file| format!("  {}:{}", file.to_string_lossy(), frame.line)).unwrap_or_default();
+                        let label = format!("{}{}", frame.name, location);
+                        if ui.selectable_label(selected == Some(frame.id), label).on_hover_text(frame.path().map(|path| path.display().to_string()).unwrap_or_else(|| frame.name.clone())).clicked() {
+                            picked = Some((thread.id, frame.id));
+                        }
+                    }
+                    if list.loading && !list.frames.is_empty() {
+                        ui.add(egui::Spinner::new().size(12.0));
+                    } else if list.has_more() && ui.link(tr("Load more frames")).clicked() {
+                        s.request_frames(thread.id);
+                    }
+                });
+        }
+    });
+    if let Some((thread_id, frame_id)) = picked {
+        ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new("dbg_thread"), thread_id));
+        s.select_frame(frame_id);
+    }
 }
 
 fn frames(ui: &mut Ui, dbg: &mut Debugger) {
