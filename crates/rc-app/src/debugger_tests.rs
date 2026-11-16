@@ -132,6 +132,7 @@ fn debugs_the_cli_and_the_api_from_the_ide() {
     assert_eq!(doc.editor.caret_line_col().0, loop_line);
     let vars = locals(&mut app);
     assert_eq!(value(&vars, "subtotal"), "30.00", "{vars:?}");
+    assert!(app.docs.active_doc().unwrap().editor.debug_inline_values.values().flatten().any(|hint| hint.name == "subtotal" && hint.value == "30.00"));
 
     // Watches and Evaluate.
     app.debugger.session.as_mut().unwrap().add_watch("subtotal + 1");

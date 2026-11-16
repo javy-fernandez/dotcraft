@@ -33,6 +33,8 @@ pub struct Settings {
     pub editor_line_spacing: f32,
     pub ui_zoom: f32,
     pub show_inlay_hints: bool,
+    /// Show local variable values beside source lines while the debugger is paused.
+    pub show_debug_inline_values: bool,
     pub show_indent_guides: bool,
     pub right_margin: usize,
     /// Save files when the window loses focus or when switching tabs (IntelliJ autosave).
@@ -88,6 +90,7 @@ impl Default for Settings {
             editor_line_spacing: 1.2,
             ui_zoom: 1.0,
             show_inlay_hints: true,
+            show_debug_inline_values: true,
             show_indent_guides: true,
             right_margin: 120,
             autosave: true,
@@ -162,6 +165,7 @@ mod tests {
         let s: Settings = serde_json::from_str(r#"{"editor_font_size": 15.0, "unknown": 1}"#).unwrap();
         assert_eq!(s.editor_font_size, 15.0);
         assert_eq!(s.right_margin, 120);
+        assert!(s.show_debug_inline_values);
     }
 
     #[test]

@@ -4,7 +4,7 @@
 use crate::keymap::{Action, Keymap};
 use crate::layout::{EditorFont, LineInput, LineLayout, Virtual, VirtualKind, fold_placeholder, layout_line, mono, severity_color};
 use crate::state::{BreakpointKind, EditorEvent, EditorState, GutterIcon, LineChange, Severity};
-use egui::{Color32, CornerRadius, CursorIcon, Event, Id, Key, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2, pos2, vec2};
+use egui::{Color32, CornerRadius, CursorIcon, Event, FontId, Id, Key, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2, pos2, vec2};
 use rc_kit::{Scheme, ico, icons};
 use rc_text::commands::{self, Motion};
 use rc_text::{EditKind, Range, Selection};
@@ -17,12 +17,13 @@ pub struct EditorConfig {
     pub show_indent_guides: bool,
     pub right_margin: Option<usize>,
     pub show_inlays: bool,
+    pub show_debug_inline_values: bool,
     pub caret_blink: bool,
 }
 
 impl Default for EditorConfig {
     fn default() -> Self {
-        EditorConfig { font: EditorFont::default(), auto_pair: true, show_indent_guides: true, right_margin: Some(120), show_inlays: true, caret_blink: true }
+        EditorConfig { font: EditorFont::default(), auto_pair: true, show_indent_guides: true, right_margin: Some(120), show_inlays: true, show_debug_inline_values: true, caret_blink: true }
     }
 }
 
@@ -527,6 +528,26 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
         // Hints carry their own background in the galley; strip it by painting with the
         // galley's colours (backgrounds are drawn above as rounded boxes).
         painter.galley(origin, lay.galley.clone(), scheme.text);
+    }
+
+    if config.show_debug_inline_values {
+        let font = FontId::monospace((config.font.size - 1.0).max(10.0));
+        for (index, line) in lines.iter().copied().enumerate() {
+            let Some(values) = state.debug_inline_values.get(&line) else { continue };
+            let layout = &layouts[index];
+            let mut x = x0 + layout.origin_x() + layout.galley.size().x + 12.0;
+            let y = y_of_row(first_row + index);
+            for value in values.iter().take(3) {
+                if x >= text_rect.right() { break; }
+                let label = format!("{} = {}", value.name, value.value);
+                let color = if value.changed { pal.warn } else { scheme.hint_fg };
+                let galley = ui.painter().layout_no_wrap(label, font.clone(), color);
+                let box_rect = Rect::from_min_size(pos2(x, y + 2.0), vec2(galley.size().x + 10.0, m.row_h - 4.0));
+                painter.rect_filled(box_rect, 3.0, if value.changed { pal.warn.gamma_multiply(0.2) } else { scheme.hint_bg });
+                painter.galley(pos2(x + 5.0, y + m.text_dy), galley, color);
+                x += box_rect.width() + 6.0;
+            }
+        }
     }
 
     // ⌘/Ctrl+hover link: underlined like Rider's.
