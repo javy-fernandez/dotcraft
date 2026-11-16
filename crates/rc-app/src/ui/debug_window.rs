@@ -82,7 +82,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     let state = app.debugger.state_label();
     ui.horizontal(|ui| {
         ui.add_space(8.0);
-        if theme::tab(ui, !app.debugger.show_console, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked() {
+        if theme::tab(ui, !app.debugger.show_console && !app.debugger.show_parallel_stacks, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked() {
             app.debugger.show_console = false;
             app.debugger.show_parallel_stacks = false;
         }

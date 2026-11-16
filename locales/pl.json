@@ -796,7 +796,8 @@
     "Restore the project to view its dependencies": "Przywróć projekt, aby zobaczyć jego zależności",
     "No projects in the workspace": "Brak projektów w obszarze roboczym",
     "{packages} packages, {edges} dependencies": "Pakiety: {packages}, zależności: {edges}",
-    "Select an existing .sln or .slnx solution": "Wybierz istniejące rozwiązanie .sln lub .slnx"
+    "Select an existing .sln or .slnx solution": "Wybierz istniejące rozwiązanie .sln lub .slnx",
+    "Show inline variable values while debugging": "Pokazuj wartości zmiennych w tekście podczas debugowania"
   },
   "terminal": {
     "Local": "Lokalny",
@@ -1028,7 +1029,10 @@
     "Thread {id}": "Wątek {id}",
     "Threads & Variables": "Wątki i zmienne",
     "Variables are shown when the program is paused": "Zmienne są wyświetlane, gdy program jest wstrzymany",
-    "netcoredbg is ready": "netcoredbg jest gotowy"
+    "netcoredbg is ready": "netcoredbg jest gotowy",
+    "Parallel Stacks": "Stosy równoległe",
+    "No threads available": "Brak dostępnych wątków",
+    "No stack frames": "Brak ramek stosu"
   },
   "tests": {
     "Run All Tests": "Uruchom wszystkie testy"
@@ -1046,7 +1050,10 @@
     "the file does not exist": "plik nie istnieje",
     "New File": "Nowy plik",
     "New File…": "Nowy plik…",
-    "Could not create {path}: {error}": "Nie można utworzyć {path}: {error}"
+    "Could not create {path}: {error}": "Nie można utworzyć {path}: {error}",
+    "Scratches": "Szkice",
+    "New Scratch File…": "Nowy plik szkicu…",
+    "Scratch file names must stay inside Scratches": "Nazwa pliku szkicu musi pozostać w folderze Szkice"
   },
   "newproject": {
     "Add New Project": "Dodaj nowy projekt",

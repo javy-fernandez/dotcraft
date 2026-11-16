@@ -796,7 +796,8 @@
     "Restore the project to view its dependencies": "Restaurez le projet pour voir ses dépendances",
     "No projects in the workspace": "Aucun projet dans l’espace de travail",
     "{packages} packages, {edges} dependencies": "{packages} paquets, {edges} dépendances",
-    "Select an existing .sln or .slnx solution": "Sélectionnez une solution .sln ou .slnx existante"
+    "Select an existing .sln or .slnx solution": "Sélectionnez une solution .sln ou .slnx existante",
+    "Show inline variable values while debugging": "Afficher les valeurs des variables en ligne pendant le débogage"
   },
   "terminal": {
     "Local": "Local",
@@ -1028,7 +1029,10 @@
     "Thread {id}": "Thread {id}",
     "Threads & Variables": "Threads et variables",
     "Variables are shown when the program is paused": "Les variables s'affichent quand le programme est suspendu",
-    "netcoredbg is ready": "netcoredbg est prêt"
+    "netcoredbg is ready": "netcoredbg est prêt",
+    "Parallel Stacks": "Piles parallèles",
+    "No threads available": "Aucun thread disponible",
+    "No stack frames": "Aucun cadre de pile"
   },
   "tests": {
     "Run All Tests": "Exécuter tous les tests"
@@ -1046,7 +1050,10 @@
     "the file does not exist": "le fichier n'existe pas",
     "New File": "Nouveau fichier",
     "New File…": "Nouveau fichier…",
-    "Could not create {path}: {error}": "Impossible de créer {path} : {error}"
+    "Could not create {path}: {error}": "Impossible de créer {path} : {error}",
+    "Scratches": "Brouillons",
+    "New Scratch File…": "Nouveau fichier brouillon…",
+    "Scratch file names must stay inside Scratches": "Le nom du brouillon doit rester dans Brouillons"
   },
   "newproject": {
     "Add New Project": "Ajouter un nouveau projet",

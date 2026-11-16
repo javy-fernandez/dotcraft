@@ -796,7 +796,8 @@
     "Restore the project to view its dependencies": "Restaure o projeto para ver suas dependências",
     "No projects in the workspace": "Nenhum projeto no espaço de trabalho",
     "{packages} packages, {edges} dependencies": "{packages} pacotes, {edges} dependências",
-    "Select an existing .sln or .slnx solution": "Selecione uma solução .sln ou .slnx existente"
+    "Select an existing .sln or .slnx solution": "Selecione uma solução .sln ou .slnx existente",
+    "Show inline variable values while debugging": "Mostrar valores de variáveis embutidos durante a depuração"
   },
   "terminal": {
     "Local": "Local",
@@ -1028,7 +1029,10 @@
     "Thread {id}": "Thread {id}",
     "Threads & Variables": "Threads e variáveis",
     "Variables are shown when the program is paused": "As variáveis são mostradas quando o programa está pausado",
-    "netcoredbg is ready": "netcoredbg está pronto"
+    "netcoredbg is ready": "netcoredbg está pronto",
+    "Parallel Stacks": "Pilhas paralelas",
+    "No threads available": "Nenhuma thread disponível",
+    "No stack frames": "Nenhum quadro de pilha"
   },
   "tests": {
     "Run All Tests": "Executar todos os testes"
@@ -1046,7 +1050,10 @@
     "the file does not exist": "o arquivo não existe",
     "New File": "Novo arquivo",
     "New File…": "Novo arquivo…",
-    "Could not create {path}: {error}": "Não foi possível criar {path}: {error}"
+    "Could not create {path}: {error}": "Não foi possível criar {path}: {error}",
+    "Scratches": "Rascunhos",
+    "New Scratch File…": "Novo arquivo de rascunho…",
+    "Scratch file names must stay inside Scratches": "O nome do rascunho deve ficar dentro de Rascunhos"
   },
   "newproject": {
     "Add New Project": "Adicionar novo projeto",

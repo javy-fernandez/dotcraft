@@ -475,8 +475,8 @@ impl Debugger {
     }
 }
 
-/// The expression under `pos` for hover values: the identifier with its member-access chain
-/// (`order.Customer`), without calls.
+/// Values of `variables` to paint after the last of `lines` that names each one (at most
+/// three per line), marking those that changed since the previous stop.
 fn inline_values_for_lines(
     lines: &[(usize, String)],
     variables: &[rc_dap::Variable],
@@ -509,6 +509,8 @@ fn contains_identifier(line: &str, name: &str) -> bool {
     })
 }
 
+/// The expression under `pos` for hover values: the identifier with its member-access chain
+/// (`order.Customer`), without calls.
 pub fn expression_at(rope: &rc_text::Rope, pos: usize) -> String {
     let (s, e) = rc_text::commands::word_at(rope, pos);
     if s == e {

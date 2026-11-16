@@ -796,7 +796,8 @@
     "Restore the project to view its dependencies": "Stellen Sie das Projekt wieder her, um seine Abhängigkeiten zu sehen",
     "No projects in the workspace": "Keine Projekte im Arbeitsbereich",
     "{packages} packages, {edges} dependencies": "{packages} Pakete, {edges} Abhängigkeiten",
-    "Select an existing .sln or .slnx solution": "Wählen Sie eine vorhandene .sln- oder .slnx-Projektmappe"
+    "Select an existing .sln or .slnx solution": "Wählen Sie eine vorhandene .sln- oder .slnx-Projektmappe",
+    "Show inline variable values while debugging": "Variablenwerte beim Debuggen inline anzeigen"
   },
   "terminal": {
     "Local": "Lokal",
@@ -1028,7 +1029,10 @@
     "Thread {id}": "Thread {id}",
     "Threads & Variables": "Threads und Variablen",
     "Variables are shown when the program is paused": "Variablen werden angezeigt, wenn das Programm angehalten ist",
-    "netcoredbg is ready": "netcoredbg ist bereit"
+    "netcoredbg is ready": "netcoredbg ist bereit",
+    "Parallel Stacks": "Parallele Stapel",
+    "No threads available": "Keine Threads verfügbar",
+    "No stack frames": "Keine Stack-Frames"
   },
   "tests": {
     "Run All Tests": "Alle Tests ausführen"
@@ -1046,7 +1050,10 @@
     "the file does not exist": "die Datei existiert nicht",
     "New File": "Neue Datei",
     "New File…": "Neue Datei…",
-    "Could not create {path}: {error}": "{path} konnte nicht erstellt werden: {error}"
+    "Could not create {path}: {error}": "{path} konnte nicht erstellt werden: {error}",
+    "Scratches": "Notizdateien",
+    "New Scratch File…": "Neue Notizdatei…",
+    "Scratch file names must stay inside Scratches": "Notizdateinamen müssen innerhalb von Notizdateien bleiben"
   },
   "newproject": {
     "Add New Project": "Neues Projekt hinzufügen",

@@ -796,7 +796,8 @@
     "Restore the project to view its dependencies": "依存関係を表示するにはプロジェクトを復元してください",
     "No projects in the workspace": "ワークスペースにプロジェクトがありません",
     "{packages} packages, {edges} dependencies": "{packages} 個のパッケージ、{edges} 個の依存関係",
-    "Select an existing .sln or .slnx solution": "既存の .sln または .slnx ソリューションを選択してください"
+    "Select an existing .sln or .slnx solution": "既存の .sln または .slnx ソリューションを選択してください",
+    "Show inline variable values while debugging": "デバッグ中に変数の値をインライン表示"
   },
   "terminal": {
     "Local": "ローカル",
@@ -1028,7 +1029,10 @@
     "Thread {id}": "スレッド {id}",
     "Threads & Variables": "スレッドと変数",
     "Variables are shown when the program is paused": "プログラムが一時停止すると変数が表示されます",
-    "netcoredbg is ready": "netcoredbg の準備ができました"
+    "netcoredbg is ready": "netcoredbg の準備ができました",
+    "Parallel Stacks": "並列スタック",
+    "No threads available": "利用できるスレッドはありません",
+    "No stack frames": "スタックフレームはありません"
   },
   "tests": {
     "Run All Tests": "すべてのテストを実行"
@@ -1046,7 +1050,10 @@
     "the file does not exist": "ファイルが存在しません",
     "New File": "新規ファイル",
     "New File…": "新規ファイル…",
-    "Could not create {path}: {error}": "{path} を作成できませんでした: {error}"
+    "Could not create {path}: {error}": "{path} を作成できませんでした: {error}",
+    "Scratches": "スクラッチ",
+    "New Scratch File…": "新規スクラッチファイル…",
+    "Scratch file names must stay inside Scratches": "スクラッチファイル名はスクラッチ内に収める必要があります"
   },
   "newproject": {
     "Add New Project": "新しいプロジェクトを追加",

@@ -796,7 +796,8 @@
     "Restore the project to view its dependencies": "还原项目以查看其依赖项",
     "No projects in the workspace": "工作区中没有项目",
     "{packages} packages, {edges} dependencies": "{packages} 个包，{edges} 个依赖项",
-    "Select an existing .sln or .slnx solution": "请选择现有的 .sln 或 .slnx 解决方案"
+    "Select an existing .sln or .slnx solution": "请选择现有的 .sln 或 .slnx 解决方案",
+    "Show inline variable values while debugging": "调试时以内联方式显示变量值"
   },
   "terminal": {
     "Local": "本地",
@@ -1028,7 +1029,10 @@
     "Thread {id}": "线程 {id}",
     "Threads & Variables": "线程和变量",
     "Variables are shown when the program is paused": "程序暂停时显示变量",
-    "netcoredbg is ready": "netcoredbg 已就绪"
+    "netcoredbg is ready": "netcoredbg 已就绪",
+    "Parallel Stacks": "并行堆栈",
+    "No threads available": "没有可用的线程",
+    "No stack frames": "没有堆栈帧"
   },
   "tests": {
     "Run All Tests": "运行所有测试"
@@ -1046,7 +1050,10 @@
     "the file does not exist": "文件不存在",
     "New File": "新建文件",
     "New File…": "新建文件…",
-    "Could not create {path}: {error}": "无法创建 {path}：{error}"
+    "Could not create {path}: {error}": "无法创建 {path}：{error}",
+    "Scratches": "临时文件",
+    "New Scratch File…": "新建临时文件…",
+    "Scratch file names must stay inside Scratches": "临时文件名必须位于临时文件内"
   },
   "newproject": {
     "Add New Project": "添加新项目",
