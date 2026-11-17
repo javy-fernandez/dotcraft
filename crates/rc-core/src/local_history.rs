@@ -53,14 +53,20 @@ fn record_in(root: &Path, path: &Path, text: &str, label: &str) -> std::io::Resu
     let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
     // Labels are short ASCII words; keep them safe for a file name.
     let label: String = label.chars().map(|c| if c.is_ascii_alphanumeric() || c == ' ' { c } else { '_' }).collect();
-    // Exclusive creation keeps simultaneous saves in the same millisecond separate.
+    // Each revision needs its own stamp, whatever its label, or two saves in the same
+    // millisecond would sort in no particular order. Exclusive creation keeps simultaneous
+    // saves separate too.
+    let taken: std::collections::HashSet<String> = std::fs::read_dir(&dir)
+        .map(|entries| entries.flatten().filter_map(|e| e.file_name().to_string_lossy().split_once('-').map(|(stamp, _)| stamp.to_string())).collect())
+        .unwrap_or_default();
     let mut n = 0;
     loop {
-        let name = if n == 0 {
-            format!("{millis}-{label}.txt")
-        } else {
-            format!("{millis}{n:03}-{label}.txt")
-        };
+        let stamp = if n == 0 { millis.to_string() } else { format!("{millis}{n:03}") };
+        if taken.contains(&stamp) {
+            n += 1;
+            continue;
+        }
+        let name = format!("{stamp}-{label}.txt");
         let path = dir.join(name);
         match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
             Ok(mut file) => {
