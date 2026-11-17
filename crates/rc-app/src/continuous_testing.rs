@@ -158,12 +158,11 @@ impl ContinuousTesting {
             self.graph_task.take();
         }
         if self.options.mode == ContinuousMode::Off {
-            if self.automatic_running {
-                if let Some(tests) = &mut runner.tests
-                    && let Some(handle) = tests.handle.take()
-                {
-                    handle.cancel();
-                }
+            if self.automatic_running
+                && let Some(tests) = &mut runner.tests
+                && let Some(handle) = tests.handle.take()
+            {
+                handle.cancel();
             }
             self.queue.clear();
             self.changed.clear();
