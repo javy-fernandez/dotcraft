@@ -454,7 +454,8 @@ async fn remote_command(
     target: Option<String>,
     cancel: oneshot::Receiver<()>,
 ) -> anyhow::Result<Option<CommandResult>> {
-    let timeout_ms = if matches!(kind, CommandKind::Build | CommandKind::Test) { 120_000 } else { 15_000 };
+    // Builds and tests can take long (a first restore, a big test suite); Stop ends them.
+    let timeout_ms = if matches!(kind, CommandKind::Build | CommandKind::Test) { 30 * 60 * 1000 } else { 60_000 };
     let Some(value) = client
         .request_cancellable(
             Operation::Run {

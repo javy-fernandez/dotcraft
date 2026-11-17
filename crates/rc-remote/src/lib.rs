@@ -24,6 +24,16 @@ use tokio::{
 pub const PROTOCOL_VERSION: u32 = 1;
 const MAX_BYTES: usize = 1024 * 1024;
 const MAX_LINE_BYTES: usize = 2 * 1024 * 1024;
+/// Longest a process may run: a first restore and build of a large solution, or its tests.
+pub const MAX_RUN_MS: u64 = 60 * 60 * 1000;
+
+/// `~/x` is `$HOME/x` on the agent's machine, so settings can name `~/.dotnet/dotnet`.
+fn expand_home(path: &str) -> String {
+    match (path.strip_prefix("~/"), std::env::var("HOME")) {
+        (Some(rest), Ok(home)) if !home.is_empty() => format!("{}/{rest}", home.trim_end_matches('/')),
+        _ => path.to_string(),
+    }
+}
 
 pub fn decode_data(data: &str) -> Result<Vec<u8>> {
     let bytes = STANDARD.decode(data).context("invalid base64 data")?;
@@ -347,10 +357,10 @@ async fn perform(operation: Operation) -> Result<Value> {
             env,
             timeout_ms,
         } => {
-            if program.is_empty() || timeout_ms == 0 || timeout_ms > 120_000 {
+            if program.is_empty() || timeout_ms == 0 || timeout_ms > MAX_RUN_MS {
                 bail!("invalid process request");
             }
-            run_process(program, args, cwd, env, timeout_ms).await
+            run_process(expand_home(&program), args, expand_home(&cwd), env, timeout_ms).await
         }
         Operation::Cancel { .. } => bail!("cancel is handled by the server"),
     }
@@ -1212,6 +1222,34 @@ mod session_tests {
         let text = error.to_string();
         assert!(text.contains("dotcraft-remote-test.invalid"), "{text}");
         assert!(start.elapsed() < Duration::from_secs(20));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod home_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn programs_and_folders_may_start_in_the_home_folder() {
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(expand_home("~/.dotnet/dotnet"), format!("{}/.dotnet/dotnet", home.trim_end_matches('/')));
+        assert_eq!(expand_home("/usr/bin/dotnet"), "/usr/bin/dotnet");
+        assert_eq!(expand_home("dotnet"), "dotnet");
+        assert_eq!(expand_home("~user/x"), "~user/x");
+        let Value::Exit { stdout, .. } = perform(Operation::Run {
+            program: "pwd".into(),
+            args: vec![],
+            cwd: "~/".into(),
+            env: vec![],
+            timeout_ms: 5_000,
+        })
+        .await
+        .unwrap() else {
+            panic!("run response")
+        };
+        let pwd = String::from_utf8(STANDARD.decode(stdout).unwrap()).unwrap();
+        let canonical = |p: &str| std::fs::canonicalize(p.trim()).unwrap();
+        assert_eq!(canonical(&pwd), canonical(&home));
     }
 }
 
