@@ -1930,6 +1930,7 @@ impl eframe::App for DotCraftApp {
                             self.insight.add_missing_usings(&self.docs.list[i]);
                         }
                     }
+                    MenuCommand::OpenRemoteFolder => self.dialog = Some(Dialog::RemoteConnect),
                     MenuCommand::CloseProject => self.close_project(),
                     MenuCommand::ReloadFromDisk => self.reload_active_from_disk(),
                     MenuCommand::ShowHistory => self.show_local_history(None),
