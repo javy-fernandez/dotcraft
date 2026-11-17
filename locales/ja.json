@@ -1699,7 +1699,16 @@
     "This Godot project has no C# project to build": "この Godot プロジェクトにはビルドする C# プロジェクトがありません",
     "{path} cannot run C# scripts. Choose a Godot .NET build in Settings › Tools.": "{path} では C# スクリプトを実行できません。設定 › ツール で Godot .NET 版を選択してください。",
     "To edit Godot's C# scripts here, set Editor Settings › Dotnet › Editor › External Editor to Custom, Custom Exec Path to {path} and Custom Exec Path Args to {args}": "Godot の C# スクリプトをここで編集するには、Editor Settings › Dotnet › Editor で External Editor を Custom に、Custom Exec Path を {path} に、Custom Exec Path Args を {args} に設定します",
-    "Starting {name}…": "{name} を起動中…"
+    "Starting {name}…": "{name} を起動中…",
+    "Check spelling": "スペルをチェック",
+    "Dictionaries": "辞書",
+    "Not installed: {languages}. Add their Hunspell .aff and .dic files to {folder}": "未インストール: {languages}。Hunspell の .aff と .dic ファイルを {folder} に追加してください",
+    "Change to '{word}'": "「{word}」に変更",
+    "Rename to '{name}'": "「{name}」に名前を変更",
+    "Save '{word}' to the user dictionary": "「{word}」をユーザー辞書に保存",
+    "Save '{word}' to the solution dictionary": "「{word}」をソリューション辞書に保存",
+    "Only words made of letters can be saved to the dictionary": "辞書に保存できるのは文字だけで構成された単語です",
+    "{file} is not a settings file DotCraft can update": "{file} は DotCraft が更新できる設定ファイルではありません"
   },
   "launchprofileeditor": {
     "Add profile": "プロファイルを追加",

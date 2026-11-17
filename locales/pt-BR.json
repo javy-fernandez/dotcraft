@@ -1699,7 +1699,16 @@
     "This Godot project has no C# project to build": "Este projeto Godot não tem um projeto C# para compilar",
     "{path} cannot run C# scripts. Choose a Godot .NET build in Settings › Tools.": "{path} não executa scripts C#. Escolha uma versão do Godot .NET em Configurações › Ferramentas.",
     "To edit Godot's C# scripts here, set Editor Settings › Dotnet › Editor › External Editor to Custom, Custom Exec Path to {path} and Custom Exec Path Args to {args}": "Para editar aqui os scripts C# do Godot, em Editor Settings › Dotnet › Editor defina External Editor como Custom, Custom Exec Path como {path} e Custom Exec Path Args como {args}",
-    "Starting {name}…": "Iniciando {name}…"
+    "Starting {name}…": "Iniciando {name}…",
+    "Check spelling": "Verificar a ortografia",
+    "Dictionaries": "Dicionários",
+    "Not installed: {languages}. Add their Hunspell .aff and .dic files to {folder}": "Não instalados: {languages}. Adicione os arquivos .aff e .dic do Hunspell em {folder}",
+    "Change to '{word}'": "Alterar para “{word}”",
+    "Rename to '{name}'": "Renomear para “{name}”",
+    "Save '{word}' to the user dictionary": "Salvar “{word}” no dicionário do usuário",
+    "Save '{word}' to the solution dictionary": "Salvar “{word}” no dicionário da solução",
+    "Only words made of letters can be saved to the dictionary": "Só palavras formadas por letras podem ser salvas no dicionário",
+    "{file} is not a settings file DotCraft can update": "{file} não é um arquivo de configurações que o DotCraft possa atualizar"
   },
   "launchprofileeditor": {
     "Add profile": "Adicionar perfil",
