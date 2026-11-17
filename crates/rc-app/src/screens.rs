@@ -2580,3 +2580,64 @@ fn screens_godot() {
         }
     }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/proto-*.png and grpc-client-*.png"]
+fn screens_proto_and_grpc_client() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let root = home.path().canonicalize().unwrap().join("shop");
+        std::fs::create_dir_all(root.join("Protos")).unwrap();
+        let common = root.join("Protos/common.proto");
+        std::fs::write(&common, "syntax = \"proto3\";\n\npackage common;\n\n// An amount in a currency.\nmessage Money {\n  string currency = 1;\n  int64 units = 2;\n}\n").unwrap();
+        let orders = root.join("Protos/orders.proto");
+        std::fs::write(&orders, "syntax = \"proto3\";\n\npackage shop.v1;\n\nimport \"common.proto\";\nimport \"google/protobuf/timestamp.proto\";\n\noption csharp_namespace = \"Shop.Grpc\";\n\n/* Orders of the shop. */\nservice Orders {\n  rpc GetOrder (GetOrderRequest) returns (Order);\n  rpc WatchOrders (WatchRequest) returns (stream Order);\n}\n\nmessage GetOrderRequest {\n  int32 id = 1;\n}\n\nmessage WatchRequest {}\n\nmessage Order {\n  message Line {\n    string sku = 1;\n    common.Money price = 2;\n  }\n  enum State {\n    NEW = 0;\n    PAID = 1;\n  }\n  int32 id = 1;\n  repeated Line lines = 2;\n  map<string, common.Money> taxes = 3;\n  oneof payment {\n    string card = 4;\n    string voucher = 5;\n  }\n  State state = 6;\n  google.protobuf.Timestamp created = 7;\n}\n").unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root);
+        app.open_file(&orders);
+        app.dock.show(crate::toolwindow::ToolWindow::Structure);
+        let mut h = harness(app, vec2(1440.0, 900.0));
+        run_frames(&mut h, "the file index", |a| a.files.index.as_ref().is_some_and(|i| i.is_ready()));
+        h.render().unwrap().save(out.join(format!("proto-structure-{suffix}.png"))).unwrap();
+        // Find Usages of common.Money from its declaration in the other file: two usages.
+        h.state_mut().open_file(&common);
+        let pos = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().find("Money").unwrap();
+        h.state_mut().proto_navigate(pos, true);
+        h.run_steps(4);
+        let results = h.state().find_results.as_ref().map(|(_, t)| t.iter().map(|t| (t.path.clone(), t.line)).collect::<Vec<_>>());
+        assert_eq!(results, Some(vec![(orders.clone(), 24), (orders.clone(), 32)]));
+        h.render().unwrap().save(out.join(format!("proto-usages-{suffix}.png"))).unwrap();
+        // Go to Declaration from `common.Money price` back to common.proto.
+        h.state_mut().open_file(&orders);
+        let pos = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().find("Money price").unwrap();
+        h.state_mut().proto_navigate(pos, false);
+        h.run_steps(2);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, common);
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.caret_line_col(), (5, 8));
+        // The gRPC Client with a reply, its method picked from the .proto.
+        h.state_mut().open_file(&orders);
+        h.state_mut().dock.show(crate::toolwindow::ToolWindow::GrpcClient);
+        h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::GrpcClient, 360.0);
+        let app = h.state_mut();
+        app.grpc.method = "shop.v1.Orders/GetOrder".into();
+        app.grpc.json = "{\n  \"id\": 42\n}".into();
+        app.grpc.metadata = "authorization: Bearer dev-token".into();
+        app.grpc.show(Ok(crate::grpc::Reply {
+            body: "{\n  \"id\": 42,\n  \"lines\": [\n    {\n      \"sku\": \"BOOK-1\",\n      \"price\": {\n        \"currency\": \"EUR\",\n        \"units\": \"12\"\n      }\n    }\n  ],\n  \"state\": \"PAID\"\n}\n".into(),
+            elapsed: std::time::Duration::from_millis(38),
+        }));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("grpc-client-{suffix}.png"))).unwrap();
+        let app = h.state_mut();
+        app.grpc.plaintext = false;
+        app.grpc.show_metadata = true;
+        app.grpc.show(Err("ERROR:\n  Code: Unavailable\n  Message: connection error: desc = \"transport: Error while dialing: dial tcp [::1]:5000: connect: connection refused\"".into()));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("grpc-client-error-{suffix}.png"))).unwrap();
+    }
+}
