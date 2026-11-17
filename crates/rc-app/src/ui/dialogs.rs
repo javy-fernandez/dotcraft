@@ -273,6 +273,9 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
                         ui.checkbox(&mut draft.show_debug_inline_values, tr("Show inline variable values while debugging"));
                         ui.end_row();
                         ui.label("");
+                        ui.checkbox(&mut draft.show_code_vision, tr("Show Code Vision"));
+                        ui.end_row();
+                        ui.label("");
                         ui.checkbox(&mut draft.show_indent_guides, tr("Show indent guides"));
                         ui.end_row();
                         ui.label("");

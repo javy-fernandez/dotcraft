@@ -47,6 +47,13 @@ pub struct InlineDebugValue {
     pub changed: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodeVision {
+    pub line: usize,
+    pub position: usize,
+    pub title: String,
+}
+
 /// Coverage of a line (gutter bar while coverage is shown).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoverageMark {
@@ -99,6 +106,8 @@ pub enum EditorEvent {
     CaretMoved,
     /// Click in the breakpoint area of the gutter (0-based line).
     GutterClicked { line: usize },
+    /// A Code Vision reference count was clicked.
+    CodeVisionClicked { position: usize },
     /// Right-click on a line number (0-based line).
     GutterSecondaryClicked { line: usize, screen: egui::Pos2 },
     /// Click on an icon of the gutter's icon column.
@@ -153,6 +162,8 @@ pub struct EditorState {
     pub diagnostics: Vec<Diagnostic>,
     pub inlays: Vec<InlayHint>,
     pub debug_inline_values: BTreeMap<usize, Vec<InlineDebugValue>>,
+    /// Reference counts shown above C# declarations.
+    pub code_vision: Vec<CodeVision>,
     /// Semantic colours per line (from the language server), char columns.
     pub semantic: Vec<Vec<Span>>,
     pub breakpoints: BTreeMap<usize, BreakpointKind>,
@@ -221,6 +232,7 @@ impl EditorState {
             diagnostics: Vec::new(),
             inlays: Vec::new(),
             debug_inline_values: BTreeMap::new(),
+            code_vision: Vec::new(),
             semantic: Vec::new(),
             breakpoints: BTreeMap::new(),
             bookmarks: BTreeMap::new(),

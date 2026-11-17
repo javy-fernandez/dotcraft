@@ -264,6 +264,7 @@ pub fn client_capabilities() -> Value {
                 "dataSupport": true,
                 "isPreferredSupport": true
             },
+            "codeLens": { "dynamicRegistration": false, "resolveSupport": { "properties": ["command"] } },
             "formatting": {},
             "rangeFormatting": {},
             "onTypeFormatting": {},
@@ -340,7 +341,8 @@ fn setting(section: &str) -> Value {
         "dotnet_suppress_inlay_hints_for_parameters_that_differ_only_by_suffix" | "dotnet_suppress_inlay_hints_for_parameters_that_match_method_intent" | "dotnet_suppress_inlay_hints_for_parameters_that_match_argument_name" => json!(true),
         "csharp_enable_inlay_hints_for_types" | "csharp_enable_inlay_hints_for_implicit_variable_types" | "csharp_enable_inlay_hints_for_lambda_parameter_types" | "csharp_enable_inlay_hints_for_implicit_object_creation" => json!(false),
         "dotnet_show_completion_items_from_unimported_namespaces" | "dotnet_provide_regex_completions" | "dotnet_show_name_completion_suggestions" => json!(true),
-        "dotnet_enable_references_code_lens" | "dotnet_enable_tests_code_lens" => json!(false),
+        "dotnet_enable_references_code_lens" | "enableReferencesCodeLens" => json!(true),
+        "dotnet_enable_tests_code_lens" => json!(false),
         "dotnet_analyzer_diagnostics_scope" | "dotnet_compiler_diagnostics_scope" => json!("openFiles"),
         _ => Value::Null,
     }
@@ -365,6 +367,17 @@ mod tests {
         let v = default_reply("workspace/configuration", &json!({"items": [{}, {"section": "csharp|inlay_hints.dotnet_enable_inlay_hints_for_parameters"}, {"section": "x"}]})).unwrap();
         assert_eq!(v, json!([null, true, null]));
         assert!(default_reply("workspace/applyEdit", &json!({})).is_none());
+    }
+
+    #[test]
+    fn reference_code_lens_is_advertised_and_enabled() {
+        let capabilities = client_capabilities();
+        assert_eq!(capabilities["textDocument"]["codeLens"]["resolveSupport"]["properties"], json!(["command"]));
+        let reply = default_reply("workspace/configuration", &json!({"items": [
+            {"section": "csharp|code_lens.dotnet_enable_references_code_lens"},
+            {"section": "dotnet.codeLens.enableReferencesCodeLens"}
+        ]})).unwrap();
+        assert_eq!(reply, json!([true, true]));
     }
 
     #[test]
