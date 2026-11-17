@@ -55,7 +55,7 @@ impl Assembly {
         }
         out.sort_by(|a, b| (a.0.is_empty(), a.0).cmp(&(b.0.is_empty(), b.0)));
         for (_, list) in &mut out {
-            list.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+            list.sort_by_key(|t| t.name.to_lowercase());
         }
         out
     }
@@ -259,11 +259,7 @@ impl AssemblyExplorer {
                         Err(_) => {}
                     }
                 }
-                Event::ToolMissing(s) if s == session || s == u64::MAX => {
-                    if !self.installing {
-                        self.tool_missing = true;
-                    }
-                }
+                Event::ToolMissing(s) if (s == session || s == u64::MAX) && !self.installing => self.tool_missing = true,
                 _ => {}
             }
         }
