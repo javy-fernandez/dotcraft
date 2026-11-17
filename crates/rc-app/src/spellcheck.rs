@@ -62,8 +62,32 @@ pub fn available_dictionaries() -> Vec<(String, PathBuf, PathBuf)> {
             }
         }
     }
+    if !found.iter().any(|(name, _, _)| name == "en_US")
+        && let Some((aff, dic)) = install_bundled_en_us()
+    {
+        found.push(("en_US".to_string(), aff, dic));
+    }
     found.sort_by(|a, b| a.0.cmp(&b.0));
     found
+}
+
+/// SCOWL's en_US Hunspell pair (wooorm/dictionaries, see `docs/third-party/`), embedded so
+/// typos are found out of the box on systems without Hunspell dictionaries (macOS, Windows).
+const BUNDLED_EN_US_AFF: &[u8] = include_bytes!("../../../assets/dictionaries/en_US.aff");
+const BUNDLED_EN_US_DIC: &[u8] = include_bytes!("../../../assets/dictionaries/en_US.dic");
+
+/// Writes the bundled en_US pair to `<data folder>/dictionaries/bundled` (once per content)
+/// and returns its paths.
+fn install_bundled_en_us() -> Option<(PathBuf, PathBuf)> {
+    let dir = rc_core::paths::data_dir().join("dictionaries/bundled");
+    let (aff, dic) = (dir.join("en_US.aff"), dir.join("en_US.dic"));
+    for (path, bytes) in [(&aff, BUNDLED_EN_US_AFF), (&dic, BUNDLED_EN_US_DIC)] {
+        if std::fs::metadata(path).is_ok_and(|m| m.len() == bytes.len() as u64) {
+            continue;
+        }
+        rc_core::paths::write_atomic(path, bytes).ok()?;
+    }
+    Some((aff, dic))
 }
 
 /// Reads an `.aff` / `.dic` file: UTF-8, or the 8-bit encoding older dictionaries use.
@@ -1087,6 +1111,20 @@ pub mod tests {
         let none = HashSet::new();
         let mut ok = |w: &str| is_known(w, &d, &none);
         find_in_source(&Rope::from_str(text), lang, &mut ok, &|| false).unwrap().into_iter().map(|m| (m.word, m.identifier)).collect()
+    }
+
+    #[test]
+    fn the_bundled_en_us_dictionary_loads_and_flags_typos() {
+        let aff = String::from_utf8(BUNDLED_EN_US_AFF.to_vec()).unwrap();
+        let dic = String::from_utf8(BUNDLED_EN_US_DIC.to_vec()).unwrap();
+        let d = Dictionary::new(&aff, &dic).unwrap();
+        for word in ["receive", "colors", "running", "Wednesday", "isn't"] {
+            assert!(d.check(word), "{word}");
+        }
+        for typo in ["recieve", "teh", "occurence"] {
+            assert!(!d.check(typo), "{typo}");
+        }
+        assert!(suggestions(&d, "recieve", false).contains(&"receive".to_string()));
     }
 
     #[test]
