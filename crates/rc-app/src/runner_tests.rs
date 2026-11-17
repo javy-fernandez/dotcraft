@@ -17,8 +17,8 @@ fn godot_workspace_builds_csharp_before_debug_launch() {
     unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
     let dotnet = home.path().join("dotnet");
     let engine = home.path().join("godot-mono");
-    for path in [&dotnet, &engine] {
-        std::fs::write(path, "#!/bin/sh\nexit 0\n").unwrap();
+    for (path, script) in [(&dotnet, "#!/bin/sh\nexit 0\n"), (&engine, "#!/bin/sh\necho 4.4.stable.mono.official\n")] {
+        std::fs::write(path, script).unwrap();
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/godot-dotnet");

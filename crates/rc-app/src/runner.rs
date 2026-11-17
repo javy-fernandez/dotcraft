@@ -185,6 +185,8 @@ pub struct Runner {
     waker: Waker,
     dotnet: Option<Dotnet>,
     godot_executable: Option<PathBuf>,
+    /// Whether that Godot build runs C# (`--version` says `mono`), probed off the UI thread.
+    godot_dotnet: std::sync::Arc<std::sync::OnceLock<bool>>,
     godot_csharp_project: Option<PathBuf>,
     /// Compound configurations of the workspace (name, member names), kept in the session.
     pub compounds: Vec<(String, Vec<String>)>,
@@ -194,7 +196,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, godot_executable: None, godot_csharp_project: None, compounds: Vec::new(), options: BTreeMap::new() }
+        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, godot_executable: None, godot_dotnet: Default::default(), godot_csharp_project: None, compounds: Vec::new(), options: BTreeMap::new() }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -251,6 +253,15 @@ impl Runner {
     /// A C# project is optional: GDScript-only projects can still be launched.
     pub fn add_godot_project(&mut self, project_root: &Path, configured_executable: Option<&Path>) {
         self.godot_executable = rc_dotnet::godot::find_godot_executable(configured_executable);
+        self.godot_dotnet = Default::default();
+        if let Some(executable) = self.godot_executable.clone() {
+            let probe = self.godot_dotnet.clone();
+            rc_core::Runtime::spawn(async move {
+                if let Ok(dotnet) = rc_dotnet::godot::is_dotnet_enabled(&executable).await {
+                    let _ = probe.set(dotnet);
+                }
+            });
+        }
         self.godot_csharp_project = self
             .godot_csharp_project
             .take()
@@ -366,6 +377,10 @@ impl Runner {
             return Err(tr("Choose a Godot game or scene configuration to debug").into());
         };
         let executable = self.godot_executable.clone().ok_or_else(|| tr("Godot was not found. Install Godot .NET or configure its executable in Settings › Tools.").to_string())?;
+        // Without C# support the debugger would wait for a runtime that never loads.
+        if self.godot_dotnet.get() == Some(&false) {
+            return Err(trf("{path} cannot run C# scripts. Choose a Godot .NET build in Settings › Tools.", &[("path", &executable.display())]));
+        }
         let dotnet = self.dotnet.as_ref().ok_or_else(|| tr("The .NET SDK was not found. Install it or set its path in Settings › Tools.").to_string())?;
         let mut request = rc_dotnet::godot::GodotRunRequest::new(executable, project_root.clone());
         request.scene = scene.clone();
