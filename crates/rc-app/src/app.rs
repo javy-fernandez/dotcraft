@@ -642,6 +642,7 @@ impl DotCraftApp {
         self.search_everywhere = None;
         self.find_bar = None;
         self.generate = None;
+        self.generate_discovery = None;
         self.terminals = rc_term::Terminals::new();
         self.find_results = None;
         self.docs.list.clear();
