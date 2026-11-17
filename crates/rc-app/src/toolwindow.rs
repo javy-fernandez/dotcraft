@@ -28,6 +28,7 @@ pub enum ToolWindow {
     Hierarchy,
     LocalHistory,
     HttpClient,
+    GrpcClient,
     Endpoints,
     Coverage,
     PullRequests,
@@ -69,7 +70,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 27] = [
+    pub const ALL: [ToolWindow; 28] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -84,6 +85,7 @@ impl ToolWindow {
         ToolWindow::Monitoring,
         ToolWindow::Endpoints,
         ToolWindow::HttpClient,
+        ToolWindow::GrpcClient,
         ToolWindow::Find,
         ToolWindow::Problems,
         ToolWindow::Todo,
@@ -122,6 +124,7 @@ impl ToolWindow {
             ToolWindow::Hierarchy => "hierarchy",
             ToolWindow::LocalHistory => "local_history",
             ToolWindow::HttpClient => "http_client",
+            ToolWindow::GrpcClient => "grpc_client",
             ToolWindow::Endpoints => "endpoints",
             ToolWindow::Coverage => "coverage",
             ToolWindow::PullRequests => "pull_requests",
@@ -154,6 +157,7 @@ impl ToolWindow {
             ToolWindow::Hierarchy => tr("Hierarchy"),
             ToolWindow::LocalHistory => tr("Local History"),
             ToolWindow::HttpClient => tr("HTTP Client"),
+            ToolWindow::GrpcClient => tr("gRPC Client"),
             ToolWindow::Endpoints => tr("Endpoints"),
             ToolWindow::Coverage => tr("Coverage"),
             ToolWindow::PullRequests => tr("Pull Requests"),
@@ -186,6 +190,7 @@ impl ToolWindow {
             ToolWindow::Hierarchy => ico::TW_HIERARCHY,
             ToolWindow::LocalHistory => ico::HISTORY,
             ToolWindow::HttpClient => ico::TW_HTTP,
+            ToolWindow::GrpcClient => ico::TW_SERVICES,
             ToolWindow::Endpoints => ico::TW_ENDPOINTS,
             ToolWindow::Coverage => ico::RUN_COVERAGE,
             ToolWindow::PullRequests => ico::TW_PULL_REQUESTS,
@@ -198,7 +203,7 @@ impl ToolWindow {
     pub fn side(self) -> Side {
         match self {
             ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit | ToolWindow::Bookmarks | ToolWindow::AssemblyExplorer => Side::Left,
-            ToolWindow::Notifications | ToolWindow::Hierarchy => Side::Right,
+            ToolWindow::Notifications | ToolWindow::Hierarchy | ToolWindow::GrpcClient => Side::Right,
             _ => Side::Bottom,
         }
     }

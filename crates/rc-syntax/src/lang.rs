@@ -25,6 +25,8 @@ pub enum Lang {
     GodotResource,
     /// Godot's script language (`.gd`), highlighted by a small lexer.
     GdScript,
+    /// Protocol Buffer definitions (`.proto`), highlighted by a lexer.
+    Proto,
     Plain,
 }
 
@@ -52,6 +54,7 @@ impl Lang {
             "sln" => Lang::Sln,
             "tscn" | "tres" | "godot" | "import" => Lang::GodotResource,
             "gd" => Lang::GdScript,
+            "proto" => Lang::Proto,
             _ => {
                 if name.eq_ignore_ascii_case("Directory.Packages.props") { Lang::Xml } else { Lang::Plain }
             }
@@ -61,7 +64,7 @@ impl Lang {
     /// Prefix used by "Comment with line comment".
     pub fn line_comment(self) -> Option<&'static str> {
         match self {
-            Lang::CSharp | Lang::JavaScript | Lang::TypeScript | Lang::Tsx | Lang::Json => Some("//"),
+            Lang::CSharp | Lang::JavaScript | Lang::TypeScript | Lang::Tsx | Lang::Json | Lang::Proto => Some("//"),
             Lang::Sln | Lang::Dockerfile | Lang::GdScript => Some("#"),
             Lang::GodotResource => Some(";"),
             _ => None,
@@ -71,7 +74,7 @@ impl Lang {
     /// Block comment delimiters (XML has no line comments).
     pub fn block_comment(self) -> Option<(&'static str, &'static str)> {
         match self {
-            Lang::CSharp | Lang::Css | Lang::JavaScript | Lang::TypeScript | Lang::Tsx => Some(("/*", "*/")),
+            Lang::CSharp | Lang::Css | Lang::JavaScript | Lang::TypeScript | Lang::Tsx | Lang::Proto => Some(("/*", "*/")),
             Lang::Xml | Lang::Markdown | Lang::Html => Some(("<!--", "-->")),
             Lang::Razor => Some(("@*", "*@")),
             _ => None,
@@ -94,6 +97,7 @@ impl Lang {
             Lang::Dockerfile => "Dockerfile",
             Lang::GodotResource => "Godot resource",
             Lang::GdScript => "GDScript",
+            Lang::Proto => "Protocol Buffers",
             Lang::Plain => "Plain text",
         }
     }
@@ -110,7 +114,7 @@ impl Lang {
             Lang::Json => tree_sitter_json::LANGUAGE.into(),
             Lang::Markdown => tree_sitter_md::LANGUAGE.into(),
             Lang::Razor => tree_sitter_razor_modern::LANGUAGE.into(),
-            Lang::Sln | Lang::Dockerfile | Lang::GodotResource | Lang::GdScript | Lang::Plain => return None,
+            Lang::Sln | Lang::Dockerfile | Lang::GodotResource | Lang::GdScript | Lang::Proto | Lang::Plain => return None,
         })
     }
 
@@ -142,7 +146,7 @@ impl Lang {
             Lang::Json => (&JSON, include_str!("../queries/json.scm")),
             Lang::Markdown => (&MD, include_str!("../queries/markdown.scm")),
             Lang::Razor => (&RAZOR, RAZOR_SOURCE.get_or_init(|| format!("{}\n{}", include_str!("../queries/csharp.scm"), include_str!("../queries/razor.scm"))).as_str()),
-            Lang::Sln | Lang::Dockerfile | Lang::GodotResource | Lang::GdScript | Lang::Plain => return None,
+            Lang::Sln | Lang::Dockerfile | Lang::GodotResource | Lang::GdScript | Lang::Proto | Lang::Plain => return None,
         };
         let language = self.language()?;
         Some(cell.get_or_init(|| Query::new(&language, source).unwrap_or_else(|e| panic!("bad {self:?} query: {e}"))))
