@@ -1577,7 +1577,12 @@
     "The document changed; open Generate again": "Dokument się zmienił; otwórz ponownie Generuj",
     "The document was closed": "Dokument został zamknięty",
     "The type has no members to use": "Typ nie ma składowych do użycia",
-    "Members of {type} to use": "Składowe typu {type} do użycia"
+    "Members of {type} to use": "Składowe typu {type} do użycia",
+    "Missing Members": "Brakujące składowe",
+    "Overriding Members": "Składowe do przesłonięcia",
+    "Delegating Members": "Składowe delegujące",
+    "No local members found": "Nie znaleziono składowych w tym pliku",
+    "Try Roslyn code actions": "Wypróbuj akcje kodu Roslyn"
   },
   "launchprofileeditor": {
     "Add profile": "Dodaj profil",

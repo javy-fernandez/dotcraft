@@ -1577,7 +1577,12 @@
     "The document changed; open Generate again": "ドキュメントが変更されました。もう一度［生成］を開いてください",
     "The document was closed": "ドキュメントは閉じられました",
     "The type has no members to use": "この型には使用できるメンバーがありません",
-    "Members of {type} to use": "使用する {type} のメンバー"
+    "Members of {type} to use": "使用する {type} のメンバー",
+    "Missing Members": "不足しているメンバー",
+    "Overriding Members": "オーバーライドするメンバー",
+    "Delegating Members": "委譲メンバー",
+    "No local members found": "このファイルにメンバーが見つかりません",
+    "Try Roslyn code actions": "Roslyn のコード アクションを試す"
   },
   "launchprofileeditor": {
     "Add profile": "プロファイルを追加",

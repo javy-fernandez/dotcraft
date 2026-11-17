@@ -1577,7 +1577,12 @@
     "The document changed; open Generate again": "文档已更改；请重新打开“生成”",
     "The document was closed": "文档已关闭",
     "The type has no members to use": "该类型没有可用的成员",
-    "Members of {type} to use": "要使用的 {type} 成员"
+    "Members of {type} to use": "要使用的 {type} 成员",
+    "Missing Members": "缺少的成员",
+    "Overriding Members": "重写成员",
+    "Delegating Members": "委托成员",
+    "No local members found": "在此文件中未找到成员",
+    "Try Roslyn code actions": "尝试 Roslyn 代码操作"
   },
   "launchprofileeditor": {
     "Add profile": "添加配置文件",

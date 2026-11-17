@@ -1577,7 +1577,12 @@
     "The document changed; open Generate again": "Das Dokument wurde geändert; öffnen Sie Generieren erneut",
     "The document was closed": "Das Dokument wurde geschlossen",
     "The type has no members to use": "Der Typ hat keine verwendbaren Member",
-    "Members of {type} to use": "Zu verwendende Member von {type}"
+    "Members of {type} to use": "Zu verwendende Member von {type}",
+    "Missing Members": "Fehlende Member",
+    "Overriding Members": "Zu überschreibende Member",
+    "Delegating Members": "Delegierende Member",
+    "No local members found": "Keine Member in dieser Datei gefunden",
+    "Try Roslyn code actions": "Roslyn-Codeaktionen versuchen"
   },
   "launchprofileeditor": {
     "Add profile": "Profil hinzufügen",
