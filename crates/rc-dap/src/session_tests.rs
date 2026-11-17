@@ -321,4 +321,19 @@ fn failure_messages_have_templates() {
     let f = Failure::AttachFailed { pid: 42, error: "denied".into() };
     assert_eq!(f.to_string(), "The debugger could not attach to process 42: denied");
     assert_eq!(StopReason::parse("exception").label(), "Paused on exception");
+    let f = Failure::MissingSystemLibrary("glibc 2.38".into());
+    assert!(f.to_string().starts_with("netcoredbg cannot run on this Linux system: it needs glibc 2.38. "), "{f}");
+}
+
+/// An adapter built for a newer glibc dies in the loader: the session says what is missing.
+#[test]
+#[cfg(target_os = "linux")]
+fn an_adapter_the_loader_rejects_names_the_missing_glibc() {
+    let mut adapter = AdapterCommand::new("/bin/sh", Origin::Settings);
+    let error = "/tools/netcoredbg: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.38' not found (required by /tools/netcoredbg)";
+    adapter.prefix = vec!["-c".into(), "echo \"$1\" >&2; exit 1".into(), "sh".into(), error.into()];
+    let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), Breakpoints::new(), Waker::noop());
+    let mut all = Vec::new();
+    pump_until_state(&mut s, &mut all, |s| s.state().is_ended());
+    assert_eq!(s.state(), &SessionState::Failed(Failure::MissingSystemLibrary("glibc 2.38".into())));
 }

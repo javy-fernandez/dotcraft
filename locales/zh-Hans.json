@@ -1040,7 +1040,8 @@
     "netcoredbg is ready": "netcoredbg 已就绪",
     "Parallel Stacks": "并行堆栈",
     "No threads available": "没有可用的线程",
-    "No stack frames": "没有堆栈帧"
+    "No stack frames": "没有堆栈帧",
+    "netcoredbg cannot run on this Linux system: it needs {library}. Set a netcoredbg build that runs here in Settings › Tools › netcoredbg debugger.": "netcoredbg 无法在此 Linux 系统上运行：它需要 {library}。请在“设置 › 工具 › netcoredbg 调试器”中指定可在此运行的 netcoredbg 版本。"
   },
   "tests": {
     "Run All Tests": "运行所有测试"

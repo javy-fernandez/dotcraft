@@ -1040,7 +1040,8 @@
     "netcoredbg is ready": "netcoredbg está listo",
     "Parallel Stacks": "Pilas paralelas",
     "No threads available": "No hay hilos disponibles",
-    "No stack frames": "No hay marcos de pila"
+    "No stack frames": "No hay marcos de pila",
+    "netcoredbg cannot run on this Linux system: it needs {library}. Set a netcoredbg build that runs here in Settings › Tools › netcoredbg debugger.": "netcoredbg no puede ejecutarse en este sistema Linux: necesita {library}. Indica una versión de netcoredbg que funcione aquí en Ajustes › Herramientas › Depurador netcoredbg."
   },
   "tests": {
     "Run All Tests": "Ejecutar todas las pruebas"

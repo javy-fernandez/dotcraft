@@ -81,6 +81,8 @@ pub enum Failure {
     LaunchFailed(String),
     AttachFailed { pid: u32, error: String },
     AdapterExited(Option<i32>),
+    /// The adapter cannot load on this Linux system (glibc or libstdc++ too old).
+    MissingSystemLibrary(String),
 }
 
 impl Failure {
@@ -93,6 +95,10 @@ impl Failure {
             Failure::LaunchFailed(e) => ("The debugger could not launch the program: {error}", vec![("error", e.clone())]),
             Failure::AttachFailed { pid, error } => ("The debugger could not attach to process {pid}: {error}", vec![("pid", pid.to_string()), ("error", error.clone())]),
             Failure::AdapterExited(_) => ("The debugger exited unexpectedly", vec![]),
+            Failure::MissingSystemLibrary(library) => (
+                "netcoredbg cannot run on this Linux system: it needs {library}. Set a netcoredbg build that runs here in Settings › Tools › netcoredbg debugger.",
+                vec![("library", library.clone())],
+            ),
         }
     }
 }
@@ -332,6 +338,8 @@ pub struct DebugSession {
     continue_after_logs: Option<i64>,
     orphan_breakpoint_events: Vec<Breakpoint>,
     shutdown_started: bool,
+    /// What the Linux loader said is missing when the adapter could not even start.
+    missing_library: Option<String>,
     events: Vec<DebugEvent>,
 }
 
@@ -380,6 +388,7 @@ impl DebugSession {
             continue_after_logs: None,
             orphan_breakpoint_events: Vec::new(),
             shutdown_started: false,
+            missing_library: None,
             events: Vec::new(),
         };
         match target {
@@ -514,11 +523,21 @@ impl DebugSession {
                     c.reply(seq, &command, answer);
                 }
             }
-            Incoming::Stderr(line) => self.events.push(DebugEvent::Log(line)),
+            Incoming::Stderr(line) => {
+                #[cfg(target_os = "linux")]
+                if !self.hs.initialize_done
+                    && let Some(library) = crate::netcoredbg::missing_system_library(&line)
+                {
+                    self.missing_library = Some(library);
+                }
+                self.events.push(DebugEvent::Log(line));
+            }
             Incoming::Exited(code) => {
                 if !self.state.is_ended() {
                     if self.hs.configuration_done && self.exit_code.is_some() {
                         self.end(self.exit_code);
+                    } else if let Some(library) = self.missing_library.take() {
+                        self.fail(Failure::MissingSystemLibrary(library));
                     } else {
                         self.fail(Failure::AdapterExited(code));
                     }
@@ -613,6 +632,9 @@ impl DebugSession {
                     }
                     self.maybe_configure();
                 }
+                // On Linux an adapter that cannot load only explains why on stderr, which
+                // arrives before its exit: let `Incoming::Exited` report the failure.
+                Err(e) if cfg!(target_os = "linux") && e.is_stopped() => {}
                 Err(e) => self.fail(Failure::InitializeFailed(e.message)),
             },
             Purpose::Launch => match r {

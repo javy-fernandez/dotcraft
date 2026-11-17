@@ -20,6 +20,8 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{mpsc, oneshot};
 
+const STOPPED: &str = "the debug adapter stopped";
+
 /// A failed request: the adapter's message (`success: false`) or a transport problem.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DapError {
@@ -34,7 +36,12 @@ impl DapError {
     }
 
     fn stopped() -> Self {
-        DapError::new("the debug adapter stopped")
+        DapError::new(STOPPED)
+    }
+
+    /// Whether the adapter went away before answering.
+    pub fn is_stopped(&self) -> bool {
+        self.message == STOPPED && self.details.is_none()
     }
 }
 
@@ -180,8 +187,19 @@ impl DapClient {
         let reader_shared = shared.clone();
         let reader_incoming = incoming.clone();
         let exit_child = child.clone();
+        let stderr_task = tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                incoming.send(Incoming::Stderr(line));
+            }
+        });
         tokio::spawn(async move {
             read_loop(stdout, &reader_shared, &reader_incoming).await;
+            if cfg!(target_os = "linux") {
+                // A loader error (glibc too old) is all such an adapter prints: deliver its
+                // stderr before its exit. Bounded, in case a child process keeps the pipe.
+                let _ = tokio::time::timeout(std::time::Duration::from_millis(500), stderr_task).await;
+            }
             for (_, tx) in reader_shared.pending.lock().drain() {
                 let _ = tx.send(Err(DapError::stopped()));
             }
@@ -199,12 +217,6 @@ impl DapClient {
                 }
             }
             reader_incoming.send(Incoming::Exited(code));
-        });
-        tokio::spawn(async move {
-            let mut lines = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                incoming.send(Incoming::Stderr(line));
-            }
         });
         Ok(DapClient { shared, child, pid })
     }

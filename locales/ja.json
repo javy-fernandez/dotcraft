@@ -1040,7 +1040,8 @@
     "netcoredbg is ready": "netcoredbg の準備ができました",
     "Parallel Stacks": "並列スタック",
     "No threads available": "利用できるスレッドはありません",
-    "No stack frames": "スタックフレームはありません"
+    "No stack frames": "スタックフレームはありません",
+    "netcoredbg cannot run on this Linux system: it needs {library}. Set a netcoredbg build that runs here in Settings › Tools › netcoredbg debugger.": "netcoredbg はこの Linux システムでは実行できません: {library} が必要です。設定 › ツール › netcoredbg デバッガーで、ここで動作する netcoredbg を指定してください。"
   },
   "tests": {
     "Run All Tests": "すべてのテストを実行"
