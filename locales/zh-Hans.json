@@ -1564,5 +1564,23 @@
     "New profile": "新建配置文件",
     "Profile name": "配置文件名称",
     "Use NAME=value for each environment variable": "每个环境变量请使用 NAME=value 格式"
+  },
+  "publishprofiles": {
+    "A publish profile with this name already exists": "A publish profile with this name already exists",
+    "Configuration": "Configuration",
+    "Loading publish profiles…": "Loading publish profiles…",
+    "New profile": "New profile",
+    "No .NET project is available to publish": "No .NET project is available to publish",
+    "Profile name": "Profile name",
+    "Publish": "Publish",
+    "Publish Project": "Publish Project",
+    "Publish Project…": "Publish Project…",
+    "Publish profile": "Publish profile",
+    "ReadyToRun": "ReadyToRun",
+    "Runtime identifier": "Runtime identifier",
+    "Save Profile": "Save Profile",
+    "Self-contained": "Self-contained",
+    "Single file": "Single file",
+    "Trim unused code": "Trim unused code"
   }
 }

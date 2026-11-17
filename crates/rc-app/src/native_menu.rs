@@ -32,6 +32,7 @@ pub enum MenuCommand {
     NewFile,
     NewSolution,
     EditRunConfig,
+    PublishProject,
     AddUsings,
     CloseProject,
     ReloadFromDisk,
@@ -69,6 +70,7 @@ impl MenuCommand {
             MenuCommand::RunCoverage => ico::RUN_COVERAGE,
             MenuCommand::EfCore => ico::TW_DATABASE,
             MenuCommand::EditRunConfig => ico::SETTINGS,
+            MenuCommand::PublishProject => ico::BUILD,
             MenuCommand::AddUsings => ico::NAMESPACE,
             MenuCommand::Undo => ico::UNDO,
             MenuCommand::Redo => ico::REDO,
@@ -596,7 +598,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &item(MenuCommand::AddUsings, || tr("Add Missing Usings"), None),
         ],
     )?;
-    let build_menu = submenu(|| tr("Build"), &[&act(Action::Build, || tr("Build Solution")), &sep(), &item(MenuCommand::EfCore, || tr("Entity Framework Core…"), None)])?;
+    let build_menu = submenu(|| tr("Build"), &[&act(Action::Build, || tr("Build Solution")), &item(MenuCommand::PublishProject, || tr("Publish Project…"), None), &sep(), &item(MenuCommand::EfCore, || tr("Entity Framework Core…"), None)])?;
     let run_menu = submenu(
         || tr("Run"),
         &[

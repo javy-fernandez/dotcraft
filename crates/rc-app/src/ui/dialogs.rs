@@ -57,6 +57,7 @@ pub enum Dialog {
     RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions, web: bool },
     LaunchProfileEditor(Box<crate::ui::launch_profile_editor::LaunchProfileEditor>),
     ProjectProperties(Box<crate::ui::project_properties::ProjectPropertiesDialog>),
+    Publish(Box<crate::ui::publish::PublishDialog>),
     /// A compound run configuration: its name and which applications it starts.
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
@@ -128,6 +129,15 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
                 Outcome::Close
             }
             None => Outcome::Keep,
+        },
+        Dialog::Publish(state) => match state.show(ctx) {
+            crate::ui::publish::PublishOutcome::Keep => Outcome::Keep,
+            crate::ui::publish::PublishOutcome::Close => Outcome::Close,
+            crate::ui::publish::PublishOutcome::Start(request) => {
+                let outputs = app.runner.build_request(request);
+                crate::ui::run_windows::handle_outputs(app, outputs);
+                Outcome::Close
+            }
         },
         Dialog::InteractiveRebase(state) => if crate::ui::rebase::dialog(app, ctx, state) { Outcome::Close } else { Outcome::Keep },
     };

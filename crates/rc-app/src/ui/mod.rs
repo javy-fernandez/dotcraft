@@ -9,6 +9,7 @@ pub mod dialogs;
 pub mod sdk_selection;
 pub mod launch_profile_editor;
 pub mod project_properties;
+pub mod publish;
 pub mod editor_area;
 pub mod ef_core;
 pub mod explorer;

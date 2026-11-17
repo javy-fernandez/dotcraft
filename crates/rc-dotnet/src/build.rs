@@ -17,6 +17,7 @@ pub enum BuildAction {
     Rebuild,
     Clean,
     Restore,
+    Publish,
 }
 
 /// What to build and how.
@@ -54,6 +55,7 @@ impl BuildRequest {
             BuildAction::Build | BuildAction::Rebuild => "build",
             BuildAction::Clean => "clean",
             BuildAction::Restore => "restore",
+            BuildAction::Publish => "publish",
         }
         .into());
         a.push(self.target.to_string_lossy().into_owned());
@@ -66,7 +68,7 @@ impl BuildRequest {
         if self.action == BuildAction::Rebuild {
             a.push("--no-incremental".into());
         }
-        if self.no_restore && matches!(self.action, BuildAction::Build | BuildAction::Rebuild) {
+        if self.no_restore && matches!(self.action, BuildAction::Build | BuildAction::Rebuild | BuildAction::Publish) {
             a.push("--no-restore".into());
         }
         a.extend(["-nologo", "-v:minimal", "-clp:NoSummary", "-tl:off", "-p:GenerateFullPaths=true"].map(String::from));
