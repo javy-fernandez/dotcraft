@@ -81,6 +81,8 @@ pub enum ExplorerAction {
     ProjectProperties(PathBuf),
     /// Entity Framework Core › operation, for this project.
     EfCore(PathBuf, crate::ui::ef_core::EfOp),
+    /// Publish… this project with a folder publish profile.
+    Publish(PathBuf),
     /// Migrate this solution to Central Package Management (NuGet window).
     MigrateToCpm,
     /// Add New Project to this solution.
@@ -693,6 +695,12 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actio
                 }
             }
         });
+    }
+    if let NodeKind::Project(p) = &row.kind
+        && theme::menu_item(ui, Some(ico::BUILD), tr("Publish…"), false).clicked()
+    {
+        actions.push(ExplorerAction::Publish(p.clone()));
+        ui.close();
     }
     let (path, is_dir) = match &row.kind {
         NodeKind::File(p) => (p.clone(), false),

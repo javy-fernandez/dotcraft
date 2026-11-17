@@ -568,15 +568,18 @@ impl DotCraftApp {
         }
     }
 
-    pub fn publish_project_dialog(&mut self) {
+    /// Build › Publish Project…, on `project` (Explorer) or the selected run configuration's.
+    pub fn publish_project_dialog(&mut self, project: Option<&Path>) {
         let projects = self.solution_projects();
         if projects.is_empty() {
             self.notify(tr("No .NET project is available to publish"), false);
             return;
         }
-        let selected = self.runner.selected_config().and_then(|config| match &config.kind {
-            crate::runner::ConfigKind::App { project, .. } => Some(project.as_path()),
-            _ => None,
+        let selected = project.or_else(|| {
+            self.runner.selected_config().and_then(|config| match &config.kind {
+                crate::runner::ConfigKind::App { project, .. } => Some(project.as_path()),
+                _ => None,
+            })
         });
         self.dialog = Some(Dialog::Publish(Box::new(crate::ui::publish::PublishDialog::new(projects, selected, self.waker.clone()))));
         self.focus_editor = false;
@@ -1672,6 +1675,7 @@ impl DotCraftApp {
                     self.dock.show(ToolWindow::Nuget);
                 }
                 ExplorerAction::EfCore(project, op) => self.ef_dialog(op, Some(project)),
+                ExplorerAction::Publish(project) => self.publish_project_dialog(Some(&project)),
                 ExplorerAction::ManagePackages(project) => {
                     self.nuget.focus_project(&project);
                     self.dock.show(ToolWindow::Nuget);
@@ -1867,7 +1871,7 @@ impl eframe::App for DotCraftApp {
                     MenuCommand::NewFile => self.new_file_dialog(),
                     MenuCommand::NewSolution => self.new_project_dialog(None),
                     MenuCommand::EditRunConfig => self.edit_run_config(None),
-                    MenuCommand::PublishProject => self.publish_project_dialog(),
+                    MenuCommand::PublishProject => self.publish_project_dialog(None),
                     MenuCommand::AddUsings => {
                         if let Some(i) = self.docs.active {
                             self.insight.add_missing_usings(&self.docs.list[i]);
