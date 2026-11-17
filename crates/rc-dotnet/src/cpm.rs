@@ -837,7 +837,7 @@ fn insert_item(doc: &roxmltree::Document, text: &str, tag: &str, id: &str, elem:
 /// after `<Project>` when there is none).
 pub fn set_central_property(text: &str, name: &str, value: &str) -> anyhow::Result<Vec<TextEdit>> {
     let doc = parse(text)?;
-    if let Some(p) = doc.descendants().find(|n| n.has_tag_name(name) && n.parent_element().is_some_and(|g| g.has_tag_name("PropertyGroup") && g.attribute("Condition").is_none())) {
+    if let Some(p) = doc.descendants().find(|n| n.has_tag_name(name) && n.attribute("Condition").is_none() && n.parent_element().is_some_and(|g| g.has_tag_name("PropertyGroup") && g.attribute("Condition").is_none())) {
         if p.text().unwrap_or("").trim() == value {
             return Ok(Vec::new());
         }

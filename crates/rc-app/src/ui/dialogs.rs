@@ -56,6 +56,7 @@ pub enum Dialog {
     /// Edit an application run configuration: launch profile, arguments, environment, folder.
     RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions, web: bool },
     LaunchProfileEditor(Box<crate::ui::launch_profile_editor::LaunchProfileEditor>),
+    ProjectProperties(Box<crate::ui::project_properties::ProjectPropertiesDialog>),
     /// A compound run configuration: its name and which applications it starts.
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
@@ -112,6 +113,16 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
             Some(saved) => {
                 if saved {
                     app.refresh_run_configs();
+                }
+                Outcome::Close
+            }
+            None => Outcome::Keep,
+        },
+        Dialog::ProjectProperties(state) => match state.show(ctx) {
+            Some(saved) => {
+                if saved {
+                    app.explorer.invalidate(state.path());
+                    app.reload_workspace();
                 }
                 Outcome::Close
             }

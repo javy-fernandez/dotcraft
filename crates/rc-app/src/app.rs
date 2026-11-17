@@ -1669,6 +1669,9 @@ impl DotCraftApp {
                     }
                     Err(error) => self.notify(error, true),
                 },
+                ExplorerAction::ProjectProperties(project) => {
+                    self.dialog = Some(Dialog::ProjectProperties(Box::new(crate::ui::project_properties::ProjectPropertiesDialog::new(project, self.waker.clone()))));
+                }
             }
         }
     }
