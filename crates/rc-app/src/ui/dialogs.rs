@@ -1725,6 +1725,7 @@ mod responsive_settings_tests {
                     let long_path = PathBuf::from(format!("/opt/{}/dotnet", "long-installation-folder/".repeat(20)));
                     draft.dotnet_path = Some(long_path.clone());
                     draft.roslyn_path = Some(long_path.clone());
+                    draft.godot_path = Some(long_path.clone());
                     draft.netcoredbg_path = Some(long_path);
                 }
                 harness.state_mut().dialog = Some(Dialog::Settings { draft: Box::new(draft), page });
@@ -1741,8 +1742,9 @@ mod responsive_settings_tests {
                     assert!((settled.height() - modal.height()).abs() < 1.0, "modal height changed: {modal:?} -> {settled:?}");
                 }
                 if page == SettingsPage::Tools {
+                    // The page scrolls vertically; long paths must not push Browse… off the side.
                     for browse in harness.get_all_by_label(tr("Browse…")) {
-                        assert!(viewport.contains_rect(browse.rect()), "tool browse button outside viewport");
+                        assert!(viewport.x_range().contains(browse.rect().left()) && viewport.x_range().contains(browse.rect().right()), "tool browse button outside viewport {size:?} {:?}", browse.rect());
                     }
                 }
                 widths.push(modal.width());
