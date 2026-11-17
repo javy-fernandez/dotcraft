@@ -2582,6 +2582,58 @@ fn screens_godot() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes target/snapshots/unity-*.png"]
+fn screens_unity() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::Builder::new().prefix("dotcraft-unity").tempdir().unwrap();
+    let game = dunce::canonicalize(dir.path()).unwrap().join("Game");
+    for folder in ["Assets/Scripts", "Assets/Scenes", "ProjectSettings", "Packages", "Library/PackageCache", "Temp", "Logs"] {
+        std::fs::create_dir_all(game.join(folder)).unwrap();
+    }
+    std::fs::write(game.join("ProjectSettings/ProjectVersion.txt"), "m_EditorVersion: 6000.0.23f1\nm_EditorVersionWithRevision: 6000.0.23f1 (1c4764c07fb4)\n").unwrap();
+    std::fs::write(game.join("Packages/manifest.json"), "{\n  \"dependencies\": {}\n}\n").unwrap();
+    std::fs::write(game.join("Assets/Scripts/Player.cs"), "using UnityEngine;\n\npublic class Player : MonoBehaviour\n{\n    [SerializeField] float speed = 5f;\n\n    void Update()\n    {\n        var move = new Vector3(Input.GetAxis(\"Horizontal\"), 0, Input.GetAxis(\"Vertical\"));\n        transform.Translate(move * speed * Time.deltaTime);\n    }\n}\n").unwrap();
+    std::fs::write(game.join("Assets/Scenes/Main.unity"), "%YAML 1.1\n").unwrap();
+    for meta in ["Assets/Scripts.meta", "Assets/Scenes.meta", "Assets/Scripts/Player.cs.meta", "Assets/Scenes/Main.unity.meta"] {
+        std::fs::write(game.join(meta), "fileFormatVersion: 2\nguid: 3f2a9c1b7d6e4a5f8b0c1d2e3f4a5b6c\n").unwrap();
+    }
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        // Without generated projects the folder opens with the guidance notice.
+        app.open_workspace(&game);
+        for folder in ["Assets", "Assets/Scripts", "Assets/Scenes"] {
+            app.explorer.expanded.insert(format!("dir:{}", game.join(folder).display()));
+        }
+        app.open_file(&game.join("Assets/Scripts/Player.cs"));
+        app.dock.show(crate::toolwindow::ToolWindow::Explorer);
+        let mut h = harness(app, vec2(1280.0, 720.0));
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("unity-project-{suffix}.png"))).unwrap();
+        h.get_by_label("Main Menu").click();
+        h.run_steps(2);
+        h.get_by_label(rc_kit::i18n::tr("Tools")).click();
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("unity-tools-menu-{suffix}.png"))).unwrap();
+        h.key_press(egui::Key::Escape);
+        h.run_steps(2);
+        if dark {
+            h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(h.state().settings.clone()), page: crate::ui::dialogs::SettingsPage::Tools });
+            h.run_steps(4);
+            let browse = h.get_all_by_label(rc_kit::i18n::tr("Browse…")).next().unwrap().rect().center();
+            h.input_mut().events.push(egui::Event::PointerMoved(browse));
+            h.input_mut().events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, -1000.0), phase: egui::TouchPhase::Move, modifiers: egui::Modifiers::NONE });
+            h.run_steps(20);
+            h.render().unwrap().save(out.join("unity-settings-dark.png")).unwrap();
+        }
+    }
+}
+
+#[test]
 #[ignore = "Requires a GPU; writes target/snapshots/proto-*.png and grpc-client-*.png"]
 fn screens_proto_and_grpc_client() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
