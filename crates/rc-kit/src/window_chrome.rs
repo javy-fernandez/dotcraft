@@ -1,8 +1,9 @@
 //! Shared application header, with custom Windows/Linux controls and native macOS chrome.
 use crate::i18n::tr;
+use crate::icons::{self, ico};
 use crate::theme::pal;
 use egui::viewport::ResizeDirection;
-use egui::{Color32, CursorIcon, Id, Rect, Sense, Stroke, Ui, Vec2, ViewportCommand, pos2, vec2};
+use egui::{Color32, CursorIcon, Id, Rect, Sense, Ui, Vec2, ViewportCommand, pos2, vec2};
 
 /// Windows and Linux use the application header for window controls. macOS keeps its
 /// native traffic lights over the full-height content view. Adapted from CrabCraft
@@ -64,47 +65,17 @@ pub fn controls(ui: &mut Ui) -> Option<ViewportCommand> {
                 Color32::TRANSPARENT
             };
             ui.painter().rect_filled(rect, 0.0, fill);
-            let color = if index == 0 && response.hovered() {
-                Color32::WHITE
-            } else {
-                p.text
+            let icon = match index {
+                0 => ico::WIN_CLOSE,
+                1 if maximized => ico::WIN_RESTORE,
+                1 => ico::WIN_MAXIMIZE,
+                _ => ico::WIN_MINIMIZE,
             };
-            let stroke = Stroke::new(1.0, color);
-            let center = rect.center();
-            match index {
-                0 => {
-                    ui.painter()
-                        .line_segment([center + vec2(-5.0, -5.0), center + vec2(5.0, 5.0)], stroke);
-                    ui.painter()
-                        .line_segment([center + vec2(-5.0, 5.0), center + vec2(5.0, -5.0)], stroke);
-                }
-                1 => {
-                    let square = Rect::from_center_size(center, Vec2::splat(10.0));
-                    if maximized {
-                        ui.painter().rect_stroke(
-                            square.translate(vec2(2.0, -2.0)),
-                            0.0,
-                            stroke,
-                            egui::StrokeKind::Inside,
-                        );
-                        ui.painter().rect_filled(
-                            square,
-                            0.0,
-                            if response.hovered() {
-                                p.hover
-                            } else {
-                                p.main_bg
-                            },
-                        );
-                    }
-                    ui.painter()
-                        .rect_stroke(square, 0.0, stroke, egui::StrokeKind::Inside);
-                }
-                _ => {
-                    ui.painter()
-                        .line_segment([center + vec2(-5.0, 1.0), center + vec2(5.0, 1.0)], stroke);
-                }
-            }
+            let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(16.0));
+            // The set's light variants suit IntelliJ's dark light-theme header; DotCraft's is
+            // light, so they take the toolbar's icon colour.
+            let tint = if index == 0 && response.hovered() { Color32::WHITE } else { p.icon };
+            icons::paint_tinted(ui.painter(), icon_rect, icon, p.dark, 16.0, tint);
             if response.on_hover_text(label).clicked() {
                 command = Some(match index {
                     0 => ViewportCommand::Close,
