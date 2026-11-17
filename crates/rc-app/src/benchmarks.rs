@@ -124,6 +124,20 @@ impl Benchmarks {
         }
     }
 
+    /// Forgets everything (the workspace closed): stops the run and drops its results and artifacts.
+    pub fn reset(&mut self) {
+        self.stop();
+        if let Some(artifacts) = self.artifacts.take() {
+            discard(vec![artifacts]);
+        }
+        self.last = None;
+        self.failed = false;
+        self.status.clear();
+        self.results.clear();
+        self.output.clear();
+        self.show_output = false;
+    }
+
     pub fn update(&mut self) {
         for event in self.events.drain() {
             match event {

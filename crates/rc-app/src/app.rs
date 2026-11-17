@@ -607,7 +607,7 @@ impl DotCraftApp {
         self.user_secrets.cancel();
         self.docker_runs.clear();
         self.continuous.reset();
-        self.benchmarks.stop();
+        self.benchmarks.reset();
         self.debugger.stop();
         self.runner.stop_all();
         self.runner.clear();
