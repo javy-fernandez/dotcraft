@@ -1,0 +1,10 @@
+# cargo-audit settings, used by `cargo audit` here and by .github/workflows/security-audit.yml.
+[advisories]
+# Vulnerabilities accepted after review. Give each one a comment with the reason, for example
+# that the affected code is never reached, and remove it once a patched release is in Cargo.lock:
+#   "RUSTSEC-YYYY-NNNN", # crate: why it does not affect DotCraft
+#
+# Not listed because warnings do not fail the audit: RUSTSEC-2026-0097 (rand 0.7.3 is unsound
+# with a custom logger), pulled in by tiberius -> winauth for SQL Server Windows authentication.
+# The 0.7 series has no patched release.
+ignore = []

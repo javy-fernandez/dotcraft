@@ -1,0 +1,38 @@
+# Checks Cargo.lock against the RustSec advisory database: whenever the dependencies change,
+# and every week, so an advisory published later against an unchanged lock file is caught too.
+# Only vulnerabilities fail the job; unsound, unmaintained and yanked crates are printed as
+# warnings. Reviewed exceptions go in .cargo/audit.toml, which a local `cargo audit` also reads.
+name: Security audit
+
+on:
+  pull_request:
+    paths: ['**/Cargo.toml', 'Cargo.lock', '.cargo/audit.toml', '.github/workflows/security-audit.yml']
+  push:
+    branches: [main]
+    paths: ['**/Cargo.toml', 'Cargo.lock', '.cargo/audit.toml', '.github/workflows/security-audit.yml']
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # The official release binary, checked against its SHA-256: no compiling, no third-party action.
+      - name: Install cargo-audit 0.23.0
+        run: |
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/cargo-audit.tgz" \
+            https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.23.0/cargo-audit-x86_64-unknown-linux-musl-v0.23.0.tgz
+          echo "4f01c74ed84b2dffd0b1d37012a62cdf2a92c96e25bdf8eec7fcc0d4d3eb7811  $RUNNER_TEMP/cargo-audit.tgz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/cargo-audit.tgz" -C "$RUNNER_TEMP" --strip-components=1 cargo-audit-x86_64-unknown-linux-musl-v0.23.0/cargo-audit
+
+      - name: Audit Cargo.lock
+        run: '"$RUNNER_TEMP/cargo-audit" audit'
