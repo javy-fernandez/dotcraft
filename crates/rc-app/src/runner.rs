@@ -348,6 +348,14 @@ impl Runner {
         self.configs.get(self.selected)
     }
 
+    /// The Godot project folder, when the workspace has one.
+    pub fn godot_root(&self) -> Option<&Path> {
+        self.configs.iter().find_map(|config| match &config.kind {
+            ConfigKind::Godot { project_root, .. } => Some(project_root.as_path()),
+            _ => None,
+        })
+    }
+
     pub fn godot_csharp_project(&self) -> Option<&Path> {
         self.godot_csharp_project.as_deref()
     }

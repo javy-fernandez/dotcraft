@@ -157,7 +157,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                     app.pending.push(Action::SearchEverywhere);
                 }
                 if app.workspace.is_some() {
-                    let godot_project = app.workspace.as_ref().is_some_and(|workspace| workspace.ws.godot_project().is_some());
+                    let godot_project = app.builds_godot_csharp_project();
                     ui.add_space(6.0);
                     theme::toolbar_separator(ui);
                     ui.add_space(4.0);
@@ -166,9 +166,9 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                         ui.set_min_width(200.0);
                         let scene = app.docs.active_doc().map(|doc| doc.path.clone()).filter(|path| {
                             matches!(path.extension().and_then(|ext| ext.to_str()), Some("tscn" | "scn"))
+                                && app.runner.godot_root().is_some_and(|root| path.starts_with(root))
                         });
-                        if godot_project
-                            && let Some(scene) = scene
+                        if let Some(scene) = scene
                             && theme::menu_item(ui, Some(ico::RUN), tr("Run Current Godot Scene"), false).clicked()
                         {
                             if app.runner.select_godot_scene(&scene) {

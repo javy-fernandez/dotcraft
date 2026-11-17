@@ -449,8 +449,13 @@ impl DotCraftApp {
             _ => None,
         }).collect();
         self.continuous.set_workspace(all_projects, test_projects, session.continuous_testing.clone());
-        if let Some(root) = ws.godot_project().and_then(Path::parent) {
-            self.runner.add_godot_project(root, self.settings.godot_path.as_deref());
+        // The Godot project: `project.godot` at the root, or next to the `Godot.NET.Sdk` project
+        // (a game kept in a subfolder of a larger repository or solution).
+        let godot_root = ws.godot_project().and_then(Path::parent).map(Path::to_path_buf).or_else(|| {
+            self.runner.godot_csharp_project().and_then(Path::parent).filter(|dir| dir.join("project.godot").is_file()).map(Path::to_path_buf)
+        });
+        if let Some(root) = godot_root {
+            self.runner.add_godot_project(&root, self.settings.godot_path.as_deref());
             if let Some(scene) = session.godot_scene.as_deref() {
                 self.runner.select_godot_scene(scene);
             }
@@ -471,8 +476,9 @@ impl DotCraftApp {
     }
 
     fn open_godot_request(&mut self, request: crate::godot_cli::OpenRequest) {
-        if let Some(project) = request.project
-            && self.workspace.as_ref().is_none_or(|workspace| workspace.ws.root != project)
+        // Keep the open workspace when it already contains the Godot project.
+        if let Some(project) = request.project.map(|project| dunce::canonicalize(&project).unwrap_or(project))
+            && self.workspace.as_ref().is_none_or(|workspace| !project.starts_with(&workspace.ws.root))
         {
             self.open_workspace(&project);
         }
@@ -480,9 +486,15 @@ impl DotCraftApp {
         self.focus_editor = true;
     }
 
+    /// A Godot workspace without a solution builds its C# project; a solution builds as usual
+    /// (the Godot project is one of its projects).
+    pub fn builds_godot_csharp_project(&self) -> bool {
+        self.runner.godot_root().is_some() && self.workspace.as_ref().is_some_and(|workspace| !matches!(workspace.ws.kind, rc_core::WorkspaceKind::Solution(_)))
+    }
+
     pub fn workspace_build_target(&self) -> Option<PathBuf> {
         let workspace = self.workspace.as_ref()?;
-        if workspace.ws.godot_project().is_some() {
+        if self.builds_godot_csharp_project() {
             self.runner.godot_csharp_project().map(Path::to_path_buf)
         } else {
             Some(workspace.ws.key_path().to_path_buf())
@@ -494,7 +506,7 @@ impl DotCraftApp {
         if let Some(target) = self.workspace_build_target() {
             let outs = self.runner.build(&target, action);
             crate::ui::run_windows::handle_outputs(self, outs);
-        } else if self.workspace.as_ref().is_some_and(|workspace| workspace.ws.godot_project().is_some()) {
+        } else if self.runner.godot_root().is_some() {
             self.notify(tr("This Godot project has no C# project to build"), false);
         }
     }
@@ -1749,9 +1761,9 @@ impl DotCraftApp {
         let godot_changed = new.godot_path != self.settings.godot_path;
         self.settings = new;
         if godot_changed
-            && let Some(root) = self.workspace.as_ref().and_then(|workspace| workspace.ws.godot_project()).and_then(Path::parent)
+            && let Some(root) = self.runner.godot_root().map(Path::to_path_buf)
         {
-            self.runner.add_godot_project(root, self.settings.godot_path.as_deref());
+            self.runner.add_godot_project(&root, self.settings.godot_path.as_deref());
         }
         self.editor_config = editor_config(&self.settings);
         if self.focus_mode == FocusMode::Presentation {

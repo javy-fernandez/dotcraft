@@ -45,6 +45,31 @@ fn godot_workspace_builds_csharp_before_debug_launch() {
     app.runner.cancel_build();
 }
 
+#[test]
+fn godot_project_in_a_subfolder_is_found_next_to_its_csharp_project() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let repo = tempfile::tempdir().unwrap();
+    let repo = dunce::canonicalize(repo.path()).unwrap();
+    let game = repo.join("game");
+    std::fs::create_dir_all(&game).unwrap();
+    std::fs::create_dir_all(repo.join("tools")).unwrap();
+    std::fs::write(game.join("project.godot"), "config_version=5\n").unwrap();
+    std::fs::write(game.join("Game.csproj"), r#"<Project Sdk="Godot.NET.Sdk/4.4.1"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>"#).unwrap();
+    std::fs::write(repo.join("tools/Tool.csproj"), r#"<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup></Project>"#).unwrap();
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&repo);
+    assert_eq!(app.runner.godot_root(), Some(game.as_path()));
+    assert_eq!(app.runner.godot_csharp_project(), Some(game.join("Game.csproj").as_path()));
+    assert!(app.builds_godot_csharp_project());
+    assert!(app.runner.configs.iter().any(|config| matches!(config.kind, ConfigKind::App { .. })));
+    app.close_workspace();
+    assert_eq!(app.runner.godot_root(), None);
+}
+
 fn pump(app: &mut DotCraftApp, what: &str, mut done: impl FnMut(&mut DotCraftApp) -> bool) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(300) {
