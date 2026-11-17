@@ -45,6 +45,11 @@ or on the shared tokio runtime and reports back through channels that wake the U
 - **Third-party code.** Parts of the HTTP client, EditorConfig, SQLite browser, egui
   menu, the editor tab docking guides and the title bar project glow are adapted from
   CrabCraft (MIT); its notice is in `docs/third-party/`.
+- **Spelling.** Typo checks use the `spellbook` crate (MPL-2.0, unmodified, source on
+  crates.io) with Hunspell `.aff`/`.dic` pairs found in `<data folder>/dictionaries`,
+  `DOTCRAFT_DICTIONARIES` and the system folders (`~/Library/Spelling`, `/usr/share/hunspell`…).
+  No word list is bundled. Saved words go to `<data folder>/spelling/user-dictionary.txt` and
+  to the solution's Rider `.DotSettings` file.
 
 ## Packaging
 
@@ -53,4 +58,5 @@ Everything the app needs (fonts, icons, translations) is embedded in the binary.
 x64/ARM64 executables with cargo-xwin (`--windows`, DirectX 12, statically linked C runtime,
 icon from `assets/icon.ico` via `crates/rc-app/build.rs`). Application icons are generated
 from `assets/icon.svg` by `scripts/make_icon.py`. The Roslyn language server and netcoredbg
-are not bundled: they are located or downloaded on first use into the data folder.
+are not bundled: they are located or downloaded on first use into the data folder. Neither
+are spelling dictionaries (see Spelling above).
