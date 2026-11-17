@@ -2481,3 +2481,45 @@ fn screens_assembly_explorer() {
         h.render().unwrap().save(out.join(format!("assembly-explorer-install-{suffix}.png"))).unwrap();
     }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/godot-*.png"]
+fn screens_godot() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::Builder::new().prefix("dotcraft-godot").tempdir().unwrap();
+    let game = dunce::canonicalize(dir.path()).unwrap().join("Game");
+    copy_tree(&fixtures().join("godot-dotnet"), &game);
+    std::fs::write(game.join("player.gd"), "extends CharacterBody2D\n\n@export var speed := 240.0 # pixels per second\n\nfunc _physics_process(delta: float) -> void:\n\tvar direction := Input.get_vector(\"left\", \"right\", \"up\", \"down\")\n\tvelocity = direction * speed\n\tmove_and_slide()\n").unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&game);
+        app.open_file(&game.join("player.gd"));
+        app.open_file(&game.join("Main.tscn"));
+        let mut h = harness(app, vec2(1280.0, 720.0));
+        h.run_steps(3);
+        // The Godot run configurations, and the scene being edited in "More actions".
+        h.get_by_label(&rc_kit::i18n::trf("Run configuration: {name}", &[("name", &rc_kit::i18n::tr("Run Godot Project"))])).click();
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("godot-run-configs-{suffix}.png"))).unwrap();
+        h.key_press(egui::Key::Escape);
+        h.run_steps(2);
+        h.get_by_label(rc_kit::i18n::tr("More actions")).click();
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("godot-more-actions-{suffix}.png"))).unwrap();
+        h.key_press(egui::Key::Escape);
+        h.run_steps(2);
+        h.state_mut().open_file(&game.join("player.gd"));
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("godot-gdscript-{suffix}.png"))).unwrap();
+        if dark {
+            h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(h.state().settings.clone()), page: crate::ui::dialogs::SettingsPage::Tools });
+            h.run_steps(4);
+            h.render().unwrap().save(out.join("godot-settings-dark.png")).unwrap();
+        }
+    }
+}
