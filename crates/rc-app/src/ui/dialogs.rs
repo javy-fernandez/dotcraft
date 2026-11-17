@@ -371,11 +371,11 @@ fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
     }
     ui.add_space(10.0);
     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-    for (label, value) in [
-        (tr(".NET CLI"), &mut draft.dotnet_path),
-        (tr("Godot .NET executable"), &mut draft.godot_path),
-        (tr("Roslyn language server"), &mut draft.roslyn_path),
-        (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),
+    for (label, value, godot) in [
+        (tr(".NET CLI"), &mut draft.dotnet_path, false),
+        (tr("Godot .NET executable"), &mut draft.godot_path, true),
+        (tr("Roslyn language server"), &mut draft.roslyn_path, false),
+        (tr("netcoredbg debugger"), &mut draft.netcoredbg_path, false),
     ] {
         let label_response = ui.label(label);
         let browse_width = (ui.fonts_mut(|fonts| fonts.layout_no_wrap(tr("Browse…").to_string(), FontId::proportional(13.0), rc_kit::pal(ui).text).size().x) + 24.0).max(72.0);
@@ -391,6 +391,15 @@ fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
                 *value = Some(path);
             }
         });
+        if godot {
+            // Godot opens C# scripts in DotCraft through its custom external editor.
+            let exe = std::env::current_exe().map(|path| path.display().to_string()).unwrap_or_else(|_| "dotcraft".into());
+            crate::ui::kit::note(ui, &trf(
+                "To edit Godot's C# scripts here, set Editor Settings › Dotnet › Editor › External Editor to Custom, Custom Exec Path to {path} and Custom Exec Path Args to {args}",
+                &[("path", &exe), ("args", &"--godot-csharp \"{project}\" \"{file}\" {line} {col}")],
+            ));
+            ui.add_space(4.0);
+        }
         ui.add_space(10.0);
     }
 }
