@@ -2169,5 +2169,46 @@ fn screens_custom_title_bar() {
         h.get_by_label("Close window").hover();
         h.run_steps(2);
         h.render().unwrap().save(out.join(format!("custom-title-bar-maximized-{suffix}.png"))).unwrap();
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/generate-*.png"]
+fn screens_generate() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::Builder::new().prefix("dotcraft-generate").tempdir().unwrap();
+    let file = dunce::canonicalize(dir.path()).unwrap().join("Person.cs");
+    std::fs::write(file.with_file_name("Shop.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <Nullable>enable</Nullable>\n    <ImplicitUsings>enable</ImplicitUsings>\n  </PropertyGroup>\n</Project>\n").unwrap();
+    std::fs::write(&file, "namespace Shop;\n\npublic class Person\n{\n    private readonly string _name;\n    private int _age;\n    public string? Email { get; set; }\n}\n").unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(file.parent().unwrap());
+        app.open_file(&file);
+        let at = std::fs::read_to_string(&file).unwrap().find("_age").unwrap();
+        app.docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(at);
+        let mut h = harness(app, vec2(1280.0, 720.0));
+        h.run_steps(3);
+        // ⌘N: what to generate, at the caret.
+        crate::ui::generate::open(h.state_mut());
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("generate-kinds-{suffix}.png"))).unwrap();
+        // Equality members: the member list, the third row highlighted and unticked.
+        h.key_press(egui::Key::ArrowDown);
+        h.key_press(egui::Key::ArrowDown);
+        h.run_steps(1);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        h.key_press(egui::Key::ArrowDown);
+        h.key_press(egui::Key::ArrowDown);
+        h.key_press(egui::Key::Space);
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("generate-members-{suffix}.png"))).unwrap();
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        let text = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+        assert!(text.contains("protected bool Equals(Person other) => _name == other._name && _age == other._age;"), "{text}");
+        h.render().unwrap().save(out.join(format!("generate-result-{suffix}.png"))).unwrap();
     }
 }
