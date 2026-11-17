@@ -75,11 +75,19 @@ impl PublishProfile {
             })
             .filter(|name| Self::path_for(project, name).is_ok())
             .collect::<Vec<_>>();
-        names.sort_unstable();
+        names.sort_unstable_by_key(|name| name.to_ascii_lowercase());
         Ok(names)
     }
 
+    /// The saved profile named `name`, ignoring case (MSBuild matches profile names that way on
+    /// every file system).
+    pub fn find<'a>(names: &'a [String], name: &str) -> Option<&'a String> {
+        names.iter().find(|existing| existing.eq_ignore_ascii_case(name.trim()))
+    }
+
     pub fn load(project: &Path, name: &str) -> anyhow::Result<Self> {
+        let names = Self::list(project)?;
+        let name = Self::find(&names, name).map(String::as_str).unwrap_or(name);
         let path = Self::path_for(project, name)?;
         let text = std::fs::read_to_string(path)?;
         let doc = roxmltree::Document::parse(&text)?;
@@ -280,6 +288,16 @@ mod tests {
                 .contains(&"-p:PublishProfile=linux-x64".into())
         );
         assert_eq!(request.configuration, "Release");
+    }
+
+    #[test]
+    fn profile_names_match_ignoring_case() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("App.csproj");
+        PublishProfile { name: "FolderProfile".into(), ..Default::default() }.save(&project).unwrap();
+        let names = PublishProfile::list(&project).unwrap();
+        assert_eq!(PublishProfile::find(&names, "folderprofile"), Some(&"FolderProfile".to_string()));
+        assert_eq!(PublishProfile::load(&project, "FOLDERPROFILE").unwrap().name, "FolderProfile");
     }
 
     #[test]

@@ -83,9 +83,9 @@ impl PublishDialog {
         let Some(project) = self.projects.get(self.project_index).cloned() else {
             return;
         };
-        if self.selected_name.as_deref() != Some(self.draft.name.as_str())
-            && self.names.contains(&self.draft.name)
-        {
+        self.draft.name = self.draft.name.trim().to_string();
+        let renamed = !self.selected_name.as_deref().is_some_and(|name| name.eq_ignore_ascii_case(&self.draft.name));
+        if renamed && PublishProfile::find(&self.names, &self.draft.name).is_some() {
             self.error = Some(tr("A publish profile with this name already exists").into());
             return;
         }
@@ -131,9 +131,9 @@ impl PublishDialog {
                     if let Some(request) = request {
                         return PublishOutcome::Start(request);
                     }
-                    if !self.names.contains(&profile.name) {
+                    if PublishProfile::find(&self.names, &profile.name).is_none() {
                         self.names.push(profile.name.clone());
-                        self.names.sort_unstable();
+                        self.names.sort_unstable_by_key(|name| name.to_ascii_lowercase());
                     }
                     self.selected_name = Some(profile.name.clone());
                     self.draft = profile;
