@@ -202,9 +202,13 @@ fn handshake_order_stops_caches_watches_and_exit() {
     let before = commands(&log).len();
     s.remove_breakpoint(&calc(), 9);
     pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::BreakpointsChanged(p) if p == &calc()));
-    pump_until_state(&mut s, &mut ev, |_| requests(&log).len() > before);
-    let last = requests(&log).pop().unwrap();
-    assert_eq!(last["command"], "setBreakpoints");
+    // Selecting the frame above may still be re-evaluating watches, so find the request
+    // among the new ones rather than taking the last.
+    let new_set = || requests(&log).into_iter().skip(before).filter(|r| r["command"] == "setBreakpoints").collect::<Vec<_>>();
+    pump_until_state(&mut s, &mut ev, |_| !new_set().is_empty());
+    let sent = new_set();
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    let last = &sent[0];
     assert_eq!(last["arguments"]["source"]["path"], "/w/Calc.cs");
     assert_eq!(last["arguments"]["breakpoints"], json!([]));
 
