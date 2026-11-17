@@ -190,7 +190,7 @@ impl ToolWindow {
             ToolWindow::Hierarchy => ico::TW_HIERARCHY,
             ToolWindow::LocalHistory => ico::HISTORY,
             ToolWindow::HttpClient => ico::TW_HTTP,
-            ToolWindow::GrpcClient => ico::TW_SERVICES,
+            ToolWindow::GrpcClient => ico::TW_GRPC,
             ToolWindow::Endpoints => ico::TW_ENDPOINTS,
             ToolWindow::Coverage => ico::RUN_COVERAGE,
             ToolWindow::PullRequests => ico::TW_PULL_REQUESTS,
@@ -203,7 +203,7 @@ impl ToolWindow {
     pub fn side(self) -> Side {
         match self {
             ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit | ToolWindow::Bookmarks | ToolWindow::AssemblyExplorer => Side::Left,
-            ToolWindow::Notifications | ToolWindow::Hierarchy | ToolWindow::GrpcClient => Side::Right,
+            ToolWindow::Notifications | ToolWindow::Hierarchy => Side::Right,
             _ => Side::Bottom,
         }
     }
