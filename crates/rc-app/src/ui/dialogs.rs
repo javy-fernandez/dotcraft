@@ -345,6 +345,7 @@ fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
         (tr(".NET CLI"), &mut draft.dotnet_path),
         (tr("Roslyn language server"), &mut draft.roslyn_path),
         (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),
+        (tr("Unity Editor (executable or editors folder)"), &mut draft.unity_editor_path),
     ] {
         let label_response = ui.label(label);
         let browse_width = (ui.fonts_mut(|fonts| fonts.layout_no_wrap(tr("Browse…").to_string(), FontId::proportional(13.0), rc_kit::pal(ui).text).size().x) + 24.0).max(72.0);
@@ -1600,10 +1601,11 @@ mod tests {
         for size in [vec2(480.0, 320.0), vec2(800.0, 300.0)] {
             let app = crate::screens::test_app(home.path(), true);
             let mut draft = app.settings.clone();
-            let paths: Vec<String> = ["dotnet", "roslyn", "netcoredbg"].into_iter().map(|tool| format!("/tools/{}/{tool}", "long-folder/".repeat(20))).collect();
+            let paths: Vec<String> = ["dotnet", "roslyn", "netcoredbg", "Unity"].into_iter().map(|tool| format!("/tools/{}/{tool}", "long-folder/".repeat(20))).collect();
             draft.dotnet_path = Some(paths[0].clone().into());
             draft.roslyn_path = Some(paths[1].clone().into());
             draft.netcoredbg_path = Some(paths[2].clone().into());
+            draft.unity_editor_path = Some(paths[3].clone().into());
             let mut harness = crate::screens::harness(app, size);
             harness.state_mut().dialog = Some(Dialog::Settings { draft: Box::new(draft), page: SettingsPage::Tools });
             harness.run_steps(5);
@@ -1701,13 +1703,68 @@ mod responsive_settings_tests {
                     assert!((settled.height() - modal.height()).abs() < 1.0, "modal height changed: {modal:?} -> {settled:?}");
                 }
                 if page == SettingsPage::Tools {
-                    for browse in harness.get_all_by_label(tr("Browse…")) {
-                        assert!(viewport.contains_rect(browse.rect()), "tool browse button outside viewport");
+                    // Tool rows never spill sideways; rows below the fold must scroll into the page
+                    // between the modal's top and the fixed footer.
+                    let browse: Vec<egui::Rect> = harness.get_all_by_label(tr("Browse…")).map(|node| node.rect()).collect();
+                    assert_eq!(browse.len(), 4, "every tool row needs a Browse button");
+                    for r in &browse {
+                        assert!(r.left() >= modal.left() && r.right() <= modal.right(), "tool browse button outside modal at {size:?}: {r:?}");
                     }
+                    harness.input_mut().events.push(egui::Event::PointerMoved(browse[0].center()));
+                    harness.input_mut().events.push(egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: vec2(0.0, -1000.0),
+                        phase: egui::TouchPhase::Move,
+                        modifiers: egui::Modifiers::NONE,
+                    });
+                    harness.run_steps(20);
+                    let last = harness.get_all_by_label(tr("Browse…")).last().unwrap().rect();
+                    let ok_top = harness.get_by_label(tr("OK")).rect().top();
+                    assert!(last.top() >= modal.top() && last.bottom() <= ok_top, "last tool row not scrollable into view at {size:?}: {last:?}, footer at {ok_top}");
                 }
                 widths.push(modal.width());
             }
             assert!(widths.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 1.0), "page widths differ at {size:?}: {widths:?}");
+        }
+    }
+
+    #[test]
+    fn unity_editor_path_is_reachable_and_editable_on_small_windows() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let label = tr("Unity Editor (executable or editors folder)");
+        for size in [vec2(480.0, 320.0), vec2(800.0, 300.0), vec2(640.0, 400.0)] {
+            let app = crate::screens::test_app(home.path(), true);
+            let mut harness = crate::screens::harness(app, size);
+            harness.state_mut().dialog = Some(Dialog::Settings { draft: Box::new(Settings::default()), page: SettingsPage::Tools });
+            harness.run_steps(5);
+            let modal = harness.ctx.memory(|memory| memory.area_rect(Id::new("settings"))).unwrap();
+            let field = || egui_kittest::kittest::By::new().label(label).role(egui::accesskit::Role::TextInput);
+            let start = harness.get(field()).rect();
+            let first_browse = harness.get_all_by_label(tr("Browse…")).next().unwrap().rect().center();
+            harness.input_mut().events.push(egui::Event::PointerMoved(first_browse));
+            harness.input_mut().events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: vec2(0.0, -1000.0),
+                phase: egui::TouchPhase::Move,
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(20);
+            let rect = harness.get(field()).rect();
+            let ok_top = harness.get_by_label(tr("OK")).rect().top();
+            assert!(rect.top() >= modal.top() && rect.bottom() <= ok_top && rect.left() >= modal.left() && rect.right() <= modal.right(), "Unity field hidden at {size:?}: {rect:?} (started at {start:?}, footer at {ok_top})");
+            assert!(rect.width() > 60.0, "Unity field too narrow at {size:?}: {rect:?}");
+            // Click with real pointer events: a field still clipped by the scroll area would not take focus.
+            for pressed in [true, false] {
+                harness.input_mut().events.push(egui::Event::PointerButton { pos: rect.center(), button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+            }
+            harness.run_steps(2);
+            harness.input_mut().events.push(egui::Event::Text("/opt/Unity/Hub/Editor".into()));
+            harness.run_steps(2);
+            harness.get_by_label(tr("OK")).click();
+            harness.run_steps(2);
+            assert!(harness.state().dialog.is_none(), "OK must close settings at {size:?}");
+            assert_eq!(harness.state().settings.unity_editor_path, Some(PathBuf::from("/opt/Unity/Hub/Editor")), "at {size:?}");
         }
     }
 
@@ -1883,12 +1940,15 @@ mod sdk_settings_return_tests {
             h.get_by_label(tr("Manage project SDK…")).click();
             h.run_steps(3);
             assert!(matches!(h.state().dialog, Some(Dialog::SdkSelection { .. })));
+            // The chooser grows once SDK discovery finishes, moving its buttons: wait for that
+            // before clicking, or a real pointer click lands where the button used to be.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while h.get_by_role(egui::accesskit::Role::ComboBox).accesskit_node().is_disabled() && std::time::Instant::now() < deadline {
+                h.run_steps(1);
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            h.run_steps(2);
             if save {
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-                while h.get_by_role(egui::accesskit::Role::ComboBox).accesskit_node().is_disabled() && std::time::Instant::now() < deadline {
-                    h.run_steps(1);
-                    std::thread::sleep(std::time::Duration::from_millis(5));
-                }
                 h.get_by_role(egui::accesskit::Role::ComboBox).click();
                 h.run_steps(2);
                 h.get_by_label("10.0.100").click();

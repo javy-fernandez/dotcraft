@@ -1,5 +1,6 @@
 //! Core services of DotCraft without UI: the shared async runtime, inboxes that wake the UI,
-//! settings and per-workspace sessions, the workspace's file tree and file watching.
+//! settings and per-workspace sessions, the workspace's file tree, file watching and Unity
+//! project detection.
 
 pub mod editorconfig;
 pub mod inbox;
@@ -8,6 +9,7 @@ pub mod paths;
 pub mod runtime;
 pub mod session;
 pub mod settings;
+pub mod unity;
 pub mod watch;
 pub mod workspace;
 

@@ -57,6 +57,9 @@ pub struct Settings {
     /// Explicit path to the Roslyn language server DLL or executable.
     pub roslyn_path: Option<PathBuf>,
     pub netcoredbg_path: Option<PathBuf>,
+    /// Unity editor for Open in Unity Editor: an executable (or `Unity.app`) used for every
+    /// project, or a folder of version-named installations searched before Unity Hub's.
+    pub unity_editor_path: Option<PathBuf>,
     /// Most recent first.
     pub recent_workspaces: Vec<PathBuf>,
     /// Files opened in the editor, most recent first (File › Open Recent).
@@ -105,6 +108,7 @@ impl Default for Settings {
             dotnet_path: None,
             roslyn_path: None,
             netcoredbg_path: None,
+            unity_editor_path: None,
             recent_workspaces: Vec::new(),
             recent_files: Vec::new(),
             reopen_last: true,
@@ -169,6 +173,9 @@ mod tests {
         assert_eq!(s.editor_font_size, 15.0);
         assert_eq!(s.right_margin, 120);
         assert!(s.show_debug_inline_values);
+        assert_eq!(s.unity_editor_path, None);
+        let s: Settings = serde_json::from_str(r#"{"unity_editor_path": "/opt/Unity/Editor/Unity"}"#).unwrap();
+        assert_eq!(s.unity_editor_path, Some(PathBuf::from("/opt/Unity/Editor/Unity")));
     }
 
     #[test]

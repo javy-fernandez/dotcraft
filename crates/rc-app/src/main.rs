@@ -19,6 +19,7 @@ mod appsettings_insight;
 mod item_templates;
 mod runner;
 mod search;
+mod unity;
 mod vcs;
 mod work_items;
 #[cfg(test)]

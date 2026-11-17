@@ -798,7 +798,15 @@
     "{packages} packages, {edges} dependencies": "{packages} pacotes, {edges} dependências",
     "Select an existing .sln or .slnx solution": "Selecione uma solução .sln ou .slnx existente",
     "Show inline variable values while debugging": "Mostrar valores de variáveis embutidos durante a depuração",
-    "Show Code Vision": "Mostrar Code Vision"
+    "Show Code Vision": "Mostrar Code Vision",
+    "Open in Unity Editor": "Abrir no Unity Editor",
+    "Unity Editor (executable or editors folder)": "Unity Editor (executável ou pasta de editores)",
+    "The open project is not a Unity project": "O projeto aberto não é um projeto Unity",
+    "Opening {project} in the Unity Editor": "Abrindo {project} no Unity Editor",
+    "Could not start the Unity Editor: {error}": "Não foi possível iniciar o Unity Editor: {error}",
+    "ProjectSettings/ProjectVersion.txt has no Unity Editor version. Choose a Unity Editor in Settings › Tools.": "ProjectSettings/ProjectVersion.txt não indica a versão do Unity Editor. Escolha um Unity Editor em Configurações › Ferramentas.",
+    "The Unity Editor set in Settings › Tools was not found: {path}": "O Unity Editor definido em Configurações › Ferramentas não foi encontrado: {path}",
+    "Unity {version} is not installed. Install it with Unity Hub or choose a Unity Editor in Settings › Tools.": "O Unity {version} não está instalado. Instale-o com o Unity Hub ou escolha um Unity Editor em Configurações › Ferramentas."
   },
   "terminal": {
     "Local": "Local",

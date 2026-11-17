@@ -1,5 +1,6 @@
 //! The workspace file index: every file under the root (honouring `.gitignore`, `.ignore` and
-//! global git excludes, skipping build and tool folders), walked in parallel on a background
+//! global git excludes, skipping build and tool folders and, in Unity project roots, the
+//! folders Unity generates), walked in parallel on a background
 //! thread and then patched from file-system events. Readers take an immutable
 //! [`IndexSnapshot`] (an `Arc`), so searching never holds a lock.
 
@@ -7,7 +8,7 @@ use ignore::{WalkBuilder, WalkState};
 use parking_lot::Mutex;
 use rc_core::Waker;
 use rc_core::watch::FsEvent;
-use rc_core::workspace::{HIDDEN_DIRS, is_hidden};
+use rc_core::workspace::{HIDDEN_DIRS, is_hidden_in};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -166,7 +167,7 @@ pub(crate) fn walk_builder(start: &Path) -> WalkBuilder {
         .follow_links(true)
         .filter_entry(|e| {
             let is_dir = e.file_type().is_some_and(|t| t.is_dir());
-            e.depth() == 0 || !is_hidden(&e.file_name().to_string_lossy(), is_dir)
+            e.depth() == 0 || !is_hidden_in(e.path().parent().unwrap_or(e.path()), &e.file_name().to_string_lossy(), is_dir)
         });
     b
 }
@@ -360,6 +361,9 @@ fn apply_events(shared: &Shared, events: &[FsEvent]) {
         }
         // Rebuilt from the root as given, so a canonical event path compares equal below.
         let path = &shared.root.join(&rel);
+        if rc_core::unity::in_generated_dir(&shared.root, path) {
+            continue;
+        }
         let exists = std::fs::symlink_metadata(path).is_ok();
         if matches!(ev, FsEvent::Removed(_)) || !exists {
             changed |= remove_path(&mut files, &rel);

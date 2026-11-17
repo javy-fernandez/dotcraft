@@ -180,6 +180,8 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
             app.focus_editor = false;
         }
         if command(ui, "NuGet", Some(ico::PACKAGE), app.workspace.is_some()) { app.dock.show(ToolWindow::Nuget); }
+        // Only Unity projects get the entry, so .NET workspaces keep their menu unchanged.
+        if app.unity_project().is_some() && command(ui, tr("Open in Unity Editor"), Some(ico::OPEN), true) { app.open_in_unity_editor(); }
     }
     if category == tr("Help") && command(ui, tr("About DotCraft"), Some(ico::INFO), true) { app.dialog = Some(Dialog::About); }
 }
@@ -339,6 +341,35 @@ mod tests {
         harness.get_by_label(tr(".NET CLI")).click();
         harness.run_steps(2);
         assert!(matches!(harness.state().dialog, Some(Dialog::Settings { page: SettingsPage::Tools, .. })));
+    }
+
+    #[test]
+    fn open_in_unity_editor_is_offered_only_for_unity_projects() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let plain = home.path().join("Demo");
+        std::fs::create_dir(&plain).unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(&plain).unwrap(), solution: None });
+        let mut harness = harness_app(app, egui::vec2(640.0, 320.0));
+        harness.get_by_label(tr("Tools")).click();
+        harness.run_steps(3);
+        assert!(harness.query_by_label(tr("Open in Unity Editor")).is_none());
+
+        let game = home.path().join("Game");
+        std::fs::create_dir_all(game.join("Assets")).unwrap();
+        std::fs::create_dir_all(game.join("ProjectSettings")).unwrap();
+        std::fs::write(game.join("ProjectSettings/ProjectVersion.txt"), "m_EditorVersion: 1999.1.0f1\n").unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(&game).unwrap(), solution: None });
+        let mut harness = harness_app(app, egui::vec2(640.0, 320.0));
+        harness.get_by_label(tr("Tools")).click();
+        harness.run_steps(3);
+        harness.get_by_label(tr("Open in Unity Editor")).click();
+        harness.run_steps(2);
+        // No editor of that version exists, so the click explains what to install.
+        let notice = harness.state().notices.last().expect("a notice");
+        assert!(notice.error && notice.text.contains("1999.1.0f1"), "{}", notice.text);
     }
 
     #[test]
