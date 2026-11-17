@@ -136,6 +136,7 @@ pub struct DotCraftApp {
     pub runner: Runner,
     user_secrets: crate::user_secrets::UserSecrets,
     pub docker_services: crate::docker_services::DockerServices,
+    pub docker_runs: crate::docker_runs::DockerRuns,
     pub debugger: crate::debugger::Debugger,
     window_title: String,
     pub files: crate::search::Files,
@@ -254,6 +255,7 @@ impl DotCraftApp {
             runner: Runner::new(waker.clone()),
             user_secrets: crate::user_secrets::UserSecrets::new(waker.clone()),
             docker_services: crate::docker_services::DockerServices::new(waker.clone()),
+            docker_runs: crate::docker_runs::DockerRuns::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
             files: crate::search::Files::new(),
@@ -416,6 +418,7 @@ impl DotCraftApp {
         self.ef_options = session.ef.clone();
         self.ef = None;
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
+        self.docker_runs.discover(ws.root.clone(), session.run_configuration.clone());
         let root = ws.root.clone();
         self.workspace = Some(WorkspaceState { ws, solution });
         let workspace_projects = self.solution_projects();
@@ -531,8 +534,25 @@ impl DotCraftApp {
                 });
                 self.dialog = Some(Dialog::Compound { old: Some(name.clone()), name, members: all.collect() });
             }
+            Some(crate::runner::RunConfig { kind: crate::runner::ConfigKind::Docker { .. }, .. }) => self.notify(tr("Docker configurations are derived from their files"), false),
             Some(_) => self.notify(tr("Test configurations have nothing to edit"), false),
             None => self.notify(tr("There is no run configuration to edit"), false),
+        }
+    }
+
+    pub fn run_selected_configuration(&mut self) {
+        self.save_all_docs();
+        match self.runner.selected_config().cloned() {
+            Some(config @ crate::runner::RunConfig { kind: crate::runner::ConfigKind::Docker { .. }, .. }) => {
+                self.docker_runs.start(config);
+                self.dock.show(ToolWindow::Run);
+            }
+            _ => {
+                self.docker_runs.stop();
+                self.docker_runs.active = false;
+                let outs = self.runner.run_selected();
+                crate::ui::run_windows::handle_outputs(self, outs);
+            }
         }
     }
 
@@ -573,6 +593,7 @@ impl DotCraftApp {
         self._filter_watcher = None;
         self.insight.stop();
         self.user_secrets.cancel();
+        self.docker_runs.clear();
         self.debugger.stop();
         self.runner.stop_all();
         self.runner.clear();
@@ -1123,9 +1144,7 @@ impl DotCraftApp {
                 }
             }
             Action::Run => {
-                self.save_all_docs();
-                let outs = self.runner.run_selected();
-                crate::ui::run_windows::handle_outputs(self, outs);
+                self.run_selected_configuration();
             }
             Action::RunTests => {
                 self.save_all_docs();
@@ -1138,6 +1157,7 @@ impl DotCraftApp {
                 if self.debugger.active() || self.debugger.downloading.is_some() {
                     self.debugger.stop();
                 } else {
+                    self.docker_runs.stop();
                     self.runner.stop_all();
                 }
             }
@@ -1658,6 +1678,7 @@ impl DotCraftApp {
             }
             let remembered = self.runner.selected_config().map(|c| c.name.clone());
             self.runner.set_workspace(Some(&solution), &[], &dotnet_path(&self.settings), remembered.as_deref());
+            self.docker_runs.discover(root.clone(), remembered);
             if target.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("slnf")) {
                 self.insight.start(&root, Some(&target), Vec::new(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
             }
@@ -1850,6 +1871,7 @@ impl eframe::App for DotCraftApp {
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
         self.docker_services.poll();
+        self.docker_runs.poll(&mut self.runner);
         // Monitoring follows the selected Run tab's process (or the last one started).
         let target = self.runner.runs.get(self.runner.active_run).filter(|r| r.running()).or_else(|| self.runner.runs.iter().rev().find(|r| r.running()));
         self.monitor.follow(target.and_then(|r| Some((r.name.clone(), r.handle.as_ref()?.pid()?))));

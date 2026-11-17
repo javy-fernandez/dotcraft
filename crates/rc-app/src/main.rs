@@ -12,6 +12,7 @@ mod debugger;
 mod user_secrets;
 mod docker_services;
 mod dependency_diagram;
+mod docker_runs;
 mod database;
 mod insight;
 mod package_insight;
