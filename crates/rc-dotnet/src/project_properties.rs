@@ -86,16 +86,7 @@ impl ProjectPropertiesEditor {
             doc.root_element().tag_name().name() == "Project",
             "edited project XML is invalid"
         );
-        let parent = path
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("project has no parent directory"))?;
-        let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-        use std::io::Write;
-        temporary.write_all(updated.as_bytes())?;
-        temporary
-            .as_file()
-            .set_permissions(std::fs::metadata(path)?.permissions())?;
-        temporary.persist(path).map_err(|error| error.error)?;
+        rc_core::paths::write_atomic(path, updated.as_bytes())?;
         Ok(updated)
     }
 
