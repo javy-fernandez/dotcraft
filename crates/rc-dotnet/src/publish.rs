@@ -168,17 +168,7 @@ impl PublishProfile {
                 text
             }
         };
-        let parent = path.parent().unwrap();
-        std::fs::create_dir_all(parent)?;
-        let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-        use std::io::Write;
-        temporary.write_all(text.as_bytes())?;
-        if let Ok(metadata) = std::fs::metadata(&path) {
-            temporary
-                .as_file()
-                .set_permissions(metadata.permissions())?;
-        }
-        temporary.persist(&path).map_err(|error| error.error)?;
+        rc_core::paths::write_atomic(&path, text.as_bytes())?;
         Ok(path)
     }
 
