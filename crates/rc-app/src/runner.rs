@@ -34,6 +34,7 @@ impl RunConfig {
         match &self.kind {
             ConfigKind::App { web: true, .. } => rc_kit::ico::CONFIG_WEB,
             ConfigKind::App { .. } => rc_kit::ico::CONFIG_APP,
+            ConfigKind::Godot { editor: true, .. } => rc_kit::ico::EDIT,
             ConfigKind::Godot { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Tests { .. } => rc_kit::ico::RUN_ALL,
             ConfigKind::Compound { .. } => rc_kit::ico::TW_SERVICES,
