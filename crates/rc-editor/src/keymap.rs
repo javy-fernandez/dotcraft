@@ -1,4 +1,4 @@
-//! Rider keymaps: every shortcut of the IDE maps to an [`Action`]. The editor handles the
+//! IDE keymaps: every shortcut of the IDE maps to an [`Action`]. The editor handles the
 //! editing actions itself and reports the rest to the application.
 
 use egui::{Key, Modifiers};
@@ -234,6 +234,10 @@ pub enum KeymapKind {
     Rider,
     /// Visual Studio keymap (Windows).
     VisualStudio,
+    /// Visual Studio Code keymap on macOS.
+    VsCodeMac,
+    /// Visual Studio Code keymap on Windows/Linux.
+    VsCode,
 }
 
 /// A key with modifiers. `cmd` is ⌘ on macOS and Ctrl elsewhere (egui's `command`).
@@ -258,6 +262,8 @@ impl Keymap {
             KeymapKind::RiderMac => mac_bindings(),
             KeymapKind::Rider => win_bindings(false),
             KeymapKind::VisualStudio => win_bindings(true),
+            KeymapKind::VsCodeMac => vscode_bindings(true),
+            KeymapKind::VsCode => vscode_bindings(false),
         };
         Keymap { kind, bindings }
     }
@@ -271,7 +277,7 @@ impl Keymap {
     /// The first shortcut of `action`, formatted for menus and tooltips (⌘⇧F, Ctrl+Shift+F).
     pub fn shortcut_text(&self, action: Action) -> Option<String> {
         let (chord, _) = self.bindings.iter().find(|(_, a)| *a == action)?;
-        Some(format_chord(*chord, self.kind == KeymapKind::RiderMac))
+        Some(format_chord(*chord, matches!(self.kind, KeymapKind::RiderMac | KeymapKind::VsCodeMac)))
     }
 
     pub fn chord(&self, action: Action) -> Option<Chord> {
@@ -681,6 +687,92 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
     v
 }
 
+/// Adapt the shortcuts DotCraft supports from VS Code's platform defaults. Actions without a
+/// one-stroke VS Code equivalent keep their Rider binding until multi-stroke chords exist.
+fn vscode_bindings(mac: bool) -> Vec<(Chord, Action)> {
+    use Action::*;
+    let mut bindings = if mac { mac_bindings() } else { win_bindings(false) };
+    let command = m(false, !mac, false, mac);
+    let command_shift = m(false, !mac, true, mac);
+    let command_alt = m(true, !mac, false, mac);
+    let ctrl = m(false, true, false, false);
+    let ctrl_shift = m(false, true, true, false);
+    let alt = m(true, false, false, false);
+    let shift_alt = m(true, false, true, false);
+    let bind = |bindings: &mut Vec<(Chord, Action)>, key, mods, action| {
+        let chord = Chord { key, mods };
+        bindings.retain(|(existing, bound)| *existing != chord && *bound != action);
+        bindings.push((chord, action));
+    };
+
+    bind(&mut bindings, Key::K, command_shift, DeleteLine);
+    bind(&mut bindings, Key::Enter, command, StartNewLine);
+    bind(&mut bindings, Key::Enter, command_shift, StartNewLineBefore);
+    bind(&mut bindings, Key::ArrowUp, alt, MoveLineUp);
+    bind(&mut bindings, Key::ArrowDown, alt, MoveLineDown);
+    bind(&mut bindings, Key::ArrowDown, if cfg!(target_os = "linux") { m(true, true, true, false) } else { shift_alt }, DuplicateLine);
+    bind(&mut bindings, Key::D, command, SelectNextOccurrence);
+    bind(&mut bindings, Key::L, command_shift, SelectAllOccurrences);
+    bind(&mut bindings, Key::U, command, UnselectOccurrence);
+    bind(&mut bindings, Key::Slash, command, CommentLine);
+    bind(&mut bindings, Key::A, if cfg!(target_os = "linux") { ctrl_shift } else { shift_alt }, CommentBlock);
+    bind(&mut bindings, Key::OpenBracket, if mac { command_alt } else { command_shift }, Fold);
+    bind(&mut bindings, Key::CloseBracket, if mac { command_alt } else { command_shift }, Unfold);
+    bind(&mut bindings, Key::Space, ctrl, Complete);
+    bind(&mut bindings, Key::Space, command_shift, ParameterInfo);
+    bind(&mut bindings, Key::F12, m(false, false, false, false), GotoDeclaration);
+    bind(&mut bindings, Key::Period, command, ShowIntentions);
+    bind(&mut bindings, Key::F12, m(false, false, true, false), FindUsages);
+    bind(&mut bindings, Key::F2, m(false, false, false, false), Rename);
+    bind(&mut bindings, Key::F, shift_alt, Reformat);
+    if cfg!(target_os = "linux") {
+        bind(&mut bindings, Key::I, command_shift, Reformat);
+    }
+    bind(&mut bindings, Key::G, ctrl, GotoLine);
+    bind(&mut bindings, Key::F, command, Find);
+    bind(&mut bindings, Key::H, if mac { command_alt } else { command }, Replace);
+    bind(&mut bindings, Key::F8, m(false, false, false, false), NextError);
+    bind(&mut bindings, Key::F8, m(false, false, true, false), PreviousError);
+    bind(&mut bindings, Key::P, command, GotoFile);
+    bind(&mut bindings, Key::O, command_shift, GotoSymbol);
+    bind(&mut bindings, Key::T, command, GotoClass);
+    bind(&mut bindings, Key::P, command_shift, SearchEverywhere);
+    bind(&mut bindings, Key::F, command_shift, FindInFiles);
+    bind(&mut bindings, Key::H, command_shift, ReplaceInFiles);
+    bind(&mut bindings, Key::S, command, Save);
+    bind(&mut bindings, Key::Tab, ctrl, NextTab);
+    bind(&mut bindings, Key::Tab, ctrl_shift, PreviousTab);
+    bind(&mut bindings, Key::B, command_shift, Build);
+    bind(&mut bindings, Key::F5, m(false, false, false, false), Debug);
+    bind(&mut bindings, Key::F5, ctrl, Run);
+    bind(&mut bindings, Key::F5, m(false, false, true, false), StopRun);
+    bind(&mut bindings, Key::F10, m(false, false, false, false), StepOver);
+    bind(&mut bindings, Key::F11, m(false, false, false, false), StepInto);
+    bind(&mut bindings, Key::F11, m(false, false, true, false), StepOut);
+    bind(&mut bindings, Key::F9, m(false, false, false, false), ToggleBreakpoint);
+    bind(&mut bindings, Key::Comma, command, ShowSettings);
+    bind(&mut bindings, Key::E, command_shift, ToggleProjectWindow);
+    bind(&mut bindings, Key::G, ctrl_shift, ToggleGitWindow);
+    bind(&mut bindings, Key::Backtick, ctrl, ToggleTerminal);
+    bind(&mut bindings, Key::M, command_shift, ToggleProblems);
+    bind(&mut bindings, Key::Equals, command, ZoomIn);
+    bind(&mut bindings, Key::Minus, command, ZoomOut);
+    bind(&mut bindings, Key::Num0, command, ZoomReset);
+    if mac {
+        bind(&mut bindings, Key::Minus, ctrl, NavigateBack);
+        bind(&mut bindings, Key::Minus, ctrl_shift, NavigateForward);
+        bind(&mut bindings, Key::S, command_alt, SaveAll);
+        bind(&mut bindings, Key::W, command, CloseTab);
+    } else {
+        bind(&mut bindings, Key::Y, ctrl, Redo);
+        bind(&mut bindings, Key::ArrowLeft, if cfg!(target_os = "windows") { alt } else { command_alt }, NavigateBack);
+        bind(&mut bindings, Key::ArrowRight, if cfg!(target_os = "windows") { alt } else { command_alt }, NavigateForward);
+        bind(&mut bindings, if cfg!(target_os = "windows") { Key::F4 } else { Key::W }, ctrl, CloseTab);
+        bindings.retain(|(_, action)| *action != SaveAll);
+    }
+    bindings
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -696,7 +788,7 @@ mod tests {
 
     #[test]
     fn no_chord_is_bound_twice() {
-        for kind in [KeymapKind::RiderMac, KeymapKind::Rider, KeymapKind::VisualStudio] {
+        for kind in [KeymapKind::RiderMac, KeymapKind::Rider, KeymapKind::VisualStudio, KeymapKind::VsCodeMac, KeymapKind::VsCode] {
             let k = Keymap::new(kind);
             for (i, (a, _)) in k.bindings.iter().enumerate() {
                 for (b, act) in &k.bindings[i + 1..] {
@@ -708,5 +800,21 @@ mod tests {
             }
         }
         assert_eq!(Keymap::new(KeymapKind::Rider).shortcut_text(Action::FindInFiles).as_deref(), Some("Ctrl+Shift+F"));
+    }
+
+    #[test]
+    fn vscode_presets_match_common_platform_shortcuts() {
+        let mac = Keymap::new(KeymapKind::VsCodeMac);
+        assert_eq!(mac.shortcut_text(Action::GotoFile).as_deref(), Some("⌘P"));
+        assert_eq!(mac.shortcut_text(Action::SearchEverywhere).as_deref(), Some("⇧⌘P"));
+        assert_eq!(mac.shortcut_text(Action::DeleteLine).as_deref(), Some("⇧⌘K"));
+        assert_eq!(mac.shortcut_text(Action::SaveAll).as_deref(), Some("⌥⌘S"));
+
+        let other = Keymap::new(KeymapKind::VsCode);
+        assert_eq!(other.shortcut_text(Action::GotoFile).as_deref(), Some("Ctrl+P"));
+        assert_eq!(other.shortcut_text(Action::SearchEverywhere).as_deref(), Some("Ctrl+Shift+P"));
+        assert_eq!(other.shortcut_text(Action::DeleteLine).as_deref(), Some("Ctrl+Shift+K"));
+        assert_eq!(other.shortcut_text(Action::SaveAll), None);
+        assert_eq!(other.lookup(Key::F9, m(false, false, false, false)), Some(Action::ToggleBreakpoint));
     }
 }
