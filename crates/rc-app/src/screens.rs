@@ -606,6 +606,15 @@ fn screens_insight() {
     }
     run_frames(&mut h, "actions", |a| matches!(a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { .. })) || a.notices.iter().any(|n| n.text.contains("context")));
     h.render().unwrap().save(out.join("actions-dark.png")).unwrap();
+    // Code Vision rows above the declarations of a class.
+    {
+        let app = h.state_mut();
+        app.dialog = None;
+        app.open_file(&fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs"));
+    }
+    run_frames(&mut h, "code vision", |a| a.docs.active_doc().is_some_and(|d| d.editor.code_vision.len() >= 2));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("code-vision-dark.png")).unwrap();
     h.state_mut().insight.stop();
 }
 

@@ -211,14 +211,12 @@ fn paint_code_vision(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m:
         if y + m.row_h < text_rect.top() || y > text_rect.bottom() {
             continue;
         }
-        let mut x = text_rect.left() + 6.0;
-        let (name_start, name_end) = commands::word_at(state.buffer.rope(), position);
-        if name_start < name_end {
-            let name = state.buffer.rope().slice(name_start..name_end).to_string();
-            let prefix = ui.fonts_mut(|fonts| fonts.layout_no_wrap(format!("{name}:"), font.clone(), pal.text));
-            painter.galley(pos2(x, y + (m.row_h - prefix.size().y) / 2.0), prefix.clone(), pal.text);
-            x += prefix.size().x + 10.0;
-        }
+        // Aligned with the declaration's indentation, as Rider does.
+        let rope = state.buffer.rope();
+        let line_start = rope.line_to_char(line);
+        let indent = rope.line(line).chars().take_while(|c| *c == ' ' || *c == '\t').count();
+        let column = commands::visual_col(rope, line_start + indent, state.indent.tab_width);
+        let mut x = text_rect.left() + TEXT_PAD + column as f32 * m.char_w - state.scroll.x;
         for (index, vision) in labels.iter().enumerate() {
             let galley = ui.fonts_mut(|fonts| fonts.layout_no_wrap(vision.title.clone(), font.clone(), pal.muted));
             let available = text_rect.right() - 6.0 - x;
@@ -226,7 +224,7 @@ fn paint_code_vision(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m:
                 break;
             }
             let width = (galley.size().x + 10.0).min(available);
-            let rect = Rect::from_min_size(pos2(x, y + 1.0), vec2(width, m.row_h - 2.0));
+            let rect = Rect::from_min_size(pos2(x - 5.0, y + 1.0), vec2(width, m.row_h - 2.0));
             let response = ui.interact(rect, Id::new(("code_vision", state.id, line, position, index)), Sense::click());
             painter.rect_filled(rect, 3.0, if response.hovered() { pal.row_hover } else { pal.editor_bg });
             painter.galley(rect.min + vec2(5.0, (rect.height() - galley.size().y) / 2.0), galley, pal.muted);
