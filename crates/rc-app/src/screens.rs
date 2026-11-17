@@ -906,6 +906,42 @@ fn screens_monitoring() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes target/snapshots/benchmarks-*.png"]
+fn screens_benchmarks() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let src = tempfile::tempdir().unwrap();
+    let bench = dunce::canonicalize(src.path()).unwrap().join("SortBench.cs");
+    std::fs::write(&bench, "using BenchmarkDotNet.Attributes;\n\nnamespace Perf;\n\n[MemoryDiagnoser]\npublic class SortBench\n{\n    private readonly int[] data = Enumerable.Range(0, 1000).Reverse().ToArray();\n\n    [Benchmark]\n    public int[] Quick() => data.Order().ToArray();\n\n    [Benchmark]\n    public int[] Merge() => data.OrderBy(x => x).ToArray();\n\n    [Benchmark(Baseline = true)]\n    public int[] ArraySort() { var copy = (int[])data.Clone(); Array.Sort(copy); return copy; }\n}\n").unwrap();
+    for (dark, width) in [(true, 1440.0), (false, 900.0)] {
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+        app.open_file(&bench);
+        app.dock.show(crate::toolwindow::ToolWindow::Benchmarks);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Benchmarks, 340.0);
+        let b = &mut app.benchmarks;
+        b.status = rc_kit::i18n::tr("Benchmark results ready").into();
+        let row = |name: &str, mean: f64, error: f64, stddev: f64, bytes: f64| crate::benchmarks::BenchmarkResult { name: name.into(), mean_ns: mean, error_ns: Some(error), stddev_ns: Some(stddev), allocated_bytes: Some(bytes) };
+        b.results = vec![
+            row("SortBench.ArraySort: DefaultJob", 3_412.7, 21.4, 18.9, 4_024.0),
+            row("SortBench.Merge: DefaultJob", 18_904.2, 140.8, 131.7, 12_168.0),
+            row("SortBench.Quick: DefaultJob", 9_870.5, 62.3, 58.1, 8_096.0),
+        ];
+        b.output = ["// Validating benchmarks:", "// ***** BenchmarkRunner: Start   *****", "// ***** Found 3 benchmark(s) in total *****", "// * Export *", "  BenchmarkDotNet.Artifacts/results/Perf.SortBench-report-full-compressed.json", "// ***** BenchmarkRunner: End *****", "Global total time: 00:01:12 (72.4 sec), executed benchmarks: 3"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        b.show_output = dark;
+        let mut h = harness(app, vec2(width, 800.0));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("benchmarks-{}.png", if dark { "dark" } else { "light-narrow" }))).unwrap();
+    }
+}
+
+#[test]
 #[ignore = "Requires a GPU and the .NET SDK; runs Shop.Api and writes target/snapshots/monitoring-live-dark.png"]
 fn screens_monitoring_live() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
