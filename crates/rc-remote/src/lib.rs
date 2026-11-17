@@ -8,12 +8,16 @@ use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
     process::Stdio,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, ChildStdout, Command},
-    sync::mpsc,
+    sync::{Notify, mpsc},
     task::JoinHandle,
 };
 
@@ -328,58 +332,131 @@ async fn perform(operation: Operation) -> Result<Value> {
             if program.is_empty() || timeout_ms == 0 || timeout_ms > 120_000 {
                 bail!("invalid process request");
             }
-            let mut cmd = Command::new(program);
-            cmd.args(args)
-                .current_dir(PathBuf::from(cwd))
-                .envs(env)
-                .stdin(Stdio::null())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .kill_on_drop(true);
-            let mut child = cmd.spawn()?;
-            let stdout = child.stdout.take().context("missing stdout")?;
-            let stderr = child.stderr.take().context("missing stderr")?;
-            let output = tokio::time::timeout(Duration::from_millis(timeout_ms), async {
-                let (out, err, status) =
-                    tokio::try_join!(capture_limited(stdout), capture_limited(stderr), async {
-                        Ok::<_, anyhow::Error>(child.wait().await?)
-                    })?;
-                Result::<_>::Ok((out, err, status.code()))
-            })
-            .await;
-            let output = match output {
-                Ok(Ok(output)) => output,
-                Ok(Err(error)) => {
-                    let _ = child.kill().await;
-                    return Err(error);
-                }
-                Err(_) => {
-                    let _ = child.kill().await;
-                    bail!("process timed out");
-                }
-            };
-            Ok(Value::Exit {
-                code: output.2,
-                stdout: STANDARD.encode(output.0),
-                stderr: STANDARD.encode(output.1),
-            })
+            run_process(program, args, cwd, env, timeout_ms).await
         }
         Operation::Cancel { .. } => bail!("cancel is handled by the server"),
     }
 }
 
-async fn capture_limited<R: AsyncRead + Unpin>(mut reader: R) -> Result<Vec<u8>> {
-    let mut output = Vec::new();
-    let mut buffer = [0u8; 8192];
-    loop {
-        let count = reader.read(&mut buffer).await?;
-        if count == 0 {
-            return Ok(output);
+/// Runs a process in its own process group. Dropping the future (a cancelled request), a
+/// timeout or an output overflow kills the whole group, so `dotnet test` cannot leave a
+/// testhost running on the remote machine.
+async fn run_process(
+    program: String,
+    args: Vec<String>,
+    cwd: String,
+    env: Vec<(String, String)>,
+    timeout_ms: u64,
+) -> Result<Value> {
+    let mut cmd = Command::new(program);
+    cmd.args(args)
+        .current_dir(PathBuf::from(cwd))
+        .envs(env)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(unix)]
+    cmd.process_group(0);
+    let mut child = no_window(cmd).spawn()?;
+    let mut tree = ProcessTree {
+        pid: child.id(),
+        armed: true,
+    };
+    let overflow = Arc::new(Notify::new());
+    let mut out = Capture::start(child.stdout.take().context("missing stdout")?, &overflow);
+    let mut err = Capture::start(child.stderr.take().context("missing stderr")?, &overflow);
+    let status = tokio::select! {
+        status = child.wait() => status?,
+        _ = overflow.notified() => bail!("process output exceeds 1 MiB limit"),
+        _ = tokio::time::sleep(Duration::from_millis(timeout_ms)) => bail!("process timed out"),
+    };
+    // The process exited on its own: build servers and MSBuild nodes it started may live on
+    // by design, and may keep its pipes open. Read what is left for a moment, then stop.
+    tree.armed = false;
+    let _ = tokio::time::timeout(Duration::from_millis(400), async {
+        let _ = (&mut out.task).await;
+        let _ = (&mut err.task).await;
+    })
+    .await;
+    Ok(Value::Exit {
+        code: status.code(),
+        stdout: STANDARD.encode(out.take()?),
+        stderr: STANDARD.encode(err.take()?),
+    })
+}
+
+/// Kills the process group of a child when dropped while still armed.
+struct ProcessTree {
+    #[cfg_attr(not(unix), allow(dead_code))]
+    pid: Option<u32>,
+    armed: bool,
+}
+
+impl Drop for ProcessTree {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        if self.armed
+            && let Some(pid) = self.pid
+        {
+            // SAFETY: plain syscall; the group was created for this child, which has not
+            // been reaped yet, so its id cannot have been reused.
+            unsafe {
+                libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+            }
         }
-        if output.len() + count > MAX_BYTES {
+        // Elsewhere `kill_on_drop` stops the direct child.
+    }
+}
+
+/// Reads one output stream into a buffer capped at `MAX_BYTES`, signalling `overflow`
+/// when the process writes more.
+struct Capture {
+    data: Arc<Mutex<Vec<u8>>>,
+    overflowed: Arc<AtomicBool>,
+    task: JoinHandle<()>,
+}
+
+impl Capture {
+    fn start<R: AsyncRead + Unpin + Send + 'static>(mut reader: R, overflow: &Arc<Notify>) -> Self {
+        let data = Arc::new(Mutex::new(Vec::new()));
+        let overflowed = Arc::new(AtomicBool::new(false));
+        let (buffer, flag, overflow) = (data.clone(), overflowed.clone(), overflow.clone());
+        let task = tokio::spawn(async move {
+            let mut chunk = [0u8; 8192];
+            while let Ok(count) = reader.read(&mut chunk).await {
+                if count == 0 {
+                    return;
+                }
+                let mut buffer = buffer.lock().unwrap_or_else(|e| e.into_inner());
+                if buffer.len() + count > MAX_BYTES {
+                    flag.store(true, Ordering::SeqCst);
+                    overflow.notify_one();
+                    return;
+                }
+                buffer.extend_from_slice(&chunk[..count]);
+            }
+        });
+        Self {
+            data,
+            overflowed,
+            task,
+        }
+    }
+
+    fn take(&self) -> Result<Vec<u8>> {
+        if self.overflowed.load(Ordering::SeqCst) {
             bail!("process output exceeds 1 MiB limit");
         }
-        output.extend_from_slice(&buffer[..count]);
+        Ok(std::mem::take(
+            &mut self.data.lock().unwrap_or_else(|e| e.into_inner()),
+        ))
+    }
+}
+
+impl Drop for Capture {
+    fn drop(&mut self) {
+        self.task.abort();
     }
 }
 
@@ -769,5 +846,95 @@ mod limits_tests {
         .unwrap_err();
         assert!(error.to_string().contains("output exceeds"));
         assert!(start.elapsed() < Duration::from_secs(4));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod process_tree_tests {
+    use super::*;
+
+    fn alive(pid: i32) -> bool {
+        // SAFETY: signal 0 only checks that the process exists.
+        unsafe { libc::kill(pid, 0) == 0 }
+    }
+
+    async fn wait_gone(pid: i32) -> bool {
+        for _ in 0..40 {
+            if !alive(pid) {
+                return true;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        false
+    }
+
+    async fn read_pid(path: &std::path::Path) -> i32 {
+        for _ in 0..40 {
+            if let Ok(text) = std::fs::read_to_string(path)
+                && let Ok(pid) = text.trim().parse()
+            {
+                return pid;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("the script did not write its pid")
+    }
+
+    fn sleeper(dir: &std::path::Path, timeout_ms: u64) -> Operation {
+        Operation::Run {
+            program: "sh".into(),
+            args: vec!["-c".into(), "sleep 30 & echo $! > pid; wait".into()],
+            cwd: dir.display().to_string(),
+            env: vec![],
+            timeout_ms,
+        }
+    }
+
+    #[tokio::test]
+    async fn cancelling_a_run_kills_its_grandchildren() {
+        let dir = tempfile::tempdir().unwrap();
+        let task = tokio::spawn(perform(sleeper(dir.path(), 20_000)));
+        let pid = read_pid(&dir.path().join("pid")).await;
+        assert!(alive(pid));
+        task.abort();
+        assert!(wait_gone(pid).await, "the grandchild survived the cancel");
+    }
+
+    #[tokio::test]
+    async fn a_timeout_kills_its_grandchildren() {
+        let dir = tempfile::tempdir().unwrap();
+        let task = tokio::spawn(perform(sleeper(dir.path(), 1_500)));
+        let pid = read_pid(&dir.path().join("pid")).await;
+        let error = task.await.unwrap().unwrap_err();
+        assert!(error.to_string().contains("timed out"));
+        assert!(wait_gone(pid).await, "the grandchild survived the timeout");
+    }
+
+    /// Like an MSBuild node, a background process keeps the pipes open after the command
+    /// exits: the run still finishes as soon as the command does, and leaves it running.
+    #[tokio::test]
+    async fn background_processes_holding_the_pipes_do_not_stall_the_run() {
+        let start = std::time::Instant::now();
+        let Value::Exit { code, stdout, .. } = perform(Operation::Run {
+            program: "sh".into(),
+            args: vec!["-c".into(), "sleep 30 & echo $!".into()],
+            cwd: std::env::temp_dir().display().to_string(),
+            env: vec![],
+            timeout_ms: 20_000,
+        })
+        .await
+        .unwrap() else {
+            panic!("run response")
+        };
+        assert!(start.elapsed() < Duration::from_secs(3));
+        assert_eq!(code, Some(0));
+        let pid: i32 = String::from_utf8(STANDARD.decode(stdout).unwrap())
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(alive(pid));
+        // SAFETY: the test's own background process.
+        unsafe { libc::kill(pid, libc::SIGKILL) };
     }
 }
