@@ -1684,7 +1684,22 @@
     "ilspycmd is not installed": "ilspycmd no está instalado",
     "{count} types": "{count} tipos",
     "Explore Assemblies…": "Explorar ensamblados…",
-    "Explore Assembly": "Explorar ensamblado"
+    "Explore Assembly": "Explorar ensamblado",
+    "Build C# Project": "Compilar proyecto C#",
+    "Rebuild C# Project": "Recompilar proyecto C#",
+    "Clean C# Project": "Limpiar proyecto C#",
+    "C# debugging requires a Godot .NET project": "Depurar C# requiere un proyecto Godot .NET",
+    "Choose a Godot game or scene configuration to debug": "Elige una configuración de juego o escena de Godot para depurar",
+    "Godot .NET executable": "Ejecutable de Godot .NET",
+    "Godot was not found. Install Godot .NET or configure its executable in Settings › Tools.": "No se encontró Godot. Instala Godot .NET o configura su ejecutable en Ajustes › Herramientas.",
+    "Open Godot Editor": "Abrir editor de Godot",
+    "Run Godot Project": "Ejecutar proyecto Godot",
+    "Run Current Godot Scene": "Ejecutar escena de Godot actual",
+    "Run Godot Scene: {scene}": "Ejecutar escena de Godot: {scene}",
+    "This Godot project has no C# project to build": "Este proyecto Godot no tiene un proyecto C# que compilar",
+    "{path} cannot run C# scripts. Choose a Godot .NET build in Settings › Tools.": "{path} no puede ejecutar scripts C#. Elige una versión de Godot .NET en Ajustes › Herramientas.",
+    "To edit Godot's C# scripts here, set Editor Settings › Dotnet › Editor › External Editor to Custom, Custom Exec Path to {path} and Custom Exec Path Args to {args}": "Para editar aquí los scripts C# de Godot, en Editor Settings › Dotnet › Editor pon External Editor en Custom, Custom Exec Path en {path} y Custom Exec Path Args en {args}",
+    "Starting {name}…": "Iniciando {name}…"
   },
   "launchprofileeditor": {
     "Add profile": "Añadir perfil",

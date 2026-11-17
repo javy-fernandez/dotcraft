@@ -1684,7 +1684,22 @@
     "ilspycmd is not installed": "未安装 ilspycmd",
     "{count} types": "{count} 个类型",
     "Explore Assemblies…": "浏览程序集…",
-    "Explore Assembly": "浏览程序集"
+    "Explore Assembly": "浏览程序集",
+    "Build C# Project": "生成 C# 项目",
+    "Rebuild C# Project": "重新生成 C# 项目",
+    "Clean C# Project": "清理 C# 项目",
+    "C# debugging requires a Godot .NET project": "调试 C# 需要 Godot .NET 项目",
+    "Choose a Godot game or scene configuration to debug": "请选择要调试的 Godot 游戏或场景配置",
+    "Godot .NET executable": "Godot .NET 可执行文件",
+    "Godot was not found. Install Godot .NET or configure its executable in Settings › Tools.": "未找到 Godot。请安装 Godot .NET，或在“设置 › 工具”中配置其可执行文件。",
+    "Open Godot Editor": "打开 Godot 编辑器",
+    "Run Godot Project": "运行 Godot 项目",
+    "Run Current Godot Scene": "运行当前 Godot 场景",
+    "Run Godot Scene: {scene}": "运行 Godot 场景：{scene}",
+    "This Godot project has no C# project to build": "此 Godot 项目没有可生成的 C# 项目",
+    "{path} cannot run C# scripts. Choose a Godot .NET build in Settings › Tools.": "{path} 无法运行 C# 脚本。请在“设置 › 工具”中选择 Godot .NET 版本。",
+    "To edit Godot's C# scripts here, set Editor Settings › Dotnet › Editor › External Editor to Custom, Custom Exec Path to {path} and Custom Exec Path Args to {args}": "要在此编辑 Godot 的 C# 脚本，请在 Editor Settings › Dotnet › Editor 中将 External Editor 设为 Custom，Custom Exec Path 设为 {path}，Custom Exec Path Args 设为 {args}",
+    "Starting {name}…": "正在启动 {name}…"
   },
   "launchprofileeditor": {
     "Add profile": "添加配置文件",

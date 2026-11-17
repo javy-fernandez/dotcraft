@@ -1684,7 +1684,22 @@
     "ilspycmd is not installed": "ilspycmd がインストールされていません",
     "{count} types": "{count} 個の型",
     "Explore Assemblies…": "アセンブリを参照…",
-    "Explore Assembly": "アセンブリを参照"
+    "Explore Assembly": "アセンブリを参照",
+    "Build C# Project": "C# プロジェクトをビルド",
+    "Rebuild C# Project": "C# プロジェクトをリビルド",
+    "Clean C# Project": "C# プロジェクトをクリーン",
+    "C# debugging requires a Godot .NET project": "C# のデバッグには Godot .NET プロジェクトが必要です",
+    "Choose a Godot game or scene configuration to debug": "デバッグする Godot のゲームまたはシーン構成を選択してください",
+    "Godot .NET executable": "Godot .NET 実行ファイル",
+    "Godot was not found. Install Godot .NET or configure its executable in Settings › Tools.": "Godot が見つかりません。Godot .NET をインストールするか、設定 › ツール で実行ファイルを指定してください。",
+    "Open Godot Editor": "Godot エディターを開く",
+    "Run Godot Project": "Godot プロジェクトを実行",
+    "Run Current Godot Scene": "現在の Godot シーンを実行",
+    "Run Godot Scene: {scene}": "Godot シーンを実行: {scene}",
+    "This Godot project has no C# project to build": "この Godot プロジェクトにはビルドする C# プロジェクトがありません",
+    "{path} cannot run C# scripts. Choose a Godot .NET build in Settings › Tools.": "{path} では C# スクリプトを実行できません。設定 › ツール で Godot .NET 版を選択してください。",
+    "To edit Godot's C# scripts here, set Editor Settings › Dotnet › Editor › External Editor to Custom, Custom Exec Path to {path} and Custom Exec Path Args to {args}": "Godot の C# スクリプトをここで編集するには、Editor Settings › Dotnet › Editor で External Editor を Custom に、Custom Exec Path を {path} に、Custom Exec Path Args を {args} に設定します",
+    "Starting {name}…": "{name} を起動中…"
   },
   "launchprofileeditor": {
     "Add profile": "プロファイルを追加",
