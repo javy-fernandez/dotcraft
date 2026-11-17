@@ -89,13 +89,15 @@ The debugger uses [netcoredbg](https://github.com/Samsung/netcoredbg) (MIT), dow
 
 ### Unity projects
 
-Open the folder of a Unity project (the one with `Assets` and `ProjectSettings`) with **File › Open…**. If Unity has generated a solution (**Preferences › External Tools › Regenerate project files** in the Unity Editor), DotCraft opens it as usual and the C# code intelligence uses Unity's generated projects. Without a solution the folder opens as a folder; Unity's generated `.csproj` files are not treated as a standalone project. DotCraft reads the editor version from `ProjectSettings/ProjectVersion.txt`.
+Open the folder of a Unity project (the one with `Assets` and `ProjectSettings`) with **File › Open…**. DotCraft opens the `.sln` Unity generated, and the C# code intelligence uses Unity's generated projects. Unity writes those files only for the editors of its IDE packages: if they are missing or out of date, choose Visual Studio or Visual Studio Code in Unity's **Preferences › External Tools**, click **Regenerate project files**, then choose DotCraft again. DotCraft reminds you of this when a Unity folder has no solution or projects yet.
 
-Unity's cache folders at the project root (`Library`, `Temp`, `Logs`, `MemoryCaptures`, and `obj` as in any .NET project) are left out of the explorer, Search Everywhere, Go to File, Find in Files and file watching. Folders with those names elsewhere, such as `Assets/Library` or a `Temp` folder in a .NET project, are shown as usual. **Show All Files** in the explorer shows the cache folders dimmed.
+To open Unity's scripts in DotCraft (double-click in the Project window or the Console), choose DotCraft as **External Script Editor** in **Preferences › External Tools** and set **External Script Editor Args** to `--unity $(ProjectPath) $(File) $(Line) $(Column)`. On macOS and Linux a running DotCraft window opens the file at that line.
 
-**Tools › Open in Unity Editor** (in the main menu, shown only for Unity projects) starts the editor the project was saved with, so opening it never upgrades the project to another version. DotCraft looks in Unity Hub's install folders: the default one (`/Applications/Unity/Hub/Editor` on macOS, `C:\Program Files\Unity\Hub\Editor` on Windows, `~/Unity/Hub/Editor` on Linux) and the custom location set in Unity Hub. In **Settings › Tools › Unity Editor** you can set either an editor executable (or `Unity.app` on macOS), which is used for every project whatever its version, or a folder of editors named by version, which is searched first. The editor is started directly with `-projectPath <folder>`; no shell is involved.
+Unity's cache folders at the project root (`Library`, `Temp`, `Logs`, `MemoryCaptures`) are left out of the explorer, Search Everywhere, Go to File, Find in Files and file watching, and the explorer hides the `.meta` file next to each asset. Renaming or deleting an asset in the explorer renames or deletes its `.meta` file too, so Unity keeps its references. **Show All Files** shows the hidden entries dimmed.
 
-Play mode, building players and debugging Unity are done in the Unity Editor; DotCraft's Run, Debug and Test commands are for .NET projects.
+**Tools › Open in Unity Editor** starts the editor version recorded in `ProjectSettings/ProjectVersion.txt`, so opening never upgrades the project. DotCraft looks in Unity Hub's install folders (`/Applications/Unity/Hub/Editor` on macOS, `C:\Program Files\Unity\Hub\Editor` on Windows, `~/Unity/Hub/Editor` on Linux, and the custom location set in Unity Hub). **Settings › Tools › Unity Editor** takes an editor executable (or `Unity.app`), used for every project, or a folder of editors named by version, searched first.
+
+Play mode, building players and debugging are done in the Unity Editor: Unity runs scripts on Mono, which DotCraft's .NET debugger (netcoredbg) cannot attach to.
 
 ## Requirements
 
