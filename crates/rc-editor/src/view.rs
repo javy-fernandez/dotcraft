@@ -708,6 +708,21 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
         }
     }
 
+    // Spelling mistakes: under the diagnostics, which are painted over them.
+    let first = state.spelling.partition_point(|w| w.end < vis_start);
+    for w in state.spelling[first..].iter().take_while(|w| w.start <= vis_end) {
+        for (i, &l) in lines.iter().enumerate() {
+            let ls = line_start(l);
+            let lay = &layouts[i];
+            let le = ls + lay.len;
+            if w.end <= ls || w.start >= le {
+                continue;
+            }
+            let (xa, xb) = (col_x(lay, w.start.max(ls) - ls), col_x(lay, w.end.min(le) - ls));
+            painter.add(wavy(xa, xb, y_of_row(source_rows[i]) + m.row_h - 3.0, scheme.typo));
+        }
+    }
+
     // Diagnostics: wavy underlines.
     for d in &state.diagnostics {
         if d.unnecessary || d.severity == Severity::Hint || d.end < vis_start || d.start > vis_end {
@@ -733,21 +748,6 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
             } else {
                 painter.add(wavy(xa, xb, y, color));
             }
-        }
-    }
-
-    // Spelling marks remain separate from compiler diagnostics and the Problems window.
-    for mark in &state.spelling {
-        if mark.end < vis_start || mark.start > vis_end { continue; }
-        for (i, &line) in lines.iter().enumerate() {
-            let start = line_start(line);
-            let layout = &layouts[i];
-            let end = start + layout.len;
-            if mark.end <= start || mark.start >= end { continue; }
-            let left = col_x(layout, mark.start.max(start) - start);
-            let right = col_x(layout, mark.end.min(end) - start);
-            let y = y_of_row(first_row + i) + m.row_h - 3.0;
-            painter.add(wavy(left, right, y, scheme.warning));
         }
     }
 
@@ -783,7 +783,8 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
     }
 }
 
-fn wavy(x0: f32, x1: f32, y: f32, color: Color32) -> Shape {
+/// A wavy underline from `x0` to `x1` (diagnostics, typos).
+pub fn wavy(x0: f32, x1: f32, y: f32, color: Color32) -> Shape {
     let mut pts = Vec::new();
     let step = 2.0;
     let mut x = x0;

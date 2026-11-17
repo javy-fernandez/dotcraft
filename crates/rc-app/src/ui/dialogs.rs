@@ -308,17 +308,8 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
                         ui.label("");
                         ui.checkbox(&mut draft.spellcheck_enabled, tr("Check spelling"));
                         ui.end_row();
-                        ui.label(tr("Spelling language"));
-                        egui::ComboBox::from_id_salt("spelling_language")
-                            .selected_text(&draft.spelling_language)
-                            .show_ui(ui, |ui| {
-                                for language in &app.spelling_languages {
-                                    ui.selectable_value(&mut draft.spelling_language, language.clone(), language);
-                                }
-                                if app.spelling_languages.is_empty() {
-                                    ui.label(tr("No installed spelling dictionaries"));
-                                }
-                            });
+                        ui.label(tr("Dictionaries"));
+                        spelling_dictionaries(ui, draft, app);
                         ui.end_row();
                         ui.label("");
                         ui.checkbox(&mut draft.show_indent_guides, tr("Show indent guides"));
@@ -1059,6 +1050,40 @@ fn templates(app: &mut DotCraftApp, ctx: &Context, surround: bool, filter: &mut 
     if close { Outcome::Close } else { Outcome::Keep }
 }
 
+/// The dictionaries of the Editor page (several at once, like Rider's: a word is right when
+/// any of them knows it), with where to add one that is missing.
+fn spelling_dictionaries(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
+    app.spelling.discover_if_stale();
+    let mut options = app.spelling.installed.clone();
+    for l in &draft.spelling_languages {
+        if !options.contains(l) {
+            options.push(l.clone());
+        }
+    }
+    ui.vertical(|ui| {
+        ui.set_max_width(380.0);
+        ui.add_enabled_ui(draft.spellcheck_enabled, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                for l in &options {
+                    let mut on = draft.spelling_languages.contains(l);
+                    if ui.checkbox(&mut on, l).changed() {
+                        if on {
+                            draft.spelling_languages.push(l.clone());
+                        } else {
+                            draft.spelling_languages.retain(|x| x != l);
+                        }
+                    }
+                }
+            });
+        });
+        let missing: Vec<&str> = draft.spelling_languages.iter().filter(|l| !app.spelling.installed.contains(l)).map(String::as_str).collect();
+        if !missing.is_empty() {
+            let folder = rc_core::paths::data_dir().join("dictionaries");
+            crate::ui::kit::note(ui, &trf("Not installed: {languages}. Add their Hunspell .aff and .dic files to {folder}", &[("languages", &missing.join(", ")), ("folder", &folder.display().to_string())]));
+        }
+    });
+}
+
 fn code_actions(app: &mut DotCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: &mut usize) -> Outcome {
     use rc_lsp::lsp_types::CodeActionOrCommand as A;
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
@@ -1115,6 +1140,10 @@ fn code_actions(app: &mut DotCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp
     if let Some(i) = chosen {
         app.focus_editor = true;
         let action = list.swap_remove(i);
+        if let Some(fix) = crate::spellcheck::fix_of(&action) {
+            crate::spellcheck::apply(app, fix);
+            return Outcome::Close;
+        }
         // Package fixes of project files are applied here, not by the language server.
         if let Some(fix) = crate::package_insight::fix_of(&action) {
             app.apply_package_fix(fix);

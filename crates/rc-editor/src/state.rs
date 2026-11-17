@@ -62,12 +62,14 @@ pub enum CodeVisionKind {
     Overrides,
 }
 
+/// A misspelled word (char range), underlined with the scheme's typo colour.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpellingMark {
     pub start: usize,
     pub end: usize,
     pub word: String,
-    pub suggestions: Vec<String>,
+    /// Part of a declared name (fixed by renaming the symbol, not by editing the text).
+    pub identifier: bool,
 }
 
 /// Coverage of a line (gutter bar while coverage is shown).
@@ -523,6 +525,13 @@ impl EditorState {
         for h in &mut self.inlays {
             h.pos = map(h.pos);
         }
+        // A word that was edited is checked again; the others move with the text.
+        self.spelling.retain_mut(|w| {
+            let (start, end) = (changes.map_pos(w.start, rc_text::Assoc::After), changes.map_pos(w.end, rc_text::Assoc::Before));
+            let kept = end >= start && end - start == w.end - w.start;
+            (w.start, w.end) = (start, end);
+            kept
+        });
         self.search_matches.clear();
         self.current_match = None;
         self.highlights.clear();
@@ -545,6 +554,11 @@ impl EditorState {
             for hint in &mut self.inlays {
                 hint.pos = map(hint.pos);
             }
+            self.spelling.retain_mut(|w| {
+                let touched = e.start_char <= w.end && e.old_end_char >= w.start;
+                (w.start, w.end) = (map(w.start), map(w.end));
+                !touched
+            });
         }
         self.search_matches.clear();
         self.current_match = None;

@@ -17,13 +17,6 @@ use rc_dotnet::Solution;
 use rc_editor::{Action, EditorConfig, Keymap, KeymapKind};
 use rc_kit::i18n::{self, Lang, tr, trf};
 use std::path::{Path, PathBuf};
-use std::hash::{Hash, Hasher};
-
-fn spelling_hash(text: &str) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    text.hash(&mut hasher);
-    hasher.finish()
-}
 
 /// A message in the status bar / notification balloon.
 #[derive(Clone, Debug)]
@@ -140,12 +133,8 @@ pub struct DotCraftApp {
     pub update: Option<crate::update::Release>,
     pub insight: Insight,
     pub assembly_explorer: crate::assembly_explorer::AssemblyExplorer,
-    pub spelling: crate::spellcheck::SpellingService,
-    pub spelling_languages: Vec<String>,
-    spelling_requested: Option<(u64, u64, String)>,
-    commit_spelling_requested: Option<(u64, String)>,
-    pub commit_spelling: Vec<crate::spellcheck::Misspelling>,
-    spelling_missing: Option<String>,
+    /// Typo inspection of the active document and the commit message.
+    pub spelling: crate::spellcheck::Spelling,
     /// Package completion, hover, updates and CPM problems in project files.
     pub packages: crate::package_insight::PackageInsight,
     /// Completion, hover and problems in `appsettings*.json`.
@@ -282,12 +271,7 @@ impl DotCraftApp {
             update: None,
             insight: Insight::new(waker.clone()),
             assembly_explorer: crate::assembly_explorer::AssemblyExplorer::new(waker.clone()),
-            spelling: crate::spellcheck::SpellingService::new(waker.clone()),
-            spelling_languages: Vec::new(),
-            spelling_requested: None,
-            commit_spelling_requested: None,
-            commit_spelling: Vec::new(),
-            spelling_missing: None,
+            spelling: crate::spellcheck::Spelling::new(waker.clone()),
             packages: crate::package_insight::PackageInsight::new(waker.clone()),
             appsettings: crate::appsettings_insight::SettingsInsight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
@@ -925,7 +909,15 @@ impl DotCraftApp {
                         self.dock.show(ToolWindow::Find);
                     }
                 }
-                InsightOutput::Actions(list) => self.dialog = Some(Dialog::CodeActions { list, selected: 0 }),
+                InsightOutput::Actions(mut list) => {
+                    // Typo fixes come after the language server's own actions.
+                    list.extend(self.spelling.pending_actions.take().unwrap_or_default());
+                    if list.is_empty() {
+                        self.notify(tr("No context actions here"), false);
+                    } else {
+                        self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
+                    }
+                }
                 InsightOutput::AskRename { doc, pos, name } => self.dialog = Some(Dialog::RenameSymbol { doc, pos, original: name.clone(), name, focus: true }),
                 InsightOutput::Message(m) => self.notify(m, false),
                 InsightOutput::Hierarchy { kind, items } => {
@@ -1002,6 +994,30 @@ impl DotCraftApp {
         if action == Action::Generate {
             crate::ui::generate::open(self);
             return;
+        }
+        // ⌥⏎ on a typo: its fixes, with the language server's actions for C#.
+        self.spelling.pending_actions = None;
+        if action == Action::ShowIntentions
+            && let Some(typos) = crate::spellcheck::context_actions(self, caret_screen)
+        {
+            if typos.is_empty() {
+                // Suggestions are on their way; the popup opens when they arrive.
+                return;
+            }
+            let doc = &self.docs.list[i];
+            if rc_dotnet::project_xml::is_package_file(&doc.path) {
+                let mut list = typos;
+                if let [crate::package_insight::PackageOutput::Actions(more)] = self.packages.context_actions(doc).as_slice() {
+                    list.splice(0..0, more.iter().cloned());
+                }
+                self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
+                return;
+            }
+            if !(self.insight.ready() && crate::insight::is_csharp(doc)) {
+                self.dialog = Some(Dialog::CodeActions { list: typos, selected: 0 });
+                return;
+            }
+            self.spelling.pending_actions = Some(typos);
         }
         // Project files: package completion, documentation and fixes.
         if rc_dotnet::project_xml::is_package_file(&self.docs.list[i].path) && matches!(action, Action::Complete | Action::QuickDoc | Action::ShowIntentions) {
@@ -2044,73 +2060,6 @@ pub fn startup_paths(settings: &Settings, from_system: Vec<PathBuf>) -> Vec<Path
     settings.last_workspace.clone().filter(|p| settings.reopen_last && p.exists()).into_iter().collect()
 }
 
-impl DotCraftApp {
-    fn update_spelling(&mut self) {
-        for reply in self.spelling.drain() {
-            match reply {
-                crate::spellcheck::Reply::Languages(languages) => self.spelling_languages = languages,
-                crate::spellcheck::Reply::Checked { doc, version, words } => {
-                    if let Some(open) = self.docs.list.iter_mut().find(|d| d.editor.id == doc)
-                        && open.editor.buffer.version() == version
-                    {
-                        open.editor.spelling = words.into_iter().map(|word| rc_editor::SpellingMark { start: word.start, end: word.end, word: word.word, suggestions: word.suggestions }).collect();
-                        self.spelling_missing = None;
-                    }
-                }
-                crate::spellcheck::Reply::CheckedCommit { version, words } => {
-                    if spelling_hash(&self.vcs.message) == version {
-                        self.commit_spelling = words;
-                    }
-                }
-                crate::spellcheck::Reply::MissingDictionary { language } => {
-                    if self.spelling_missing.as_deref() != Some(&language) {
-                        self.spelling_missing = Some(language.clone());
-                        self.notify(trf("No spelling dictionary installed for {language}", &[("language", &language)]), false);
-                    }
-                }
-                crate::spellcheck::Reply::Added { word, error } => {
-                    self.spelling_requested = None;
-                    self.commit_spelling_requested = None;
-                    if let Some(error) = error {
-                        self.notify(error, true);
-                    } else {
-                        self.notify(trf("Added {word} to the spelling dictionary", &[("word", &word)]), false);
-                    }
-                }
-            }
-        }
-        if !self.settings.spellcheck_enabled {
-            self.spelling_requested = None;
-            self.commit_spelling_requested = None;
-            self.commit_spelling.clear();
-            for doc in &mut self.docs.list { doc.editor.spelling.clear(); }
-            return;
-        }
-        let commit_key = (spelling_hash(&self.vcs.message), self.settings.spelling_language.clone());
-        if self.vcs.message.trim().is_empty() {
-            self.commit_spelling.clear();
-            self.commit_spelling_requested = None;
-        }
-        if !self.vcs.message.trim().is_empty() && self.commit_spelling_requested.as_ref() != Some(&commit_key) {
-            self.commit_spelling.clear();
-            self.commit_spelling_requested = Some(commit_key.clone());
-            self.spelling.check_commit(commit_key.0, &commit_key.1, self.vcs.message.clone(), self.workspace.as_ref().map(|w| w.ws.root.clone()));
-        }
-        let Some(active) = self.docs.active else { return };
-        let doc = &self.docs.list[active];
-        let source_language = doc.editor.syntax.lang;
-        if source_language == rc_syntax::Lang::Sln { return; }
-        let key = (doc.editor.id, doc.editor.buffer.version(), self.settings.spelling_language.clone());
-        if self.spelling_requested.as_ref() == Some(&key) { return; }
-        let text = doc.editor.buffer.rope().to_string();
-        self.docs.list[active].editor.spelling.clear();
-        self.spelling_requested = Some(key.clone());
-        let root = self.workspace.as_ref().map(|w| w.ws.root.clone());
-        self.spelling.check(key.0, key.1, source_language, &key.2, text, root);
-    }
-
-}
-
 impl eframe::App for DotCraftApp {
     fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         // Window title: active file and workspace (Mission Control, the Window menu).
@@ -2216,7 +2165,7 @@ impl eframe::App for DotCraftApp {
         }
         let outputs = self.insight.update(&mut self.docs, self.settings.show_inlay_hints, self.settings.show_code_vision);
         self.handle_insight(outputs);
-        self.update_spelling();
+        crate::spellcheck::update(self, &ctx);
         let outputs = self.packages.update(&mut self.docs, &mut self.insight.problems, self.nuget.selected_source());
         self.handle_packages(outputs);
         self.appsettings.update(&mut self.docs, &mut self.insight.problems);

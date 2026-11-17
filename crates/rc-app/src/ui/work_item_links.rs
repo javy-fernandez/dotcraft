@@ -125,7 +125,9 @@ const ROW_H: f32 = 24.0;
 
 /// The commit message editor: links underlined (Cmd/Ctrl+click opens them) and completion of
 /// work item ids after `#` / `AB#`.
-pub fn message_editor(ui: &mut Ui, text: &mut String, work_items: &WorkItems, hint: &str) -> Response {
+/// The commit message editor. `typos` (char ranges) get a wavy underline; the second value is
+/// the typo last right-clicked, for the caller's context menu.
+pub fn message_editor(ui: &mut Ui, text: &mut String, work_items: &WorkItems, hint: &str, typos: &[crate::spellcheck::Misspelling]) -> (Response, Option<crate::spellcheck::Misspelling>) {
     let id = ui.make_persistent_id("commit_message");
     let popup_id = id.with("work_items");
     let mut popup: Popup = ui.data(|d| d.get_temp(popup_id)).unwrap_or_default();
@@ -166,6 +168,31 @@ pub fn message_editor(ui: &mut Ui, text: &mut String, work_items: &WorkItems, hi
     if resp.has_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
         ui.memory_mut(|m| m.surrender_focus(id));
     }
+
+    // Typos: wavy underlines in the editor's typo colour; right-click picks one.
+    let typo_color = rc_kit::theme::scheme(ui.visuals().dark_mode).typo;
+    let byte = |text: &str, c: usize| text.char_indices().nth(c).map_or(text.len(), |(b, _)| b);
+    let clip = out.text_clip_rect;
+    for t in typos {
+        let range = byte(text, t.start)..byte(text, t.end);
+        if text.get(range.clone()) != Some(t.word.as_str()) {
+            continue;
+        }
+        for r in range_rects(&out.galley, out.galley_pos, text, &range) {
+            if clip.intersects(r) {
+                ui.painter().with_clip_rect(clip).add(rc_editor::view::wavy(r.left(), r.right(), r.bottom() - 2.0, typo_color));
+            }
+        }
+    }
+    let typo_id = id.with("typo");
+    if resp.secondary_clicked()
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        let c = out.galley.cursor_from_pos(p - out.galley_pos).index.0;
+        let typo = typos.iter().find(|t| t.start <= c && c <= t.end).cloned();
+        ui.data_mut(|d| d.insert_temp(typo_id, typo));
+    }
+    let typo: Option<crate::spellcheck::Misspelling> = ui.data(|d| d.get_temp(typo_id)).flatten();
 
     // Links: hand cursor and URL with Cmd/Ctrl held; Cmd/Ctrl+click opens.
     if let Some(p) = resp.hover_pos() {
@@ -238,7 +265,7 @@ pub fn message_editor(ui: &mut Ui, text: &mut String, work_items: &WorkItems, hi
         popup.selected = 0;
     }
     ui.data_mut(|d| d.insert_temp(popup_id, popup));
-    resp
+    (resp, typo)
 }
 
 /// The list of ids; returns its rectangle and the clicked row.

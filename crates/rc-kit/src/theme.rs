@@ -215,6 +215,8 @@ pub struct Scheme {
     pub deleted_lines: Color32,
     pub error_line: Color32,
     pub todo: Color32,
+    /// Wavy underline of spelling mistakes (IntelliJ's Typo), quieter than warnings.
+    pub typo: Color32,
 }
 
 pub const SCHEME_LIGHT: Scheme = Scheme {
@@ -261,6 +263,7 @@ pub const SCHEME_LIGHT: Scheme = Scheme {
     deleted_lines: hex(0xFF5C5C),
     error_line: hex(0xFFEAE8),
     todo: hex(0x0093A1),
+    typo: hex(0x5D9B47),
 };
 
 pub const SCHEME_DARK: Scheme = Scheme {
@@ -307,6 +310,7 @@ pub const SCHEME_DARK: Scheme = Scheme {
     deleted_lines: hex(0xBF3428),
     error_line: hex(0x4A2421),
     todo: hex(0x66C3CC),
+    typo: hex(0x659C6B),
 };
 
 pub fn scheme(dark: bool) -> Scheme {

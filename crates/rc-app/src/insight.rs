@@ -891,12 +891,8 @@ impl Insight {
             && let Some(r) = p.poll()
         {
             self.actions = None;
-            let list = r.ok().flatten().unwrap_or_default();
-            if list.is_empty() {
-                out.push(InsightOutput::Message(tr("No context actions here").into()));
-            } else {
-                out.push(InsightOutput::Actions(list));
-            }
+            // An empty list too: the app adds typo fixes, or says there is nothing here.
+            out.push(InsightOutput::Actions(r.ok().flatten().unwrap_or_default()));
         }
         if let Some(p) = &mut self.action_resolve
             && let Some(r) = p.poll()
