@@ -2,7 +2,7 @@
 //! folders and files (read lazily from disk). Keyboard navigation like Rider: ↑/↓ move,
 //! →/← expand/collapse, Enter or double-click opens, F2 renames, ⌫ deletes.
 
-use rc_core::workspace::{FileNode, is_hidden, is_hidden_in, list_dir_with};
+use rc_core::workspace::{FileNode, list_dir_with};
 use rc_dotnet::{ProjectInfo, Solution, SolutionItem};
 use rc_kit::i18n::tr;
 use rc_kit::{Ico, ico, icons, theme};
@@ -395,7 +395,7 @@ impl ExplorerState {
 
     /// `dim`: the parent is not part of the solution, so neither is this node.
     fn push_node(&mut self, rows: &mut Vec<Row>, node: &FileNode, depth: usize, dim: bool) {
-        let dim = dim || node.path.parent().map_or_else(|| is_hidden(&node.name, node.is_dir), |parent| is_hidden_in(parent, &node.name, node.is_dir));
+        let dim = dim || node.hidden;
         if node.is_dir {
             let key = format!("dir:{}", node.path.display());
             let special = node.name == "Properties";

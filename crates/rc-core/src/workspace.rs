@@ -138,6 +138,8 @@ pub struct FileNode {
     pub path: PathBuf,
     pub name: String,
     pub is_dir: bool,
+    /// Hidden unless Show All Files is on (the explorer dims it then).
+    pub hidden: bool,
 }
 
 /// Children of `dir`: folders first, then files, each sorted case-insensitively.
@@ -146,13 +148,11 @@ pub fn list_dir(dir: &Path) -> Vec<FileNode> {
 }
 
 /// Like [`list_dir`]; with `all` (the explorer's Show All Files) it also lists what
-/// [`is_hidden_in`] hides, except `.git` and the OS's own files.
+/// [`is_hidden_in`] hides and Unity's `.meta` files, except `.git` and the OS's own files.
 pub fn list_dir_with(dir: &Path, all: bool) -> Vec<FileNode> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     let canonical_dir = dunce::canonicalize(dir).ok();
-    // Checked once per listing rather than per entry.
-    let unity_root = !all && unity::is_unity_root(dir);
-    let mut out: Vec<FileNode> = entries
+    let entries: Vec<(PathBuf, String, bool)> = entries
         .flatten()
         .filter_map(|e| {
             let name = e.file_name().to_string_lossy().into_owned();
@@ -160,12 +160,25 @@ pub fn list_dir_with(dir: &Path, all: bool) -> Vec<FileNode> {
             let is_dir = file_type.is_dir() || (file_type.is_symlink() && canonical_dir.as_ref().is_some_and(|base| {
                 dunce::canonicalize(e.path()).ok().is_some_and(|target| target != *base && target.starts_with(base) && target.is_dir())
             }));
-            let shown = if all {
-                name != ".git" && !HIDDEN_FILES.contains(&name.as_str())
-            } else {
-                !is_hidden(&name, is_dir) && !(unity_root && is_dir && unity::GENERATED_DIRS.contains(&name.as_str()))
-            };
-            shown.then(|| FileNode { path: e.path(), name, is_dir })
+            Some((e.path(), name, is_dir))
+        })
+        .collect();
+    // Disk checks happen once per listing, never per entry; the explorer reads `hidden`
+    // instead of asking again every frame.
+    let unity_root = unity::is_unity_root(dir);
+    // A `.meta` file is hidden next to the asset it describes, inside a Unity project only.
+    let names: std::collections::HashSet<&str> = entries.iter().map(|(_, name, _)| name.as_str()).collect();
+    let is_meta = |name: &str, is_dir: bool| !is_dir && name.strip_suffix(".meta").is_some_and(|asset| names.contains(asset));
+    let in_unity = entries.iter().any(|(_, name, is_dir)| is_meta(name, *is_dir)) && dir.ancestors().any(unity::is_unity_root);
+    let mut out: Vec<FileNode> = entries
+        .iter()
+        .filter_map(|(path, name, is_dir)| {
+            let is_dir = *is_dir;
+            let hidden = is_hidden(name, is_dir)
+                || (unity_root && is_dir && unity::GENERATED_DIRS.contains(&name.as_str()))
+                || (in_unity && is_meta(name, is_dir));
+            let shown = if all { name != ".git" && !HIDDEN_FILES.contains(&name.as_str()) } else { !hidden };
+            shown.then(|| FileNode { path: path.clone(), name: name.clone(), is_dir, hidden })
         })
         .collect();
     out.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
@@ -272,6 +285,28 @@ mod tests {
         let ws = Workspace::open(&tool).unwrap();
         assert_eq!(ws.kind, WorkspaceKind::Project(tool.join("Tool.csproj")));
         assert_eq!(ws.unity.as_ref().map(|u| u.root.clone()), Some(game));
+    }
+
+    #[test]
+    fn unity_meta_files_are_hidden_next_to_their_assets() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let game = root.join("Game");
+        unity_project(&game);
+        let scripts = game.join("Assets/Scripts");
+        for file in ["Player.cs.meta", "Gone.cs.meta"] {
+            std::fs::write(scripts.join(file), "fileFormatVersion: 2\n").unwrap();
+        }
+        std::fs::write(game.join("Assets/Scripts.meta"), "fileFormatVersion: 2\n").unwrap();
+        // Orphans stay visible: Unity deletes them, and the user should notice them.
+        let names = |dir: &Path, all: bool| list_dir_with(dir, all).into_iter().map(|n| (n.name, n.hidden)).collect::<Vec<_>>();
+        assert_eq!(names(&scripts, false), [("Gone.cs.meta".to_string(), false), ("Player.cs".to_string(), false)]);
+        assert_eq!(names(&scripts, true), [("Gone.cs.meta".to_string(), false), ("Player.cs".to_string(), false), ("Player.cs.meta".to_string(), true)]);
+        assert_eq!(names(&game.join("Assets"), false), [("Scripts".to_string(), false)]);
+        // Outside a Unity project a `.meta` file is an ordinary file.
+        std::fs::write(root.join("notes.txt"), "").unwrap();
+        std::fs::write(root.join("notes.txt.meta"), "").unwrap();
+        assert!(list_dir(&root).iter().any(|n| n.name == "notes.txt.meta"));
     }
 
     #[test]
