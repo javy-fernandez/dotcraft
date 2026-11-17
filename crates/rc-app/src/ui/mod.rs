@@ -26,6 +26,7 @@ pub mod pull_requests;
 pub mod header;
 pub mod kit;
 pub mod status;
+pub mod structural_search;
 pub mod run_windows;
 pub mod search_popup;
 pub mod stripes;
@@ -74,6 +75,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     if app.workspace.is_none() && app.docs.list.is_empty() {
         egui::CentralPanel::default().frame(bar.inner_margin(Margin { left: 6, right: 6, top: 0, bottom: 0 })).show(ui, |ui| welcome::show(app, ui));
         dialogs::show(app, &ctx);
+        structural_search::show(app, &ctx);
         if let Some(mut d) = app.new_project.take()
             && new_project::show(app, &ctx, &mut d)
         {
@@ -100,6 +102,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     nuget::sign_in_dialog(app, &ctx);
     generate::show(app, &ctx);
     search_popup::show(app, &ctx);
+    structural_search::show(app, &ctx);
     editor_area::floating_windows(app, &ctx);
     if let Some(mut d) = app.new_project.take()
         && new_project::show(app, &ctx, &mut d)

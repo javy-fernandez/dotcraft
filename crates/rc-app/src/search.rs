@@ -118,6 +118,7 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Settings…"), ShowSettings),
         (tr("Find in Files…"), FindInFiles),
         (tr("Replace in Files…"), ReplaceInFiles),
+        (tr("Structural Search and Replace…"), StructuralSearch),
         (tr("Go to File…"), GotoFile),
         (tr("Go to Type…"), GotoClass),
         (tr("Go to Symbol…"), GotoSymbol),
