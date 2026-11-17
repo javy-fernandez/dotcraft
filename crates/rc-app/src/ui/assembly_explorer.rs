@@ -46,7 +46,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     }
     let x = &mut app.assembly_explorer;
     if x.tool_missing {
-        let hint = tr("DotCraft decompiles assemblies with ilspycmd, the ILSpy command-line tool. It is installed as a .NET global tool (dotnet tool install --global ilspycmd).");
+        let hint = tr("DotCraft decompiles assemblies with ilspycmd, the ILSpy command-line tool, installed as a .NET global tool.");
         let label = if x.installing { tr("Installing…") } else { tr("Install ilspycmd") };
         if toolwindows::empty_state_with(ui, ico::DOWNLOAD, tr("ilspycmd is not installed"), hint, Some(label)) && !x.installing {
             let outs = app.runner.run_tool(tr("Install ilspycmd").into(), crate::assembly_explorer::install_args(), None, crate::runner::ToolFollowup::RecheckIlspy);
