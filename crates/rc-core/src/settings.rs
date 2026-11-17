@@ -37,6 +37,8 @@ pub struct Settings {
     /// Show local variable values beside source lines while the debugger is paused.
     pub show_debug_inline_values: bool,
     pub show_code_vision: bool,
+    pub spellcheck_enabled: bool,
+    pub spelling_language: String,
     pub show_indent_guides: bool,
     pub right_margin: usize,
     /// Save files when the window loses focus or when switching tabs (IntelliJ autosave).
@@ -115,6 +117,8 @@ impl Default for Settings {
             show_inlay_hints: true,
             show_debug_inline_values: true,
             show_code_vision: true,
+            spellcheck_enabled: false,
+            spelling_language: "en_US".into(),
             show_indent_guides: true,
             right_margin: 120,
             autosave: true,

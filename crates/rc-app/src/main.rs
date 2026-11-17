@@ -28,6 +28,7 @@ mod structural_search;
 mod vcs;
 mod work_items;
 mod assembly_explorer;
+mod spellcheck;
 #[cfg(test)]
 mod vcs_tests;
 #[cfg(test)]

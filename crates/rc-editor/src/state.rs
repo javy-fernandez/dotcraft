@@ -62,6 +62,14 @@ pub enum CodeVisionKind {
     Overrides,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpellingMark {
+    pub start: usize,
+    pub end: usize,
+    pub word: String,
+    pub suggestions: Vec<String>,
+}
+
 /// Coverage of a line (gutter bar while coverage is shown).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoverageMark {
@@ -172,6 +180,7 @@ pub struct EditorState {
     pub(crate) select_stack: Vec<Range>,
     // --- decorations
     pub diagnostics: Vec<Diagnostic>,
+    pub spelling: Vec<SpellingMark>,
     pub inlays: Vec<InlayHint>,
     pub debug_inline_values: BTreeMap<usize, Vec<InlineDebugValue>>,
     /// Reference counts shown above C# declarations.
@@ -245,6 +254,7 @@ impl EditorState {
             line_clipboard: None,
             select_stack: Vec::new(),
             diagnostics: Vec::new(),
+            spelling: Vec::new(),
             inlays: Vec::new(),
             debug_inline_values: BTreeMap::new(),
             code_vision: Vec::new(),
