@@ -709,7 +709,7 @@ fn set_property(doc: &roxmltree::Document, prop: &str, value: &str) -> anyhow::R
 }
 
 /// Replaces the text inside `<X>…</X>` (keeping surrounding blanks).
-fn element_text_edit(text: &str, n: roxmltree::Node, value: &str) -> TextEdit {
+pub(crate) fn element_text_edit(text: &str, n: roxmltree::Node, value: &str) -> TextEdit {
     match n.first_child().filter(|c| c.is_text()) {
         Some(t) => {
             let r = t.range();
@@ -743,7 +743,7 @@ fn indent_before(text: &str, pos: usize) -> Option<&str> {
 }
 
 /// `range` widened to whole lines (with the line break) when it is alone on its lines.
-fn line_span(text: &str, range: Range<usize>) -> Range<usize> {
+pub(crate) fn line_span(text: &str, range: Range<usize>) -> Range<usize> {
     let Some(ws) = indent_before(text, range.start) else { return range };
     let rest = &text[range.end..];
     let tail = rest.len() - rest.trim_start_matches([' ', '\t']).len();
@@ -761,7 +761,7 @@ fn line_span(text: &str, range: Range<usize>) -> Range<usize> {
 }
 
 /// Like [`line_span`] for a whole `ItemGroup`, also taking one of two blank lines around it.
-fn group_span(text: &str, range: Range<usize>) -> Range<usize> {
+pub(crate) fn group_span(text: &str, range: Range<usize>) -> Range<usize> {
     let r = line_span(text, range);
     if r.start == 0 || !text[..r.start].ends_with('\n') {
         return r;
@@ -843,6 +843,12 @@ pub fn set_central_property(text: &str, name: &str, value: &str) -> anyhow::Resu
         }
         return Ok(vec![element_text_edit(text, p, value)]);
     }
+    Ok(vec![insert_property(&doc, text, name, value)?])
+}
+
+/// A new `<name>value</name>` at the end of the first unconditional `PropertyGroup` of the
+/// project, or in a new group right after `<Project>` when there is none.
+pub(crate) fn insert_property(doc: &roxmltree::Document, text: &str, name: &str, value: &str) -> anyhow::Result<TextEdit> {
     let nl = newline(text);
     let unit = indent_unit(&doc, text);
     let elem = format!("<{name}>{}</{name}>", escape(value));
@@ -850,15 +856,15 @@ pub fn set_central_property(text: &str, name: &str, value: &str) -> anyhow::Resu
         && let Some(last) = g.children().rfind(|c| c.is_element())
     {
         let at = last.range().end;
-        return Ok(vec![match indent_before(text, last.range().start) {
+        return Ok(match indent_before(text, last.range().start) {
             Some(ind) => TextEdit { range: at..at, text: format!("{nl}{ind}{elem}") },
             None => TextEdit { range: at..at, text: elem },
-        }]);
+        });
     }
     // A new PropertyGroup right after `<Project>`.
     let root = doc.root_element();
     let open_end = text[root.range()].find('>').map(|i| root.range().start + i + 1).ok_or_else(|| anyhow::anyhow!("malformed <Project>"))?;
-    Ok(vec![TextEdit { range: open_end..open_end, text: format!("{nl}{unit}<PropertyGroup>{nl}{unit}{unit}{elem}{nl}{unit}</PropertyGroup>") }])
+    Ok(TextEdit { range: open_end..open_end, text: format!("{nl}{unit}<PropertyGroup>{nl}{unit}{unit}{elem}{nl}{unit}</PropertyGroup>") })
 }
 
 // ---------------------------------------------------------------- migration
