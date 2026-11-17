@@ -327,84 +327,21 @@ impl Dialog {
                 }
             }
         }
-        dialog.read_body(source, body);
+        let mut part = Part::default();
+        part.read_body(source, body);
+        dialog.merge(part);
         dialog.targets = crate::generate_targets::collect(tree, source, node, &dialog.members, &dialog.known());
         Some(dialog)
     }
 
-    fn read_body(&mut self, source: &str, body: Node<'_>) {
-        let mut cursor = body.walk();
-        for child in body.named_children(&mut cursor) {
-            let mods = modifiers(child, source);
-            let is_static = mods.iter().any(|m| m == "static" || m == "const");
-            match child.kind() {
-                "field_declaration" => {
-                    let Some(decl) = named(child, "variable_declaration") else { continue };
-                    let Some(ty) = decl.child_by_field_name("type") else { continue };
-                    let mut c = decl.walk();
-                    for variable in decl.named_children(&mut c).filter(|n| n.kind() == "variable_declarator") {
-                        let Some(name) = variable.child_by_field_name("name") else { continue };
-                        self.existing.push(text(name, source).into());
-                        if !is_static {
-                            self.members.push(Member {
-                                name: text(name, source).into(),
-                                ty: text(ty, source).into(),
-                                field: true,
-                                readonly: mods.iter().any(|m| m == "readonly"),
-                                assignable: true,
-                                selected: true,
-                            });
-                        }
-                    }
-                }
-                "property_declaration" => {
-                    let (Some(name), Some(ty)) = (child.child_by_field_name("name"), child.child_by_field_name("type")) else { continue };
-                    let name = text(name, source).to_string();
-                    self.existing.push(name.clone());
-                    // Explicit interface implementations are not members of the type's surface.
-                    if is_static || named(child, "explicit_interface_specifier").is_some() {
-                        continue;
-                    }
-                    let accessors = accessors(child, source);
-                    let auto = !accessors.is_empty() && accessors.iter().all(|(_, body)| !body);
-                    let setter = accessors.iter().any(|(n, _)| n == "set" || n == "init");
-                    let expression_bodied = child.child_by_field_name("value").is_some_and(|v| v.kind() == "arrow_expression_clause");
-                    self.members.push(Member {
-                        name,
-                        ty: text(ty, source).into(),
-                        field: false,
-                        readonly: !setter,
-                        assignable: !expression_bodied && (auto || setter),
-                        selected: true,
-                    });
-                }
-                "method_declaration" | "constructor_declaration" => {
-                    let Some(name) = child.child_by_field_name("name") else { continue };
-                    let name = text(name, source).to_string();
-                    self.existing.push(name.clone());
-                    let params = child.child_by_field_name("parameters").map(|p| parameter_types(p, source)).unwrap_or_default();
-                    self.methods.push(Signature { name, params });
-                }
-                "indexer_declaration" => {
-                    let params = child.child_by_field_name("parameters").map(|p| parameter_types(p, source)).unwrap_or_default();
-                    self.methods.push(Signature { name: "this".into(), params });
-                }
-                "event_field_declaration" => {
-                    let Some(decl) = named(child, "variable_declaration") else { continue };
-                    let mut c = decl.walk();
-                    for variable in decl.named_children(&mut c).filter(|n| n.kind() == "variable_declarator") {
-                        if let Some(name) = variable.child_by_field_name("name") {
-                            self.existing.push(text(name, source).into());
-                        }
-                    }
-                }
-                _ => {
-                    if let Some(name) = child.child_by_field_name("name") {
-                        self.existing.push(text(name, source).into());
-                    }
-                }
-            }
-        }
+    /// Adds the members of another part of the type (`partial`), and drops the targets they
+    /// already implement.
+    pub fn merge(&mut self, part: Part) {
+        self.members.extend(part.members);
+        self.existing.extend(part.existing);
+        self.methods.extend(part.methods);
+        let known = self.known();
+        self.targets.retain(|t| !known.has(&t.name, t.params.as_deref()));
     }
 
     /// What the type already declares, for the target generators.
@@ -537,6 +474,114 @@ impl Dialog {
             Kind::Implement | Kind::Override | Kind::Delegate => unreachable!(),
         })
     }
+}
+
+/// What one declaration of a type has: its fields and properties, and every member name.
+#[derive(Clone, Debug, Default)]
+pub struct Part {
+    pub members: Vec<Member>,
+    pub existing: Vec<String>,
+    pub methods: Vec<Signature>,
+}
+
+impl Part {
+    /// The members of the `partial` declarations of `name` in another file.
+    pub fn of_partial(source: &str, name: &str, arity: usize) -> Self {
+        let mut part = Part::default();
+        let Some(tree) = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rc_text::Rope::from_str(source), None) else { return part };
+        let mut types = Vec::new();
+        crate::generate_targets::walk_types(tree.root_node(), source, &mut types);
+        for node in types {
+            let params = named(node, "type_parameter_list").map_or(0, |list| {
+                let mut cursor = list.walk();
+                list.named_children(&mut cursor).filter(|n| n.kind() == "type_parameter").count()
+            });
+            let same = node.child_by_field_name("name").is_some_and(|n| text(n, source) == name) && params == arity;
+            if same
+                && modifiers(node, source).iter().any(|m| m == "partial")
+                && let Some(body) = node.child_by_field_name("body")
+            {
+                part.read_body(source, body);
+            }
+        }
+        part
+    }
+
+    fn read_body(&mut self, source: &str, body: Node<'_>) {
+        let mut cursor = body.walk();
+        for child in body.named_children(&mut cursor) {
+            let mods = modifiers(child, source);
+            let is_static = mods.iter().any(|m| m == "static" || m == "const");
+            match child.kind() {
+                "field_declaration" => {
+                    let Some(decl) = named(child, "variable_declaration") else { continue };
+                    let Some(ty) = decl.child_by_field_name("type") else { continue };
+                    let mut c = decl.walk();
+                    for variable in decl.named_children(&mut c).filter(|n| n.kind() == "variable_declarator") {
+                        let Some(name) = variable.child_by_field_name("name") else { continue };
+                        self.existing.push(text(name, source).into());
+                        if !is_static {
+                            self.members.push(Member {
+                                name: text(name, source).into(),
+                                ty: text(ty, source).into(),
+                                field: true,
+                                readonly: mods.iter().any(|m| m == "readonly"),
+                                assignable: true,
+                                selected: true,
+                            });
+                        }
+                    }
+                }
+                "property_declaration" => {
+                    let (Some(name), Some(ty)) = (child.child_by_field_name("name"), child.child_by_field_name("type")) else { continue };
+                    let name = text(name, source).to_string();
+                    self.existing.push(name.clone());
+                    // Explicit interface implementations are not members of the type's surface.
+                    if is_static || named(child, "explicit_interface_specifier").is_some() {
+                        continue;
+                    }
+                    let accessors = accessors(child, source);
+                    let auto = !accessors.is_empty() && accessors.iter().all(|(_, body)| !body);
+                    let setter = accessors.iter().any(|(n, _)| n == "set" || n == "init");
+                    let expression_bodied = child.child_by_field_name("value").is_some_and(|v| v.kind() == "arrow_expression_clause");
+                    self.members.push(Member {
+                        name,
+                        ty: text(ty, source).into(),
+                        field: false,
+                        readonly: !setter,
+                        assignable: !expression_bodied && (auto || setter),
+                        selected: true,
+                    });
+                }
+                "method_declaration" | "constructor_declaration" => {
+                    let Some(name) = child.child_by_field_name("name") else { continue };
+                    let name = text(name, source).to_string();
+                    self.existing.push(name.clone());
+                    let params = child.child_by_field_name("parameters").map(|p| parameter_types(p, source)).unwrap_or_default();
+                    self.methods.push(Signature { name, params });
+                }
+                "indexer_declaration" => {
+                    let params = child.child_by_field_name("parameters").map(|p| parameter_types(p, source)).unwrap_or_default();
+                    self.methods.push(Signature { name: "this".into(), params });
+                }
+                "event_field_declaration" => {
+                    let Some(decl) = named(child, "variable_declaration") else { continue };
+                    let mut c = decl.walk();
+                    for variable in decl.named_children(&mut c).filter(|n| n.kind() == "variable_declarator") {
+                        if let Some(name) = variable.child_by_field_name("name") {
+                            self.existing.push(text(name, source).into());
+                        }
+                    }
+                }
+                _ => {
+                    if let Some(name) = child.child_by_field_name("name") {
+                        self.existing.push(text(name, source).into());
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 /// The innermost class, struct or record around `byte`; None inside an interface or enum.
@@ -832,6 +877,18 @@ mod tests {
         std::fs::create_dir(dir.path().join("Lib")).unwrap();
         std::fs::write(dir.path().join("Lib/Lib.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>").unwrap();
         assert_eq!(Style::detect(&lib, "using System;\nclass B {}"), Style { nullable: false, system: true, collections: false });
+    }
+
+    #[test]
+    fn other_parts_of_a_partial_type_add_members_and_hide_targets() {
+        let source = "interface INamed { string Name { get; } void Rename(string name); }\npartial class Person : INamed\n{\n    private int _age;\n}\n";
+        let mut d = dialog_at(source, "_age", Style::default());
+        assert_eq!(d.targets.len(), 2);
+        let other = "namespace N;\npartial class Person\n{\n    private string _name = \"\";\n    public string Name => _name;\n}\nclass Person2 { int _x; }\n";
+        d.merge(Part::of_partial(other, "Person", 0));
+        assert_eq!(d.members.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["_age", "_name", "Name"]);
+        assert_eq!(d.targets.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["Rename"]);
+        assert!(Part::of_partial(other, "Person", 1).members.is_empty(), "Person<T> is another type");
     }
 
     #[test]

@@ -15,7 +15,7 @@ pub struct Known {
 }
 
 impl Known {
-    fn has(&self, name: &str, params: Option<&[String]>) -> bool {
+    pub fn has(&self, name: &str, params: Option<&[String]>) -> bool {
         match params {
             Some(params) => self.methods.iter().any(|s| s.name == name && s.params == params),
             None => self.existing.iter().any(|n| n == name),
