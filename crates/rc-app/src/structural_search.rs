@@ -250,7 +250,7 @@ impl StructuralSearch {
             }
             match docs.index_of(&path) {
                 Some(index) => {
-                    if docs.list[index].editor.buffer.rope().to_string() != *original {
+                    if *docs.list[index].editor.buffer.rope() != original.as_str() {
                         return Err(changed(&path));
                     }
                     let changes = hits
@@ -316,7 +316,7 @@ fn edit_documents(open: Vec<OpenEdits>, docs: &mut crate::docs::Docs, mut replac
             continue;
         };
         let doc = &mut docs.list[index];
-        if doc.editor.buffer.rope().to_string() != *edits.original {
+        if *doc.editor.buffer.rope() != edits.original.as_str() {
             replaced.error.get_or_insert_with(|| changed(&edits.path));
             continue;
         }
