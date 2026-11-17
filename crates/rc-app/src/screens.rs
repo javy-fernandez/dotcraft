@@ -1919,6 +1919,53 @@ fn screens_ef_core() {
 
 
 #[test]
+#[ignore = "Requires a GPU; writes publish dialog captures to target/snapshots"]
+fn screens_publish() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let (_tmp, root) = ef_solution();
+    rc_dotnet::publish::PublishProfile {
+        name: "FolderProfile".into(),
+        runtime_identifier: "osx-arm64".into(),
+        self_contained: true,
+        single_file: true,
+        ..Default::default()
+    }
+    .save(&root.join("Shop.Api/Shop.Api.csproj"))
+    .unwrap();
+    let settle = |h: &mut Harness<'static, DotCraftApp>| {
+        for _ in 0..20 {
+            h.run_steps(1);
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    };
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root.join("Shop.slnx"));
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        h.run_steps(4);
+        // Explorer › right-click on the API project › Publish….
+        let at = h.get_by_label("Shop.Api").rect().center();
+        h.event(egui::Event::PointerMoved(at));
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(3);
+        h.get_by_label(rc_kit::i18n::tr("Publish…")).click();
+        settle(&mut h);
+        assert!(matches!(h.state().dialog, Some(crate::ui::dialogs::Dialog::Publish(_))));
+        h.render().unwrap().save(out.join(format!("publish-{suffix}.png"))).unwrap();
+        // A new profile: defaults, with this machine's runtime identifier as the hint.
+        h.get_by_label(rc_kit::i18n::tr("Add profile")).click();
+        settle(&mut h);
+        h.render().unwrap().save(out.join(format!("publish-new-{suffix}.png"))).unwrap();
+    }
+}
+
+#[test]
 #[ignore = "Requires a GPU; writes appsettings.json insight captures to target/snapshots"]
 fn screens_appsettings_insight() {
     use crate::appsettings_insight_tests::{app_with, settings_workspace, settle};
