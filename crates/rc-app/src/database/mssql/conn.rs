@@ -326,9 +326,10 @@ mod tests {
                 "Url": "https://x//y",
             },
         }"#;
+        // In file order, as appsettings.json lists them.
         assert_eq!(connection_strings(text), vec![
-            ("Cache".to_string(), "Data Source=cache.db".to_string()),
             ("Default".to_string(), "Server=localhost;Database=Shop;User Id=reader;Password=secret;".to_string()),
+            ("Cache".to_string(), "Data Source=cache.db".to_string()),
             ("Url".to_string(), "https://x//y".to_string()),
         ]);
     }

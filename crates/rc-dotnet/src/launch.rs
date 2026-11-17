@@ -116,7 +116,11 @@ impl LaunchSettings {
             set_optional(fields, "workingDirectory", profile.working_directory.as_deref());
             set_optional(fields, "executablePath", profile.executable_path.as_deref());
             let env = profile.environment_variables.iter().map(|(key, value)| (key.clone(), serde_json::Value::String(value.clone()))).collect();
-            fields.insert("environmentVariables".into(), serde_json::Value::Object(env));
+            if profile.environment_variables.is_empty() {
+                fields.shift_remove("environmentVariables");
+            } else {
+                fields.insert("environmentVariables".into(), serde_json::Value::Object(env));
+            }
             profiles.insert(name.into(), entry);
         } else if let Some(old) = original {
             profiles.shift_remove(old);

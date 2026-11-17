@@ -108,15 +108,15 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
-        Dialog::LaunchProfileEditor(editor) => {
-            match editor.show(ctx) {
-                Some(saved) => {
-                    if saved { app.reload_workspace(); }
-                    Outcome::Close
+        Dialog::LaunchProfileEditor(editor) => match editor.show(ctx) {
+            Some(saved) => {
+                if saved {
+                    app.refresh_run_configs();
                 }
-                None => Outcome::Keep,
+                Outcome::Close
             }
-        }
+            None => Outcome::Keep,
+        },
         Dialog::InteractiveRebase(state) => if crate::ui::rebase::dialog(app, ctx, state) { Outcome::Close } else { Outcome::Keep },
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
@@ -484,7 +484,9 @@ fn goto_line(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus: &mu
 }
 
 fn run_options(app: &mut DotCraftApp, ctx: &Context, name: &str, project: &std::path::Path, profiles: &[String], o: &mut rc_core::session::RunOptions, web: bool) -> Outcome {
+    let settings_file = Some(rc_dotnet::LaunchSettings::path_for(project)).filter(|p| p.exists());
     let mut edit_settings = false;
+    let mut open_settings = None;
     let ((ok, cancel), esc) = modal(ctx, "run_options", 560.0, |ui| {
         title(ui, &trf("Run Configuration: {name}", &[("name", &name)]));
         let p = rc_kit::pal(ui);
@@ -532,11 +534,23 @@ fn run_options(app: &mut DotCraftApp, ctx: &Context, name: &str, project: &std::
         ui.add_space(6.0);
         ui.label(egui::RichText::new(tr("Variables here are added to the profile's; one NAME=value per line.")).size(12.0).color(p.muted));
         ui.add_space(4.0);
-        if ui.link(tr("Edit launch profiles…")).clicked() {
-            edit_settings = true;
-        }
+        ui.horizontal(|ui| {
+            if ui.link(tr("Edit launch profiles…")).clicked() {
+                edit_settings = true;
+            }
+            if let Some(file) = &settings_file {
+                ui.add_space(12.0);
+                if ui.link(tr("Open launchSettings.json")).clicked() {
+                    open_settings = Some(file.clone());
+                }
+            }
+        });
         buttons(ui, tr("OK"), true)
     });
+    if let Some(file) = open_settings {
+        app.open_file(&file);
+        return Outcome::Close;
+    }
     if edit_settings {
         app.dialog = Some(Dialog::LaunchProfileEditor(Box::new(crate::ui::launch_profile_editor::LaunchProfileEditor::new(project.to_path_buf(), app.waker.clone()))));
         return Outcome::Close;

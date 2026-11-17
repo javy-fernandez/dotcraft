@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use egui::{Context, TextEdit};
 use rc_core::{Inbox, Runtime, Waker};
 use rc_dotnet::{LaunchProfile, LaunchSettings};
-use rc_kit::i18n::tr;
+use rc_kit::{i18n::tr, ico};
 
 pub struct LaunchProfileEditor {
     project: PathBuf,
@@ -149,136 +149,69 @@ impl LaunchProfileEditor {
                 Err(error) => self.error = Some(error),
             }
         }
-        let mut close = false;
         let mut add = false;
         let mut select = None;
-        let mut save = false;
         let mut delete = false;
-        let response = egui::Modal::new(egui::Id::new("launch_profile_editor")).show(ctx, |ui| {
-            ui.set_width((ctx.content_rect().width() - 48.0).clamp(320.0, 640.0));
+        let width = (ctx.content_rect().width() - 48.0).clamp(320.0, 600.0);
+        let field_width = (width - 150.0).max(160.0);
+        let ((save, cancel), escape) = super::dialogs::modal(ctx, "launch_profile_editor", width, |ui| {
             super::dialogs::title(ui, tr("Edit launch profiles"));
             if self.loading {
-                ui.spinner();
-                ui.label(tr("Loading launch profiles…"));
-                return;
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    super::kit::note(ui, tr("Loading launch profiles…"));
+                });
+                return super::dialogs::buttons(ui, tr("Save"), false);
             }
+            let names: Vec<String> = self.profiles.iter().map(|profile| profile.name.clone()).collect();
+            let selected = self.original.clone().unwrap_or_else(|| tr("New profile").to_string());
             ui.horizontal(|ui| {
-                egui::ComboBox::from_id_salt("launch_profile_name")
-                    .selected_text(self.original.as_deref().unwrap_or(tr("New profile")))
-                    .show_ui(ui, |ui| {
-                        for (index, profile) in self.profiles.iter().enumerate() {
-                            if ui
-                                .selectable_label(
-                                    self.original.as_deref() == Some(profile.name.as_str()),
-                                    &profile.name,
-                                )
-                                .clicked()
-                            {
-                                select = Some(index);
-                            }
-                        }
-                    });
-                if ui
-                    .add_enabled(!self.saving, egui::Button::new(tr("Add profile")))
-                    .clicked()
-                {
+                select = super::kit::dropdown(ui, "launch_profile_name", &selected, &names, !self.saving);
+                if super::kit::button(ui, Some(ico::ADD), tr("Add profile"), !self.saving).clicked() {
                     add = true;
                 }
-                if ui
-                    .add_enabled(
-                        !self.saving && self.original.is_some(),
-                        egui::Button::new(tr("Delete profile")),
-                    )
-                    .clicked()
-                {
+                if super::kit::button(ui, Some(ico::REMOVE), tr("Delete profile"), !self.saving && self.original.is_some()).clicked() {
                     delete = true;
                 }
             });
+            ui.add_space(10.0);
             ui.add_enabled_ui(!self.saving, |ui| {
-                egui::Grid::new("launch_profile_fields")
-                    .num_columns(2)
-                    .spacing([12.0, 8.0])
-                    .show(ui, |ui| {
-                        ui.label(tr("Profile name"));
-                        ui.add(TextEdit::singleline(&mut self.draft.name).desired_width(380.0));
+                egui::Grid::new("launch_profile_fields").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
+                    let line = |ui: &mut egui::Ui, label: &str, text: &mut String, hint: &str| {
+                        ui.label(label);
+                        ui.add(TextEdit::singleline(text).hint_text(hint).desired_width(field_width));
                         ui.end_row();
-                        ui.label(tr("Command"));
-                        ui.add(
-                            TextEdit::singleline(&mut self.draft.command_name).desired_width(380.0),
-                        );
-                        ui.end_row();
-                        ui.label(tr("Application URLs"));
-                        ui.add(
-                            TextEdit::singleline(
-                                self.draft.application_url.get_or_insert_with(String::new),
-                            )
-                            .hint_text("http://localhost:5000;https://localhost:7000")
-                            .desired_width(380.0),
-                        );
-                        ui.end_row();
-                        ui.label(tr("Program arguments"));
-                        ui.add(
-                            TextEdit::singleline(
-                                self.draft.command_line_args.get_or_insert_with(String::new),
-                            )
-                            .desired_width(380.0),
-                        );
-                        ui.end_row();
-                        ui.label(tr("Launch URL"));
-                        ui.add(
-                            TextEdit::singleline(
-                                self.draft.launch_url.get_or_insert_with(String::new),
-                            )
-                            .desired_width(380.0),
-                        );
-                        ui.end_row();
-                        ui.label(tr("Working directory"));
-                        ui.add(
-                            TextEdit::singleline(
-                                self.draft.working_directory.get_or_insert_with(String::new),
-                            )
-                            .desired_width(380.0),
-                        );
-                        ui.end_row();
-                        ui.label(tr("Executable path"));
-                        ui.add(
-                            TextEdit::singleline(
-                                self.draft.executable_path.get_or_insert_with(String::new),
-                            )
-                            .desired_width(380.0),
-                        );
-                        ui.end_row();
-                        ui.label(tr("Environment variables"));
-                        ui.add(
-                            TextEdit::multiline(&mut self.environment)
-                                .desired_rows(4)
-                                .desired_width(380.0)
-                                .font(egui::TextStyle::Monospace),
-                        );
-                        ui.end_row();
-                    });
-                ui.checkbox(&mut self.draft.launch_browser, tr("Launch browser"));
+                    };
+                    line(ui, tr("Profile name"), &mut self.draft.name, "");
+                    line(ui, tr("Command"), &mut self.draft.command_name, "Project");
+                    line(ui, tr("Application URLs"), self.draft.application_url.get_or_insert_with(String::new), "http://localhost:5000;https://localhost:7000");
+                    line(ui, tr("Program arguments"), self.draft.command_line_args.get_or_insert_with(String::new), "");
+                    line(ui, tr("Launch URL"), self.draft.launch_url.get_or_insert_with(String::new), "swagger");
+                    line(ui, tr("Working directory"), self.draft.working_directory.get_or_insert_with(String::new), "");
+                    line(ui, tr("Executable path"), self.draft.executable_path.get_or_insert_with(String::new), "");
+                    ui.label(tr("Environment variables"));
+                    ui.add(
+                        TextEdit::multiline(&mut self.environment)
+                            .hint_text("ASPNETCORE_ENVIRONMENT=Development")
+                            .font(egui::TextStyle::Monospace)
+                            .desired_rows(4)
+                            .desired_width(field_width),
+                    );
+                    ui.end_row();
+                    ui.label("");
+                    ui.checkbox(&mut self.draft.launch_browser, tr("Launch browser"));
+                    ui.end_row();
+                });
             });
             if let Some(error) = &self.error {
-                ui.colored_label(ui.visuals().error_fg_color, error);
+                ui.add_space(6.0);
+                super::kit::message(ui, error, true);
             }
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(!self.saving, egui::Button::new(tr("Save")))
-                    .clicked()
-                {
-                    save = true;
-                }
-                if ui
-                    .add_enabled(!self.saving, egui::Button::new(tr("Cancel")))
-                    .clicked()
-                {
-                    close = true;
-                }
-                if self.saving {
-                    ui.spinner();
-                }
-            });
+            if self.saving {
+                ui.add_space(6.0);
+                ui.spinner();
+            }
+            super::dialogs::buttons(ui, tr("Save"), !self.saving)
         });
         if let Some(index) = select {
             self.select(index);
@@ -292,6 +225,6 @@ impl LaunchProfileEditor {
         if save {
             self.submit(false);
         }
-        (close || (response.should_close() && !self.saving)).then_some(false)
+        ((cancel || escape) && !self.saving).then_some(false)
     }
 }

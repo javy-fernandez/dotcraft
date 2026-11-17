@@ -129,9 +129,17 @@ fn screens() {
         let api = h.state().runner.configs.iter().find(|c| c.name.starts_with("Shop.Api")).cloned().unwrap();
         if let crate::runner::ConfigKind::App { project, .. } = api.kind {
             let options = rc_core::session::RunOptions { args: "--seed 42".into(), env: "ASPNETCORE_ENVIRONMENT=Staging".into(), ..Default::default() };
-            h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RunOptions { name: api.name.clone(), project, profiles: vec!["http".into(), "https".into()], options, web: true });
+            h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RunOptions { name: api.name.clone(), project: project.clone(), profiles: vec!["http".into(), "https".into()], options, web: true });
             h.run_steps(4);
             h.render().unwrap().save(out.join(format!("run-options-{suffix}.png"))).unwrap();
+            // Its launch profiles, edited in place.
+            let waker = h.state().waker.clone();
+            h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::LaunchProfileEditor(Box::new(crate::ui::launch_profile_editor::LaunchProfileEditor::new(project, waker))));
+            for _ in 0..20 {
+                h.run_steps(1);
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            h.render().unwrap().save(out.join(format!("launch-profiles-{suffix}.png"))).unwrap();
             h.state_mut().dialog = None;
         }
         // Add › API Controller.

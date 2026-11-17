@@ -491,6 +491,19 @@ impl DotCraftApp {
         }
     }
 
+    /// Rebuilds the run configurations after launch profiles change, without reopening the
+    /// workspace (and restarting the language server).
+    pub fn refresh_run_configs(&mut self) {
+        let Some(w) = &self.workspace else { return };
+        let projects = match &w.ws.kind {
+            rc_core::WorkspaceKind::Project(p) => vec![p.clone()],
+            rc_core::WorkspaceKind::Folder => find_projects(&w.ws.root, 4),
+            rc_core::WorkspaceKind::Solution(_) => Vec::new(),
+        };
+        let remembered = self.runner.selected_config().map(|c| c.name.clone());
+        self.runner.set_workspace(w.solution.as_ref(), &projects, &dotnet_path(&self.settings), remembered.as_deref());
+    }
+
     /// Edit the run configuration `name` (the selected one when `None`): an application's
     /// options or a compound's members.
     pub fn edit_run_config(&mut self, name: Option<String>) {

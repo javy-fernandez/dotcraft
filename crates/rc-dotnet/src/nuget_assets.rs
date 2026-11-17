@@ -116,6 +116,8 @@ pub fn parse(project: &Path, json: &str) -> anyhow::Result<AssetsGraph> {
         let (packages, edges) = framework_graph(target, direct)?;
         frameworks.push(FrameworkGraph { framework: alias.unwrap_or(name).to_string(), packages, edges });
     }
+    // By name, whatever order the assets file lists them in.
+    frameworks.sort_by(|a, b| a.framework.cmp(&b.framework));
     anyhow::ensure!(!frameworks.is_empty(), "NuGet assets have no matching target framework");
     Ok(AssetsGraph { project: project.to_path_buf(), frameworks })
 }
