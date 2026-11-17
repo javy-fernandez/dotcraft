@@ -121,8 +121,9 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::ProjectProperties(state) => match state.show(ctx) {
             Some(saved) => {
                 if saved {
+                    // The explorer rereads the project; Roslyn picks the change up from the file
+                    // watcher, so the workspace (and its language server) keeps running.
                     app.explorer.invalidate(state.path());
-                    app.reload_workspace();
                 }
                 Outcome::Close
             }
