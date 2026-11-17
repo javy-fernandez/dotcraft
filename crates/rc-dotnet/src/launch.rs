@@ -82,6 +82,58 @@ impl LaunchSettings {
         }
     }
 
+    /// Update one profile while retaining file-level and profile-level fields this UI does
+    /// not know about. `None` removes the named profile. A new profile uses `original = None`.
+    pub fn write_profile(project: &Path, original: Option<&str>, profile: Option<&LaunchProfile>) -> anyhow::Result<()> {
+        anyhow::ensure!(original.is_some() || profile.is_some(), "no launch profile selected");
+        let path = Self::path_for(project);
+        let mut document: serde_json::Value = match std::fs::read_to_string(&path) {
+            Ok(text) => serde_json::from_str(text.trim_start_matches('\u{feff}'))?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => serde_json::json!({ "profiles": {} }),
+            Err(error) => return Err(error.into()),
+        };
+        let root = document.as_object_mut().ok_or_else(|| anyhow::anyhow!("launchSettings.json must contain an object"))?;
+        let profiles = root.entry("profiles").or_insert_with(|| serde_json::json!({})).as_object_mut()
+            .ok_or_else(|| anyhow::anyhow!("profiles must contain an object"))?;
+        if let Some(old) = original {
+            anyhow::ensure!(profiles.contains_key(old), "launch profile '{old}' no longer exists");
+        }
+        if let Some(profile) = profile {
+            let name = profile.name.trim();
+            anyhow::ensure!(!name.is_empty(), "launch profile name is empty");
+            anyhow::ensure!(original == Some(name) || !profiles.contains_key(name), "launch profile '{name}' already exists");
+            let mut entry = if original == Some(name) {
+                profiles.get(name).cloned()
+            } else {
+                original.and_then(|old| profiles.shift_remove(old))
+            }.unwrap_or_else(|| serde_json::json!({}));
+            let fields = entry.as_object_mut().ok_or_else(|| anyhow::anyhow!("launch profile must contain an object"))?;
+            fields.insert("commandName".into(), serde_json::Value::String(profile.command_name.clone()));
+            set_optional(fields, "commandLineArgs", profile.command_line_args.as_deref());
+            set_optional(fields, "applicationUrl", profile.application_url.as_deref());
+            fields.insert("launchBrowser".into(), serde_json::Value::Bool(profile.launch_browser));
+            set_optional(fields, "launchUrl", profile.launch_url.as_deref());
+            set_optional(fields, "workingDirectory", profile.working_directory.as_deref());
+            set_optional(fields, "executablePath", profile.executable_path.as_deref());
+            let env = profile.environment_variables.iter().map(|(key, value)| (key.clone(), serde_json::Value::String(value.clone()))).collect();
+            fields.insert("environmentVariables".into(), serde_json::Value::Object(env));
+            profiles.insert(name.into(), entry);
+        } else if let Some(old) = original {
+            profiles.shift_remove(old);
+        }
+        let parent = path.parent().ok_or_else(|| anyhow::anyhow!("launchSettings.json has no parent directory"))?;
+        std::fs::create_dir_all(parent)?;
+        let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+        serde_json::to_writer_pretty(&mut temporary, &document)?;
+        use std::io::Write;
+        temporary.write_all(b"\n")?;
+        if let Ok(metadata) = std::fs::metadata(&path) {
+            temporary.as_file().set_permissions(metadata.permissions())?;
+        }
+        temporary.persist(path).map_err(|error| error.error)?;
+        Ok(())
+    }
+
     pub fn parse(text: &str) -> anyhow::Result<LaunchSettings> {
         let text = text.trim_start_matches('\u{feff}');
         let file: FileDe = serde_json::from_str(text)?;
@@ -113,6 +165,14 @@ impl LaunchSettings {
     /// What `dotnet run` picks: the first `Project` profile.
     pub fn default_profile(&self) -> Option<&LaunchProfile> {
         self.profiles.iter().find(|p| p.is_project())
+    }
+}
+
+fn set_optional(fields: &mut serde_json::Map<String, serde_json::Value>, name: &str, value: Option<&str>) {
+    if let Some(value) = value.filter(|value| !value.is_empty()) {
+        fields.insert(name.into(), serde_json::Value::String(value.into()));
+    } else {
+        fields.shift_remove(name);
     }
 }
 
@@ -225,5 +285,37 @@ mod tests {
         assert_eq!(s.default_profile().unwrap().application_url.as_deref(), Some("http://localhost:5112"));
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(LaunchSettings::load(&dir.path().join("X.csproj")).unwrap(), None);
+    }
+
+    #[test]
+    fn edits_profiles_without_dropping_other_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("App.csproj");
+        let path = LaunchSettings::path_for(&project);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, r#"{"$schema":"example","profiles":{"first":{"commandName":"Project","customFlag":9},"second":{"commandName":"Project"}},"iisSettings":{"windowsAuthentication":false}}"#).unwrap();
+        let profile = LaunchProfile {
+            name: "renamed".into(),
+            command_name: "Project".into(),
+            application_url: Some("http://localhost:5100".into()),
+            environment_variables: vec![("MODE".into(), "Development".into())],
+            launch_browser: true,
+            command_line_args: Some("--sample".into()),
+            ..Default::default()
+        };
+        LaunchSettings::write_profile(&project, Some("first"), Some(&profile)).unwrap();
+        let document: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(document["$schema"], "example");
+        assert_eq!(document["iisSettings"]["windowsAuthentication"], false);
+        assert_eq!(document["profiles"]["renamed"]["customFlag"], 9);
+        assert_eq!(document["profiles"]["renamed"]["environmentVariables"]["MODE"], "Development");
+        assert!(document["profiles"].get("first").is_none());
+        assert!(document["profiles"].get("second").is_some());
+        assert_eq!(LaunchSettings::load(&project).unwrap().unwrap().profiles.iter().map(|profile| profile.name.as_str()).collect::<Vec<_>>(), vec!["second", "renamed"]);
+        let mut created = profile.clone();
+        created.name = "third".into();
+        LaunchSettings::write_profile(&project, None, Some(&created)).unwrap();
+        LaunchSettings::write_profile(&project, Some("third"), None).unwrap();
+        assert!(LaunchSettings::load(&project).unwrap().unwrap().profile("third").is_none());
     }
 }
