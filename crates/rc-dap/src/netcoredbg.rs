@@ -7,8 +7,84 @@ use rc_core::inbox::Outbox;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-/// Release downloaded when none is installed.
+/// Release downloaded when none is installed (see [`release`] for Linux).
 pub const VERSION: &str = "3.2.0-1092";
+
+/// Official Linux builds, newest first, with the oldest glibc each one is downloaded for.
+/// Samsung builds them on recent distributions, so each needs that host's glibc and
+/// libstdc++ (amd64 and arm64 alike): 3.2.0 needs glibc 2.38 and GLIBCXX_3.4.32, 3.1.3 glibc
+/// 2.34 and GLIBCXX_3.4.30, 3.0.0 glibc 2.17 and GLIBCXX_3.4.26. 3.1.3 starts at glibc 2.35
+/// because the distributions on 2.34 (RHEL 9, Fedora 35) ship GCC 11's libstdc++, which
+/// stops at GLIBCXX_3.4.29.
+#[cfg(any(target_os = "linux", test))]
+const LINUX_RELEASES: [(&str, (u32, u32)); 3] = [(VERSION, (2, 38)), ("3.1.3-1062", (2, 35)), ("3.0.0-1018", (2, 17))];
+
+/// The release downloaded on this machine: [`VERSION`], or on a Linux system whose glibc is
+/// too old for it, the newest official build that runs there (instead of an adapter that
+/// fails to load).
+pub fn release() -> &'static str {
+    #[cfg(target_os = "linux")]
+    if let Some(glibc) = glibc_version() {
+        return release_for_glibc(glibc);
+    }
+    VERSION
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn release_for_glibc(glibc: (u32, u32)) -> &'static str {
+    LINUX_RELEASES.iter().find(|(_, oldest)| glibc >= *oldest).unwrap_or(&LINUX_RELEASES[LINUX_RELEASES.len() - 1]).0
+}
+
+/// Whether `version` is one of our Linux downloads that needs a newer glibc than this
+/// system's (left in the tools folder by an earlier DotCraft, it cannot start).
+fn needs_newer_glibc(version: &str) -> bool {
+    #[cfg(target_os = "linux")]
+    if let (Some((_, oldest)), Some(glibc)) = (LINUX_RELEASES.iter().find(|(v, _)| *v == version), glibc_version()) {
+        return glibc < *oldest;
+    }
+    let _ = version;
+    false
+}
+
+/// The running glibc (`gnu_get_libc_version`).
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn glibc_version() -> Option<(u32, u32)> {
+    // SAFETY: glibc returns a static NUL-terminated string.
+    let v = unsafe { std::ffi::CStr::from_ptr(libc::gnu_get_libc_version()) };
+    parse_glibc_version(v.to_str().ok()?)
+}
+
+/// Another C library (musl): the newest build, as elsewhere.
+#[cfg(all(target_os = "linux", not(target_env = "gnu")))]
+fn glibc_version() -> Option<(u32, u32)> {
+    None
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn parse_glibc_version(text: &str) -> Option<(u32, u32)> {
+    let mut parts = text.trim().split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor: String = parts.next()?.chars().take_while(char::is_ascii_digit).collect();
+    Some((major, minor.parse().ok()?))
+}
+
+/// What a Linux loader error on the adapter's stderr says is missing, worded for the user:
+/// "libc.so.6: version `GLIBC_2.38' not found (required by netcoredbg)" gives "glibc 2.38";
+/// a libstdc++ symbol version (GLIBCXX_3.4.32, CXXABI_1.3.15) gives "libstdc++ (GLIBCXX_3.4.32)".
+#[cfg(any(target_os = "linux", test))]
+pub fn missing_system_library(stderr_line: &str) -> Option<String> {
+    let at = stderr_line.find("version ")? + "version ".len();
+    let rest = stderr_line[at..].strip_prefix(['`', '\'', '‘'])?;
+    let end = rest.find(['\'', '’', '`'])?;
+    let (name, after) = (&rest[..end], &rest[end + 1..]);
+    if !after.trim_start().starts_with("not found") {
+        return None;
+    }
+    if let Some(version) = name.strip_prefix("GLIBC_") {
+        return Some(format!("glibc {version}"));
+    }
+    (name.starts_with("GLIBCXX_") || name.starts_with("CXXABI_")).then(|| format!("libstdc++ ({name})"))
+}
 const RELEASES: &str = "https://github.com/Samsung/netcoredbg/releases/download";
 
 /// How to start the adapter.
@@ -65,16 +141,17 @@ pub fn asset_for(os: &str, arch: &str) -> Option<&'static str> {
 }
 
 pub fn download_url() -> Option<String> {
-    asset_name().map(|a| format!("{RELEASES}/{VERSION}/{a}"))
+    asset_name().map(|a| format!("{RELEASES}/{}/{a}", release()))
 }
 
 /// Folder of the downloaded adapter (`<tools>/netcoredbg/<version>`).
 pub fn install_dir() -> PathBuf {
-    rc_core::paths::tools_dir().join("netcoredbg").join(VERSION)
+    rc_core::paths::tools_dir().join("netcoredbg").join(release())
 }
 
 /// Finds netcoredbg: the configured path (the executable or its folder), our download (the
-/// pinned version first, then any other version in the tools folder), then `PATH`.
+/// [`release`] first, then any other version in the tools folder that can run here), then
+/// `PATH`.
 pub fn locate(configured: Option<&Path>) -> Option<AdapterCommand> {
     if let Some(p) = configured {
         let p = if p.is_dir() { p.join(exe_name()) } else { p.to_path_buf() };
@@ -93,6 +170,7 @@ pub fn locate(configured: Option<&Path>) -> Option<AdapterCommand> {
         .flatten()
         .map(|e| e.path())
         .filter(|p| !p.extension().is_some_and(|e| e == "partial"))
+        .filter(|p| !p.file_name().is_some_and(|n| needs_newer_glibc(&n.to_string_lossy())))
         .map(|p| p.join(exe_name()))
         .chain(std::iter::once(root.join(exe_name())))
         .filter(|p| p.is_file())
@@ -155,7 +233,7 @@ pub async fn download(events: Outbox<DownloadEvent>) {
 
 async fn download_inner(events: &Outbox<DownloadEvent>) -> anyhow::Result<PathBuf> {
     let asset = asset_name().ok_or_else(|| anyhow::anyhow!("netcoredbg has no build for {}-{}", std::env::consts::OS, std::env::consts::ARCH))?;
-    let url = format!("{RELEASES}/{VERSION}/{asset}");
+    let url = format!("{RELEASES}/{}/{asset}", release());
     let client = reqwest::Client::builder().build()?;
     let mut resp = client.get(&url).send().await?.error_for_status()?;
     let total = resp.content_length();
@@ -269,6 +347,45 @@ mod tests {
         assert_eq!(asset_for("linux", "aarch64"), Some("netcoredbg-linux-arm64.tar.gz"));
         assert_eq!(asset_for("macos", "x86_64"), None);
         assert!(VERSION.contains('-'));
+    }
+
+    #[test]
+    fn picks_the_newest_linux_build_the_system_glibc_runs() {
+        assert_eq!(release_for_glibc((2, 39)), VERSION);
+        assert_eq!(release_for_glibc((2, 38)), VERSION);
+        // Ubuntu 22.04, Debian 12.
+        assert_eq!(release_for_glibc((2, 35)), "3.1.3-1062");
+        assert_eq!(release_for_glibc((2, 36)), "3.1.3-1062");
+        // RHEL 9 (GCC 11's libstdc++), Ubuntu 20.04, Debian 11, and anything older.
+        assert_eq!(release_for_glibc((2, 34)), "3.0.0-1018");
+        assert_eq!(release_for_glibc((2, 31)), "3.0.0-1018");
+        assert_eq!(release_for_glibc((2, 12)), "3.0.0-1018");
+        assert!(LINUX_RELEASES.windows(2).all(|w| w[0].1 > w[1].1));
+        if !cfg!(target_os = "linux") {
+            assert_eq!(release(), VERSION);
+            assert!(!needs_newer_glibc(VERSION));
+        }
+    }
+
+    #[test]
+    fn parses_the_glibc_version() {
+        assert_eq!(parse_glibc_version("2.35"), Some((2, 35)));
+        assert_eq!(parse_glibc_version("2.38.9000"), Some((2, 38)));
+        assert_eq!(parse_glibc_version("2.17-RHEL"), Some((2, 17)));
+        assert_eq!(parse_glibc_version("unknown"), None);
+    }
+
+    #[test]
+    fn reads_what_the_linux_loader_misses() {
+        let glibc = "/home/u/.local/share/DotCraft/tools/netcoredbg/3.2.0-1092/netcoredbg: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.38' not found (required by /home/u/.local/share/DotCraft/tools/netcoredbg/3.2.0-1092/netcoredbg)";
+        assert_eq!(missing_system_library(glibc).as_deref(), Some("glibc 2.38"));
+        let cxx = "./netcoredbg: /lib64/libstdc++.so.6: version 'GLIBCXX_3.4.32' not found (required by ./netcoredbg)";
+        assert_eq!(missing_system_library(cxx).as_deref(), Some("libstdc++ (GLIBCXX_3.4.32)"));
+        let abi = "netcoredbg: /usr/lib/libstdc++.so.6: version `CXXABI_1.3.15' not found (required by netcoredbg)";
+        assert_eq!(missing_system_library(abi).as_deref(), Some("libstdc++ (CXXABI_1.3.15)"));
+        for other in ["info: version `GLIBC_2.38' found", "netcoredbg: version 3.2.0", "error: libdbgshim.so not found", ""] {
+            assert_eq!(missing_system_library(other), None, "{other}");
+        }
     }
 
     #[test]
