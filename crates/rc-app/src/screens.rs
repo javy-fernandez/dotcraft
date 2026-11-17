@@ -2323,3 +2323,106 @@ fn screens_generate() {
         assert!(text.contains("    public event EventHandler? Changed;\n}\n"), "{text}");
     }
 }
+
+/// The `.resx` editor: the resource grid with a column per culture (missing translations in red,
+/// a cell being edited, the Comment column), a file with thousands of keys scrolled down, and
+/// the XML view.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/resx-*.png"]
+fn screens_resx_editor() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let resx = |entries: &[(&str, &str, Option<&str>)]| {
+        let mut text = String::from("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<root>\n  <resheader name=\"resmimetype\">\n    <value>text/microsoft-resx</value>\n  </resheader>\n");
+        for (name, value, comment) in entries {
+            text.push_str(&format!("  <data name=\"{name}\" xml:space=\"preserve\">\n    <value>{value}</value>\n"));
+            if let Some(comment) = comment {
+                text.push_str(&format!("    <comment>{comment}</comment>\n"));
+            }
+            text.push_str("  </data>\n");
+        }
+        text.push_str("  <data name=\"Logo\" type=\"System.Resources.ResXFileRef, System.Windows.Forms\">\n    <value>Resources\\logo.png;System.Drawing.Bitmap, System.Drawing</value>\n  </data>\n</root>\n");
+        text
+    };
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let workspace = tempfile::tempdir().unwrap();
+        let dir = workspace.path().join("Shop.Web/Resources");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("Strings.resx"),
+            resx(&[
+                ("AddToCart", "Add to cart", Some("Product page button")),
+                ("CartEmpty", "Your cart is empty.", None),
+                ("Checkout", "Checkout", None),
+                ("FreeShipping", "Free shipping on orders over {0}", Some("{0}: amount with currency")),
+                ("OrderPlaced", "Thanks! Your order {0} is on its way.", None),
+                ("OutOfStock", "Out of stock", None),
+                ("Search", "Search products", None),
+                ("SignIn", "Sign in", None),
+                ("Welcome", "Welcome back, {0}!", Some("{0}: first name")),
+            ]),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("Strings.es.resx"),
+            resx(&[
+                ("AddToCart", "Añadir al carrito", None),
+                ("CartEmpty", "Tu carrito está vacío.", None),
+                ("Checkout", "Pagar", None),
+                ("FreeShipping", "Envío gratis en pedidos de más de {0}", None),
+                ("OrderPlaced", "¡Gracias! Tu pedido {0} está en camino.", None),
+                ("Search", "Buscar productos", None),
+                ("SignIn", "Iniciar sesión", None),
+                ("Welcome", "¡Hola de nuevo, {0}!", None),
+            ]),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("Strings.de.resx"),
+            resx(&[("AddToCart", "In den Warenkorb", None), ("CartEmpty", "Ihr Warenkorb ist leer.", None), ("Checkout", "Zur Kasse", None), ("SignIn", "Anmelden", None), ("Welcome", "Willkommen zurück, {0}!", None)]),
+        )
+        .unwrap();
+        std::fs::write(dir.join("Strings.fr.resx"), resx(&[("AddToCart", "Ajouter au panier", None), ("Checkout", "Paiement", None), ("Search", "Rechercher des produits", None), ("SignIn", "Se connecter", None)])).unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(workspace.path());
+        app.open_file(&dir.join("Strings.resx"));
+        let mut h = harness(app, vec2(1440.0, 800.0));
+        run_frames(&mut h, "resource grid", |app| app.docs.active_doc().and_then(|d| d.resx.as_ref()).is_some_and(|r| r.group.is_some()));
+        h.run_steps(3);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("resx-grid-{suffix}.png"))).unwrap();
+        // Typing a missing German translation in place.
+        {
+            let resx = h.state_mut().docs.active_doc_mut().unwrap().resx.as_mut().unwrap();
+            let row = resx.group.as_ref().unwrap().rows.iter().position(|r| r.name == "FreeShipping").unwrap();
+            resx.start_edit(row, crate::resource_editor::Column::Culture(1));
+            resx.edit.as_mut().unwrap().text = "Kostenloser Versand ab {0}".into();
+            resx.apply_edit();
+        }
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("resx-editing-{suffix}.png"))).unwrap();
+        if !dark {
+            continue;
+        }
+        // Thousands of keys: only the rows on screen are laid out.
+        let many: Vec<(String, String)> = (0..5000).map(|i| (format!("Message{i:04}"), format!("Message number {i}"))).collect();
+        let entries: Vec<(&str, &str, Option<&str>)> = many.iter().map(|(k, v)| (k.as_str(), v.as_str(), None)).collect();
+        let big = workspace.path().join("Shop.Web/Big.resx");
+        std::fs::write(&big, resx(&entries)).unwrap();
+        std::fs::write(workspace.path().join("Shop.Web/Big.pl.resx"), resx(&entries[..4000])).unwrap();
+        h.state_mut().open_file(&big);
+        run_frames(&mut h, "big resource grid", |app| app.docs.active_doc().and_then(|d| d.resx.as_ref()).is_some_and(|r| r.group.is_some()));
+        h.state_mut().docs.active_doc_mut().unwrap().resx.as_mut().unwrap().scroll_to = Some(4010);
+        h.run_steps(3);
+        h.render().unwrap().save(out.join("resx-big-dark.png")).unwrap();
+        // The XML of the same file.
+        let index = h.state().docs.index_of(&dir.join("Strings.resx").canonicalize().unwrap()).unwrap();
+        h.state_mut().docs.activate(index);
+        crate::ui::resource_editor::switch_view(h.state_mut(), index, crate::resource_editor::ResxView::Xml);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join("resx-xml-dark.png")).unwrap();
+    }
+}

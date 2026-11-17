@@ -261,6 +261,15 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         }
         editor_rect.min.y = banner.bottom();
     }
+    // .resx: the resource grid instead of the XML, switched at the top right.
+    if app.docs.list[active].resx.is_some() {
+        if app.docs.list[active].shows_resource_grid() {
+            let clicked = crate::ui::resource_editor::show(app, ui, active, editor_rect);
+            crate::ui::resource_editor::switcher(app, ui, active, editor_rect);
+            return clicked;
+        }
+        crate::ui::resource_editor::switcher(app, ui, active, editor_rect);
+    }
     // Markdown: the rendered page beside or instead of the editor.
     let pane = editor_rect;
     let mut preview_clicked = false;

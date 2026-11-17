@@ -25,6 +25,8 @@ pub struct Doc {
     pub conflict: bool,
     /// Markdown files: editor, preview or both side by side.
     pub md_view: Option<MdView>,
+    /// `.resx` files: the resource grid (Rider's Resources editor) and its edits.
+    pub resx: Option<Box<crate::resource_editor::ResxEditor>>,
     detected_indent: rc_text::commands::Indent,
     style_revision: u64,
     resolved_style: rc_core::editorconfig::Indentation,
@@ -43,8 +45,14 @@ impl Doc {
         self.path.file_name().map_or_else(|| self.path.display().to_string(), |n| n.to_string_lossy().into_owned())
     }
 
+    /// Unsaved edits in the text or, for a `.resx` file, in its resource grid.
     pub fn is_modified(&self) -> bool {
-        self.editor.buffer.is_modified()
+        self.editor.buffer.is_modified() || self.resx.as_ref().is_some_and(|resx| resx.dirty())
+    }
+
+    /// The resource grid is what the tab shows.
+    pub fn shows_resource_grid(&self) -> bool {
+        self.resx.as_ref().is_some_and(|resx| resx.view == crate::resource_editor::ResxView::Grid)
     }
 
     fn apply_style(&mut self) {
@@ -80,6 +88,7 @@ pub struct Docs {
     pub bookmarks: std::collections::BTreeMap<PathBuf, std::collections::BTreeMap<usize, Option<char>>>,
     /// Record Local History on saves and outside changes (off in unit tests: no home folder).
     pub history: bool,
+    waker: rc_core::Waker,
 }
 
 /// A single background reader per document collection; no filesystem work on the UI thread.
@@ -149,7 +158,7 @@ impl Docs {
     }
 
     pub fn with_waker(pool: ParserPool, waker: rc_core::Waker) -> Self {
-        Docs { list: Vec::new(), active: None, next_id: 1, pool, recent: Vec::new(), styles: StyleWorker::new(waker), bookmarks: Default::default(), history: false }
+        Docs { list: Vec::new(), active: None, next_id: 1, pool, recent: Vec::new(), styles: StyleWorker::new(waker.clone()), bookmarks: Default::default(), history: false, waker }
     }
 
     /// Every bookmark: open files' from their editors, the others' from the store; by file and line.
@@ -234,9 +243,14 @@ impl Docs {
             let lines = editor.buffer.len_lines();
             editor.bookmarks = marks.into_iter().filter(|(l, _)| *l < lines).collect();
         }
+        let resx = rc_dotnet::resx::base_and_culture(&path).map(|_| {
+            let mut resx = Box::new(crate::resource_editor::ResxEditor::new(self.waker.clone()));
+            resx.load(&path, true);
+            resx
+        });
         let detected_indent = editor.indent.clone();
         let _ = self.styles.requests.send((id, 0, path.clone()));
-        self.list.push(Doc { detected_indent, style_revision: 0, resolved_style: Default::default(), editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view });
+        self.list.push(Doc { detected_indent, style_revision: 0, resolved_style: Default::default(), editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, resx });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)
@@ -302,6 +316,9 @@ impl Docs {
     }
 
     pub fn save(&mut self, i: usize) -> Result<(), String> {
+        if self.list[i].shows_resource_grid() {
+            return self.save_resources(i);
+        }
         let history = self.history && !crate::user_secrets::is_user_secrets_file(&self.list[i].path);
         let doc = &mut self.list[i];
         // The first revision is the file as it was before DotCraft touched it.
@@ -338,6 +355,46 @@ impl Docs {
         doc.conflict = false;
         if history {
             let _ = rc_core::local_history::record(&doc.path, &doc.editor.buffer.rope().to_string(), "Saved");
+        }
+        // The XML changed under the resource grid.
+        if let Some(resx) = &mut doc.resx {
+            resx.load(&doc.path, false);
+        }
+        Ok(())
+    }
+
+    /// Saves the resource grid of `.resx` document `i`: every culture file it changed (only the
+    /// edited spans), then the `.Designer.cs` class generated from the neutral file. Open tabs
+    /// of those files reload.
+    fn save_resources(&mut self, i: usize) -> Result<(), String> {
+        let doc = &self.list[i];
+        let Some(resx) = doc.resx.as_ref().filter(|resx| resx.dirty()) else { return Ok(()) };
+        // Saving would overwrite unsaved text edits of the same files in other tabs.
+        if let Some(group) = &resx.group
+            && let Some(other) = self.list.iter().enumerate().find(|(j, other)| *j != i && other.editor.buffer.is_modified() && group.files.iter().any(|file| file.path == other.path))
+        {
+            return Err(trf("Save {file} before saving the resource grid", &[("file", &other.1.name())]));
+        }
+        let name = doc.name();
+        let resx = self.list[i].resx.as_mut().expect("checked above");
+        let saved = resx.save().map_err(|e| trf("Could not save {file}: {error}", &[("file", &name), ("error", &e)]))?;
+        for (path, before, after) in &saved.written {
+            if self.history {
+                if rc_core::local_history::revisions(path).is_empty() {
+                    let _ = rc_core::local_history::record(path, &before.replace("\r\n", "\n"), "Original");
+                }
+                let _ = rc_core::local_history::record(path, &after.replace("\r\n", "\n"), "Saved");
+            }
+            if let Some(j) = self.index_of(path)
+                && !self.list[j].editor.buffer.is_modified()
+            {
+                let _ = self.discard_and_reload(j);
+            }
+        }
+        if let Some(update) = saved.designer
+            && update.path.is_file()
+        {
+            self.edit_file(&update.path, |text| Ok(rc_dotnet::resx::designer_edits(text, &update.before, &update.after)))?;
         }
         Ok(())
     }
@@ -395,6 +452,14 @@ impl Docs {
         if path.file_name().is_some_and(|name| name == ".editorconfig") {
             self.refresh_styles();
         }
+        // Resource grids show every culture file of their family.
+        for doc in &mut self.list {
+            if let Some(resx) = &mut doc.resx
+                && rc_dotnet::resx::same_family(&doc.path, path)
+            {
+                resx.on_disk_change(&doc.path);
+            }
+        }
         let Some(i) = self.index_of(path) else { return };
         let doc = &mut self.list[i];
         let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok();
@@ -406,7 +471,7 @@ impl Docs {
             doc.mtime = mtime;
             return;
         }
-        if doc.is_modified() {
+        if doc.editor.buffer.is_modified() {
             doc.conflict = true;
             return;
         }
@@ -433,6 +498,14 @@ impl Docs {
     /// File › Reload from Disk: an unmodified document loads the file again; one with unsaved
     /// edits shows the conflict banner so the user picks which version to keep.
     pub fn reload_from_disk(&mut self, i: usize) -> Result<(), String> {
+        let doc = &mut self.list[i];
+        if doc.shows_resource_grid()
+            && let Some(resx) = &mut doc.resx
+        {
+            // With edits, the grid asks which version to keep once the files are read.
+            resx.load(&doc.path, !resx.dirty());
+            return Ok(());
+        }
         if self.list[i].is_modified() {
             self.list[i].conflict = true;
             return Ok(());
