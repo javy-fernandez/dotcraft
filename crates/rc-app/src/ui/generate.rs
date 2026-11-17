@@ -22,7 +22,9 @@ enum Outcome {
 pub fn open(app: &mut DotCraftApp) {
     let Some(doc) = app.docs.active_doc() else { return };
     if let Some(dialog) = Dialog::from_doc(doc) {
+        let discovery = crate::generate_semantic::GenerateDiscovery::start(doc, &dialog, app.insight.session.as_ref(), app.waker.clone());
         app.generate = Some(dialog);
+        app.generate_discovery = discovery;
         app.focus_editor = false;
     } else {
         app.notify(tr("Place the caret inside a C# class, struct or record to generate members"), true);
@@ -30,8 +32,23 @@ pub fn open(app: &mut DotCraftApp) {
 }
 
 pub fn show(app: &mut DotCraftApp, ctx: &Context) {
-    let Some(mut dialog) = app.generate.take() else { return };
-    let outcome = if dialog.choosing_kind { kind_popup(app, ctx, &mut dialog) } else { members_dialog(ctx, &mut dialog) };
+    let Some(mut dialog) = app.generate.take() else {
+        app.generate_discovery = None;
+        return;
+    };
+    if app.generate_discovery.is_none()
+        && let Some(doc) = app.docs.active_doc().filter(|doc| doc.editor.id == dialog.doc_id && doc.editor.buffer.version() == dialog.version)
+    {
+        app.generate_discovery = crate::generate_semantic::GenerateDiscovery::start(doc, &dialog, app.insight.session.as_ref(), app.waker.clone());
+    }
+    if let Some(discovery) = app.generate_discovery.as_mut() {
+        discovery.update(&mut dialog);
+    }
+    let busy = app.generate_discovery.as_ref().is_some_and(|discovery| discovery.busy());
+    let outcome = if dialog.choosing_kind { kind_popup(app, ctx, &mut dialog) } else { members_dialog(ctx, &mut dialog, busy) };
+    if !matches!(outcome, Outcome::Keep) {
+        app.generate_discovery = None;
+    }
     match outcome {
         Outcome::Keep => app.generate = Some(dialog),
         Outcome::Close => app.focus_editor = true,
@@ -114,7 +131,7 @@ fn kind_popup(app: &DotCraftApp, ctx: &Context, dialog: &mut Dialog) -> Outcome 
 }
 
 /// The second step: the members to generate from, with check boxes.
-fn members_dialog(ctx: &Context, dialog: &mut Dialog) -> Outcome {
+fn members_dialog(ctx: &Context, dialog: &mut Dialog, busy: bool) -> Outcome {
     let targets = dialog.kind.uses_targets();
     let rows: Vec<usize> = if targets {
         dialog.targets.iter().enumerate().filter(|(_, t)| t.kind == dialog.kind).map(|(i, _)| i).collect()
@@ -146,9 +163,16 @@ fn members_dialog(ctx: &Context, dialog: &mut Dialog) -> Outcome {
         let p = rc_kit::pal(ui);
         egui::Frame::new().stroke(egui::Stroke::new(1.0, p.control_border)).corner_radius(6).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
             egui::ScrollArea::vertical().max_height(300.0).min_scrolled_height(120.0).auto_shrink([false, true]).show(ui, |ui| {
-                if rows.is_empty() && targets {
+                if rows.is_empty() && targets && busy {
                     ui.add_space(6.0);
-                    kit::note(ui, tr("No local members found"));
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        kit::note(ui, tr("Discovering members…"));
+                    });
+                    ui.add_space(6.0);
+                } else if rows.is_empty() && targets {
+                    ui.add_space(6.0);
+                    kit::note(ui, tr("No members found"));
                     roslyn = kit::button(ui, Some(ico::BULB), tr("Try Roslyn code actions"), true).clicked();
                     ui.add_space(6.0);
                 } else if rows.is_empty() {

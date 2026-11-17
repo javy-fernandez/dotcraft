@@ -23,6 +23,25 @@ impl Known {
     }
 }
 
+/// Builds picker candidates from a declaration resolved by Roslyn in another source file.
+pub fn collect_resolved_source(source: &str, reference: &str, receiver: Option<&str>, known: &Known) -> Vec<TargetMember> {
+    let rope = rc_text::Rope::from_str(source);
+    let Some(tree) = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None) else { return Vec::new() };
+    let mut types = Vec::new();
+    walk_types(tree.root_node(), source, &mut types);
+    let Some(declaration) = find_type(&types, source, reference) else { return Vec::new() };
+    let kind = if receiver.is_some() {
+        Kind::Delegate
+    } else if declaration.kind() == "interface_declaration" {
+        Kind::Implement
+    } else {
+        Kind::Override
+    };
+    let mut targets = Vec::new();
+    add_type_members(&mut targets, source, declaration, kind, reference, receiver, known);
+    targets
+}
+
 /// Candidates from the types declared in the same file as `current`.
 pub fn collect(tree: &Tree, source: &str, current: Node<'_>, members: &[Member], known: &Known) -> Vec<TargetMember> {
     let mut types = Vec::new();
@@ -450,6 +469,18 @@ mod tests {
         assert!(out.contains("\tpublic string Id => _service.Id;\n"), "{out}");
         assert!(out.contains("\tpublic event System.Action Done\n\t{\n\t\tadd => _service.Done += value;\n\t\tremove => _service.Done -= value;\n\t}\n"), "{out}");
         assert!(!out.contains("_service.Hidden"), "{out}");
+    }
+
+    #[test]
+    fn resolves_members_from_another_source_file() {
+        use super::{Known, collect_resolved_source};
+        let source = "namespace Contracts; public interface IRepository<T> { T Find(T value); string Name { get; } }";
+        let targets = collect_resolved_source(source, "IRepository<string>", None, &Known::default());
+        assert!(targets.iter().any(|target| target.kind == Kind::Implement && target.code.contains("string Find(string value)")));
+        assert!(targets.iter().any(|target| target.code.contains("string Name")));
+        let service = "namespace Services; public class Formatter { public string Format(int value) => value.ToString(); }";
+        let targets = collect_resolved_source(service, "Formatter", Some("_formatter"), &Known::default());
+        assert!(targets.iter().any(|target| target.kind == Kind::Delegate && target.code.contains("_formatter.Format(value)")));
     }
 
     #[test]
