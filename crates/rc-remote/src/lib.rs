@@ -97,35 +97,79 @@ pub enum Endpoint {
     Wsl { distribution: String, agent: String },
 }
 
+/// Quotes `word` as a single word for the POSIX shell that sshd runs the remote command
+/// through. A leading `~/` stays unquoted so the remote shell expands it to the home folder;
+/// everything else is single-quoted, so `$`, backticks, `;` and the like stay literal.
+pub fn shell_word(word: &str) -> String {
+    let (home, rest) = match word.strip_prefix("~/") {
+        Some(rest) => ("~/", rest),
+        None => ("", word),
+    };
+    format!("{home}'{}'", rest.replace('\'', "'\\''"))
+}
+
+/// Keeps Windows from flashing a console window for a process started by the GUI.
+fn no_window(#[allow(unused_mut)] mut cmd: Command) -> Command {
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    cmd
+}
+
+/// A host, distribution or agent path must be one plain line: no control characters, and
+/// no leading `-` that ssh or wsl.exe could read as an option.
+fn plain_argument(value: &str) -> bool {
+    !value.is_empty() && !value.starts_with('-') && !value.chars().any(char::is_control)
+}
+
 impl Endpoint {
     pub fn command(&self) -> Result<Command> {
-        match self {
+        let cmd = match self {
             Endpoint::Ssh { host, agent } => {
-                if host.is_empty()
-                    || host.starts_with('-')
+                if !plain_argument(host)
                     || host.chars().any(char::is_whitespace)
-                    || agent.is_empty()
+                    || !plain_argument(agent)
                 {
                     bail!("invalid SSH host or agent");
                 }
-                // ssh executes its remote command through a shell; quote the executable as one word.
-                let quoted = format!("'{}'", agent.replace('\'', "'\\''"));
                 let mut cmd = Command::new("ssh");
-                cmd.args(["-T", "--", host, &quoted]);
-                Ok(cmd)
+                // No prompts: DotCraft has no terminal to answer them, so password and
+                // unknown-host-key prompts fail instead of hanging. Keys, agents, known_hosts
+                // and host aliases all come from the user's own SSH configuration.
+                cmd.args([
+                    "-T",
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "ConnectTimeout=15",
+                    "-o",
+                    "ServerAliveInterval=15",
+                    "-o",
+                    "ServerAliveCountMax=3",
+                    "--",
+                    host,
+                    &shell_word(agent),
+                ]);
+                cmd
             }
             Endpoint::Wsl {
                 distribution,
                 agent,
             } => {
-                if distribution.is_empty() || agent.is_empty() {
+                if !plain_argument(distribution) || !plain_argument(agent) {
                     bail!("invalid WSL distribution or agent");
                 }
                 let mut cmd = Command::new("wsl.exe");
-                cmd.args(["--distribution", distribution, "--exec", agent]);
-                Ok(cmd)
+                cmd.args(["--distribution", distribution]);
+                // `--exec` runs the program without a shell, so `~` is never expanded:
+                // start in the home folder and run the rest as a relative path instead.
+                match agent.strip_prefix("~/") {
+                    Some(rest) => cmd.args(["--cd", "~", "--exec", &format!("./{rest}")]),
+                    None => cmd.args(["--exec", agent]),
+                };
+                cmd
             }
-        }
+        };
+        Ok(no_window(cmd))
     }
 
     pub fn spawn(&self) -> Result<Child> {
@@ -454,13 +498,91 @@ mod tests {
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
+        assert_eq!(args[0], "-T");
+        assert!(args.contains(&"BatchMode=yes".to_string()));
+        assert_eq!(
+            args[args.len() - 3..],
+            ["--", "example.org", "'/home/a b/agent'\\''v1'"]
+        );
+        for (host, agent) in [
+            ("-oProxyCommand=evil", "agent"),
+            ("bad host", "agent"),
+            ("host\n", "agent"),
+            ("", "agent"),
+            ("host", ""),
+            ("host", "-agent"),
+            ("host", "agent\nrm -rf ~"),
+        ] {
+            let endpoint = Endpoint::Ssh {
+                host: host.into(),
+                agent: agent.into(),
+            };
+            assert!(endpoint.command().is_err(), "{host:?} {agent:?}");
+        }
+    }
+
+    /// The quoted word goes through a real POSIX shell and must come back unchanged.
+    #[cfg(unix)]
+    #[test]
+    fn shell_word_survives_a_real_shell() {
+        for word in [
+            "plain",
+            "/home/a b/agent",
+            "it's",
+            "$(touch /tmp/dotcraft-pwned)",
+            "`id`",
+            "a;b && c | d > e",
+            "\"double\" \\back\\slash",
+            "*?[glob]",
+            "${HOME}",
+            "naïve/日本",
+            "'",
+            "",
+        ] {
+            let out = std::process::Command::new("sh")
+                .args(["-c", &format!("printf %s {}", shell_word(word))])
+                .output()
+                .unwrap();
+            assert_eq!(String::from_utf8(out.stdout).unwrap(), word);
+        }
+        let out = std::process::Command::new("sh")
+            .args(["-c", &format!("printf %s {}", shell_word("~/bin/it's agent"))])
+            .output()
+            .unwrap();
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(
+            String::from_utf8(out.stdout).unwrap(),
+            format!("{home}/bin/it's agent")
+        );
+    }
+
+    #[test]
+    fn wsl_launcher_starts_home_relative_agents_in_the_home_folder() {
+        let command = Endpoint::Wsl {
+            distribution: "Ubuntu".into(),
+            agent: "~/.cargo/bin/dotcraft-remote-agent".into(),
+        }
+        .command()
+        .unwrap();
+        let args: Vec<_> = command
+            .as_std()
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
         assert_eq!(
             args,
-            ["-T", "--", "example.org", "'/home/a b/agent'\\''v1'"]
+            [
+                "--distribution",
+                "Ubuntu",
+                "--cd",
+                "~",
+                "--exec",
+                "./.cargo/bin/dotcraft-remote-agent"
+            ]
         );
         assert!(
-            Endpoint::Ssh {
-                host: "-bad".into(),
+            Endpoint::Wsl {
+                distribution: "--help".into(),
                 agent: "agent".into()
             }
             .command()
