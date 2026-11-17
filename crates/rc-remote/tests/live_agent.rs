@@ -13,7 +13,7 @@ async fn local_agent_binary_lists_and_reads_a_workspace() {
         .kill_on_drop(true)
         .spawn()
         .unwrap();
-    let mut client = Client::new(
+    let client = Client::new(
         process.stdout.take().unwrap(),
         process.stdin.take().unwrap(),
     );
@@ -53,7 +53,7 @@ async fn cancelled_command_keeps_the_agent_connection_usable() {
         .kill_on_drop(true)
         .spawn()
         .unwrap();
-    let mut client = Client::new(
+    let client = Client::new(
         process.stdout.take().unwrap(),
         process.stdin.take().unwrap(),
     );
@@ -64,7 +64,7 @@ async fn cancelled_command_keeps_the_agent_connection_usable() {
         let _ = tx.send(());
     });
     let start = std::time::Instant::now();
-    let error = client
+    let cancelled = client
         .request_cancellable(
             Operation::Run {
                 program: "sleep".into(),
@@ -76,13 +76,63 @@ async fn cancelled_command_keeps_the_agent_connection_usable() {
             rx,
         )
         .await
-        .unwrap_err();
-    assert!(error.to_string().contains("cancelled"));
+        .unwrap();
+    assert!(cancelled.is_none());
     assert!(start.elapsed() < std::time::Duration::from_secs(2));
     assert!(matches!(
         client.request(Operation::Hello).await.unwrap(),
         Value::Hello { .. }
     ));
+    drop(client);
+    assert!(process.wait().await.unwrap().success());
+}
+
+/// A long command does not hold up browsing: other requests are answered meanwhile.
+#[cfg(unix)]
+#[tokio::test]
+async fn requests_run_side_by_side_with_a_long_command() {
+    let mut process = Command::new(env!("CARGO_BIN_EXE_dotcraft-remote-agent"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let client = Client::new(
+        process.stdout.take().unwrap(),
+        process.stdin.take().unwrap(),
+    );
+    client.handshake().await.unwrap();
+    let build = {
+        let client = client.clone();
+        tokio::spawn(async move {
+            client
+                .request(Operation::Run {
+                    program: "sh".into(),
+                    args: vec!["-c".into(), "sleep 1; echo built".into()],
+                    cwd: std::env::temp_dir().display().to_string(),
+                    env: vec![],
+                    timeout_ms: 20_000,
+                })
+                .await
+        })
+    };
+    let start = std::time::Instant::now();
+    let dir = tempfile::tempdir().unwrap();
+    for _ in 0..3 {
+        let listed = client
+            .request(Operation::List {
+                path: dir.path().display().to_string(),
+            })
+            .await
+            .unwrap();
+        assert!(matches!(listed, Value::Entries { .. }));
+    }
+    assert!(start.elapsed() < std::time::Duration::from_millis(800));
+    let Value::Exit { stdout, .. } = build.await.unwrap().unwrap() else {
+        panic!("process response")
+    };
+    assert_eq!(decode_data(&stdout).unwrap(), b"built\n");
     drop(client);
     assert!(process.wait().await.unwrap().success());
 }
@@ -102,7 +152,7 @@ async fn local_agent_runs_dotnet_discovery_build_and_test_commands() {
         .kill_on_drop(true)
         .spawn()
         .unwrap();
-    let mut client = Client::new(
+    let client = Client::new(
         process.stdout.take().unwrap(),
         process.stdin.take().unwrap(),
     );

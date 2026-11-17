@@ -16,7 +16,7 @@ use std::{
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
-    process::{Child, ChildStdin, ChildStdout, Command},
+    process::{Child, Command},
     sync::{Notify, mpsc, oneshot},
     task::JoinHandle,
 };
@@ -207,7 +207,7 @@ where
     let mut cancelled = HashSet::new();
     loop {
         tokio::select! {
-            line = read_line_bounded(&mut reader) => {
+            line = read_line_bounded(&mut reader, MAX_LINE_BYTES) => {
                 let Some(line) = line? else { break };
                 let req: Request = match serde_json::from_slice(&line) {
                     Ok(req) => req,
@@ -265,6 +265,7 @@ where
 
 async fn read_line_bounded<R: AsyncRead + Unpin>(
     reader: &mut BufReader<R>,
+    limit: usize,
 ) -> Result<Option<Vec<u8>>> {
     let mut line = Vec::new();
     loop {
@@ -273,14 +274,14 @@ async fn read_line_bounded<R: AsyncRead + Unpin>(
             if line.is_empty() {
                 return Ok(None);
             }
-            bail!("truncated remote request");
+            bail!("truncated remote line");
         }
         let count = chunk
             .iter()
             .position(|byte| *byte == b'\n')
             .map_or(chunk.len(), |index| index + 1);
-        if line.len() + count > MAX_LINE_BYTES {
-            bail!("remote request exceeds 2 MiB line limit");
+        if line.len() + count > limit {
+            bail!("remote line exceeds the {} MiB line limit", limit / (1024 * 1024));
         }
         line.extend_from_slice(&chunk[..count]);
         reader.consume(count);
@@ -477,11 +478,183 @@ impl Drop for Capture {
     }
 }
 
-/// A sequential client for the current transport. Parallel callers may use separate connections.
-pub struct Client<R, W> {
-    read: tokio::io::Lines<BufReader<R>>,
-    write: W,
-    next_id: u64,
+/// Longest response line the client accepts: a process result carries two base64 streams
+/// of up to 1 MiB each.
+const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+
+type Waiters = Arc<Mutex<Option<HashMap<u64, oneshot::Sender<Response>>>>>;
+
+/// A client for the agent. Requests can run side by side (browse while a build runs): a
+/// reader task hands each response to the request with its id. Clones share the connection.
+#[derive(Clone)]
+pub struct Client {
+    inner: Arc<ClientInner>,
+}
+
+struct ClientInner {
+    write: tokio::sync::Mutex<std::pin::Pin<Box<dyn AsyncWrite + Send>>>,
+    /// `None` once the connection is gone: every waiting request then fails.
+    waiters: Waiters,
+    next_id: std::sync::atomic::AtomicU64,
+    reader: JoinHandle<()>,
+}
+
+impl Drop for ClientInner {
+    fn drop(&mut self) {
+        self.reader.abort();
+    }
+}
+
+/// Forgets a request whose caller stopped waiting, so its late response is dropped.
+struct Waiting<'a> {
+    waiters: &'a Waiters,
+    id: u64,
+}
+
+impl Drop for Waiting<'_> {
+    fn drop(&mut self) {
+        if let Some(map) = lock(self.waiters).as_mut() {
+            map.remove(&self.id);
+        }
+    }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn disconnected<E>(_: E) -> anyhow::Error {
+    anyhow::anyhow!("remote agent disconnected")
+}
+
+fn outcome(response: Response) -> Result<Value> {
+    response
+        .result
+        .map_err(|message| anyhow::Error::new(RemoteError(message)))
+}
+
+/// Routes responses to their requests until the stream ends or breaks.
+async fn route_responses<R: AsyncRead + Unpin>(read: R, waiters: Waiters) {
+    let mut read = BufReader::new(read);
+    while let Ok(Some(line)) = read_line_bounded(&mut read, MAX_RESPONSE_BYTES).await {
+        // A line that is not a response of this protocol means the stream is not ours.
+        let Ok(response) = serde_json::from_slice::<Response>(&line) else {
+            break;
+        };
+        if response.version != PROTOCOL_VERSION {
+            break;
+        }
+        let waiter = lock(&waiters).as_mut().and_then(|map| map.remove(&response.id));
+        if let Some(waiter) = waiter {
+            let _ = waiter.send(response);
+        }
+    }
+    lock(&waiters).take();
+}
+
+impl Client {
+    /// Starts the response reader on the current tokio runtime.
+    pub fn new<R, W>(read: R, write: W) -> Self
+    where
+        R: AsyncRead + Unpin + Send + 'static,
+        W: AsyncWrite + Send + 'static,
+    {
+        let waiters: Waiters = Arc::new(Mutex::new(Some(HashMap::new())));
+        let reader = tokio::spawn(route_responses(read, waiters.clone()));
+        Self {
+            inner: Arc::new(ClientInner {
+                write: tokio::sync::Mutex::new(Box::pin(write)),
+                waiters,
+                next_id: std::sync::atomic::AtomicU64::new(1),
+                reader,
+            }),
+        }
+    }
+
+    async fn send(&self, operation: Operation) -> Result<(u64, oneshot::Receiver<Response>)> {
+        let id = self
+            .inner
+            .next_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let (tx, rx) = oneshot::channel();
+        lock(&self.inner.waiters)
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("remote agent disconnected"))?
+            .insert(id, tx);
+        let mut line = serde_json::to_vec(&Request {
+            version: PROTOCOL_VERSION,
+            id,
+            operation,
+        })?;
+        line.push(b'\n');
+        let mut write = self.inner.write.lock().await;
+        let sent = async {
+            write.write_all(&line).await?;
+            write.flush().await
+        }
+        .await;
+        if sent.is_err() {
+            if let Some(map) = lock(&self.inner.waiters).as_mut() {
+                map.remove(&id);
+            }
+            bail!("remote agent disconnected");
+        }
+        Ok((id, rx))
+    }
+
+    pub async fn request(&self, operation: Operation) -> Result<Value> {
+        let (id, rx) = self.send(operation).await?;
+        let _waiting = Waiting {
+            waiters: &self.inner.waiters,
+            id,
+        };
+        outcome(rx.await.map_err(disconnected)?)
+    }
+
+    /// Like [`Client::request`], but firing `cancel` asks the agent to stop the request (and
+    /// kill its processes). Returns `None` when it was cancelled; a request that finished
+    /// before the cancellation reached the agent returns its result.
+    pub async fn request_cancellable(
+        &self,
+        operation: Operation,
+        cancel: oneshot::Receiver<()>,
+    ) -> Result<Option<Value>> {
+        let (id, mut rx) = self.send(operation).await?;
+        let _waiting = Waiting {
+            waiters: &self.inner.waiters,
+            id,
+        };
+        tokio::select! {
+            response = &mut rx => return outcome(response.map_err(disconnected)?).map(Some),
+            fired = cancel => {
+                if fired.is_err() {
+                    // Nobody can cancel any more: just wait.
+                    return outcome(rx.await.map_err(disconnected)?).map(Some);
+                }
+            }
+        }
+        // Nobody waits for the acknowledgement: the reader drops it.
+        let (cancel_id, _) = self.send(Operation::Cancel { target_id: id }).await?;
+        if let Some(map) = lock(&self.inner.waiters).as_mut() {
+            map.remove(&cancel_id);
+        }
+        match rx.await.map_err(disconnected)? {
+            Response {
+                result: Ok(Value::Cancelled),
+                ..
+            } => Ok(None),
+            response => outcome(response).map(Some),
+        }
+    }
+
+    pub async fn handshake(&self) -> Result<()> {
+        match self.request(Operation::Hello).await? {
+            Value::Hello {
+                version: PROTOCOL_VERSION,
+            } => Ok(()),
+            _ => bail!("remote agent protocol mismatch"),
+        }
+    }
 }
 
 /// An error the agent answered for one request. The connection itself is still usable;
@@ -509,7 +682,7 @@ const STDERR_TAIL_BYTES: usize = 4096;
 /// Owns one SSH or WSL agent process and its checked protocol connection. Dropping it
 /// kills the launcher, which closes the agent's stdin; the agent then stops its processes.
 pub struct RemoteSession {
-    pub client: Client<ChildStdout, ChildStdin>,
+    pub client: Client,
     stderr: Arc<Mutex<Vec<u8>>>,
     stderr_task: Option<JoinHandle<()>>,
     _child: Child,
@@ -533,7 +706,7 @@ impl RemoteSession {
             .stderr
             .take()
             .map(|pipe| tokio::spawn(keep_tail(pipe, stderr.clone())));
-        let mut client = Client::new(stdout, stdin);
+        let client = Client::new(stdout, stdin);
         let error = match tokio::time::timeout(Duration::from_secs(30), client.handshake()).await
         {
             Ok(Ok(())) => {
@@ -605,7 +778,7 @@ mod tests {
         let (client_read, client_write) = tokio::io::split(client);
         let (server_read, server_write) = tokio::io::split(server);
         let task = tokio::spawn(serve(server_read, server_write));
-        let mut client = Client::new(client_read, client_write);
+        let client = Client::new(client_read, client_write);
         client.handshake().await.unwrap();
         let path = dir.path().join("example.txt");
         client
@@ -865,104 +1038,6 @@ mod tests {
     }
 }
 
-impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> Client<R, W> {
-    pub fn new(read: R, write: W) -> Self {
-        Self {
-            read: BufReader::new(read).lines(),
-            write,
-            next_id: 1,
-        }
-    }
-
-    pub async fn request(&mut self, operation: Operation) -> Result<Value> {
-        let id = self.send(operation).await?;
-        self.receive(id).await
-    }
-
-    async fn send(&mut self, operation: Operation) -> Result<u64> {
-        let id = self.next_id;
-        self.next_id += 1;
-        let request = Request {
-            version: PROTOCOL_VERSION,
-            id,
-            operation,
-        };
-        self.write
-            .write_all(serde_json::to_string(&request)?.as_bytes())
-            .await?;
-        self.write.write_all(b"\n").await?;
-        self.write.flush().await?;
-        Ok(id)
-    }
-
-    async fn read_response(&mut self) -> Result<Response> {
-        let line = self
-            .read
-            .next_line()
-            .await?
-            .context("remote agent disconnected")?;
-        let response: Response = serde_json::from_str(&line)?;
-        if response.version != PROTOCOL_VERSION {
-            bail!("unexpected remote protocol version");
-        }
-        Ok(response)
-    }
-
-    async fn receive(&mut self, id: u64) -> Result<Value> {
-        let response = self.read_response().await?;
-        if response.id != id {
-            bail!("unexpected remote response");
-        }
-        response
-            .result
-            .map_err(|message| anyhow::Error::new(RemoteError(message)))
-    }
-
-    /// Sends a request, then interrupts it when `cancel` fires. Both the target response and
-    /// cancellation acknowledgement are consumed before the next request, keeping the stream in sync.
-    pub async fn request_cancellable(
-        &mut self,
-        operation: Operation,
-        mut cancel: oneshot::Receiver<()>,
-    ) -> Result<Value> {
-        let id = self.send(operation).await?;
-        tokio::select! {
-            line = self.read.next_line() => {
-                let line = line?.context("remote agent disconnected")?;
-                let response: Response = serde_json::from_str(&line)?;
-                if response.version != PROTOCOL_VERSION || response.id != id { bail!("unexpected remote response"); }
-                response.result.map_err(anyhow::Error::msg)
-            }
-            result = &mut cancel => {
-                if result.is_err() { return self.receive(id).await; }
-                let cancel_id = self.send(Operation::Cancel { target_id: id }).await?;
-                let mut target = None;
-                let mut acknowledged = false;
-                while target.is_none() || !acknowledged {
-                    let response = self.read_response().await?;
-                    if response.id == id { target = Some(response.result); }
-                    else if response.id == cancel_id { acknowledged = true; }
-                    else { bail!("unexpected remote response while cancelling"); }
-                }
-                match target.unwrap() {
-                    Ok(Value::Cancelled) => bail!("remote request cancelled"),
-                    Ok(value) => Ok(value),
-                    Err(message) => Err(anyhow::Error::msg(message)),
-                }
-            }
-        }
-    }
-
-    pub async fn handshake(&mut self) -> Result<()> {
-        match self.request(Operation::Hello).await? {
-            Value::Hello {
-                version: PROTOCOL_VERSION,
-            } => Ok(()),
-            _ => bail!("remote agent protocol mismatch"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod limits_tests {
     use super::*;
@@ -974,7 +1049,7 @@ mod limits_tests {
             .write_all(&vec![b'x'; MAX_LINE_BYTES + 1])
             .await
             .unwrap();
-        let error = read_line_bounded(&mut BufReader::new(reader))
+        let error = read_line_bounded(&mut BufReader::new(reader), MAX_LINE_BYTES)
             .await
             .unwrap_err();
         assert!(error.to_string().contains("line limit"));
@@ -1101,7 +1176,7 @@ mod framing_tests {
         let (read, write) = tokio::io::split(client);
         let (server_read, server_write) = tokio::io::split(server);
         let task = tokio::spawn(serve(server_read, server_write));
-        let mut client = Client::new(read, write);
+        let client = Client::new(read, write);
         let missing = std::env::temp_dir().join("dotcraft-remote-missing/file.txt");
         let error = client
             .request(Operation::Read {

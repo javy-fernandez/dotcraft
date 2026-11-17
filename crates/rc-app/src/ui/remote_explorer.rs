@@ -12,7 +12,7 @@ use rc_core::settings::RemoteConnection;
 use rc_core::{Inbox, Runtime, Waker, inbox::Outbox};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{Ico, ico, icons, theme};
-use rc_remote::{Endpoint, Entry, Operation, RemoteSession, Value, is_connection_error};
+use rc_remote::{Client, Endpoint, Entry, Operation, RemoteSession, Value, is_connection_error};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::{mpsc, oneshot};
 
@@ -57,7 +57,8 @@ struct CommandResult {
 /// The last `dotnet` command: its command line and how it ended.
 struct CommandOutput {
     command: String,
-    result: Option<Result<CommandResult, String>>,
+    /// `Some(Ok(None))` once cancelled.
+    result: Option<Result<Option<CommandResult>, String>>,
 }
 
 enum Event {
@@ -65,7 +66,7 @@ enum Event {
     Listed(String, Vec<Entry>),
     ListFailed(String, String),
     Read(String, Result<(String, bool), String>),
-    CommandDone(CommandKind, Result<CommandResult, String>),
+    CommandDone(CommandKind, Result<Option<CommandResult>, String>),
     /// The connection could not be made, or broke.
     Lost(String),
 }
@@ -268,7 +269,7 @@ impl RemoteExplorer {
                     self.cancel_command = None;
                     if kind == CommandKind::Sdks {
                         self.sdk_versions = Some(match &result {
-                            Ok(r) if r.code == Some(0) => sdk_versions(&r.stdout),
+                            Ok(Some(r)) if r.code == Some(0) => sdk_versions(&r.stdout),
                             _ => Vec::new(),
                         });
                     } else if let Some(output) = &mut self.output {
@@ -365,44 +366,60 @@ fn sorted(mut entries: Vec<Entry>) -> Vec<Entry> {
     entries
 }
 
-/// The worker: one connection, one request at a time, in order.
+/// The worker: one connection; requests run side by side (browse while a build runs).
+/// Aborting it drops the session and every request in flight.
 async fn serve(endpoint: Endpoint, connection: RemoteConnection, root: String, mut requests: mpsc::UnboundedReceiver<Request>, out: Outbox<Event>) {
-    let mut session = match RemoteSession::connect(&endpoint).await {
+    let session = match RemoteSession::connect(&endpoint).await {
         Ok(session) => session,
         Err(error) => {
             out.send(Event::Lost(error.to_string()));
             return;
         }
     };
-    match list(&mut session, &root).await {
+    let client = session.client.clone();
+    match list(&client, &root).await {
         Ok(entries) => out.send(Event::Connected(root.clone(), entries)),
         Err(error) => {
             out.send(Event::Lost(describe(&session, &error)));
             return;
         }
     };
-    while let Some(request) = requests.recv().await {
-        let (event, error) = match request {
-            Request::List(path) => match list(&mut session, &path).await {
-                Ok(entries) => (Event::Listed(path, entries), None),
-                Err(error) => (Event::ListFailed(path, error.to_string()), Some(error)),
-            },
-            Request::Read(path) => match read(&mut session, &path).await {
-                Ok(body) => (Event::Read(path, body), None),
-                Err(error) => (Event::Read(path, Err(error.to_string())), Some(error)),
-            },
-            Request::Command(kind, target, cancel) => match remote_command(&mut session, &root, connection.dotnet.trim(), kind, target, cancel).await {
-                Ok(result) => (Event::CommandDone(kind, Ok(result)), None),
-                Err(error) if error.to_string() == "remote request cancelled" => (Event::CommandDone(kind, Err(tr("Cancelled").into())), None),
-                Err(error) => (Event::CommandDone(kind, Err(error.to_string())), Some(error)),
-            },
-        };
-        // A broken connection ends the worker; the agent kills what it was running.
-        if let Some(error) = error.filter(is_connection_error) {
-            out.send(Event::Lost(describe(&session, &error)));
-            return;
+    let dotnet = connection.dotnet.trim().to_string();
+    let mut tasks = tokio::task::JoinSet::new();
+    loop {
+        tokio::select! {
+            request = requests.recv() => {
+                let Some(request) = request else { return };
+                let (client, root, dotnet) = (client.clone(), root.clone(), dotnet.clone());
+                tasks.spawn(async move { handle(&client, &root, &dotnet, request).await });
+            }
+            Some(Ok((event, error))) = tasks.join_next() => {
+                // A broken connection ends the worker; the agent kills what it was running.
+                if let Some(error) = error.filter(is_connection_error) {
+                    out.send(Event::Lost(describe(&session, &error)));
+                    return;
+                }
+                out.send(event);
+            }
         }
-        out.send(event);
+    }
+}
+
+/// One request: the event for the UI, and the error behind a failure.
+async fn handle(client: &Client, root: &str, dotnet: &str, request: Request) -> (Event, Option<anyhow::Error>) {
+    match request {
+        Request::List(path) => match list(client, &path).await {
+            Ok(entries) => (Event::Listed(path, entries), None),
+            Err(error) => (Event::ListFailed(path, error.to_string()), Some(error)),
+        },
+        Request::Read(path) => match read(client, &path).await {
+            Ok(body) => (Event::Read(path, body), None),
+            Err(error) => (Event::Read(path, Err(error.to_string())), Some(error)),
+        },
+        Request::Command(kind, target, cancel) => match remote_command(client, root, dotnet, kind, target, cancel).await {
+            Ok(result) => (Event::CommandDone(kind, Ok(result)), None),
+            Err(error) => (Event::CommandDone(kind, Err(error.to_string())), Some(error)),
+        },
     }
 }
 
@@ -412,33 +429,33 @@ fn describe(session: &RemoteSession, error: &anyhow::Error) -> String {
     if tail.is_empty() || !is_connection_error(error) { error.to_string() } else { format!("{error}\n{tail}") }
 }
 
-async fn list(session: &mut RemoteSession, path: &str) -> anyhow::Result<Vec<Entry>> {
-    match session.client.request(Operation::List { path: path.to_string() }).await? {
+async fn list(client: &Client, path: &str) -> anyhow::Result<Vec<Entry>> {
+    match client.request(Operation::List { path: path.to_string() }).await? {
         Value::Entries { entries } => Ok(entries),
         _ => anyhow::bail!("unexpected remote directory response"),
     }
 }
 
 /// The preview of a file: its text, cut at [`PREVIEW_BYTES`], or why it has none.
-async fn read(session: &mut RemoteSession, path: &str) -> anyhow::Result<Result<(String, bool), String>> {
-    let Value::Data { data } = session.client.request(Operation::Read { path: path.to_string() }).await? else {
+async fn read(client: &Client, path: &str) -> anyhow::Result<Result<(String, bool), String>> {
+    let Value::Data { data } = client.request(Operation::Read { path: path.to_string() }).await? else {
         anyhow::bail!("unexpected remote file response");
     };
     let bytes = rc_remote::decode_data(&data)?;
     Ok(preview_text(bytes))
 }
 
+/// Runs `dotnet`; `None` when it was cancelled.
 async fn remote_command(
-    session: &mut RemoteSession,
+    client: &Client,
     root: &str,
     dotnet: &str,
     kind: CommandKind,
     target: Option<String>,
     cancel: oneshot::Receiver<()>,
-) -> anyhow::Result<CommandResult> {
+) -> anyhow::Result<Option<CommandResult>> {
     let timeout_ms = if matches!(kind, CommandKind::Build | CommandKind::Test) { 120_000 } else { 15_000 };
-    let value = session
-        .client
+    let Some(value) = client
         .request_cancellable(
             Operation::Run {
                 program: dotnet.into(),
@@ -453,7 +470,10 @@ async fn remote_command(
             },
             cancel,
         )
-        .await?;
+        .await?
+    else {
+        return Ok(None);
+    };
     let Value::Exit { code, stdout, stderr } = value else {
         anyhow::bail!("unexpected remote process response");
     };
@@ -466,7 +486,7 @@ async fn remote_command(
         }
         output.push_str(&stderr);
     }
-    Ok(CommandResult { code, stdout, output })
+    Ok(Some(CommandResult { code, stdout, output }))
 }
 
 /// Arguments only, never a shell line: the agent starts `dotnet` directly.
@@ -815,7 +835,10 @@ fn command_output(ui: &mut Ui, output: &CommandOutput, font_size: f32) {
         Some(Err(error)) => {
             kit::content(ui, |ui| kit::message(ui, error, true));
         }
-        Some(Ok(result)) => {
+        Some(Ok(None)) => {
+            kit::content(ui, |ui| kit::message(ui, tr("Cancelled"), false));
+        }
+        Some(Ok(Some(result))) => {
             if result.code != Some(0) {
                 let code = result.code.map_or_else(|| "?".to_string(), |code| code.to_string());
                 kit::content(ui, |ui| kit::message(ui, &trf("Exited with code {code}", &[("code", &code)]), true));
@@ -878,7 +901,7 @@ impl RemoteExplorer {
     pub fn output_for_test(&mut self, command: &str, code: i32, output: &str) {
         self.output = Some(CommandOutput {
             command: command.into(),
-            result: Some(Ok(CommandResult { code: Some(code), stdout: output.into(), output: output.into() })),
+            result: Some(Ok(Some(CommandResult { code: Some(code), stdout: output.into(), output: output.into() }))),
         });
         self.show_output = true;
     }
