@@ -2178,7 +2178,7 @@ fn screens_generate() {
     let dir = tempfile::Builder::new().prefix("dotcraft-generate").tempdir().unwrap();
     let file = dunce::canonicalize(dir.path()).unwrap().join("Person.cs");
     std::fs::write(file.with_file_name("Shop.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <Nullable>enable</Nullable>\n    <ImplicitUsings>enable</ImplicitUsings>\n  </PropertyGroup>\n</Project>\n").unwrap();
-    std::fs::write(&file, "namespace Shop;\n\npublic class Person\n{\n    private readonly string _name;\n    private int _age;\n    public string? Email { get; set; }\n}\n").unwrap();
+    std::fs::write(&file, "namespace Shop;\n\npublic interface IContact\n{\n    string? Email { get; set; }\n    void Notify(string message);\n    event EventHandler? Changed;\n}\n\npublic class Person : IContact\n{\n    private readonly string _name;\n    private int _age;\n    public string? Email { get; set; }\n}\n").unwrap();
     for dark in [true, false] {
         let suffix = if dark { "dark" } else { "light" };
         let home = tempfile::tempdir().unwrap();
@@ -2210,5 +2210,16 @@ fn screens_generate() {
         let text = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
         assert!(text.contains("protected bool Equals(Person other) => _name == other._name && _age == other._age;"), "{text}");
         h.render().unwrap().save(out.join(format!("generate-result-{suffix}.png"))).unwrap();
+        // Missing members of the interface in the same file.
+        crate::ui::generate::open(h.state_mut());
+        h.run_steps(2);
+        h.get_by_label(rc_kit::i18n::tr("Missing Members")).click();
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("generate-missing-{suffix}.png"))).unwrap();
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        let text = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+        assert!(text.contains("    public void Notify(string message)\n    {\n        throw new NotImplementedException();\n    }\n"), "{text}");
+        assert!(text.contains("    public event EventHandler? Changed;\n}\n"), "{text}");
     }
 }
