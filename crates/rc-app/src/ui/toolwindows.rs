@@ -65,6 +65,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
             }
             structure(app, ui);
         }
+        ToolWindow::Find if app.structural.shown => crate::ui::structural_search::window(app, ui),
         ToolWindow::Find if app.find_results.is_none() && app.find_in_files.is_some() => {
             if header(ui, tr("Find in Files")) {
                 app.toggle_tool(tw);

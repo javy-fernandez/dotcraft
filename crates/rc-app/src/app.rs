@@ -641,6 +641,7 @@ impl DotCraftApp {
         self.database.disconnect();
         self.database.mssql.disconnect();
         self.find_in_files = None;
+        self.structural.reset();
         self.search_everywhere = None;
         self.find_bar = None;
         self.generate = None;
@@ -808,6 +809,7 @@ impl DotCraftApp {
                         self.open_at(&t.path.clone(), t.line, t.col);
                     } else {
                         self.find_results = Some((title, targets));
+                        self.structural.shown = false;
                         self.dock.show(ToolWindow::Find);
                     }
                 }
@@ -1286,11 +1288,21 @@ impl DotCraftApp {
                     fif.focus = true;
                     fif.search();
                     self.find_results = None;
+                    self.structural.shown = false;
                     self.dock.show(ToolWindow::Find);
                 }
             }
             Action::StructuralSearch => {
-                self.structural.visible = true;
+                if self.workspace.is_some() {
+                    // A selection becomes the pattern, as in Rider.
+                    let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.trim().is_empty());
+                    if let Some(text) = text {
+                        self.structural.query = text;
+                    }
+                    self.structural.dialog = true;
+                    self.structural.focus = true;
+                    self.structural.error = None;
+                }
             }
             Action::ZoomIn => self.set_zoom(ctx, self.settings.ui_zoom + 0.1),
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
