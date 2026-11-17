@@ -9,7 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use rc_core::Runtime;
 use rc_core::inbox::{Inbox, Waker};
-use rc_search::structural::{Constraint, Pattern};
+use rc_kit::i18n::{tr, trf};
+use rc_search::structural::{Constraint, Pattern, PatternError};
 use rc_search::{FileKind, IndexSnapshot};
 
 /// The most matches one search lists.
@@ -116,9 +117,9 @@ impl StructuralSearch {
 
     /// Compiles the pattern and checks the replacement against it.
     pub fn compile(&self) -> Result<Pattern, String> {
-        let pattern = Pattern::compile(&self.query, &self.constraints)?;
+        let pattern = Pattern::compile(&self.query, &self.constraints).map_err(error_text)?;
         let empty = pattern.names().iter().map(|name| (name.clone(), String::new())).collect();
-        pattern.replace(&self.replacement, &empty)?;
+        pattern.replace(&self.replacement, &empty).map_err(error_text)?;
         Ok(pattern)
     }
 
@@ -241,7 +242,7 @@ impl StructuralSearch {
         for (path, mut hits) in by_file {
             hits.sort_by_key(|hit| hit.start);
             if hits.windows(2).any(|pair| pair[0].end > pair[1].start) {
-                return Err(rc_kit::i18n::trf("Overlapping matches in {path}", &[("path", &path.display())]));
+                return Err(trf("Overlapping matches in {path}", &[("path", &path.display())]));
             }
             let original = hits[0].original.clone();
             if hits.iter().any(|hit| !Arc::ptr_eq(&hit.original, &original)) {
@@ -327,8 +328,19 @@ fn edit_documents(open: Vec<OpenEdits>, docs: &mut crate::docs::Docs, mut replac
     replaced
 }
 
+fn error_text(error: PatternError) -> String {
+    match error {
+        PatternError::Empty => tr("The pattern is empty").to_string(),
+        PatternError::StrayDollar => tr("Write placeholders as $name$").to_string(),
+        PatternError::NotCSharp => tr("The pattern is not valid C# code").to_string(),
+        PatternError::OnlyPlaceholders => tr("The pattern needs code around its placeholders").to_string(),
+        PatternError::Regex { name, error } => trf("Invalid regex for ${name}$: {error}", &[("name", &name), ("error", &error)]),
+        PatternError::UnknownPlaceholder(name) => trf("The replacement uses ${name}$, which the pattern does not have", &[("name", &name)]),
+    }
+}
+
 fn changed(path: &std::path::Path) -> String {
-    rc_kit::i18n::trf("{path} changed since the search; search again", &[("path", &path.display())])
+    trf("{path} changed since the search; search again", &[("path", &path.display())])
 }
 
 type FileEdits = (PathBuf, Vec<(usize, usize, String)>, Arc<String>);

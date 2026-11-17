@@ -63,6 +63,32 @@ pub struct Constraint {
     pub count: Count,
 }
 
+/// Why a pattern or a replacement template was refused.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PatternError {
+    Empty,
+    /// A `$` that is neither a `$name$` placeholder nor an interpolated string.
+    StrayDollar,
+    NotCSharp,
+    OnlyPlaceholders,
+    Regex { name: String, error: String },
+    /// The replacement uses a placeholder the pattern does not have.
+    UnknownPlaceholder(String),
+}
+
+impl std::fmt::Display for PatternError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PatternError::Empty => write!(f, "The pattern is empty"),
+            PatternError::StrayDollar => write!(f, "Write placeholders as $name$"),
+            PatternError::NotCSharp => write!(f, "The pattern is not valid C# code"),
+            PatternError::OnlyPlaceholders => write!(f, "The pattern needs code around its placeholders"),
+            PatternError::Regex { name, error } => write!(f, "Invalid regex for ${name}$: {error}"),
+            PatternError::UnknownPlaceholder(name) => write!(f, "The replacement uses ${name}$, which the pattern does not have"),
+        }
+    }
+}
+
 /// A match: the byte range in the searched text and the text each placeholder matched.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StructuralMatch {
@@ -116,10 +142,10 @@ pub fn placeholder_names(query: &str) -> Vec<String> {
 }
 
 impl Pattern {
-    pub fn compile(query: &str, constraints: &BTreeMap<String, Constraint>) -> Result<Self, String> {
+    pub fn compile(query: &str, constraints: &BTreeMap<String, Constraint>) -> Result<Self, PatternError> {
         let query = query.trim();
         if query.is_empty() {
-            return Err("Pattern cannot be empty".into());
+            return Err(PatternError::Empty);
         }
         let names = placeholder_names(query);
         let plain = placeholder_regex().replace_all(query, |caps: &regex::Captures<'_>| format!("{PREFIX}{}__", &caps[1])).into_owned();
@@ -129,7 +155,7 @@ impl Pattern {
             !(rest.starts_with('"') || rest.starts_with("@\"") || rest.starts_with('$'))
         });
         if stray {
-            return Err("Use $name$ for each placeholder".into());
+            return Err(PatternError::StrayDollar);
         }
         // `$s$;` and `{ $s$ }` stand for statements; a bare identifier is no C# statement, so
         // they parse as calls with their own prefix. Initializers (`new[] { $x$ }`) look the same,
@@ -143,7 +169,7 @@ impl Pattern {
             alternatives = self::alternatives(&plain);
         }
         if alternatives.is_empty() {
-            return Err("Pattern is not valid C# code".into());
+            return Err(PatternError::NotCSharp);
         }
         let mut compiled = BTreeMap::new();
         for name in &names {
@@ -154,12 +180,12 @@ impl Pattern {
                 .filter(|text| !text.is_empty())
                 .map(|text| Regex::new(&format!("^(?:{text})$")))
                 .transpose()
-                .map_err(|error| format!("Invalid regex for {name}: {error}"))?;
+                .map_err(|error| PatternError::Regex { name: name.clone(), error: error.to_string() })?;
             compiled.insert(name.clone(), Compiled { kind: constraint.kind, regex, count: constraint.count.range() });
         }
         let pattern = Self { alternatives, names, constraints: compiled };
         if pattern.alternatives.iter().all(|alt| alt.root().is_some_and(|root| pattern.placeholder(alt, root).is_some())) {
-            return Err("The pattern needs code around its placeholders".into());
+            return Err(PatternError::OnlyPlaceholders);
         }
         Ok(pattern)
     }
@@ -179,7 +205,7 @@ impl Pattern {
     }
 
     /// The replacement template with each `$name$` replaced by its capture.
-    pub fn replace(&self, template: &str, captures: &BTreeMap<String, String>) -> Result<String, String> {
+    pub fn replace(&self, template: &str, captures: &BTreeMap<String, String>) -> Result<String, PatternError> {
         let mut missing = None;
         let replaced = placeholder_regex().replace_all(template, |caps: &regex::Captures<'_>| {
             captures.get(&caps[1]).cloned().unwrap_or_else(|| {
@@ -188,7 +214,7 @@ impl Pattern {
             })
         });
         if let Some(name) = missing {
-            return Err(format!("Unknown replacement placeholder: {name}"));
+            return Err(PatternError::UnknownPlaceholder(name));
         }
         Ok(replaced.into_owned())
     }
