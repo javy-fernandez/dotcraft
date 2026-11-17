@@ -10,11 +10,11 @@ use crate::ui::{dialogs, kit};
 use egui::{Align2, Context, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_core::settings::RemoteConnection;
 use rc_core::{Inbox, Runtime, Waker, inbox::Outbox};
-use rc_kit::i18n::tr;
+use rc_kit::i18n::{tr, trf};
 use rc_kit::{Ico, ico, icons, theme};
 use rc_remote::{Endpoint, Entry, Operation, RemoteSession, Value, is_connection_error};
 use std::collections::{HashMap, HashSet};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 /// Where `cargo install` puts the agent, the default of the connection dialog.
 pub const DEFAULT_AGENT: &str = "~/.cargo/bin/dotcraft-remote-agent";
@@ -35,6 +35,29 @@ enum Status {
 enum Request {
     List(String),
     Read(String),
+    /// A `dotnet` command in the folder, with a project or solution as target; firing the
+    /// sender cancels it.
+    Command(CommandKind, Option<String>, oneshot::Receiver<()>),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum CommandKind {
+    Info,
+    Sdks,
+    Build,
+    Test,
+}
+
+struct CommandResult {
+    code: Option<i32>,
+    stdout: String,
+    output: String,
+}
+
+/// The last `dotnet` command: its command line and how it ended.
+struct CommandOutput {
+    command: String,
+    result: Option<Result<CommandResult, String>>,
 }
 
 enum Event {
@@ -42,6 +65,7 @@ enum Event {
     Listed(String, Vec<Entry>),
     ListFailed(String, String),
     Read(String, Result<(String, bool), String>),
+    CommandDone(CommandKind, Result<CommandResult, String>),
     /// The connection could not be made, or broke.
     Lost(String),
 }
@@ -67,6 +91,12 @@ pub struct RemoteExplorer {
     loading: HashSet<String>,
     expanded: HashSet<String>,
     preview: Option<Preview>,
+    running: Option<CommandKind>,
+    cancel_command: Option<oneshot::Sender<()>>,
+    sdk_versions: Option<Vec<String>>,
+    output: Option<CommandOutput>,
+    /// The editor area shows the command output instead of the preview.
+    show_output: bool,
     requests: Option<mpsc::UnboundedSender<Request>>,
     worker: Option<tokio::task::JoinHandle<()>>,
     events: Inbox<Event>,
@@ -77,6 +107,9 @@ impl RemoteExplorer {
     pub fn new(waker: Waker, mut form: RemoteConnection) -> Self {
         if form.agent.trim().is_empty() {
             form.agent = DEFAULT_AGENT.into();
+        }
+        if form.dotnet.trim().is_empty() {
+            form.dotnet = "dotnet".into();
         }
         Self {
             form,
@@ -89,6 +122,11 @@ impl RemoteExplorer {
             loading: HashSet::new(),
             expanded: HashSet::new(),
             preview: None,
+            running: None,
+            cancel_command: None,
+            sdk_versions: None,
+            output: None,
+            show_output: false,
             requests: None,
             worker: None,
             events: Inbox::new(waker.clone()),
@@ -122,6 +160,11 @@ impl RemoteExplorer {
         self.loading.clear();
         self.expanded.clear();
         self.preview = None;
+        self.running = None;
+        self.cancel_command = None;
+        self.sdk_versions = None;
+        self.output = None;
+        self.show_output = false;
     }
 
     fn stop_worker(&mut self) {
@@ -139,7 +182,7 @@ impl RemoteExplorer {
             self.form_error = Some(tr("Enter an absolute remote folder, like /home/me/src/App").into());
             return;
         };
-        let Some(endpoint) = endpoint(&self.form) else {
+        let Some(endpoint) = endpoint(&self.form).filter(|_| !self.form.dotnet.trim().is_empty()) else {
             self.form_error = Some(tr("Enter a valid host or distribution and agent path").into());
             return;
         };
@@ -157,6 +200,8 @@ impl RemoteExplorer {
         let root = root.clone();
         self.cache.clear();
         self.loading.clear();
+        self.running = None;
+        self.cancel_command = None;
         self.start(endpoint, root);
     }
 
@@ -175,7 +220,8 @@ impl RemoteExplorer {
         self.error = None;
         let (tx, rx) = mpsc::unbounded_channel();
         self.requests = Some(tx);
-        self.worker = Some(Runtime::spawn(serve(endpoint, folder, rx, self.events.sender())));
+        let connection = self.connection.clone().unwrap_or_default();
+        self.worker = Some(Runtime::spawn(serve(endpoint, connection, folder, rx, self.events.sender())));
     }
 
     /// Lists every expanded folder again.
@@ -201,6 +247,7 @@ impl RemoteExplorer {
                     self.expanded.insert(folder.clone());
                     self.cache.insert(folder.clone(), sorted(entries));
                     self.root = Some(folder);
+                    self.start_command(CommandKind::Sdks);
                 }
                 Event::Listed(path, entries) => {
                     self.loading.remove(&path);
@@ -216,10 +263,24 @@ impl RemoteExplorer {
                         preview.body = Some(body);
                     }
                 }
+                Event::CommandDone(kind, result) => {
+                    self.running = None;
+                    self.cancel_command = None;
+                    if kind == CommandKind::Sdks {
+                        self.sdk_versions = Some(match &result {
+                            Ok(r) if r.code == Some(0) => sdk_versions(&r.stdout),
+                            _ => Vec::new(),
+                        });
+                    } else if let Some(output) = &mut self.output {
+                        output.result = Some(result);
+                    }
+                }
                 Event::Lost(error) => {
                     self.requests = None;
                     self.worker = None;
                     self.loading.clear();
+                    self.running = None;
+                    self.cancel_command = None;
                     if self.root.is_some() {
                         self.status = Status::Lost;
                         self.error = Some(error);
@@ -257,6 +318,32 @@ impl RemoteExplorer {
         }
     }
 
+    /// Runs a `dotnet` command in the folder: on the selected project or solution, or on
+    /// whatever `dotnet` finds in the folder.
+    fn start_command(&mut self, kind: CommandKind) {
+        if self.running.is_some() {
+            return;
+        }
+        let target = self.preview.as_ref().map(|p| p.path.clone()).filter(|path| is_dotnet_target(path));
+        let (cancel, receiver) = oneshot::channel();
+        let dotnet = self.connection.as_ref().map(|c| c.dotnet.trim().to_string()).unwrap_or_default();
+        let command = std::iter::once(dotnet).chain(dotnet_args(kind, target.clone())).collect::<Vec<_>>().join(" ");
+        if self.send(Request::Command(kind, target, receiver)) {
+            self.running = Some(kind);
+            self.cancel_command = Some(cancel);
+            if kind != CommandKind::Sdks {
+                self.output = Some(CommandOutput { command, result: None });
+                self.show_output = true;
+            }
+        }
+    }
+
+    fn cancel_running(&mut self) {
+        if let Some(cancel) = self.cancel_command.take() {
+            let _ = cancel.send(());
+        }
+    }
+
     /// `host:/folder`, for headers.
     fn location(&self) -> String {
         match (&self.connection, &self.root) {
@@ -279,7 +366,7 @@ fn sorted(mut entries: Vec<Entry>) -> Vec<Entry> {
 }
 
 /// The worker: one connection, one request at a time, in order.
-async fn serve(endpoint: Endpoint, root: String, mut requests: mpsc::UnboundedReceiver<Request>, out: Outbox<Event>) {
+async fn serve(endpoint: Endpoint, connection: RemoteConnection, root: String, mut requests: mpsc::UnboundedReceiver<Request>, out: Outbox<Event>) {
     let mut session = match RemoteSession::connect(&endpoint).await {
         Ok(session) => session,
         Err(error) => {
@@ -288,7 +375,7 @@ async fn serve(endpoint: Endpoint, root: String, mut requests: mpsc::UnboundedRe
         }
     };
     match list(&mut session, &root).await {
-        Ok(entries) => out.send(Event::Connected(root, entries)),
+        Ok(entries) => out.send(Event::Connected(root.clone(), entries)),
         Err(error) => {
             out.send(Event::Lost(describe(&session, &error)));
             return;
@@ -303,6 +390,11 @@ async fn serve(endpoint: Endpoint, root: String, mut requests: mpsc::UnboundedRe
             Request::Read(path) => match read(&mut session, &path).await {
                 Ok(body) => (Event::Read(path, body), None),
                 Err(error) => (Event::Read(path, Err(error.to_string())), Some(error)),
+            },
+            Request::Command(kind, target, cancel) => match remote_command(&mut session, &root, connection.dotnet.trim(), kind, target, cancel).await {
+                Ok(result) => (Event::CommandDone(kind, Ok(result)), None),
+                Err(error) if error.to_string() == "remote request cancelled" => (Event::CommandDone(kind, Err(tr("Cancelled").into())), None),
+                Err(error) => (Event::CommandDone(kind, Err(error.to_string())), Some(error)),
             },
         };
         // A broken connection ends the worker; the agent kills what it was running.
@@ -334,6 +426,73 @@ async fn read(session: &mut RemoteSession, path: &str) -> anyhow::Result<Result<
     };
     let bytes = rc_remote::decode_data(&data)?;
     Ok(preview_text(bytes))
+}
+
+async fn remote_command(
+    session: &mut RemoteSession,
+    root: &str,
+    dotnet: &str,
+    kind: CommandKind,
+    target: Option<String>,
+    cancel: oneshot::Receiver<()>,
+) -> anyhow::Result<CommandResult> {
+    let timeout_ms = if matches!(kind, CommandKind::Build | CommandKind::Test) { 120_000 } else { 15_000 };
+    let value = session
+        .client
+        .request_cancellable(
+            Operation::Run {
+                program: dotnet.into(),
+                args: dotnet_args(kind, target),
+                cwd: root.to_string(),
+                env: vec![
+                    ("DOTNET_CLI_UI_LANGUAGE".into(), "en".into()),
+                    ("DOTNET_NOLOGO".into(), "1".into()),
+                    ("DOTNET_CLI_TELEMETRY_OPTOUT".into(), "1".into()),
+                ],
+                timeout_ms,
+            },
+            cancel,
+        )
+        .await?;
+    let Value::Exit { code, stdout, stderr } = value else {
+        anyhow::bail!("unexpected remote process response");
+    };
+    let stdout = String::from_utf8_lossy(&rc_remote::decode_data(&stdout)?).into_owned();
+    let stderr = String::from_utf8_lossy(&rc_remote::decode_data(&stderr)?).into_owned();
+    let mut output = stdout.clone();
+    if !stderr.is_empty() {
+        if !output.is_empty() && !output.ends_with('\n') {
+            output.push('\n');
+        }
+        output.push_str(&stderr);
+    }
+    Ok(CommandResult { code, stdout, output })
+}
+
+/// Arguments only, never a shell line: the agent starts `dotnet` directly.
+fn dotnet_args(kind: CommandKind, target: Option<String>) -> Vec<String> {
+    let mut args = match kind {
+        CommandKind::Info => vec!["--info".to_string()],
+        CommandKind::Sdks => vec!["--list-sdks".to_string()],
+        CommandKind::Build => vec!["build".to_string()],
+        CommandKind::Test => vec!["test".to_string()],
+    };
+    if matches!(kind, CommandKind::Build | CommandKind::Test)
+        && let Some(target) = target
+    {
+        args.push(target);
+    }
+    args
+}
+
+fn is_dotnet_target(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    [".sln", ".slnx", ".slnf", ".csproj", ".fsproj", ".vbproj"].iter().any(|ext| lower.ends_with(ext))
+}
+
+/// The versions in `dotnet --list-sdks` output (`8.0.428 [/usr/share/dotnet/sdk]`).
+fn sdk_versions(stdout: &str) -> Vec<String> {
+    stdout.lines().filter_map(|line| line.split_whitespace().next()).map(str::to_string).collect()
 }
 
 fn preview_text(bytes: Vec<u8>) -> Result<(String, bool), String> {
@@ -375,7 +534,7 @@ fn file_name(path: &str) -> &str {
 pub fn connect_dialog(app: &mut DotCraftApp, ctx: &Context) -> bool {
     let remote = &mut app.remote;
     let connecting = remote.connecting_from_dialog();
-    let valid = remote_root(&remote.form.folder).is_some() && endpoint(&remote.form).is_some();
+    let valid = remote_root(&remote.form.folder).is_some() && endpoint(&remote.form).is_some() && !remote.form.dotnet.trim().is_empty();
     let width = (ctx.content_rect().width() - 48.0).clamp(380.0, 620.0);
     let field_width = (width - 170.0).max(180.0);
     let (mut connect, mut cancel) = (false, false);
@@ -397,6 +556,9 @@ pub fn connect_dialog(app: &mut DotCraftApp, ctx: &Context) -> bool {
             ui.end_row();
             ui.label(tr("Remote folder"));
             ui.add_enabled(!connecting, egui::TextEdit::singleline(&mut remote.form.folder).hint_text("/home/me/src/App").desired_width(field_width));
+            ui.end_row();
+            ui.label(tr(".NET path"));
+            ui.add_enabled(!connecting, egui::TextEdit::singleline(&mut remote.form.dotnet).hint_text("dotnet").desired_width(field_width));
             ui.end_row();
         });
         ui.add_space(10.0);
@@ -445,7 +607,13 @@ pub fn explorer(app: &mut DotCraftApp, ui: &mut Ui) {
         tr("Explorer"),
         &[],
         "",
-        &[(ico::HIDE, tr("Hide"), true), (ico::CLOSE, tr("Close Remote Folder"), true), (ico::REFRESH, tr("Refresh"), connected), (ico::COLLAPSE_ALL, tr("Collapse All"), true)],
+        &[
+            (ico::HIDE, tr("Hide"), true),
+            (ico::CLOSE, tr("Close Remote Folder"), true),
+            (ico::REFRESH, tr("Refresh"), connected),
+            (ico::COLLAPSE_ALL, tr("Collapse All"), true),
+            (ico::INFO, tr("SDK Info"), connected && remote.running.is_none()),
+        ],
     );
     match click.action {
         Some(0) => {
@@ -456,9 +624,35 @@ pub fn explorer(app: &mut DotCraftApp, ui: &mut Ui) {
             app.close_project();
             return;
         }
-        Some(2) => remote.refresh(),
+        Some(2) => {
+            remote.refresh();
+            remote.start_command(CommandKind::Sdks);
+        }
         Some(3) => remote.collapse_all(),
+        Some(4) => remote.start_command(CommandKind::Info),
         _ => {}
+    }
+    if connected {
+        let busy = remote.running.is_some();
+        kit::toolbar(ui, |ui| {
+            if kit::button(ui, Some(ico::BUILD), tr("Build"), !busy).clicked() {
+                remote.start_command(CommandKind::Build);
+            }
+            if kit::button(ui, Some(ico::RUN_ALL), tr("Test"), !busy).clicked() {
+                remote.start_command(CommandKind::Test);
+            }
+            if busy && remote.running != Some(CommandKind::Sdks) && kit::button(ui, Some(ico::STOP), tr("Stop"), remote.cancel_command.is_some()).clicked() {
+                remote.cancel_running();
+            }
+            if busy {
+                ui.spinner();
+            }
+        });
+        match &remote.sdk_versions {
+            Some(versions) if versions.is_empty() => kit::content(ui, |ui| kit::message(ui, tr("No .NET SDK found on the remote machine"), false)),
+            Some(versions) => kit::content(ui, |ui| kit::note(ui, &format!("{} {}", tr(".NET SDKs:"), versions.join(", ")))),
+            None => {}
+        }
     }
     match remote.status {
         Status::Lost => {
@@ -566,27 +760,43 @@ fn tree_row(ui: &mut Ui, depth: usize, open: Option<bool>, icon: Ico, text: &str
 }
 
 /// The editor area while a remote folder is open and no local file is: the selected
-/// remote file, read-only.
+/// remote file (read-only) or the output of the last `dotnet` command.
 pub fn editor(app: &mut DotCraftApp, ui: &mut Ui) {
-    let p = rc_kit::pal(ui);
     let font_size = app.settings.editor_font_size;
-    let Some(preview) = &app.remote.preview else {
+    let remote = &mut app.remote;
+    if remote.output.is_some() {
+        let preview_name = remote.preview.as_ref().map_or(tr("Preview"), |p| file_name(&p.path)).to_string();
+        let preview_icon = remote.preview.as_ref().map_or(ico::FILE_TEXT, |p| file_icon(&p.path));
+        let tabs = [(preview_icon, preview_name.as_str(), !remote.show_output), (ico::TW_BUILD, tr(".NET Output"), remote.show_output)];
+        let status = if remote.show_output {
+            remote.output.as_ref().map(|o| o.command.clone()).unwrap_or_default()
+        } else {
+            remote.preview.as_ref().map(|p| format!("{} · {}", p.path, tr("Read-only"))).unwrap_or_default()
+        };
+        if let Some(tab) = kit::header(ui, "", &tabs, &status, &[]).tab {
+            remote.show_output = tab == 1;
+        }
+    } else if let Some(preview) = &remote.preview {
+        kit::header(ui, file_name(&preview.path), &[], &format!("{} · {}", preview.path, tr("Read-only")), &[]);
+    }
+    if remote.show_output && let Some(output) = &remote.output {
+        command_output(ui, output, font_size);
+    } else {
+        preview(ui, remote.preview.as_ref(), font_size);
+    }
+}
+
+fn preview(ui: &mut Ui, preview: Option<&Preview>, font_size: f32) {
+    let p = rc_kit::pal(ui);
+    let Some(preview) = preview else {
         let rect = ui.max_rect();
         ui.painter().text(rect.center() - vec2(0.0, 12.0), Align2::CENTER_CENTER, tr("Select a file in the Explorer to preview it"), FontId::proportional(13.0), p.text_muted);
         ui.painter().text(rect.center() + vec2(0.0, 12.0), Align2::CENTER_CENTER, tr("Remote files are read-only"), FontId::proportional(13.0), p.disabled);
         ui.allocate_rect(rect, Sense::hover());
         return;
     };
-    kit::header(ui, file_name(&preview.path), &[], &format!("{} · {}", preview.path, tr("Read-only")), &[]);
     match &preview.body {
-        None => {
-            kit::content(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    kit::note(ui, tr("Loading…"));
-                });
-            });
-        }
+        None => loading(ui, tr("Loading…")),
         Some(Err(error)) => {
             kit::content(ui, |ui| kit::message(ui, error, true));
         }
@@ -594,13 +804,43 @@ pub fn editor(app: &mut DotCraftApp, ui: &mut Ui) {
             if *truncated {
                 kit::content(ui, |ui| kit::message(ui, tr("Preview limited to the first 64 KiB"), false));
             }
-            egui::ScrollArea::both().id_salt("remote_preview").auto_shrink([false, false]).show(ui, |ui| {
-                kit::content(ui, |ui| {
-                    ui.label(egui::RichText::new(text.as_str()).font(FontId::monospace(font_size)).color(p.text));
-                });
-            });
+            monospace(ui, "remote_preview", text, font_size);
         }
     }
+}
+
+fn command_output(ui: &mut Ui, output: &CommandOutput, font_size: f32) {
+    match &output.result {
+        None => loading(ui, tr("Running…")),
+        Some(Err(error)) => {
+            kit::content(ui, |ui| kit::message(ui, error, true));
+        }
+        Some(Ok(result)) => {
+            if result.code != Some(0) {
+                let code = result.code.map_or_else(|| "?".to_string(), |code| code.to_string());
+                kit::content(ui, |ui| kit::message(ui, &trf("Exited with code {code}", &[("code", &code)]), true));
+            }
+            monospace(ui, "remote_output", &result.output, font_size);
+        }
+    }
+}
+
+fn loading(ui: &mut Ui, text: &str) {
+    kit::content(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            kit::note(ui, text);
+        });
+    });
+}
+
+fn monospace(ui: &mut Ui, id: &str, text: &str, font_size: f32) {
+    let p = rc_kit::pal(ui);
+    egui::ScrollArea::both().id_salt(id).auto_shrink([false, false]).show(ui, |ui| {
+        kit::content(ui, |ui| {
+            ui.label(egui::RichText::new(text).font(FontId::monospace(font_size)).color(p.text));
+        });
+    });
 }
 
 #[cfg(test)]
@@ -630,6 +870,18 @@ impl RemoteExplorer {
     pub fn form_error_for_test(&mut self, error: &str) {
         self.form_error = Some(error.into());
     }
+
+    pub fn sdks_for_test(&mut self, versions: &[&str]) {
+        self.sdk_versions = Some(versions.iter().map(|v| v.to_string()).collect());
+    }
+
+    pub fn output_for_test(&mut self, command: &str, code: i32, output: &str) {
+        self.output = Some(CommandOutput {
+            command: command.into(),
+            result: Some(Ok(CommandResult { code: Some(code), stdout: output.into(), output: output.into() })),
+        });
+        self.show_output = true;
+    }
 }
 
 #[cfg(test)]
@@ -647,6 +899,16 @@ mod tests {
         assert_eq!(remote_root("/tmp/a\nb"), None);
         assert_eq!(file_name("/home/dev/App"), "App");
         assert_eq!(file_name("/"), "/");
+    }
+
+    #[test]
+    fn build_and_test_use_selected_project_without_a_shell() {
+        assert!(is_dotnet_target("/repo/tests/App.Tests.csproj"));
+        assert!(!is_dotnet_target("/repo/Program.cs"));
+        assert_eq!(dotnet_args(CommandKind::Build, Some("/repo/App.sln".into())), ["build", "/repo/App.sln"]);
+        assert_eq!(dotnet_args(CommandKind::Test, Some("/repo/tests/App Tests.csproj".into())), ["test", "/repo/tests/App Tests.csproj"]);
+        assert_eq!(dotnet_args(CommandKind::Sdks, Some("/repo/App.sln".into())), ["--list-sdks"]);
+        assert_eq!(sdk_versions("8.0.428 [/usr/share/dotnet/sdk]\n10.0.100 [/usr/share/dotnet/sdk]\n"), ["8.0.428", "10.0.100"]);
     }
 
     #[test]
@@ -671,7 +933,7 @@ mod tests {
 
     #[test]
     fn the_dialog_only_accepts_launchable_connections() {
-        let mut c = RemoteConnection { wsl: false, host: "dev@build-box".into(), agent: DEFAULT_AGENT.into(), folder: "/srv/app".into() };
+        let mut c = RemoteConnection { wsl: false, host: "dev@build-box".into(), agent: DEFAULT_AGENT.into(), folder: "/srv/app".into(), dotnet: "dotnet".into() };
         assert!(endpoint(&c).is_some());
         c.host = "-oProxyCommand=sh".into();
         assert!(endpoint(&c).is_none());
@@ -691,7 +953,7 @@ mod tests {
         assert!(!remote.pump());
         assert!(!remote.is_open());
         assert_eq!(remote.form_error.as_deref(), Some("Permission denied (publickey)."));
-        let c = RemoteConnection { wsl: false, host: "box".into(), agent: "agent".into(), folder: "/srv".into() };
+        let c = RemoteConnection { wsl: false, host: "box".into(), agent: "agent".into(), folder: "/srv".into(), dotnet: "dotnet".into() };
         remote.connection = Some(c);
         remote.status = Status::Connecting;
         remote.events.sender().send(Event::Connected("/srv".into(), vec![Entry { name: "App".into(), is_dir: true }]));

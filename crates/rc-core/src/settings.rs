@@ -88,6 +88,8 @@ pub struct RemoteConnection {
     pub agent: String,
     /// Absolute POSIX folder on the remote machine.
     pub folder: String,
+    /// The .NET executable on the remote machine; `dotnet` uses its PATH.
+    pub dotnet: String,
 }
 
 /// A custom link in commit messages: text matching `pattern` opens `url`, where `$1`… are

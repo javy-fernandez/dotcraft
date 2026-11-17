@@ -1976,6 +1976,7 @@ fn screens_remote() {
         host: "dev@build-box".into(),
         agent: crate::ui::remote_explorer::DEFAULT_AGENT.into(),
         folder: "/home/dev/src/Shop".into(),
+        dotnet: "dotnet".into(),
     };
     for dark in [true, false] {
         let suffix = if dark { "dark" } else { "light" };
