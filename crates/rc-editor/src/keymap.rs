@@ -714,6 +714,9 @@ fn vscode_bindings(mac: bool) -> Vec<(Chord, Action)> {
     bind(&mut bindings, Key::D, command, SelectNextOccurrence);
     bind(&mut bindings, Key::L, command_shift, SelectAllOccurrences);
     bind(&mut bindings, Key::U, command, UnselectOccurrence);
+    let expand = if mac { m(false, true, true, true) } else { shift_alt };
+    bind(&mut bindings, Key::ArrowRight, expand, ExtendSelection);
+    bind(&mut bindings, Key::ArrowLeft, expand, ShrinkSelection);
     bind(&mut bindings, Key::Slash, command, CommentLine);
     bind(&mut bindings, Key::A, if cfg!(target_os = "linux") { ctrl_shift } else { shift_alt }, CommentBlock);
     bind(&mut bindings, Key::OpenBracket, if mac { command_alt } else { command_shift }, Fold);
@@ -809,12 +812,14 @@ mod tests {
         assert_eq!(mac.shortcut_text(Action::SearchEverywhere).as_deref(), Some("⇧⌘P"));
         assert_eq!(mac.shortcut_text(Action::DeleteLine).as_deref(), Some("⇧⌘K"));
         assert_eq!(mac.shortcut_text(Action::SaveAll).as_deref(), Some("⌥⌘S"));
+        assert_eq!(mac.shortcut_text(Action::ExtendSelection).as_deref(), Some("⌃⇧⌘→"));
 
         let other = Keymap::new(KeymapKind::VsCode);
         assert_eq!(other.shortcut_text(Action::GotoFile).as_deref(), Some("Ctrl+P"));
         assert_eq!(other.shortcut_text(Action::SearchEverywhere).as_deref(), Some("Ctrl+Shift+P"));
         assert_eq!(other.shortcut_text(Action::DeleteLine).as_deref(), Some("Ctrl+Shift+K"));
         assert_eq!(other.shortcut_text(Action::SaveAll), None);
+        assert_eq!(other.shortcut_text(Action::ShrinkSelection).as_deref(), Some("Alt+Shift+←"));
         assert_eq!(other.lookup(Key::F9, m(false, false, false, false)), Some(Action::ToggleBreakpoint));
     }
 }
