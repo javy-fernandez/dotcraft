@@ -797,7 +797,8 @@
     "No projects in the workspace": "ワークスペースにプロジェクトがありません",
     "{packages} packages, {edges} dependencies": "{packages} 個のパッケージ、{edges} 個の依存関係",
     "Select an existing .sln or .slnx solution": "既存の .sln または .slnx ソリューションを選択してください",
-    "Show inline variable values while debugging": "デバッグ中に変数の値をインライン表示"
+    "Show inline variable values while debugging": "デバッグ中に変数の値をインライン表示",
+    "Show Code Vision": "Code Vision を表示"
   },
   "terminal": {
     "Local": "ローカル",
@@ -1474,15 +1475,14 @@
   },
   "rc-app": {
     "Exit Focus Mode": "Exit Focus Mode",
-    "Refresh containers": "Refresh containers",
-    "No Docker containers found": "No Docker containers found",
-    "Stop container": "Stop container",
-    "Start container": "Start container",
-    "Container logs": "Container logs",
-    "Refresh logs": "Refresh logs",
-    "Could not start Docker: {error}": "Could not start Docker: {error}",
-    "Docker exited with {status}": "Docker exited with {status}",
-    "Cancel Docker operation": "Cancel Docker operation"
+    "Refresh containers": "コンテナーを更新",
+    "No Docker containers found": "Docker コンテナーが見つかりません",
+    "Stop container": "コンテナーを停止",
+    "Start container": "コンテナーを開始",
+    "Refresh logs": "ログを更新",
+    "Could not start Docker: {error}": "Docker を起動できませんでした: {error}",
+    "Docker exited with {status}": "Docker は {status} で終了しました",
+    "Cancel Docker operation": "Docker の操作をキャンセル"
   },
   "launchprofileeditor": {
     "Add profile": "プロファイルを追加",

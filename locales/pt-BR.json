@@ -797,7 +797,8 @@
     "No projects in the workspace": "Nenhum projeto no espaço de trabalho",
     "{packages} packages, {edges} dependencies": "{packages} pacotes, {edges} dependências",
     "Select an existing .sln or .slnx solution": "Selecione uma solução .sln ou .slnx existente",
-    "Show inline variable values while debugging": "Mostrar valores de variáveis embutidos durante a depuração"
+    "Show inline variable values while debugging": "Mostrar valores de variáveis embutidos durante a depuração",
+    "Show Code Vision": "Mostrar Code Vision"
   },
   "terminal": {
     "Local": "Local",
@@ -1474,15 +1475,14 @@
   },
   "rc-app": {
     "Exit Focus Mode": "Exit Focus Mode",
-    "Refresh containers": "Refresh containers",
-    "No Docker containers found": "No Docker containers found",
-    "Stop container": "Stop container",
-    "Start container": "Start container",
-    "Container logs": "Container logs",
-    "Refresh logs": "Refresh logs",
-    "Could not start Docker: {error}": "Could not start Docker: {error}",
-    "Docker exited with {status}": "Docker exited with {status}",
-    "Cancel Docker operation": "Cancel Docker operation"
+    "Refresh containers": "Atualizar contêineres",
+    "No Docker containers found": "Nenhum contêiner do Docker encontrado",
+    "Stop container": "Parar contêiner",
+    "Start container": "Iniciar contêiner",
+    "Refresh logs": "Atualizar logs",
+    "Could not start Docker: {error}": "Não foi possível iniciar o Docker: {error}",
+    "Docker exited with {status}": "O Docker terminou com {status}",
+    "Cancel Docker operation": "Cancelar operação do Docker"
   },
   "launchprofileeditor": {
     "Add profile": "Adicionar perfil",

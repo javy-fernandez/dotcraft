@@ -797,7 +797,8 @@
     "No projects in the workspace": "工作区中没有项目",
     "{packages} packages, {edges} dependencies": "{packages} 个包，{edges} 个依赖项",
     "Select an existing .sln or .slnx solution": "请选择现有的 .sln 或 .slnx 解决方案",
-    "Show inline variable values while debugging": "调试时以内联方式显示变量值"
+    "Show inline variable values while debugging": "调试时以内联方式显示变量值",
+    "Show Code Vision": "显示 Code Vision"
   },
   "terminal": {
     "Local": "本地",
@@ -1474,15 +1475,14 @@
   },
   "rc-app": {
     "Exit Focus Mode": "Exit Focus Mode",
-    "Refresh containers": "Refresh containers",
-    "No Docker containers found": "No Docker containers found",
-    "Stop container": "Stop container",
-    "Start container": "Start container",
-    "Container logs": "Container logs",
-    "Refresh logs": "Refresh logs",
-    "Could not start Docker: {error}": "Could not start Docker: {error}",
-    "Docker exited with {status}": "Docker exited with {status}",
-    "Cancel Docker operation": "Cancel Docker operation"
+    "Refresh containers": "刷新容器",
+    "No Docker containers found": "未找到 Docker 容器",
+    "Stop container": "停止容器",
+    "Start container": "启动容器",
+    "Refresh logs": "刷新日志",
+    "Could not start Docker: {error}": "无法启动 Docker：{error}",
+    "Docker exited with {status}": "Docker 已退出，状态为 {status}",
+    "Cancel Docker operation": "取消 Docker 操作"
   },
   "launchprofileeditor": {
     "Add profile": "添加配置文件",
