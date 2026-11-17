@@ -99,7 +99,7 @@ impl PublishProfile {
             doc.descendants()
                 .filter(|node| node.is_element() && node.tag_name().name() == name)
                 .filter_map(|node| node.text())
-                .last()
+                .next_back()
                 .unwrap_or("")
                 .trim()
                 .to_string()
@@ -225,15 +225,13 @@ fn update_xml(original: &str, values: &[(&str, String)]) -> anyhow::Result<Strin
     );
     let group = root
         .children()
-        .filter(|node| node.is_element() && node.tag_name().name() == "PropertyGroup")
-        .last()
+        .rfind(|node| node.is_element() && node.tag_name().name() == "PropertyGroup")
         .ok_or_else(|| anyhow::anyhow!("publish profile has no PropertyGroup"))?;
     let mut edits = Vec::<(usize, usize, String)>::new();
     for (key, value) in values {
         let existing = root
             .descendants()
-            .filter(|node| node.is_element() && node.tag_name().name() == *key)
-            .last();
+            .rfind(|node| node.is_element() && node.tag_name().name() == *key);
         if let Some(node) = existing {
             edits.push((
                 node.range().start,

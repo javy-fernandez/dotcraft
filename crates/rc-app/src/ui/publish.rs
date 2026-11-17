@@ -18,13 +18,16 @@ pub enum PublishOutcome {
 /// The configurations offered in the drop-down; a profile's own one is added when it differs.
 const CONFIGURATIONS: [&str; 2] = ["Debug", "Release"];
 
+/// A project's profile names and the profile shown first.
+type Loaded = Result<(Vec<String>, Option<PublishProfile>), String>;
+
 pub struct PublishDialog {
     projects: Vec<PathBuf>,
     project_index: usize,
     names: Vec<String>,
     selected_name: Option<String>,
     draft: PublishProfile,
-    loaded: Inbox<(u64, Result<(Vec<String>, Option<PublishProfile>), String>)>,
+    loaded: Inbox<(u64, Loaded)>,
     saved: Inbox<Result<(PublishProfile, Option<BuildRequest>), String>>,
     generation: u64,
     loading: bool,
