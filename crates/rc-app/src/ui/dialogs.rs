@@ -1592,6 +1592,10 @@ mod tests {
         harness.run_steps(3);
         harness.get_by_label(tr("Editor")).click();
         harness.run_steps(2);
+        // The Editor page scrolls: bring the checkbox into view.
+        harness.input_mut().events.push(egui::Event::PointerMoved(egui::pos2(600.0, 350.0)));
+        harness.input_mut().events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, -1000.0), phase: egui::TouchPhase::Move, modifiers: egui::Modifiers::NONE });
+        harness.run_steps(20);
         harness.get_by_label(tr("Color tabs by kind of file")).click();
         harness.get_by_label(tr("OK")).click();
         harness.run_steps(3);
@@ -1604,6 +1608,10 @@ mod tests {
         harness.run_steps(3);
         harness.get_by_label(tr("Editor")).click();
         harness.run_steps(2);
+        // The Editor page scrolls: bring the checkbox into view.
+        harness.input_mut().events.push(egui::Event::PointerMoved(egui::pos2(600.0, 350.0)));
+        harness.input_mut().events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, -1000.0), phase: egui::TouchPhase::Move, modifiers: egui::Modifiers::NONE });
+        harness.run_steps(20);
         harness.get_by_label(tr("Color tabs by kind of file")).click();
         harness.get_by_label(tr("Cancel")).click();
         harness.run_steps(3);
