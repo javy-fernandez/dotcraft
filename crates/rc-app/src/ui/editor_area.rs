@@ -393,10 +393,6 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
             Action::InsertLiveTemplate | Action::SurroundWith => {
                 app.dialog = Some(crate::ui::dialogs::Dialog::Templates { surround: a == Action::SurroundWith, filter: String::new(), selected: 0 });
             }
-            Action::Generate => {
-                app.generate = crate::generate::Dialog::from_doc(doc);
-                app.focus_editor = false;
-            }
             Action::ToggleBookmarkMnemonic => {
                 let line = doc.editor.caret_line_col().0;
                 app.dialog = Some(crate::ui::dialogs::Dialog::BookmarkMnemonic { path: doc.path.clone(), line });
