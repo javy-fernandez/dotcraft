@@ -282,6 +282,13 @@ impl RemoteExplorer {
                     self.loading.clear();
                     self.running = None;
                     self.cancel_command = None;
+                    // A command in flight died with the connection.
+                    if let Some(output) = self.output.as_mut().filter(|o| o.result.is_none()) {
+                        output.result = Some(Err(tr("Connection lost").into()));
+                    }
+                    if let Some(preview) = self.preview.as_mut().filter(|p| p.body.is_none()) {
+                        preview.body = Some(Err(tr("Connection lost").into()));
+                    }
                     if self.root.is_some() {
                         self.status = Status::Lost;
                         self.error = Some(error);
@@ -984,8 +991,10 @@ mod tests {
         remote.events.sender().send(Event::Connected("/srv".into(), vec![Entry { name: "App".into(), is_dir: true }]));
         assert!(remote.pump());
         assert!(remote.is_open());
+        remote.output = Some(CommandOutput { command: "dotnet build".into(), result: None });
         remote.events.sender().send(Event::Lost("Broken pipe".into()));
         assert!(!remote.pump());
+        assert!(matches!(remote.output.as_ref().and_then(|o| o.result.as_ref()), Some(Err(_))));
         assert!(remote.is_open());
         assert_eq!(remote.status, Status::Lost);
         assert!(remote.cache.contains_key("/srv"));
