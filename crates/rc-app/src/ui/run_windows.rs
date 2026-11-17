@@ -334,47 +334,40 @@ pub fn tests(app: &mut DotCraftApp, ui: &mut Ui) {
         (ico::RUN_COVERAGE, tr("Run All Tests with Coverage"), ws && !running && !app.coverage.running),
     ];
     let mut clicked = header(ui, tr("Tests"), &actions);
-    ui.horizontal(|ui| {
-        let mut mode = app.continuous.options.mode;
-        egui::ComboBox::from_id_salt("continuous_mode")
-            .selected_text(match mode {
-                ContinuousMode::Off => tr("Continuous testing: Off"),
-                ContinuousMode::OnSave => tr("Continuous testing: On Save"),
-                ContinuousMode::OnBuild => tr("Continuous testing: On Build"),
-            })
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut mode, ContinuousMode::Off, tr("Continuous testing: Off"));
-                ui.selectable_value(&mut mode, ContinuousMode::OnSave, tr("Continuous testing: On Save"));
-                ui.selectable_value(&mut mode, ContinuousMode::OnBuild, tr("Continuous testing: On Build"));
-            });
-        if mode != app.continuous.options.mode {
-            app.continuous.options.mode = mode;
+    crate::ui::kit::toolbar(ui, |ui| {
+        let modes = [ContinuousMode::Off, ContinuousMode::OnSave, ContinuousMode::OnBuild];
+        let mode_label = |mode: ContinuousMode| match mode {
+            ContinuousMode::Off => tr("Continuous testing: Off"),
+            ContinuousMode::OnSave => tr("Continuous testing: On Save"),
+            ContinuousMode::OnBuild => tr("Continuous testing: On Build"),
+        };
+        let labels: Vec<String> = modes.iter().map(|m| mode_label(*m).to_string()).collect();
+        if let Some(i) = crate::ui::kit::dropdown(ui, "continuous_mode", mode_label(app.continuous.options.mode), &labels, true) {
+            app.continuous.options.mode = modes[i];
             app.session_dirty = true;
         }
-        let mut scope = app.continuous.options.scope;
-        egui::ComboBox::from_id_salt("continuous_scope")
-            .selected_text(match scope {
+        if app.continuous.options.mode != ContinuousMode::Off {
+            let scopes = [ContinuousScope::Affected, ContinuousScope::Session];
+            let scope_label = |scope: ContinuousScope| match scope {
                 ContinuousScope::Affected => tr("Affected test projects"),
                 ContinuousScope::Session => tr("Current test session"),
-            })
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut scope, ContinuousScope::Affected, tr("Affected test projects"));
-                ui.selectable_value(&mut scope, ContinuousScope::Session, tr("Current test session"));
-            });
-        if scope != app.continuous.options.scope {
-            app.continuous.options.scope = scope;
-            app.session_dirty = true;
+            };
+            let labels: Vec<String> = scopes.iter().map(|s| scope_label(*s).to_string()).collect();
+            if let Some(i) = crate::ui::kit::dropdown(ui, "continuous_scope", scope_label(app.continuous.options.scope), &labels, true) {
+                app.continuous.options.scope = scopes[i];
+                app.session_dirty = true;
+            }
+            if let Some(request) = app.runner.tests.as_ref().map(|tests| tests.request.clone())
+                && crate::ui::kit::button(ui, Some(ico::RERUN), tr("Use current test run"), true).clicked()
+            {
+                app.continuous.select_session(&request);
+                app.session_dirty = true;
+            }
         }
-        if let Some(request) = app.runner.tests.as_ref().map(|tests| tests.request.clone())
-            && ui.button(tr("Use current test run")).clicked()
-        {
-            app.continuous.select_session(&request);
-            app.session_dirty = true;
+        if !app.continuous.status.is_empty() {
+            crate::ui::kit::note(ui, &app.continuous.status);
         }
     });
-    if !app.continuous.status.is_empty() {
-        ui.label(&app.continuous.status);
-    }
     if app.runner.tests.is_none() {
         let hint = tr("Run the tests of a project or file to see the results.");
         if crate::ui::toolwindows::empty_state_with(ui, ToolWindow::Tests.icon(), tr("No tests run yet"), hint, ws.then_some(tr("Run All Tests"))) {

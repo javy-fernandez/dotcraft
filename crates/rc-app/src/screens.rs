@@ -134,6 +134,17 @@ fn screens() {
         h.state_mut().dock.show(crate::toolwindow::ToolWindow::Services);
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("services-{suffix}.png"))).unwrap();
+        // Project and package dependencies.
+        h.state_mut().dock.show(crate::toolwindow::ToolWindow::DependencyDiagram);
+        for _ in 0..30 {
+            h.run_steps(1);
+            if !h.state().dependency_diagram.loading {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        h.run_steps(2);
+        h.render().unwrap().save(out.join(format!("dependencies-{suffix}.png"))).unwrap();
         // A compound run configuration.
         let members = h.state().runner.app_names().into_iter().map(|n| (n, true)).collect();
         h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Compound { old: None, name: "All Applications".into(), members });
