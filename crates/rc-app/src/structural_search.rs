@@ -76,6 +76,8 @@ pub struct StructuralSearch {
     /// Files with at least one hit.
     pub files: usize,
     pub truncated: bool,
+    /// The search had a replacement template: the hits show and apply it.
+    pub replacing: bool,
     pub busy: bool,
     pub applying: bool,
     pub error: Option<String>,
@@ -100,6 +102,7 @@ impl StructuralSearch {
             hits: Vec::new(),
             files: 0,
             truncated: false,
+            replacing: false,
             busy: false,
             applying: false,
             error: None,
@@ -144,6 +147,7 @@ impl StructuralSearch {
         let cancel = self.cancel.clone();
         let sender = self.inbox.sender();
         let replacement = self.replacement.clone();
+        self.replacing = !replacement.is_empty();
         Runtime::handle().spawn_blocking(move || {
             let mut found = Found { hits: Vec::new(), files: 0, truncated: false };
             for file in snapshot.files() {

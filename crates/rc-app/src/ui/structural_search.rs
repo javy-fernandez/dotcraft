@@ -150,13 +150,13 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     let s = &app.structural;
     let working = s.busy || s.applying;
-    let can_replace = !working && !s.replacement.is_empty() && s.selected() > 0;
+    let can_replace = !working && s.replacing && s.selected() > 0;
     let actions = [(ico::EDIT, tr("Edit Pattern…"), !s.applying), (ico::REFRESH, tr("Search Again"), !working), (ico::STOP, tr("Stop"), s.busy)];
     let clicked = crate::ui::run_windows::header(ui, tr("Structural Search"), &actions);
     let mut replace = false;
     let mut select = None;
     kit::toolbar(ui, |ui| {
-        if !s.replacement.is_empty() {
+        if s.replacing {
             replace = kit::button(ui, Some(ico::REPLACE), &trf("Replace {n} Selected", &[("n", &s.selected())]), can_replace).clicked();
         }
         if kit::button(ui, Some(ico::CHECKMARK), tr("Select All"), !working && !s.hits.is_empty()).clicked() {
@@ -196,7 +196,7 @@ pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
             let (dir, name) = rel.rsplit_once('/').unwrap_or(("", rel));
             kit::row(ui, 0, Some(icons::for_file(name)), name, &format!("{dir}  {count}"), false);
             for (index, hit) in s.hits.iter().enumerate().skip(i).take(count) {
-                if let Some(action) = hit_row(ui, hit, !s.replacement.is_empty(), !working) {
+                if let Some(action) = hit_row(ui, hit, s.replacing, !working) {
                     match action {
                         HitClick::Toggle => toggle = Some(index),
                         HitClick::Open => open = Some((hit.path.clone(), hit.line, hit.col)),
