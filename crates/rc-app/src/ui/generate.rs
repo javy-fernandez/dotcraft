@@ -224,6 +224,10 @@ pub(crate) fn member_row(ui: &mut Ui, highlighted: bool, checked: bool, icon: rc
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
     if highlighted {
         ui.painter().rect_filled(r, 4.0, p.selection);
+        // Keep the row moved to with ↑/↓ visible in a long list.
+        if ui.input(|i| i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::ArrowDown)) {
+            resp.scroll_to_me(None);
+        }
     } else if resp.hovered() {
         ui.painter().rect_filled(r, 4.0, p.row_hover);
     }
