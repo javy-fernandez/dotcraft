@@ -319,6 +319,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         app.insight.completion_accepted(doc, data);
     }
     let mut run_test_line = None;
+    let mut run_benchmark_line = None;
     let mut http_line = None;
     let mut code_vision_target = None;
     // ⌘+click: the clicked spot goes into Back/Forward history.
@@ -356,6 +357,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunApp } if crate::web::is_http_file(&doc.path) => http_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some((line, false)),
             EditorEvent::GutterTestDebugClicked { line } => run_test_line = Some((line, true)),
+            EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunBenchmark } => run_benchmark_line = Some(line),
             _ => {}
         }
     }
@@ -441,6 +443,9 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     }
     if let Some((line, debug)) = run_test_line {
         app.run_test_at(line, debug);
+    }
+    if let Some(line) = run_benchmark_line {
+        app.run_benchmark_at(line);
     }
     app.handle_packages(package_outputs);
     app.handle_appsettings(settings_outputs);
