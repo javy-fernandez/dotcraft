@@ -856,8 +856,20 @@ fn rename(app: &mut DotCraftApp, ctx: &Context, path: &mut PathBuf, name: &mut S
             *error = Some(tr("A file or folder with this name already exists").to_string());
             return Outcome::Keep;
         }
+        let meta = rc_core::unity::meta_file(path);
         match std::fs::rename(&*path, &target) {
             Ok(()) => {
+                // Unity's `.meta` file (the asset's GUID) moves with the asset, as in Rider.
+                if let Some(meta) = meta {
+                    let mut name = target.file_name().unwrap_or_default().to_os_string();
+                    name.push(".meta");
+                    let target_meta = target.with_file_name(name);
+                    if !target_meta.exists()
+                        && let Err(e) = std::fs::rename(&meta, &target_meta)
+                    {
+                        app.notify(trf("Could not rename {name}: {error}", &[("name", &meta.display()), ("error", &e)]), true);
+                    }
+                }
                 app.explorer.invalidate(path);
                 app.explorer.invalidate(&target);
                 app.docs.follow_rename(path, &target);
@@ -884,8 +896,15 @@ fn confirm_delete(app: &mut DotCraftApp, ctx: &Context, path: &mut PathBuf) -> O
     });
     if ok {
         // To the system trash: deleting from the IDE can be undone in Finder / Explorer.
+        let meta = rc_core::unity::meta_file(path);
         match trash(path) {
             Ok(()) => {
+                // Unity's `.meta` file goes with its asset, so restoring both keeps the GUID.
+                if let Some(meta) = meta
+                    && let Err(e) = trash(&meta)
+                {
+                    app.notify(trf("Could not delete {name}: {error}", &[("name", &meta.display()), ("error", &e)]), true);
+                }
                 app.explorer.invalidate(path);
                 let mut i = app.docs.list.len();
                 while i > 0 {
@@ -1492,6 +1511,27 @@ mod tests {
         assert!(!scratch_name_stays_inside("../outside.cs"));
         assert!(!scratch_name_stays_inside("notes/../../outside.cs"));
         assert!(!scratch_name_stays_inside("/tmp/outside.cs"));
+    }
+
+    #[test]
+    fn renaming_a_unity_asset_renames_its_meta_file() {
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let game = dunce::canonicalize(home.path()).unwrap().join("Game");
+        std::fs::create_dir_all(game.join("Assets/Scripts")).unwrap();
+        std::fs::create_dir_all(game.join("ProjectSettings")).unwrap();
+        let script = game.join("Assets/Scripts/Player.cs");
+        std::fs::write(&script, "public class Player {}\n").unwrap();
+        std::fs::write(game.join("Assets/Scripts/Player.cs.meta"), "guid: 0123456789abcdef\n").unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.dialog = Some(Dialog::Rename { path: script, name: "Hero.cs".into(), error: None });
+        let mut harness = crate::screens::harness(app, vec2(800.0, 500.0));
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, tr("Rename")).click();
+        harness.run_steps(2);
+        assert!(harness.state().dialog.is_none());
+        assert!(game.join("Assets/Scripts/Hero.cs").is_file());
+        assert_eq!(std::fs::read_to_string(game.join("Assets/Scripts/Hero.cs.meta")).unwrap(), "guid: 0123456789abcdef\n");
+        assert!(!game.join("Assets/Scripts/Player.cs.meta").exists());
     }
 
     #[test]

@@ -36,6 +36,16 @@ pub fn in_generated_dir(root: &Path, path: &Path) -> bool {
     false
 }
 
+/// The `.meta` file Unity keeps next to `asset` (file or folder), when `asset` is inside a
+/// Unity project and has one. It holds the asset's GUID: renaming or deleting the asset
+/// without it breaks every reference to the asset in scenes and prefabs.
+pub fn meta_file(asset: &Path) -> Option<PathBuf> {
+    let mut name = asset.file_name()?.to_os_string();
+    name.push(".meta");
+    let meta = asset.with_file_name(name);
+    (meta.is_file() && asset.parent()?.ancestors().any(is_unity_root)).then_some(meta)
+}
+
 /// The editor a project was last saved with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EditorVersion {
@@ -369,6 +379,23 @@ mod tests {
             &game.join("Assets/Scripts/Player.cs")
         ));
         assert!(!in_generated_dir(&game, Path::new("/elsewhere/Library")));
+    }
+
+    #[test]
+    fn meta_files_belong_to_assets_inside_unity_projects() {
+        let dir = tempfile::tempdir().unwrap();
+        let game = dir.path().join("Game");
+        unity_project(&game, None);
+        let script = game.join("Assets/Scripts/Player.cs");
+        std::fs::write(&script, "").unwrap();
+        assert_eq!(meta_file(&script), None);
+        std::fs::write(game.join("Assets/Scripts/Player.cs.meta"), "").unwrap();
+        std::fs::write(game.join("Assets/Scripts.meta"), "").unwrap();
+        assert_eq!(meta_file(&script), Some(game.join("Assets/Scripts/Player.cs.meta")));
+        assert_eq!(meta_file(&game.join("Assets/Scripts")), Some(game.join("Assets/Scripts.meta")));
+        let outside = dir.path().join("notes.txt");
+        std::fs::write(dir.path().join("notes.txt.meta"), "").unwrap();
+        assert_eq!(meta_file(&outside), None);
     }
 
     #[test]

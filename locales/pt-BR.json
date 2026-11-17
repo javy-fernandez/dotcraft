@@ -1745,7 +1745,8 @@
     "Use active .proto": "Usar o .proto ativo",
     "gRPC request exceeds 1 MiB.": "A requisição gRPC excede 1 MiB.",
     "gRPC request failed.": "A requisição gRPC falhou.",
-    "gRPC request was cancelled or timed out.": "A requisição gRPC foi cancelada ou expirou."
+    "gRPC request was cancelled or timed out.": "A requisição gRPC foi cancelada ou expirou.",
+    "Could not rename {name}: {error}": "Não foi possível renomear {name}: {error}"
   },
   "launchprofileeditor": {
     "Add profile": "Adicionar perfil",

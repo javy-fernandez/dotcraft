@@ -1745,7 +1745,8 @@
     "Use active .proto": "使用当前 .proto",
     "gRPC request exceeds 1 MiB.": "gRPC 请求超过 1 MiB。",
     "gRPC request failed.": "gRPC 请求失败。",
-    "gRPC request was cancelled or timed out.": "gRPC 请求已取消或超时。"
+    "gRPC request was cancelled or timed out.": "gRPC 请求已取消或超时。",
+    "Could not rename {name}: {error}": "无法重命名 {name}：{error}"
   },
   "launchprofileeditor": {
     "Add profile": "添加配置文件",
