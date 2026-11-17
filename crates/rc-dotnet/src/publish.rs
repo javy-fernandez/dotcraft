@@ -197,6 +197,25 @@ impl PublishProfile {
     }
 }
 
+/// The runtime identifier of the machine DotCraft runs on (`osx-arm64`, `win-x64`,
+/// `linux-x64`…): the usual choice for a self-contained publish.
+pub fn host_runtime_identifier() -> String {
+    let os = match std::env::consts::OS {
+        "macos" => "osx",
+        "windows" => "win",
+        "linux" => "linux",
+        other => other,
+    };
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "x64",
+        "aarch64" => "arm64",
+        "x86" => "x86",
+        "arm" => "arm",
+        other => other,
+    };
+    format!("{os}-{arch}")
+}
+
 fn update_xml(original: &str, values: &[(&str, String)]) -> anyhow::Result<String> {
     let document = roxmltree::Document::parse(original)?;
     let root = document.root_element();
@@ -288,6 +307,14 @@ mod tests {
                 .contains(&"-p:PublishProfile=linux-x64".into())
         );
         assert_eq!(request.configuration, "Release");
+    }
+
+    #[test]
+    fn host_runtime_identifier_uses_dotnet_names() {
+        let rid = host_runtime_identifier();
+        let (os, arch) = rid.split_once('-').unwrap();
+        assert!(["osx", "win", "linux"].contains(&os), "{rid}");
+        assert!(["x64", "arm64", "x86", "arm"].contains(&arch), "{rid}");
     }
 
     #[test]

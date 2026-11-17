@@ -30,6 +30,8 @@ pub struct PublishDialog {
     loading: bool,
     saving: bool,
     error: Option<String>,
+    /// This machine's runtime identifier, shown as the field's hint.
+    rid_hint: String,
 }
 
 impl PublishDialog {
@@ -49,6 +51,7 @@ impl PublishDialog {
             loading: false,
             saving: false,
             error: None,
+            rid_hint: rc_dotnet::publish::host_runtime_identifier(),
         };
         state.load(None);
         state
@@ -205,7 +208,7 @@ impl PublishDialog {
                 ui.add_enabled(!self.saving, TextEdit::singleline(&mut self.draft.publish_dir).desired_width(field_width));
                 ui.end_row();
                 ui.label(tr("Runtime identifier"));
-                ui.add_enabled(!self.saving, TextEdit::singleline(&mut self.draft.runtime_identifier).hint_text("linux-x64").desired_width(field_width));
+                ui.add_enabled(!self.saving, TextEdit::singleline(&mut self.draft.runtime_identifier).hint_text(self.rid_hint.as_str()).desired_width(field_width));
                 ui.end_row();
                 ui.label("");
                 ui.add_enabled_ui(!self.saving, |ui| {
