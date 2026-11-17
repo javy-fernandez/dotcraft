@@ -11,6 +11,7 @@ mod convert;
 mod debugger;
 mod user_secrets;
 mod docker_services;
+mod dependency_diagram;
 mod database;
 mod insight;
 mod package_insight;

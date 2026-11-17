@@ -3,6 +3,7 @@
 
 pub mod debug_window;
 pub mod docker_services;
+pub mod dependency_diagram;
 pub mod database_window;
 pub mod dialogs;
 pub mod sdk_selection;
