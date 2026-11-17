@@ -98,7 +98,9 @@ fn kind_popup(app: &DotCraftApp, ctx: &Context, dialog: &mut Dialog) -> Outcome 
             }
         });
     });
-    if ctx.input(|i| i.pointer.any_pressed()) && !area.response.hovered() && chosen.is_none() {
+    // A press outside the list closes it (the rows themselves take the clicks).
+    let outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !area.response.rect.contains(p)));
+    if outside && chosen.is_none() {
         close = true;
     }
     if let Some(kind) = chosen.and_then(|i| kinds.get(i)) {
@@ -157,7 +159,7 @@ fn members_dialog(ctx: &Context, dialog: &mut Dialog) -> Outcome {
                 for (row, &m) in rows.iter().enumerate() {
                     let clicked = if targets {
                         let target = &dialog.targets[m];
-                        member_row(ui, row == dialog.cursor, target.selected, dialog.kind.icon(), &target.label, "")
+                        member_row(ui, row == dialog.cursor, target.selected, dialog.kind.icon(), &target.label, &target.source)
                     } else {
                         let member = &dialog.members[m];
                         let icon = if member.field { ico::FIELD } else { ico::PROPERTY };

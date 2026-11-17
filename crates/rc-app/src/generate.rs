@@ -11,7 +11,7 @@ use rc_syntax::tree_sitter::{Node, Tree};
 use std::ops::Range;
 use std::path::Path;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Kind {
     Constructor,
     Properties,
@@ -178,6 +178,12 @@ pub struct TargetMember {
     pub label: String,
     pub code: String,
     pub selected: bool,
+    /// The generated member's name (`this` for an indexer) and, for methods and indexers, its
+    /// parameter types: what makes it clash with a member the type already has.
+    pub name: String,
+    pub params: Option<Vec<String>>,
+    /// Where it comes from: the base type, or the field and its type.
+    pub source: String,
 }
 
 /// An existing method or constructor: its name and parameter types (without spaces).
@@ -322,7 +328,7 @@ impl Dialog {
             }
         }
         dialog.read_body(source, body);
-        dialog.targets = crate::generate_targets::collect(tree, source, node, &dialog.members, &dialog.existing);
+        dialog.targets = crate::generate_targets::collect(tree, source, node, &dialog.members, &dialog.known());
         Some(dialog)
     }
 
@@ -379,6 +385,10 @@ impl Dialog {
                     let params = child.child_by_field_name("parameters").map(|p| parameter_types(p, source)).unwrap_or_default();
                     self.methods.push(Signature { name, params });
                 }
+                "indexer_declaration" => {
+                    let params = child.child_by_field_name("parameters").map(|p| parameter_types(p, source)).unwrap_or_default();
+                    self.methods.push(Signature { name: "this".into(), params });
+                }
                 "event_field_declaration" => {
                     let Some(decl) = named(child, "variable_declaration") else { continue };
                     let mut c = decl.walk();
@@ -395,6 +405,11 @@ impl Dialog {
                 }
             }
         }
+    }
+
+    /// What the type already declares, for the target generators.
+    pub fn known(&self) -> crate::generate_targets::Known {
+        crate::generate_targets::Known { existing: self.existing.clone(), methods: self.methods.clone(), style: self.style }
     }
 
     /// The kinds that make sense for this type, in Rider's order.
@@ -844,21 +859,34 @@ mod tests {
         }
     }
 
+    /// Every kind, one after the other, into a class, a struct and a record of a nullable project
+    /// that treats warnings as errors.
     #[test]
     #[ignore = "requires a .NET SDK; run with DOTNET_BIN set to the SDK executable"]
-    fn generated_target_members_build_with_dotnet() {
-        let mut source = TARGETS.to_string();
-        for kind in [Kind::Implement, Kind::Override, Kind::Delegate] {
-            let mut d = dialog_at(&source, "_service", Style::default());
-            d.kind = kind;
-            source = apply(&source, &d);
+    fn generated_members_build_with_dotnet() {
+        let style = Style { nullable: true, system: true, collections: true };
+        let mut source = format!("{TARGETS}\nstruct Point<T>\n{{\n    private double _x;\n    public T? Tag {{ get; set; }}\n}}\nrecord Person(string Name)\n{{\n    private readonly int _age;\n}}\ninterface IRepository<out T> where T : class\n{{\n    T? Find<U>(U key) where U : notnull;\n    string Label {{ get; init; }}\n}}\nsealed class Repo : IRepository<string>\n{{\n    private string _label = \"\";\n}}\n");
+        for (at, kinds) in [
+            ("_service", &[Kind::Implement, Kind::Override, Kind::Delegate, Kind::Equality, Kind::Formatting][..]),
+            ("_x", &[Kind::Constructor, Kind::Properties, Kind::Equality, Kind::Formatting][..]),
+            ("_age", &[Kind::Constructor, Kind::Properties, Kind::Formatting][..]),
+            ("_label", &[Kind::Implement, Kind::Constructor, Kind::Equality][..]),
+        ] {
+            for &kind in kinds {
+                let mut d = dialog_at(&source, at, style);
+                if !d.kinds().contains(&kind) {
+                    continue;
+                }
+                d.kind = kind;
+                source = apply(&source, &d);
+            }
         }
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("Generate.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup></Project>").unwrap();
-        std::fs::write(dir.path().join("Generated.cs"), source).unwrap();
+        std::fs::write(dir.path().join("Generate.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors><NoWarn>CS0067;CS0169;CS0414;CS0649</NoWarn></PropertyGroup></Project>").unwrap();
+        std::fs::write(dir.path().join("Generated.cs"), &source).unwrap();
         let dotnet = std::env::var("DOTNET_BIN").unwrap_or_else(|_| "dotnet".into());
-        let output = std::process::Command::new(dotnet).args(["build", "--nologo", "--verbosity", "quiet"]).current_dir(dir.path()).env("DOTNET_CLI_TELEMETRY_OPTOUT", "1").output().unwrap();
-        assert!(output.status.success(), "{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        let output = std::process::Command::new(dotnet).args(["build", "--nologo", "-v", "q", "-p:UseSharedCompilation=false"]).current_dir(dir.path()).env("DOTNET_CLI_TELEMETRY_OPTOUT", "1").output().unwrap();
+        assert!(output.status.success(), "{source}\n{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
     }
 
     #[test]
