@@ -119,6 +119,21 @@ fn screens() {
         h.state_mut().dock.show(crate::toolwindow::ToolWindow::Tests);
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("tests-empty-{suffix}.png"))).unwrap();
+        // Docker containers in Services (sample rows; the test does not need Docker).
+        {
+            use crate::docker_services::Container;
+            let services = &mut h.state_mut().docker_services;
+            services.loaded = true;
+            services.containers = vec![
+                Container { id: "a1".into(), name: "shop-db".into(), image: "postgres:16".into(), status: "Up 2 hours".into(), state: "running".into() },
+                Container { id: "b2".into(), name: "shop-cache".into(), image: "redis:7".into(), status: "Exited (0) 3 days ago".into(), state: "exited".into() },
+            ];
+            services.selected = Some("a1".into());
+            services.logs = "PostgreSQL init process complete; ready for start up.\ndatabase system is ready to accept connections\n".into();
+        }
+        h.state_mut().dock.show(crate::toolwindow::ToolWindow::Services);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("services-{suffix}.png"))).unwrap();
         // A compound run configuration.
         let members = h.state().runner.app_names().into_iter().map(|n| (n, true)).collect();
         h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Compound { old: None, name: "All Applications".into(), members });

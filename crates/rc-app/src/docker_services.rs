@@ -49,7 +49,7 @@ impl DockerServices {
         Self {
             containers: Vec::new(), selected: None, logs: String::new(), error: None,
             busy: false, loaded: false, inbox: Inbox::new(waker), task: None,
-            docker: PathBuf::from("docker"),
+            docker: docker_path(),
         }
     }
 
@@ -131,6 +131,22 @@ impl Drop for DockerServices {
     fn drop(&mut self) {
         if let Some(task) = self.task.take() { task.abort(); }
     }
+}
+
+/// The Docker CLI: on PATH, or where Docker Desktop, Homebrew and Colima install it (apps
+/// opened from Finder get a PATH without /usr/local/bin).
+fn docker_path() -> PathBuf {
+    let exe = if cfg!(windows) { "docker.exe" } else { "docker" };
+    let mut candidates: Vec<PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).map(|d| d.join(exe)).collect()).unwrap_or_default();
+    if cfg!(windows) {
+        candidates.push(PathBuf::from(r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"));
+    } else {
+        candidates.extend(["/usr/local/bin/docker", "/opt/homebrew/bin/docker", "/Applications/Docker.app/Contents/Resources/bin/docker", "/usr/bin/docker"].map(PathBuf::from));
+        if let Some(home) = dirs::home_dir() {
+            candidates.push(home.join(".docker/bin/docker"));
+        }
+    }
+    candidates.into_iter().find(|p| p.is_file()).unwrap_or_else(|| PathBuf::from(exe))
 }
 
 async fn command(program: &PathBuf, args: &[&str], include_stderr: bool) -> Result<String, String> {
