@@ -72,9 +72,13 @@ impl Benchmarks {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
-        let artifacts = rc_core::paths::data_dir()
-            .join("benchmarks")
-            .join(format!("{stamp}-{}-{run_id}", std::process::id()));
+        let root = rc_core::paths::data_dir().join("benchmarks");
+        // Only the latest run keeps its artifacts: the results are already in memory.
+        if let Some(previous) = self.artifacts.take() {
+            discard(vec![previous]);
+        }
+        discard(stale_runs(&root, STALE_AFTER));
+        let artifacts = root.join(format!("{stamp}-{}-{run_id}", std::process::id()));
         self.events = Inbox::new(self.waker.clone());
         self.parsed = Inbox::new(self.waker.clone());
         let request = run_request(&project, &filter, &artifacts);
@@ -203,6 +207,33 @@ impl Drop for Benchmarks {
     fn drop(&mut self) {
         self.stop();
     }
+}
+
+/// Runs left behind by other sessions (or a crash) are removed after this long.
+const STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// Artifact folders under `root` not modified for `age`.
+fn stale_runs(root: &Path, age: std::time::Duration) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root) else { return Vec::new() };
+    entries
+        .flatten()
+        .filter(|entry| {
+            entry.metadata().and_then(|meta| meta.modified()).ok().and_then(|modified| modified.elapsed().ok()).is_some_and(|elapsed| elapsed >= age)
+        })
+        .map(|entry| entry.path())
+        .collect()
+}
+
+/// Deletes artifact folders off the UI thread.
+fn discard(dirs: Vec<PathBuf>) {
+    if dirs.is_empty() {
+        return;
+    }
+    std::thread::spawn(move || {
+        for dir in dirs {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    });
 }
 
 pub fn run_request(project: &Path, filter: &str, artifacts: &Path) -> RunRequest {
@@ -364,6 +395,27 @@ mod tests {
             }]
         );
         assert_eq!(format_time(rows[0].mean_ns), "1.24 µs");
+        assert_eq!(format_bytes(64.0), "64 B");
+        assert_eq!(format_bytes(3072.0), "3.00 KB");
+    }
+
+    #[test]
+    fn output_keeps_only_the_latest_lines() {
+        let mut benchmarks = Benchmarks::new(Waker::noop());
+        for i in 0..OUTPUT_LINES + 3 {
+            benchmarks.push_output(i.to_string());
+        }
+        assert_eq!(benchmarks.output.len(), OUTPUT_LINES);
+        assert_eq!(benchmarks.output.front().map(String::as_str), Some("3"));
+    }
+
+    #[test]
+    fn only_old_artifact_folders_are_stale() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("run")).unwrap();
+        assert!(stale_runs(root.path(), std::time::Duration::from_secs(3600)).is_empty());
+        assert_eq!(stale_runs(root.path(), std::time::Duration::ZERO), [root.path().join("run")]);
+        assert!(stale_runs(&root.path().join("missing"), std::time::Duration::ZERO).is_empty());
     }
 
     #[test]
