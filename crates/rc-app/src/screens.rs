@@ -2426,3 +2426,58 @@ fn screens_resx_editor() {
         h.render().unwrap().save(out.join("resx-xml-dark.png")).unwrap();
     }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/assembly-explorer-*.png"]
+fn screens_assembly_explorer() {
+    use crate::assembly_explorer::{Assembly, AssemblyType, TypeKind};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let ty = |kind, namespace: &str, name: &str| AssemblyType { kind, full_name: format!("{namespace}.{name}"), namespace: namespace.into(), name: name.into() };
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+        // A decompiled type, open read-only next to the window.
+        let source = crate::assembly_explorer::cache_dir().join("Newtonsoft.Json-0123456789abcdef/Newtonsoft.Json/JsonConvert.cs");
+        std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+        std::fs::write(&source, "using System;\nusing System.IO;\nusing Newtonsoft.Json.Utilities;\n\nnamespace Newtonsoft.Json;\n\n/// <summary>\n/// Provides methods for converting between .NET types and JSON types.\n/// </summary>\npublic static class JsonConvert\n{\n\tpublic static readonly string True = \"true\";\n\n\tpublic static readonly string False = \"false\";\n\n\tpublic static Func<JsonSerializerSettings>? DefaultSettings { get; set; }\n\n\tpublic static string SerializeObject(object? value)\n\t{\n\t\treturn SerializeObject(value, (Type?)null, (JsonSerializerSettings?)null);\n\t}\n\n\tpublic static T? DeserializeObject<T>(string value)\n\t{\n\t\treturn DeserializeObject<T>(value, (JsonSerializerSettings?)null);\n\t}\n}\n").unwrap();
+        app.open_file(&source);
+        assert!(app.docs.active_doc().unwrap().editor.read_only);
+        let json = PathBuf::from("/Users/me/.nuget/packages/newtonsoft.json/13.0.3/lib/net6.0/Newtonsoft.Json.dll");
+        let skia = PathBuf::from("/Users/me/Downloads/libSkiaSharp.dll");
+        let x = &mut app.assembly_explorer;
+        x.assemblies = vec![
+            Assembly {
+                path: json.clone(),
+                types: Some(vec![
+                    ty(TypeKind::Class, "Newtonsoft.Json", "JsonConvert"),
+                    ty(TypeKind::Class, "Newtonsoft.Json", "JsonConverter<T>"),
+                    ty(TypeKind::Enum, "Newtonsoft.Json", "Formatting"),
+                    ty(TypeKind::Interface, "Newtonsoft.Json", "IArrayPool<T>"),
+                    ty(TypeKind::Struct, "Newtonsoft.Json.Utilities", "StringBuffer"),
+                    ty(TypeKind::Delegate, "Newtonsoft.Json.Serialization", "SerializationCallback"),
+                    ty(TypeKind::Class, "Newtonsoft.Json.Linq", "JObject"),
+                ]),
+                error: None,
+            },
+            Assembly { path: "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Text.Json.dll".into(), types: None, error: None },
+            Assembly { path: skia.clone(), types: None, error: Some(rc_kit::i18n::tr("This file is not a .NET assembly").into()) },
+        ];
+        x.expanded = [format!("a:{}", json.display()), format!("n:{}|Newtonsoft.Json", json.display()), format!("a:{}", skia.display())].into_iter().collect();
+        x.selected = Some(format!("t:{}|Newtonsoft.Json.JsonConvert", json.display()));
+        x.decompiling = Some("JObject".into());
+        app.dock.show(crate::toolwindow::ToolWindow::AssemblyExplorer);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::AssemblyExplorer, 380.0);
+        let suffix = if dark { "dark" } else { "light" };
+        let mut h = harness(app, vec2(1280.0, 720.0));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("assembly-explorer-{suffix}.png"))).unwrap();
+        // Without ilspycmd: the window offers to install it.
+        h.state_mut().assembly_explorer.tool_missing = true;
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("assembly-explorer-install-{suffix}.png"))).unwrap();
+    }
+}
