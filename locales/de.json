@@ -1545,7 +1545,22 @@
     "Annotations": "Annotationen",
     "Warnings": "Warnungen",
     "True": "Ja",
-    "False": "Nein"
+    "False": "Nein",
+    "A publish profile with this name already exists": "Ein Veröffentlichungsprofil mit diesem Namen ist bereits vorhanden",
+    "Configuration": "Konfiguration",
+    "Loading publish profiles…": "Veröffentlichungsprofile werden geladen…",
+    "No .NET project is available to publish": "Kein .NET-Projekt zum Veröffentlichen verfügbar",
+    "Publish": "Veröffentlichen",
+    "Publish Project": "Projekt veröffentlichen",
+    "Publish Project…": "Projekt veröffentlichen…",
+    "Publish…": "Veröffentlichen…",
+    "Publish profile": "Veröffentlichungsprofil",
+    "ReadyToRun": "ReadyToRun",
+    "Runtime identifier": "Laufzeitbezeichner",
+    "Save Profile": "Profil speichern",
+    "Self-contained": "Eigenständig",
+    "Single file": "Einzelne Datei",
+    "Trim unused code": "Nicht verwendeten Code kürzen"
   },
   "launchprofileeditor": {
     "Add profile": "Profil hinzufügen",
@@ -1564,23 +1579,5 @@
     "New profile": "Neues Profil",
     "Profile name": "Profilname",
     "Use NAME=value for each environment variable": "Verwenden Sie NAME=Wert für jede Umgebungsvariable"
-  },
-  "publishprofiles": {
-    "A publish profile with this name already exists": "A publish profile with this name already exists",
-    "Configuration": "Configuration",
-    "Loading publish profiles…": "Loading publish profiles…",
-    "New profile": "New profile",
-    "No .NET project is available to publish": "No .NET project is available to publish",
-    "Profile name": "Profile name",
-    "Publish": "Publish",
-    "Publish Project": "Publish Project",
-    "Publish Project…": "Publish Project…",
-    "Publish profile": "Publish profile",
-    "ReadyToRun": "ReadyToRun",
-    "Runtime identifier": "Runtime identifier",
-    "Save Profile": "Save Profile",
-    "Self-contained": "Self-contained",
-    "Single file": "Single file",
-    "Trim unused code": "Trim unused code"
   }
 }

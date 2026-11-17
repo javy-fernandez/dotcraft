@@ -1545,7 +1545,22 @@
     "Annotations": "注釈",
     "Warnings": "警告",
     "True": "はい",
-    "False": "いいえ"
+    "False": "いいえ",
+    "A publish profile with this name already exists": "この名前の発行プロファイルは既に存在します",
+    "Configuration": "構成",
+    "Loading publish profiles…": "発行プロファイルを読み込んでいます…",
+    "No .NET project is available to publish": "発行できる .NET プロジェクトがありません",
+    "Publish": "発行",
+    "Publish Project": "プロジェクトの発行",
+    "Publish Project…": "プロジェクトの発行…",
+    "Publish…": "発行…",
+    "Publish profile": "発行プロファイル",
+    "ReadyToRun": "ReadyToRun",
+    "Runtime identifier": "ランタイム識別子",
+    "Save Profile": "プロファイルを保存",
+    "Self-contained": "自己完結型",
+    "Single file": "単一ファイル",
+    "Trim unused code": "未使用のコードをトリミング"
   },
   "launchprofileeditor": {
     "Add profile": "プロファイルを追加",
@@ -1564,23 +1579,5 @@
     "New profile": "新しいプロファイル",
     "Profile name": "プロファイル名",
     "Use NAME=value for each environment variable": "各環境変数には NAME=value の形式を使用してください"
-  },
-  "publishprofiles": {
-    "A publish profile with this name already exists": "A publish profile with this name already exists",
-    "Configuration": "Configuration",
-    "Loading publish profiles…": "Loading publish profiles…",
-    "New profile": "New profile",
-    "No .NET project is available to publish": "No .NET project is available to publish",
-    "Profile name": "Profile name",
-    "Publish": "Publish",
-    "Publish Project": "Publish Project",
-    "Publish Project…": "Publish Project…",
-    "Publish profile": "Publish profile",
-    "ReadyToRun": "ReadyToRun",
-    "Runtime identifier": "Runtime identifier",
-    "Save Profile": "Save Profile",
-    "Self-contained": "Self-contained",
-    "Single file": "Single file",
-    "Trim unused code": "Trim unused code"
   }
 }

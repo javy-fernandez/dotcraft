@@ -1545,7 +1545,22 @@
     "Annotations": "注解",
     "Warnings": "警告",
     "True": "是",
-    "False": "否"
+    "False": "否",
+    "A publish profile with this name already exists": "已存在同名的发布配置文件",
+    "Configuration": "配置",
+    "Loading publish profiles…": "正在加载发布配置文件…",
+    "No .NET project is available to publish": "没有可发布的 .NET 项目",
+    "Publish": "发布",
+    "Publish Project": "发布项目",
+    "Publish Project…": "发布项目…",
+    "Publish…": "发布…",
+    "Publish profile": "发布配置文件",
+    "ReadyToRun": "ReadyToRun",
+    "Runtime identifier": "运行时标识符",
+    "Save Profile": "保存配置文件",
+    "Self-contained": "独立",
+    "Single file": "单个文件",
+    "Trim unused code": "剪裁未使用的代码"
   },
   "launchprofileeditor": {
     "Add profile": "添加配置文件",
@@ -1564,23 +1579,5 @@
     "New profile": "新建配置文件",
     "Profile name": "配置文件名称",
     "Use NAME=value for each environment variable": "每个环境变量请使用 NAME=value 格式"
-  },
-  "publishprofiles": {
-    "A publish profile with this name already exists": "A publish profile with this name already exists",
-    "Configuration": "Configuration",
-    "Loading publish profiles…": "Loading publish profiles…",
-    "New profile": "New profile",
-    "No .NET project is available to publish": "No .NET project is available to publish",
-    "Profile name": "Profile name",
-    "Publish": "Publish",
-    "Publish Project": "Publish Project",
-    "Publish Project…": "Publish Project…",
-    "Publish profile": "Publish profile",
-    "ReadyToRun": "ReadyToRun",
-    "Runtime identifier": "Runtime identifier",
-    "Save Profile": "Save Profile",
-    "Self-contained": "Self-contained",
-    "Single file": "Single file",
-    "Trim unused code": "Trim unused code"
   }
 }

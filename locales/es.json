@@ -1545,7 +1545,22 @@
     "Annotations": "Anotaciones",
     "Warnings": "Advertencias",
     "True": "Sí",
-    "False": "No"
+    "False": "No",
+    "A publish profile with this name already exists": "Ya existe un perfil de publicación con este nombre",
+    "Configuration": "Configuración",
+    "Loading publish profiles…": "Cargando perfiles de publicación…",
+    "No .NET project is available to publish": "No hay ningún proyecto .NET para publicar",
+    "Publish": "Publicar",
+    "Publish Project": "Publicar proyecto",
+    "Publish Project…": "Publicar proyecto…",
+    "Publish…": "Publicar…",
+    "Publish profile": "Perfil de publicación",
+    "ReadyToRun": "ReadyToRun",
+    "Runtime identifier": "Identificador de runtime",
+    "Save Profile": "Guardar perfil",
+    "Self-contained": "Autocontenido",
+    "Single file": "Archivo único",
+    "Trim unused code": "Recortar código no usado"
   },
   "launchprofileeditor": {
     "Add profile": "Añadir perfil",
@@ -1564,23 +1579,5 @@
     "New profile": "Perfil nuevo",
     "Profile name": "Nombre del perfil",
     "Use NAME=value for each environment variable": "Usa NOMBRE=valor para cada variable de entorno"
-  },
-  "publishprofiles": {
-    "A publish profile with this name already exists": "A publish profile with this name already exists",
-    "Configuration": "Configuration",
-    "Loading publish profiles…": "Loading publish profiles…",
-    "New profile": "New profile",
-    "No .NET project is available to publish": "No .NET project is available to publish",
-    "Profile name": "Profile name",
-    "Publish": "Publish",
-    "Publish Project": "Publish Project",
-    "Publish Project…": "Publish Project…",
-    "Publish profile": "Publish profile",
-    "ReadyToRun": "ReadyToRun",
-    "Runtime identifier": "Runtime identifier",
-    "Save Profile": "Save Profile",
-    "Self-contained": "Self-contained",
-    "Single file": "Single file",
-    "Trim unused code": "Trim unused code"
   }
 }
