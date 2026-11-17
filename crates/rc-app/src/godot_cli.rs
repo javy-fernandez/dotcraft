@@ -1,4 +1,5 @@
-//! Godot's external editor arguments and the local handoff to a running DotCraft window.
+//! The external editor arguments of Godot and Unity, and the local handoff to a running
+//! DotCraft window.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -19,7 +20,9 @@ pub struct OpenRequest {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Invocation {
     Ordinary(Option<PathBuf>),
-    Godot(Result<OpenRequest, String>),
+    /// A game engine asked to open a script at a position (`--godot`, `--godot-csharp`,
+    /// `--unity`).
+    Editor(Result<OpenRequest, String>),
 }
 
 static PENDING: Mutex<Vec<OpenRequest>> = Mutex::new(Vec::new());
@@ -27,10 +30,15 @@ static CONTEXT: OnceLock<egui::Context> = OnceLock::new();
 
 pub fn parse(args: &[OsString]) -> Invocation {
     if args.first().is_some_and(|arg| arg == "--godot") {
-        return Invocation::Godot(parse_godot(&args[1..], true));
+        return Invocation::Editor(parse_request(&args[1..], true));
     }
     if args.first().is_some_and(|arg| arg == "--godot-csharp") {
-        return Invocation::Godot(parse_godot(&args[1..], false));
+        return Invocation::Editor(parse_request(&args[1..], false));
+    }
+    // Unity's External Script Editor Args: `--unity $(ProjectPath) $(File) $(Line) $(Column)`,
+    // one-based like Godot's generic placeholders.
+    if args.first().is_some_and(|arg| arg == "--unity") {
+        return Invocation::Editor(parse_request(&args[1..], true));
     }
     let open = args
         .first()
@@ -39,14 +47,14 @@ pub fn parse(args: &[OsString]) -> Invocation {
     Invocation::Ordinary(open)
 }
 
-fn parse_godot(args: &[OsString], one_based: bool) -> Result<OpenRequest, String> {
+fn parse_request(args: &[OsString], one_based: bool) -> Result<OpenRequest, String> {
     if args.len() != 4 {
-        return Err("expected --godot[-csharp] <project> <file> <line> <column>".into());
+        return Err("expected --godot, --godot-csharp or --unity <project> <file> <line> <column>".into());
     }
     let project = unquoted(&args[0]);
     let file = unquoted(&args[1]);
     if file.as_os_str().is_empty() {
-        return Err("Godot file path is empty".into());
+        return Err("the file path is empty".into());
     }
     let line = parse_coordinate(&args[2], "line", one_based)?;
     let col = parse_coordinate(&args[3], "column", one_based)?;
@@ -84,7 +92,7 @@ fn parse_coordinate(value: &OsString, name: &str, one_based: bool) -> Result<usi
     }
     let position = display
         .parse::<usize>()
-        .map_err(|_| format!("invalid Godot {name}: {display}"))?;
+        .map_err(|_| format!("invalid {name}: {display}"))?;
     Ok(if one_based { position.saturating_sub(1) } else { position })
 }
 
@@ -201,7 +209,7 @@ mod tests {
         let args = ["--godot", "/work/my game", "Scripts/Hero.cs", "12", "7"].map(OsString::from);
         assert_eq!(
             parse(&args),
-            Invocation::Godot(Ok(OpenRequest {
+            Invocation::Editor(Ok(OpenRequest {
                 project: Some(PathBuf::from("/work/my game")),
                 file: PathBuf::from("/work/my game/Scripts/Hero.cs"),
                 line: 11,
@@ -213,7 +221,7 @@ mod tests {
     #[test]
     fn godot_missing_coordinates_default_to_first_character() {
         let args = ["--godot", "/work/game", "/work/game/Hero.cs", "", ""].map(OsString::from);
-        let Invocation::Godot(Ok(request)) = parse(&args) else {
+        let Invocation::Editor(Ok(request)) = parse(&args) else {
             panic!("expected Godot request")
         };
         assert_eq!((request.line, request.col), (0, 0));
@@ -222,7 +230,7 @@ mod tests {
     #[test]
     fn csharp_placeholders_preserve_zero_based_position() {
         let args = ["--godot-csharp", "/work/game", "/work/game/Hero.cs", "11", "6"].map(OsString::from);
-        let Invocation::Godot(Ok(request)) = parse(&args) else {
+        let Invocation::Editor(Ok(request)) = parse(&args) else {
             panic!("expected C# Godot request")
         };
         assert_eq!((request.line, request.col), (11, 6));
@@ -231,7 +239,7 @@ mod tests {
     #[test]
     fn csharp_unknown_location_opens_first_character() {
         let args = ["--godot-csharp", "/work/game", "/work/game/Hero.cs", "-1", "-1"].map(OsString::from);
-        let Invocation::Godot(Ok(request)) = parse(&args) else {
+        let Invocation::Editor(Ok(request)) = parse(&args) else {
             panic!("expected C# Godot request")
         };
         assert_eq!((request.line, request.col), (0, 0));
@@ -240,7 +248,7 @@ mod tests {
     #[test]
     fn quoted_paths_lose_their_quotes() {
         let args = ["--godot-csharp", "\"/work/my game\"", "\"/work/my game/Hero.cs\"", "0", "0"].map(OsString::from);
-        let Invocation::Godot(Ok(request)) = parse(&args) else {
+        let Invocation::Editor(Ok(request)) = parse(&args) else {
             panic!("expected C# Godot request")
         };
         assert_eq!(request.project, Some(PathBuf::from("/work/my game")));
@@ -248,9 +256,28 @@ mod tests {
     }
 
     #[test]
+    fn unity_placeholders_open_file_at_zero_based_position() {
+        let args = ["--unity", "/work/My Game", "/work/My Game/Assets/Scripts/Player.cs", "12", "7"].map(OsString::from);
+        assert_eq!(
+            parse(&args),
+            Invocation::Editor(Ok(OpenRequest {
+                project: Some(PathBuf::from("/work/My Game")),
+                file: PathBuf::from("/work/My Game/Assets/Scripts/Player.cs"),
+                line: 11,
+                col: 6,
+            }))
+        );
+        // Opening a script from the Project window passes no position.
+        let args = ["--unity", "/work/game", "/work/game/Assets/A.cs", "-1", "0"].map(OsString::from);
+        let Invocation::Editor(Ok(request)) = parse(&args) else { panic!("expected Unity request") };
+        assert_eq!((request.line, request.col), (0, 0));
+        assert!(matches!(parse(&["--unity", "/work/game"].map(OsString::from)), Invocation::Editor(Err(_))));
+    }
+
+    #[test]
     fn invalid_godot_arguments_do_not_become_a_file_path() {
         let args = ["--godot", "/work/game", "Hero.cs", "oops", "3"].map(OsString::from);
-        assert!(matches!(parse(&args), Invocation::Godot(Err(_))));
+        assert!(matches!(parse(&args), Invocation::Editor(Err(_))));
     }
 
     #[test]

@@ -1746,7 +1746,10 @@
     "gRPC request exceeds 1 MiB.": "Die gRPC-Anfrage überschreitet 1 MiB.",
     "gRPC request failed.": "Die gRPC-Anfrage ist fehlgeschlagen.",
     "gRPC request was cancelled or timed out.": "Die gRPC-Anfrage wurde abgebrochen oder hat das Zeitlimit überschritten.",
-    "Could not rename {name}: {error}": "{name} konnte nicht umbenannt werden: {error}"
+    "Could not rename {name}: {error}": "{name} konnte nicht umbenannt werden: {error}",
+    "To open Unity's scripts here, choose {path} as External Script Editor in Unity's Preferences › External Tools and set External Script Editor Args to {args}": "Um Unity-Skripte hier zu öffnen, wählen Sie in Unitys Preferences › External Tools {path} als External Script Editor und setzen Sie External Script Editor Args auf {args}",
+    "Unity generates the .sln and .csproj files only for the editors of its IDE packages: to update them, choose Visual Studio or Visual Studio Code there, click Regenerate project files and choose DotCraft again.": "Unity erzeugt die .sln- und .csproj-Dateien nur für die Editoren seiner IDE-Pakete: Um sie zu aktualisieren, wählen Sie dort Visual Studio oder Visual Studio Code, klicken Sie auf Regenerate project files und wählen Sie wieder DotCraft.",
+    "Unity has not generated the .sln and .csproj files of this project yet. In Unity, choose Visual Studio or Visual Studio Code in Preferences › External Tools, click Regenerate project files and open the folder again.": "Unity hat die .sln- und .csproj-Dateien dieses Projekts noch nicht erzeugt. Wählen Sie in Unity unter Preferences › External Tools Visual Studio oder Visual Studio Code, klicken Sie auf Regenerate project files und öffnen Sie den Ordner erneut."
   },
   "launchprofileeditor": {
     "Add profile": "Profil hinzufügen",

@@ -117,19 +117,19 @@ fn main() -> eframe::Result {
     let mut options = eframe::NativeOptions { viewport: rc_kit::window_chrome::viewport(), ..Default::default() };
     // Window size and position persist through eframe; everything else lives in our own files.
     options.persist_window = true;
-    // `dotcraft <path>` opens a folder, solution, project or text file. Godot passes its
-    // external-editor placeholders through `--godot` or `--godot-csharp`; a running window
+    // `dotcraft <path>` opens a folder, solution, project or text file. Godot and Unity pass their
+    // external-editor placeholders through `--godot`, `--godot-csharp` or `--unity`; a running window
     // receives them locally.
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     let open = match godot_cli::parse(&args) {
         godot_cli::Invocation::Ordinary(path) => path,
-        godot_cli::Invocation::Godot(Ok(request)) => {
+        godot_cli::Invocation::Editor(Ok(request)) => {
             if godot_cli::forward(&request) { return Ok(()); }
             let open = request.project.clone().or_else(|| Some(request.file.clone()));
             godot_cli::queue(request);
             open
         }
-        godot_cli::Invocation::Godot(Err(error)) => {
+        godot_cli::Invocation::Editor(Err(error)) => {
             eprintln!("DotCraft: {error}");
             return Ok(());
         }

@@ -379,12 +379,14 @@ fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
     }
     ui.add_space(10.0);
     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-    for (label, value, godot) in [
-        (tr(".NET CLI"), &mut draft.dotnet_path, false),
-        (tr("Godot .NET executable"), &mut draft.godot_path, true),
-        (tr("Roslyn language server"), &mut draft.roslyn_path, false),
-        (tr("netcoredbg debugger"), &mut draft.netcoredbg_path, false),
-        (tr("Unity Editor (executable or editors folder)"), &mut draft.unity_editor_path, false),
+    #[derive(PartialEq)]
+    enum Engine { None, Godot, Unity }
+    for (label, value, engine) in [
+        (tr(".NET CLI"), &mut draft.dotnet_path, Engine::None),
+        (tr("Godot .NET executable"), &mut draft.godot_path, Engine::Godot),
+        (tr("Roslyn language server"), &mut draft.roslyn_path, Engine::None),
+        (tr("netcoredbg debugger"), &mut draft.netcoredbg_path, Engine::None),
+        (tr("Unity Editor (executable or editors folder)"), &mut draft.unity_editor_path, Engine::Unity),
     ] {
         let label_response = ui.label(label);
         let browse_width = (ui.fonts_mut(|fonts| fonts.layout_no_wrap(tr("Browse…").to_string(), FontId::proportional(13.0), rc_kit::pal(ui).text).size().x) + 24.0).max(72.0);
@@ -400,7 +402,21 @@ fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
                 *value = Some(path);
             }
         });
-        if godot {
+        if engine == Engine::Unity {
+            // Unity opens scripts in DotCraft as its External Script Editor; on macOS Unity
+            // picks an application bundle, elsewhere the executable.
+            let exe = std::env::current_exe().ok();
+            let app_path = exe.as_deref().map(|exe| exe.ancestors().find(|dir| dir.extension().is_some_and(|ext| ext == "app")).unwrap_or(exe).display().to_string());
+            crate::ui::kit::note(ui, &trf(
+                "To open Unity's scripts here, choose {path} as External Script Editor in Unity's Preferences › External Tools and set External Script Editor Args to {args}",
+                &[("path", &app_path.unwrap_or_else(|| "DotCraft".into())), ("args", &"--unity $(ProjectPath) $(File) $(Line) $(Column)")],
+            ));
+            crate::ui::kit::note(ui, tr(
+                "Unity generates the .sln and .csproj files only for the editors of its IDE packages: to update them, choose Visual Studio or Visual Studio Code there, click Regenerate project files and choose DotCraft again.",
+            ));
+            ui.add_space(4.0);
+        }
+        if engine == Engine::Godot {
             // Godot opens C# scripts in DotCraft through its custom external editor.
             let exe = std::env::current_exe().map(|path| path.display().to_string()).unwrap_or_else(|_| "dotcraft".into());
             crate::ui::kit::note(ui, &trf(

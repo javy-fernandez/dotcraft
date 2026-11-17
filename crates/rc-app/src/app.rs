@@ -445,6 +445,11 @@ impl DotCraftApp {
             rc_core::WorkspaceKind::Folder => find_projects(&ws.root, 4),
             rc_core::WorkspaceKind::Solution(_) => Vec::new(),
         };
+        // Unity writes the solution and projects only when an IDE package asks for them; say how
+        // to get them instead of leaving C# without project context.
+        if ws.unity.as_ref().is_some_and(|unity| unity.root == ws.root) && ws.solution().is_none() && projects.is_empty() {
+            self.notify(tr("Unity has not generated the .sln and .csproj files of this project yet. In Unity, choose Visual Studio or Visual Studio Code in Preferences › External Tools, click Regenerate project files and open the folder again."), false);
+        }
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
         self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         self.runner.compounds = session.compounds.clone();
@@ -486,7 +491,7 @@ impl DotCraftApp {
     }
 
     fn open_godot_request(&mut self, request: crate::godot_cli::OpenRequest) {
-        // Keep the open workspace when it already contains the Godot project.
+        // Keep the open workspace when it already contains the Godot or Unity project.
         if let Some(project) = request.project.map(|project| dunce::canonicalize(&project).unwrap_or(project))
             && self.workspace.as_ref().is_none_or(|workspace| !project.starts_with(&workspace.ws.root))
         {

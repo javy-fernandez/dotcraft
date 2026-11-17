@@ -129,6 +129,28 @@ mod tests {
         );
     }
 
+    #[test]
+    fn opening_a_unity_folder_without_projects_explains_how_to_generate_them() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let game = home.path().join("Game");
+        unity_project(&game, "2022.3.10f1");
+        let guidance = tr("Unity has not generated the .sln and .csproj files of this project yet. In Unity, choose Visual Studio or Visual Studio Code in Preferences › External Tools, click Regenerate project files and open the folder again.");
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&game);
+        assert!(app.notices.iter().any(|n| n.text == guidance && !n.error));
+        app.close_workspace();
+
+        std::fs::write(game.join("Assembly-CSharp.csproj"), "<Project />\n").unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&game);
+        assert!(app.unity_project().is_some());
+        assert!(!app.notices.iter().any(|n| n.text == guidance));
+        app.close_workspace();
+    }
+
     #[cfg(unix)]
     #[test]
     fn launches_the_editor_from_the_configured_folder_with_the_project_path() {
