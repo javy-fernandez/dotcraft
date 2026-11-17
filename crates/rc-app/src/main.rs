@@ -74,6 +74,7 @@ mod open_files;
 mod generate;
 mod generate_semantic;
 mod generate_targets;
+mod resource_editor;
 mod toolwindow;
 mod ui;
 

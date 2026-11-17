@@ -33,6 +33,7 @@ pub enum ToolWindow {
     PullRequests,
     Services,
     DependencyDiagram,
+    Resources,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,7 +69,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 26] = [
+    pub const ALL: [ToolWindow; 27] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -93,6 +94,7 @@ impl ToolWindow {
         ToolWindow::LocalHistory,
         ToolWindow::Nuget,
         ToolWindow::DependencyDiagram,
+        ToolWindow::Resources,
         ToolWindow::Database,
         ToolWindow::Notifications,
     ];
@@ -125,6 +127,7 @@ impl ToolWindow {
             ToolWindow::PullRequests => "pull_requests",
             ToolWindow::Services => "services",
             ToolWindow::DependencyDiagram => "dependency_diagram",
+            ToolWindow::Resources => "resources",
         }
     }
 
@@ -156,6 +159,7 @@ impl ToolWindow {
             ToolWindow::PullRequests => tr("Pull Requests"),
             ToolWindow::Services => tr("Services"),
             ToolWindow::DependencyDiagram => tr("Dependencies"),
+            ToolWindow::Resources => tr("Resources"),
         }
     }
 
@@ -187,6 +191,7 @@ impl ToolWindow {
             ToolWindow::PullRequests => ico::TW_PULL_REQUESTS,
             ToolWindow::Services => ico::TW_SERVICES,
             ToolWindow::DependencyDiagram => ico::TW_DEPENDENCIES,
+            ToolWindow::Resources => ico::FILE_XML,
         }
     }
 
