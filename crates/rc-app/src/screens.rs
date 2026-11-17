@@ -2169,6 +2169,9 @@ fn screens_custom_title_bar() {
         h.get_by_label("Close window").hover();
         h.run_steps(2);
         h.render().unwrap().save(out.join(format!("custom-title-bar-maximized-{suffix}.png"))).unwrap();
+    }
+}
+
 #[test]
 #[ignore = "Requires a GPU; writes target/snapshots/generate-*.png"]
 fn screens_generate() {
