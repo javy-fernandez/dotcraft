@@ -799,6 +799,7 @@ pub fn tool_finished(app: &mut DotCraftApp, followup: ToolFollowup, success: boo
                 d.check_tool();
             }
         }
+        ToolFollowup::RecheckIlspy => app.assembly_explorer.tool_installed(),
         _ if !success => {}
         ToolFollowup::OpenAddedMigration => {
             if let Ok(added) = ef::parse_added(&ef::data_json(lines.iter().map(String::as_str)))

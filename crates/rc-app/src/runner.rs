@@ -102,6 +102,8 @@ pub enum ToolFollowup {
     OpenFile(PathBuf),
     /// `dotnet tool install dotnet-ef`: check the tool again.
     RecheckEfTool,
+    /// `dotnet tool install --global ilspycmd`: list the assemblies again.
+    RecheckIlspy,
 }
 
 impl BuildState {

@@ -33,6 +33,7 @@ pub enum ToolWindow {
     PullRequests,
     Services,
     DependencyDiagram,
+    AssemblyExplorer,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,11 +69,12 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 26] = [
+    pub const ALL: [ToolWindow; 27] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
         ToolWindow::Bookmarks,
+        ToolWindow::AssemblyExplorer,
         ToolWindow::Run,
         ToolWindow::Debug,
         ToolWindow::Tests,
@@ -125,6 +127,7 @@ impl ToolWindow {
             ToolWindow::PullRequests => "pull_requests",
             ToolWindow::Services => "services",
             ToolWindow::DependencyDiagram => "dependency_diagram",
+            ToolWindow::AssemblyExplorer => "assembly_explorer",
         }
     }
 
@@ -156,6 +159,7 @@ impl ToolWindow {
             ToolWindow::PullRequests => tr("Pull Requests"),
             ToolWindow::Services => tr("Services"),
             ToolWindow::DependencyDiagram => tr("Dependencies"),
+            ToolWindow::AssemblyExplorer => tr("Assembly Explorer"),
         }
     }
 
@@ -187,12 +191,13 @@ impl ToolWindow {
             ToolWindow::PullRequests => ico::TW_PULL_REQUESTS,
             ToolWindow::Services => ico::TW_SERVICES,
             ToolWindow::DependencyDiagram => ico::TW_DEPENDENCIES,
+            ToolWindow::AssemblyExplorer => ico::LIBRARY,
         }
     }
 
     pub fn side(self) -> Side {
         match self {
-            ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit | ToolWindow::Bookmarks => Side::Left,
+            ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit | ToolWindow::Bookmarks | ToolWindow::AssemblyExplorer => Side::Left,
             ToolWindow::Notifications | ToolWindow::Hierarchy => Side::Right,
             _ => Side::Bottom,
         }

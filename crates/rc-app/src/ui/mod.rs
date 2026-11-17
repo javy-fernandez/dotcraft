@@ -82,7 +82,6 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         egui::CentralPanel::default().frame(bar.inner_margin(Margin { left: 6, right: 6, top: 0, bottom: 0 })).show(ui, |ui| welcome::show(app, ui));
         dialogs::show(app, &ctx);
         structural_search::show(app, &ctx);
-        assembly_explorer::show(app, &ctx);
         if let Some(mut d) = app.new_project.take()
             && new_project::show(app, &ctx, &mut d)
         {
@@ -106,7 +105,6 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         theme::fixed_island(ui, &p, |ui| editor_area::show(app, ui, editor_actions));
     });
     dialogs::show(app, &ctx);
-    assembly_explorer::show(app, &ctx);
     nuget::sign_in_dialog(app, &ctx);
     generate::show(app, &ctx);
     search_popup::show(app, &ctx);

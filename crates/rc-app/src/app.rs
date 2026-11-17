@@ -670,6 +670,7 @@ impl DotCraftApp {
         self.database.mssql.disconnect();
         self.find_in_files = None;
         self.structural.reset();
+        self.assembly_explorer.clear();
         self.search_everywhere = None;
         self.find_bar = None;
         self.generate = None;
@@ -1533,6 +1534,34 @@ impl DotCraftApp {
         }
     }
 
+    /// Shows the Assembly Explorer, its tool running on the workspace's `dotnet`.
+    fn show_assembly_explorer(&mut self) {
+        self.assembly_explorer.dotnet_root = self.runner.dotnet().ok().and_then(|d| d.root().map(Path::to_path_buf));
+        self.dock.show(ToolWindow::AssemblyExplorer);
+        self.session_dirty = true;
+    }
+
+    /// Picks .dll/.exe files (starting in `dir`) and adds them to the Assembly Explorer.
+    pub fn open_assembly_dialog(&mut self, dir: Option<PathBuf>) {
+        let mut dialog = rfd::FileDialog::new().set_title(tr("Open Assembly")).add_filter(tr(".NET assemblies"), &["dll", "exe"]);
+        if let Some(dir) = dir {
+            dialog = dialog.set_directory(dir);
+        }
+        let Some(paths) = dialog.pick_files() else { return };
+        self.show_assembly_explorer();
+        for path in paths {
+            self.assembly_explorer.add(path);
+        }
+    }
+
+    /// The newest installed shared framework for a target framework (`net8.0`: the newest
+    /// Microsoft.NETCore.App 8.x), or the newest of all.
+    pub fn framework_assembly_dir(&mut self, tfm: Option<&str>) -> Option<PathBuf> {
+        let dotnet = self.runner.dotnet().ok()?;
+        let major: Option<u64> = tfm.and_then(|t| t.strip_prefix("net")).and_then(|v| v.split('.').next()).and_then(|m| m.parse().ok());
+        crate::assembly_explorer::framework_dir(dotnet.root()?, "Microsoft.NETCore.App", major)
+    }
+
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
         let was_open = self.dock.is_open(tw);
         self.dock.toggle(tw);
@@ -1745,7 +1774,14 @@ impl DotCraftApp {
                 ExplorerAction::ProjectProperties(project) => {
                     self.dialog = Some(Dialog::ProjectProperties(Box::new(crate::ui::project_properties::ProjectPropertiesDialog::new(project, self.waker.clone()))));
                 }
-                ExplorerAction::OpenPackageAssembly { project, framework, name, version } => self.assembly_explorer.open_package(project, framework, name, version),
+                ExplorerAction::OpenPackageAssembly { project, framework, name, version } => {
+                    self.show_assembly_explorer();
+                    self.assembly_explorer.add_package(project, framework, name, version);
+                }
+                ExplorerAction::ExploreFramework(tfm) => {
+                    let dir = self.framework_assembly_dir(Some(&tfm));
+                    self.open_assembly_dialog(dir);
+                }
             }
         }
     }
@@ -2034,6 +2070,10 @@ impl eframe::App for DotCraftApp {
         self.update_http_markers();
         self.http.poll();
         self.endpoints.poll();
+        self.assembly_explorer.poll();
+        for path in std::mem::take(&mut self.assembly_explorer.opened) {
+            self.open_file(&path);
+        }
         if self.coverage.poll() {
             self.dock.show(ToolWindow::Coverage);
         }

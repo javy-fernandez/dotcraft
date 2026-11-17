@@ -1,287 +1,222 @@
-use crate::app::DotCraftApp;
-use egui::{Context, RichText, ScrollArea};
-use rc_kit::i18n::tr;
+//! The Assembly Explorer tool window: assemblies › namespaces › types; a type opens as
+//! decompiled C# (or IL) in a read-only editor tab.
 
-pub fn show(app: &mut DotCraftApp, ctx: &Context) {
-    let explorer = &mut app.assembly_explorer;
-    explorer.poll();
-    if !explorer.visible {
+use crate::app::DotCraftApp;
+use crate::assembly_explorer::{AssemblyType, TypeKind};
+use crate::toolwindow::ToolWindow;
+use crate::ui::{kit, run_windows, toolwindows};
+use egui::{Align2, FontId, Rect, Response, Sense, Ui, pos2, vec2};
+use rc_kit::i18n::{tr, trf};
+use rc_kit::{Ico, ico, icons};
+use std::path::PathBuf;
+
+enum Pick {
+    Toggle(String),
+    Select(String),
+    Open(PathBuf, AssemblyType, bool),
+    Remove(PathBuf),
+    CopyPath(PathBuf),
+}
+
+pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
+    let selected_assembly = app.assembly_explorer.selected.as_deref().and_then(|k| k.strip_prefix("a:")).map(PathBuf::from);
+    let actions = [
+        (ico::OPEN, tr("Open Assembly…"), true),
+        (ico::LIBRARY, tr("Open Framework Assembly…"), true),
+        (ico::REMOVE, tr("Remove from Assembly Explorer"), selected_assembly.is_some()),
+        (ico::COLLAPSE_ALL, tr("Collapse All"), !app.assembly_explorer.expanded.is_empty()),
+    ];
+    match run_windows::header(ui, tr("Assembly Explorer"), &actions) {
+        Some(usize::MAX) => {
+            app.toggle_tool(ToolWindow::AssemblyExplorer);
+            return;
+        }
+        Some(0) => app.open_assembly_dialog(None),
+        Some(1) => {
+            let dir = app.framework_assembly_dir(None);
+            app.open_assembly_dialog(dir);
+        }
+        Some(2) => {
+            if let Some(path) = &selected_assembly {
+                app.assembly_explorer.remove(path);
+            }
+        }
+        Some(3) => app.assembly_explorer.expanded.clear(),
+        _ => {}
+    }
+    let x = &mut app.assembly_explorer;
+    if x.tool_missing {
+        let hint = tr("DotCraft decompiles assemblies with ilspycmd, the ILSpy command-line tool. It is installed as a .NET global tool (dotnet tool install --global ilspycmd).");
+        let label = if x.installing { tr("Installing…") } else { tr("Install ilspycmd") };
+        if toolwindows::empty_state_with(ui, ico::DOWNLOAD, tr("ilspycmd is not installed"), hint, Some(label)) && !x.installing {
+            let outs = app.runner.run_tool(tr("Install ilspycmd").into(), crate::assembly_explorer::install_args(), None, crate::runner::ToolFollowup::RecheckIlspy);
+            app.assembly_explorer.installing = app.runner.build.as_ref().is_some_and(|b| b.tool == Some(crate::runner::ToolFollowup::RecheckIlspy) && b.handle.is_some());
+            run_windows::handle_outputs(app, outs);
+        }
         return;
     }
-    let mut open = true;
-    let mut select_type = None;
-    let mut change_mode = None;
-    let mut open_framework = None;
-    egui::Window::new(tr("Assembly Explorer"))
-        .open(&mut open)
-        .default_size(egui::vec2(1050.0, 700.0))
-        .show(ctx, |ui| {
-            if let Some(path) = &explorer.path {
-                ui.label(path.display().to_string());
-            }
-            if let Some(error) = &explorer.error {
-                ui.colored_label(ui.visuals().error_fg_color, error);
-            }
-            if explorer.busy {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(tr("Reading assembly…"));
-                    if ui.button(tr("Cancel")).clicked() {
-                        explorer.cancel();
-                    }
-                });
-            }
-            ui.separator();
-            if ui.button(tr("Browse .NET reference assemblies")).clicked() {
-                explorer.list_framework_assemblies();
-            }
-            if !explorer.framework_assemblies.is_empty() {
-                ui.collapsing(tr("Reference assemblies"), |ui| {
-                    ui.text_edit_singleline(&mut explorer.framework_filter);
-                    let filter = explorer.framework_filter.to_lowercase();
-                    ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
-                        for path in &explorer.framework_assemblies {
-                            let label = path.file_name().unwrap_or_default().to_string_lossy();
-                            if !filter.is_empty() && !label.to_lowercase().contains(&filter) {
-                                continue;
-                            }
-                            if ui
-                                .selectable_label(
-                                    explorer.path.as_ref() == Some(path),
-                                    label.as_ref(),
-                                )
-                                .on_hover_text(path.display().to_string())
-                                .clicked()
-                            {
-                                open_framework = Some(path.clone());
-                            }
-                        }
-                    });
-                });
-            }
-            ui.separator();
-            ui.columns(2, |columns| {
-                let left = &mut columns[0];
-                left.label(tr("Namespaces and types"));
-                left.text_edit_singleline(&mut explorer.filter);
-                let filter = explorer.filter.to_lowercase();
-                ScrollArea::vertical()
-                    .id_salt("assembly_types")
-                    .show(left, |ui| {
-                        let mut previous_namespace = String::new();
-                        for ty in &explorer.types {
-                            if !filter.is_empty() && !ty.full_name.to_lowercase().contains(&filter)
-                            {
-                                continue;
-                            }
-                            if previous_namespace != ty.namespace {
-                                previous_namespace = ty.namespace.clone();
-                                ui.label(
-                                    RichText::new(if ty.namespace.is_empty() {
-                                        tr("Global namespace")
-                                    } else {
-                                        &ty.namespace
-                                    })
-                                    .strong(),
-                                );
-                            }
-                            let selected = explorer.selected.as_deref() == Some(&ty.full_name);
-                            if ui
-                                .selectable_label(selected, format!("{}  {}", ty.name, ty.kind))
-                                .clicked()
-                            {
-                                select_type = Some(ty.full_name.clone());
-                            }
-                        }
-                    });
-                let right = &mut columns[1];
-                right.horizontal(|ui| {
-                    if ui.selectable_label(!explorer.show_il, "C#").clicked() && explorer.show_il {
-                        change_mode = Some(false);
-                    }
-                    if ui.selectable_label(explorer.show_il, "IL").clicked() && !explorer.show_il {
-                        change_mode = Some(true);
-                    }
-                    if ui.button(tr("All members")).clicked() {
-                        explorer.selected_member = None;
-                    }
-                });
-                if !explorer.members.is_empty() {
-                    ScrollArea::horizontal()
-                        .id_salt("assembly_members")
-                        .max_height(34.0)
-                        .show(right, |ui| {
-                            ui.horizontal(|ui| {
-                                for (index, member) in explorer.members.iter().enumerate() {
-                                    if ui
-                                        .selectable_label(
-                                            explorer.selected_member == Some(index),
-                                            &member.name,
-                                        )
-                                        .clicked()
-                                    {
-                                        explorer.selected_member = Some(index);
-                                    }
-                                }
-                            });
-                        });
-                }
-                let source = member_source(
-                    &explorer.source,
-                    &explorer.members,
-                    explorer.selected_member,
-                    explorer.show_il,
-                );
-                ScrollArea::both()
-                    .id_salt("assembly_source")
-                    .show(right, |ui| {
-                        ui.label(RichText::new(source).monospace());
-                    });
-            });
+    if x.assemblies.is_empty() && x.resolving.is_none() && x.error.is_none() {
+        toolwindows::empty_state(ui, ico::LIBRARY, tr("No assemblies"), tr("Open a .dll or .exe, or choose Explore Assembly on a NuGet package in the Solution Explorer."));
+        return;
+    }
+    if !x.assemblies.is_empty() {
+        kit::toolbar(ui, |ui| {
+            kit::search(ui, &mut x.filter, tr("Filter types"), (ui.available_width() - 4.0).clamp(120.0, 320.0));
         });
-    if let Some(name) = select_type {
-        explorer.select(name, explorer.show_il);
     }
-    if let Some(path) = open_framework {
-        explorer.open(path);
-    }
-    if let (Some(mode), Some(name)) = (change_mode, explorer.selected.clone()) {
-        explorer.select(name, mode);
-    }
-    if !open {
-        explorer.visible = false;
-        explorer.cancel();
-    }
-}
-
-fn member_source<'a>(
-    source: &'a str,
-    members: &[crate::assembly_explorer::Member],
-    selected: Option<usize>,
-    il: bool,
-) -> &'a str {
-    let Some(index) = selected else { return source };
-    let Some(member) = members.get(index) else {
-        return source;
+    let status = match (&x.resolving, &x.decompiling) {
+        (Some(name), _) => Some(trf("Looking up {name}…", &[("name", name)])),
+        (_, Some(name)) => Some(trf("Decompiling {name}…", &[("name", name)])),
+        _ => None,
     };
-    if il {
-        return il_declaration_source(source, &member.name)
-            .or_else(|| il_method_source(source, &member.name))
-            .unwrap_or(source);
+    if status.is_some() || x.error.is_some() {
+        kit::content(ui, |ui| {
+            if let Some(status) = &status {
+                ui.horizontal(|ui| {
+                    ui.add(egui::Spinner::new().size(12.0));
+                    kit::note(ui, status);
+                });
+            }
+            if let Some(error) = &x.error {
+                kit::message(ui, error, true);
+            }
+        });
     }
-    let start = source
-        .lines()
-        .take(member.line)
-        .map(|line| line.len() + 1)
-        .sum::<usize>()
-        .min(source.len());
-    let next = members
-        .get(index + 1)
-        .map_or(source.lines().count(), |member| member.line);
-    let end = source
-        .lines()
-        .take(next)
-        .map(|line| line.len() + 1)
-        .sum::<usize>()
-        .min(source.len());
-    source.get(start..end).unwrap_or(source)
+    let filter = x.filter.trim().to_lowercase();
+    let single_click = app.settings.single_click_open;
+    let mut picks = Vec::new();
+    egui::ScrollArea::both().id_salt("assembly_explorer").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for assembly in &x.assemblies {
+            let key = format!("a:{}", assembly.path.display());
+            let open = x.expanded.contains(&key) || !filter.is_empty();
+            let secondary = match (&assembly.types, &assembly.error) {
+                (_, Some(_)) => tr("Could not be read").to_string(),
+                (Some(types), _) => trf("{count} types", &[("count", &types.len())]),
+                (None, None) => tr("Loading…").to_string(),
+            };
+            let resp = tree_row(ui, 0, assembly.types.as_ref().map(|t| (!t.is_empty(), open)), ico::LIBRARY, &assembly.name(), &secondary, x.selected.as_deref() == Some(&key));
+            let resp = resp.on_hover_text(assembly.path.display().to_string());
+            row_clicks(&resp, &key, 0, &mut picks);
+            resp.context_menu(|ui| {
+                if rc_kit::theme::menu_item(ui, Some(ico::REMOVE), tr("Remove from Assembly Explorer"), false).clicked() {
+                    picks.push(Pick::Remove(assembly.path.clone()));
+                    ui.close();
+                }
+                if rc_kit::theme::menu_item(ui, Some(ico::COPY), tr("Copy Path"), false).clicked() {
+                    picks.push(Pick::CopyPath(assembly.path.clone()));
+                    ui.close();
+                }
+            });
+            if let Some(error) = &assembly.error
+                && open
+            {
+                ui.horizontal(|ui| {
+                    ui.add_space(42.0);
+                    kit::message(ui, error, true);
+                });
+            }
+            if !open {
+                continue;
+            }
+            for (namespace, types) in assembly.namespaces() {
+                let types: Vec<&AssemblyType> = types.into_iter().filter(|t| filter.is_empty() || t.full_name.to_lowercase().contains(&filter)).collect();
+                if types.is_empty() {
+                    continue;
+                }
+                let ns_key = format!("n:{}|{namespace}", assembly.path.display());
+                let ns_open = x.expanded.contains(&ns_key) || !filter.is_empty();
+                let label = if namespace.is_empty() { tr("<global namespace>") } else { namespace };
+                let resp = tree_row(ui, 1, Some((true, ns_open)), ico::NAMESPACE, label, "", x.selected.as_deref() == Some(&ns_key));
+                row_clicks(&resp, &ns_key, 1, &mut picks);
+                if !ns_open {
+                    continue;
+                }
+                for ty in types {
+                    let ty_key = format!("t:{}|{}", assembly.path.display(), ty.full_name);
+                    let resp = tree_row(ui, 2, None, type_icon(ty.kind), &ty.name, "", x.selected.as_deref() == Some(&ty_key));
+                    let resp = resp.on_hover_text(&ty.full_name);
+                    if resp.clicked() {
+                        picks.push(Pick::Select(ty_key.clone()));
+                    }
+                    if resp.double_clicked() || (single_click && resp.clicked()) {
+                        picks.push(Pick::Open(assembly.path.clone(), ty.clone(), false));
+                    }
+                    resp.context_menu(|ui| {
+                        if rc_kit::theme::menu_item(ui, Some(ico::FILE_CS), tr("Decompile to C#"), false).clicked() {
+                            picks.push(Pick::Open(assembly.path.clone(), ty.clone(), false));
+                            ui.close();
+                        }
+                        if rc_kit::theme::menu_item(ui, Some(ico::FILE_TEXT), tr("Show IL Code"), false).clicked() {
+                            picks.push(Pick::Open(assembly.path.clone(), ty.clone(), true));
+                            ui.close();
+                        }
+                    });
+                }
+            }
+        }
+    });
+    for pick in picks {
+        match pick {
+            Pick::Toggle(key) => {
+                if !x.expanded.remove(&key) {
+                    x.expanded.insert(key.clone());
+                }
+                x.selected = Some(key);
+            }
+            Pick::Select(key) => x.selected = Some(key),
+            Pick::Open(path, ty, il) => {
+                x.selected = Some(format!("t:{}|{}", path.display(), ty.full_name));
+                x.decompile(&path, &ty, il);
+            }
+            Pick::Remove(path) => x.remove(&path),
+            Pick::CopyPath(path) => ui.ctx().copy_text(path.display().to_string()),
+        }
+    }
 }
 
-fn il_declaration_source<'a>(source: &'a str, name: &str) -> Option<&'a str> {
-    let mut start = 0;
-    for line in source.split_inclusive('\n') {
-        let trimmed = line.trim();
-        if trimmed.starts_with(".field ")
-            && (trimmed.split_whitespace().last() == Some(name)
-                || trimmed.contains(&format!(" {name} =")))
-        {
-            return source.get(start..start + line.len());
-        }
-        if (trimmed.starts_with(".property ") && trimmed.contains(&format!(" {name}(")))
-            || (trimmed.starts_with(".event ") && trimmed.ends_with(name))
-        {
-            let tail = &source[start + line.len()..];
-            let end = tail
-                .find("\n\t}")
-                .map(|offset| start + line.len() + offset + 3)?;
-            return source.get(start..end);
-        }
-        start += line.len();
+/// A click on an assembly or namespace row selects it; on the chevron or a double click it
+/// also expands or collapses it.
+fn row_clicks(resp: &Response, key: &str, depth: usize, picks: &mut Vec<Pick>) {
+    let on_chevron = resp.interact_pointer_pos().is_some_and(|p| p.x < resp.rect.left() + 12.0 + depth as f32 * 18.0 + 18.0);
+    if resp.double_clicked() || (resp.clicked() && on_chevron) {
+        picks.push(Pick::Toggle(key.to_string()));
+    } else if resp.clicked() {
+        picks.push(Pick::Select(key.to_string()));
     }
-    None
 }
 
-fn il_method_source<'a>(source: &'a str, name: &str) -> Option<&'a str> {
-    for (end, _) in source.match_indices("// end of method ") {
-        let line_end = source[end..]
-            .find('\n')
-            .map_or(source.len(), |offset| end + offset + 1);
-        let marker = source[end..line_end].trim();
-        let member = marker.rsplit_once("::")?.1;
-        if member != name && member != format!("get_{name}") && member != format!("set_{name}") {
-            continue;
-        }
-        let start = source[..end].rfind("\t.method ")?;
-        return source.get(start..line_end);
+fn type_icon(kind: TypeKind) -> Ico {
+    match kind {
+        TypeKind::Class => ico::CLASS,
+        TypeKind::Interface => ico::INTERFACE,
+        TypeKind::Struct => ico::STRUCT,
+        TypeKind::Delegate => ico::LAMBDA,
+        TypeKind::Enum => ico::ENUM,
     }
-    None
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn member_selection_shows_only_its_source() {
-        let source = "class Widget {\nvoid First() {}\nvoid Second() {}\n}";
-        let members = vec![
-            crate::assembly_explorer::Member {
-                name: "First".into(),
-                line: 1,
-            },
-            crate::assembly_explorer::Member {
-                name: "Second".into(),
-                line: 2,
-            },
-        ];
-        assert_eq!(
-            member_source(source, &members, Some(0), false),
-            "void First() {}\n"
-        );
-        assert_eq!(member_source(source, &members, None, false), source);
+/// A tree row: indent, chevron (`Some((has_children, open))`), icon, text and grey secondary.
+fn tree_row(ui: &mut Ui, depth: usize, chevron: Option<(bool, bool)>, icon: Ico, text: &str, secondary: &str, selected: bool) -> Response {
+    let p = rc_kit::pal(ui);
+    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(240.0), 24.0), Sense::click());
+    if selected {
+        ui.painter().rect_filled(r.shrink2(vec2(6.0, 0.0)), 4.0, p.selection);
+    } else if resp.hovered() {
+        ui.painter().rect_filled(r.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
     }
-
-    #[test]
-    fn il_member_selection_shows_the_chosen_method() {
-        let source = ".class Widget\n{\n\t.method void First()\n\t{\n\t\tIL_0000: ret\n\t} // end of method Widget::First\n\t.method void Second()\n\t{\n\t\tIL_0000: ret\n\t} // end of method Widget::Second\n}";
-        let members = vec![crate::assembly_explorer::Member {
-            name: "Second".into(),
-            line: 0,
-        }];
-        let selected = member_source(source, &members, Some(0), true);
-        assert!(selected.contains("Widget::Second"));
-        assert!(!selected.contains("Widget::First"));
+    let x = r.left() + 12.0 + depth as f32 * 18.0;
+    if let Some((true, open)) = chevron {
+        let c = if open { ico::CHEVRON_DOWN } else { ico::CHEVRON_RIGHT };
+        icons::paint(ui.painter(), Rect::from_center_size(pos2(x + 8.0, r.center().y), vec2(16.0, 16.0)), c, &p, true);
     }
-
-    #[test]
-    fn il_member_selection_shows_fields_and_properties() {
-        let source = ".class Widget\n{\n\t.field public int32 Count\n\t.field public int32 Other\n\t.property int32 Value()\n\t{\n\t\t.get instance int32 Widget::get_Value()\n\t}\n}";
-        let members = vec![
-            crate::assembly_explorer::Member {
-                name: "Count".into(),
-                line: 0,
-            },
-            crate::assembly_explorer::Member {
-                name: "Value".into(),
-                line: 0,
-            },
-        ];
-        assert_eq!(
-            member_source(source, &members, Some(0), true),
-            "\t.field public int32 Count\n"
-        );
-        let property = member_source(source, &members, Some(1), true);
-        assert!(property.contains(".property int32 Value()"));
-        assert!(!property.contains(".field public int32 Other"));
+    icons::paint(ui.painter(), Rect::from_center_size(pos2(x + 26.0, r.center().y), vec2(16.0, 16.0)), icon, &p, true);
+    let g = ui.painter().layout_no_wrap(text.to_string(), FontId::proportional(13.0), p.text);
+    let tx = x + 40.0;
+    ui.painter().galley(pos2(tx, (r.center().y - g.size().y / 2.0).round()), g.clone(), p.text);
+    if !secondary.is_empty() {
+        ui.painter().text(pos2(tx + g.size().x + 8.0, r.center().y), Align2::LEFT_CENTER, secondary, FontId::proportional(12.0), p.muted);
     }
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
+    resp
 }

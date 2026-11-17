@@ -234,8 +234,9 @@ impl Docs {
         } else {
             editor.request_parse(&self.pool);
         }
-        // Sources Roslyn decompiled from an assembly (⌘+click on a framework type) are read-only.
-        if path.components().any(|c| c.as_os_str() == "MetadataAsSource") {
+        // Sources decompiled from an assembly (⌘+click on a framework type, the Assembly
+        // Explorer) are read-only.
+        if path.components().any(|c| c.as_os_str() == "MetadataAsSource") || crate::assembly_explorer::is_decompiled(&path) {
             editor.read_only = true;
         }
         let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);

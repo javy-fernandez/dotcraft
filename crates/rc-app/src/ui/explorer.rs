@@ -79,7 +79,10 @@ pub enum ExplorerAction {
     /// Initialize and edit the local user-secrets file for a C# project.
     ManageUserSecrets(PathBuf),
     ProjectProperties(PathBuf),
+    /// Explore Assembly on a NuGet package: its assemblies for `framework` (or the first one).
     OpenPackageAssembly { project: PathBuf, framework: Option<String>, name: String, version: String },
+    /// Explore Assemblies… on a target framework: pick from its shared framework folder.
+    ExploreFramework(String),
     /// Entity Framework Core › operation, for this project.
     EfCore(PathBuf, crate::ui::ef_core::EfOp),
     /// Publish… this project with a folder publish profile.
@@ -688,8 +691,9 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actio
     if let NodeKind::Package { project, frameworks, name, version } = &row.kind {
         if frameworks.len() > 1 {
             ui.menu_button(tr("Explore Assembly"), |ui| {
+                ui.set_min_width(160.0);
                 for framework in frameworks {
-                    if ui.button(framework).clicked() {
+                    if theme::menu_item(ui, Some(ico::LIBRARY), &framework_label(framework), false).clicked() {
                         actions.push(ExplorerAction::OpenPackageAssembly { project: project.clone(), framework: Some(framework.clone()), name: name.clone(), version: version.clone() });
                         ui.close();
                     }
@@ -697,6 +701,13 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, ef: bool, actio
             });
         } else if theme::menu_item(ui, Some(ico::LIBRARY), tr("Explore Assembly"), false).clicked() {
             actions.push(ExplorerAction::OpenPackageAssembly { project: project.clone(), framework: None, name: name.clone(), version: version.clone() });
+            ui.close();
+        }
+        return;
+    }
+    if let NodeKind::Framework(tfm) = &row.kind {
+        if theme::menu_item(ui, Some(ico::LIBRARY), tr("Explore Assemblies…"), false).clicked() {
+            actions.push(ExplorerAction::ExploreFramework(tfm.clone()));
             ui.close();
         }
         return;
