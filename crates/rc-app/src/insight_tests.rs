@@ -60,10 +60,7 @@ fn live_code_vision_labels_and_navigation() {
     write(&source, "public interface IGreeter { string Hello(); }\npublic class Greeter : IGreeter { public virtual string Hello() => \"hello\"; }\npublic class LoudGreeter : Greeter { public override string Hello() => \"LOUD\"; }\npublic class Consumer { public string Read(IGreeter greeter) => greeter.Hello(); }\n");
     let restored = std::process::Command::new(&dotnet).args(["restore", "--ignore-failed-sources"]).arg(&project).output().unwrap();
     assert!(restored.status.success(), "{}", String::from_utf8_lossy(&restored.stderr));
-    let mut settings = Settings::default();
-    settings.roslyn_path = Some(roslyn);
-    settings.dotnet_path = Some(dotnet);
-    settings.show_code_vision = true;
+    let settings = Settings { roslyn_path: Some(roslyn), dotnet_path: Some(dotnet), show_code_vision: true, ..Settings::default() };
     let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&project);
     app.open_file(&source);

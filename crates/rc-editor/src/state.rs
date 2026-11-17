@@ -138,6 +138,9 @@ pub enum EditorEvent {
     TextSecondaryClicked,
 }
 
+/// Sorted `(line, position)` of the visible Code Vision rows.
+pub(crate) type VisionRows = std::sync::Arc<[(usize, usize)]>;
+
 /// One open document view.
 pub struct EditorState {
     pub id: u64,
@@ -203,7 +206,7 @@ pub struct EditorState {
     pub(crate) display: Option<Vec<usize>>,
     /// Visible Code Vision rows `(line, position)`, sorted, with the fingerprint of the
     /// buffer, folds and labels they were computed from (see `view::vision_positions`).
-    pub(crate) vision_rows: Option<(u64, std::sync::Arc<[(usize, usize)]>)>,
+    pub(crate) vision_rows: Option<(u64, VisionRows)>,
 }
 
 pub(crate) struct HlCache {
