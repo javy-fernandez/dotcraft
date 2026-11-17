@@ -354,9 +354,7 @@ mod tests {
             String::from_utf8_lossy(&restore.stdout),
             String::from_utf8_lossy(&restore.stderr)
         );
-        let mut settings = Settings::default();
-        settings.roslyn_path = Some(roslyn);
-        settings.dotnet_path = Some(dotnet.clone());
+        let settings = Settings { roslyn_path: Some(roslyn), dotnet_path: Some(dotnet.clone()), ..Default::default() };
         let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
         app.open_workspace(&solution);
         assert_eq!(app.solution_projects().len(), 2);

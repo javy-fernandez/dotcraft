@@ -120,7 +120,7 @@ impl Style {
             })
         };
         // The last `#nullable` directive of the file decides over the project.
-        let directive = source.lines().map(str::trim).filter_map(|l| l.strip_prefix("#nullable ")).last().map(|v| v.split_whitespace().next().unwrap_or_default().to_string());
+        let directive = source.lines().map(str::trim).filter_map(|l| l.strip_prefix("#nullable ")).next_back().map(|v| v.split_whitespace().next().unwrap_or_default().to_string());
         let nullable = match directive.as_deref() {
             Some("enable") => true,
             Some("disable") => false,
