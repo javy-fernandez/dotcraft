@@ -407,13 +407,12 @@ fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
             // picks an application bundle, elsewhere the executable.
             let exe = std::env::current_exe().ok();
             let app_path = exe.as_deref().map(|exe| exe.ancestors().find(|dir| dir.extension().is_some_and(|ext| ext == "app")).unwrap_or(exe).display().to_string());
-            crate::ui::kit::note(ui, &trf(
+            let setup = trf(
                 "To open Unity's scripts here, choose {path} as External Script Editor in Unity's Preferences › External Tools and set External Script Editor Args to {args}",
                 &[("path", &app_path.unwrap_or_else(|| "DotCraft".into())), ("args", &"--unity $(ProjectPath) $(File) $(Line) $(Column)")],
-            ));
-            crate::ui::kit::note(ui, tr(
-                "Unity generates the .sln and .csproj files only for the editors of its IDE packages: to update them, choose Visual Studio or Visual Studio Code there, click Regenerate project files and choose DotCraft again.",
-            ));
+            );
+            let generation = tr("Unity generates the .sln and .csproj files only for the editors of its IDE packages: to update them, choose Visual Studio or Visual Studio Code there, click Regenerate project files and choose DotCraft again.");
+            crate::ui::kit::note(ui, &format!("{setup}\n{generation}"));
             ui.add_space(4.0);
         }
         if engine == Engine::Godot {
