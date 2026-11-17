@@ -1581,8 +1581,9 @@
     "Missing Members": "Brakujące składowe",
     "Overriding Members": "Składowe do przesłonięcia",
     "Delegating Members": "Składowe delegujące",
-    "No local members found": "Nie znaleziono składowych w tym pliku",
-    "Try Roslyn code actions": "Wypróbuj akcje kodu Roslyn"
+    "Try Roslyn code actions": "Wypróbuj akcje kodu Roslyn",
+    "No members found": "Nie znaleziono składowych",
+    "Discovering members in other files…": "Wyszukiwanie składowych w innych plikach…"
   },
   "launchprofileeditor": {
     "Add profile": "Dodaj profil",

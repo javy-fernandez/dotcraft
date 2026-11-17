@@ -1581,8 +1581,9 @@
     "Missing Members": "缺少的成员",
     "Overriding Members": "重写成员",
     "Delegating Members": "委托成员",
-    "No local members found": "在此文件中未找到成员",
-    "Try Roslyn code actions": "尝试 Roslyn 代码操作"
+    "Try Roslyn code actions": "尝试 Roslyn 代码操作",
+    "No members found": "未找到成员",
+    "Discovering members in other files…": "正在其他文件中查找成员…"
   },
   "launchprofileeditor": {
     "Add profile": "添加配置文件",

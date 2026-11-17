@@ -1581,8 +1581,9 @@
     "Missing Members": "Miembros que faltan",
     "Overriding Members": "Miembros que invalidar",
     "Delegating Members": "Miembros delegados",
-    "No local members found": "No se encontraron miembros en este archivo",
-    "Try Roslyn code actions": "Probar las acciones de código de Roslyn"
+    "Try Roslyn code actions": "Probar las acciones de código de Roslyn",
+    "No members found": "No se encontraron miembros",
+    "Discovering members in other files…": "Buscando miembros en otros archivos…"
   },
   "launchprofileeditor": {
     "Add profile": "Añadir perfil",

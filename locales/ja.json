@@ -1581,8 +1581,9 @@
     "Missing Members": "不足しているメンバー",
     "Overriding Members": "オーバーライドするメンバー",
     "Delegating Members": "委譲メンバー",
-    "No local members found": "このファイルにメンバーが見つかりません",
-    "Try Roslyn code actions": "Roslyn のコード アクションを試す"
+    "Try Roslyn code actions": "Roslyn のコード アクションを試す",
+    "No members found": "メンバーが見つかりません",
+    "Discovering members in other files…": "他のファイルでメンバーを検索しています…"
   },
   "launchprofileeditor": {
     "Add profile": "プロファイルを追加",
