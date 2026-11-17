@@ -48,21 +48,15 @@ pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()>
         let mut name = file_name.to_os_string();
         name.push(format!(".dotcraft-{}-{sequence}.tmp", std::process::id()));
         let tmp = path.with_file_name(name);
-        let mut options = std::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        match options.open(&tmp) {
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
             Ok(file) => break (tmp, file),
             Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error),
         }
     };
     let result = (|| {
-        // Replacing a file must retain its access controls, including private user secrets.
+        // Replacing a file keeps its permissions (private user secrets stay private); they are
+        // copied before any byte is written. New files get the usual umask defaults.
         #[cfg(unix)]
         if let Ok(metadata) = std::fs::metadata(path) {
             file.set_permissions(metadata.permissions())?;
