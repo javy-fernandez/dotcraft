@@ -132,6 +132,7 @@ pub struct DotCraftApp {
     /// A newer release, shown in the bottom-right notice until dismissed.
     pub update: Option<crate::update::Release>,
     pub insight: Insight,
+    pub assembly_explorer: crate::assembly_explorer::AssemblyExplorer,
     /// Package completion, hover, updates and CPM problems in project files.
     pub packages: crate::package_insight::PackageInsight,
     /// Completion, hover and problems in `appsettings*.json`.
@@ -261,6 +262,7 @@ impl DotCraftApp {
             update_check: None,
             update: None,
             insight: Insight::new(waker.clone()),
+            assembly_explorer: crate::assembly_explorer::AssemblyExplorer::new(waker.clone()),
             packages: crate::package_insight::PackageInsight::new(waker.clone()),
             appsettings: crate::appsettings_insight::SettingsInsight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
@@ -1743,6 +1745,7 @@ impl DotCraftApp {
                 ExplorerAction::ProjectProperties(project) => {
                     self.dialog = Some(Dialog::ProjectProperties(Box::new(crate::ui::project_properties::ProjectPropertiesDialog::new(project, self.waker.clone()))));
                 }
+                ExplorerAction::OpenPackageAssembly { project, framework, name, version } => self.assembly_explorer.open_package(project, framework, name, version),
             }
         }
     }
