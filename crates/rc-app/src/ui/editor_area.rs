@@ -83,7 +83,7 @@ fn docking_preview(ui: &Ui, body: Rect, pointer: egui::Pos2, target: DockTarget,
     let p = rc_kit::pal(ui);
     let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("tab_docking_preview")));
     let painter = painter.with_clip_rect(body.intersect(ui.clip_rect()));
-    painter.rect_filled(body, 4.0, egui::Color32::from_rgba_unmultiplied(130, 138, 150, 48));
+    painter.rect_filled(body, 4.0, p.text_muted.gamma_multiply(0.2));
     let preview = docking_preview_rect(body, target);
     painter.rect(preview.shrink(5.0), 5.0, p.accent.gamma_multiply(0.15), egui::Stroke::new(2.0, p.accent), egui::StrokeKind::Inside);
     for (tile_target, tile) in docking_tiles(body) {
