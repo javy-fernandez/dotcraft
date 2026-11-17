@@ -43,8 +43,8 @@ fn parse_godot(args: &[OsString], one_based: bool) -> Result<OpenRequest, String
     if args.len() != 4 {
         return Err("expected --godot[-csharp] <project> <file> <line> <column>".into());
     }
-    let project = PathBuf::from(&args[0]);
-    let file = PathBuf::from(&args[1]);
+    let project = unquoted(&args[0]);
+    let file = unquoted(&args[1]);
     if file.as_os_str().is_empty() {
         return Err("Godot file path is empty".into());
     }
@@ -64,6 +64,14 @@ fn parse_godot(args: &[OsString], one_based: bool) -> Result<OpenRequest, String
         line,
         col,
     })
+}
+
+/// A path argument; quotes kept by a hand-written launcher are dropped.
+fn unquoted(arg: &OsString) -> PathBuf {
+    match arg.to_str() {
+        Some(text) if text.len() >= 2 && text.starts_with('"') && text.ends_with('"') => PathBuf::from(&text[1..text.len() - 1]),
+        _ => PathBuf::from(arg),
+    }
 }
 
 fn parse_coordinate(value: &OsString, name: &str, one_based: bool) -> Result<usize, String> {
@@ -227,6 +235,16 @@ mod tests {
             panic!("expected C# Godot request")
         };
         assert_eq!((request.line, request.col), (0, 0));
+    }
+
+    #[test]
+    fn quoted_paths_lose_their_quotes() {
+        let args = ["--godot-csharp", "\"/work/my game\"", "\"/work/my game/Hero.cs\"", "0", "0"].map(OsString::from);
+        let Invocation::Godot(Ok(request)) = parse(&args) else {
+            panic!("expected C# Godot request")
+        };
+        assert_eq!(request.project, Some(PathBuf::from("/work/my game")));
+        assert_eq!(request.file, PathBuf::from("/work/my game/Hero.cs"));
     }
 
     #[test]
