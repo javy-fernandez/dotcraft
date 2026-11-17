@@ -1487,7 +1487,18 @@
     "Docker run finished": "Docker run finished",
     "Docker": "Docker",
     "Compose": "Compose",
-    "Docker configurations are derived from their files": "Docker configurations are derived from their files"
+    "Docker configurations are derived from their files": "Docker configurations are derived from their files",
+    "Continuous testing: Off": "Continuous testing: Off",
+    "Continuous testing: On Save": "Continuous testing: On Save",
+    "Continuous testing: On Build": "Continuous testing: On Build",
+    "Affected test projects": "Affected test projects",
+    "Current test session": "Current test session",
+    "Use current test run": "Use current test run",
+    "Continuous testing: {project}": "Continuous testing: {project}",
+    "Choose a test session in the Tests window": "Choose a test session in the Tests window",
+    "No affected test projects": "No affected test projects",
+    "Continuous testing complete": "Continuous testing complete",
+    "Continuous testing cancelled": "Continuous testing cancelled"
   },
   "launchprofileeditor": {
     "Add profile": "Dodaj profil",
