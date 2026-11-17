@@ -135,7 +135,7 @@ impl Drop for DockerServices {
 
 /// The Docker CLI: on PATH, or where Docker Desktop, Homebrew and Colima install it (apps
 /// opened from Finder get a PATH without /usr/local/bin).
-fn docker_path() -> PathBuf {
+pub(crate) fn docker_path() -> PathBuf {
     let exe = if cfg!(windows) { "docker.exe" } else { "docker" };
     let mut candidates: Vec<PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).map(|d| d.join(exe)).collect()).unwrap_or_default();
     if cfg!(windows) {

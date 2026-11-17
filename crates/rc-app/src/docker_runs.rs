@@ -121,10 +121,10 @@ impl DockerRuns {
             let compose = *compose;
             Runtime::spawn(async move {
                 if compose {
-                    let _ = tokio::process::Command::new("docker").args(["compose", "-f"]).arg(&file).args(["stop", "-t", "5"]).kill_on_drop(true).output().await;
+                    let _ = tokio::process::Command::new(crate::docker_services::docker_path()).args(["compose", "-f"]).arg(&file).args(["stop", "-t", "5"]).kill_on_drop(true).output().await;
                 } else {
                     let name = container_name(&file);
-                    let _ = tokio::process::Command::new("docker").args(["stop", "--time", "5", &name]).kill_on_drop(true).output().await;
+                    let _ = tokio::process::Command::new(crate::docker_services::docker_path()).args(["stop", "--time", "5", &name]).kill_on_drop(true).output().await;
                 }
             });
         }
@@ -183,7 +183,28 @@ async fn run_dockerfile(file: &Path, generation: u64, out: &Outbox<Event>) -> Re
     let image = format!("{name}:latest");
     let context = file.parent().unwrap_or_else(|| Path::new("."));
     stream(&["build", "-t", &image, "-f"], &[file, context], &[], generation, out).await?;
-    stream(&["run", "--rm", "--name", &name, &image], &[], &[], generation, out).await
+    // Detached with every exposed port published, so the addresses can be shown (and
+    // clicked) before following the container's output until it stops.
+    stream(&["run", "--detach", "--rm", "--publish-all", "--name", &name, &image], &[], &[], generation, out).await?;
+    if let Ok(ports) = tokio::process::Command::new(crate::docker_services::docker_path()).args(["port", &name]).kill_on_drop(true).output().await {
+        for url in published_urls(&String::from_utf8_lossy(&ports.stdout)) {
+            out.send(Event::Line(generation, format!("{url}\n")));
+        }
+    }
+    stream(&["logs", "--follow", &name], &[], &[], generation, out).await
+}
+
+/// `http://localhost:PORT` for each TCP line of `docker port` (`80/tcp -> 0.0.0.0:55001`).
+fn published_urls(text: &str) -> Vec<String> {
+    let mut urls: Vec<String> = text
+        .lines()
+        .filter(|line| line.contains("/tcp"))
+        .filter_map(|line| line.rsplit_once(':').map(|(_, port)| port.trim()))
+        .filter(|port| !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()))
+        .map(|port| format!("http://localhost:{port}"))
+        .collect();
+    urls.dedup();
+    urls
 }
 
 async fn run_compose(file: &Path, generation: u64, out: &Outbox<Event>) -> Result<(), String> {
@@ -192,7 +213,7 @@ async fn run_compose(file: &Path, generation: u64, out: &Outbox<Event>) -> Resul
 }
 
 async fn stream(args: &[&str], paths: &[&Path], tail: &[&str], generation: u64, out: &Outbox<Event>) -> Result<(), String> {
-    let mut command = tokio::process::Command::new("docker");
+    let mut command = tokio::process::Command::new(crate::docker_services::docker_path());
     command.args(args);
     for path in paths { command.arg(path); }
     command.args(tail);
@@ -215,6 +236,12 @@ async fn stream(args: &[&str], paths: &[&Path], tail: &[&str], generation: u64, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn published_ports_become_local_urls() {
+        let text = "80/tcp -> 0.0.0.0:55001\n80/tcp -> [::]:55001\n53/udp -> 0.0.0.0:55002\n";
+        assert_eq!(published_urls(text), vec!["http://localhost:55001".to_string()]);
+    }
 
     #[test]
     fn finds_dockerfile_and_compose_configs_without_generated_files() {

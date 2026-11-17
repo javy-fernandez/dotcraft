@@ -230,7 +230,9 @@ pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
             _ => {}
         }
         if app.docker_runs.running { ui.ctx().request_repaint_after(std::time::Duration::from_millis(300)); }
-        if let Some(error) = &app.docker_runs.error { ui.colored_label(ui.visuals().error_fg_color, error); }
+        if let Some(error) = &app.docker_runs.error {
+            crate::ui::kit::content(ui, |ui| crate::ui::kit::message(ui, error, true));
+        }
         let cwd = app.docker_runs.current_dir();
         let events = console(ui, &app.docker_runs.console);
         for event in events {
