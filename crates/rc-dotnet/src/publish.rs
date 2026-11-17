@@ -134,8 +134,8 @@ impl PublishProfile {
             "trimming requires a self-contained deployment"
         );
         anyhow::ensure!(
-            !self.single_file || !self.runtime_identifier.trim().is_empty(),
-            "single-file publish requires a runtime identifier"
+            !self.needs_runtime_identifier() || !self.runtime_identifier.trim().is_empty(),
+            "self-contained, single-file and ReadyToRun publishing require a runtime identifier"
         );
         let values = [
             ("WebPublishMethod", "FileSystem".to_string()),
@@ -170,6 +170,11 @@ impl PublishProfile {
         };
         rc_core::paths::write_atomic(&path, text.as_bytes())?;
         Ok(path)
+    }
+
+    /// Self-contained, single-file and ReadyToRun output is specific to one runtime.
+    pub fn needs_runtime_identifier(&self) -> bool {
+        self.self_contained || self.single_file || self.ready_to_run
     }
 
     pub fn request(&self, project: &Path) -> anyhow::Result<BuildRequest> {
@@ -275,6 +280,22 @@ mod tests {
                 .contains(&"-p:PublishProfile=linux-x64".into())
         );
         assert_eq!(request.configuration, "Release");
+    }
+
+    #[test]
+    fn runtime_specific_output_requires_a_runtime_identifier() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("App.csproj");
+        for profile in [
+            PublishProfile { self_contained: true, ..Default::default() },
+            PublishProfile { single_file: true, ..Default::default() },
+            PublishProfile { ready_to_run: true, ..Default::default() },
+        ] {
+            let profile = PublishProfile { name: "Folder".into(), ..profile };
+            assert!(profile.save(&project).is_err(), "{profile:?}");
+            let profile = PublishProfile { runtime_identifier: "linux-x64".into(), ..profile };
+            profile.save(&project).unwrap();
+        }
     }
 
     #[test]
