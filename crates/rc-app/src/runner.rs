@@ -251,6 +251,11 @@ impl Runner {
         self.build.as_ref().is_some_and(|b| b.handle.is_some()) || self.tests.as_ref().is_some_and(|t| t.running) || self.runs.iter().any(|r| r.running())
     }
 
+    /// A build or a `dotnet` tool command is running in the Build window.
+    pub fn building(&self) -> bool {
+        self.build.as_ref().is_some_and(|b| b.handle.is_some())
+    }
+
     pub fn dotnet(&mut self) -> Result<Dotnet, String> {
         self.dotnet.clone().ok_or_else(|| tr("The .NET SDK was not found. Install it or set its path in Settings › Tools.").to_string())
     }

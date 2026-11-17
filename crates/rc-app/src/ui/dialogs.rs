@@ -133,6 +133,11 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
         Dialog::Publish(state) => match state.show(ctx) {
             crate::ui::publish::PublishOutcome::Keep => Outcome::Keep,
             crate::ui::publish::PublishOutcome::Close => Outcome::Close,
+            // The profile is saved; the running build keeps its output and the dialog stays.
+            crate::ui::publish::PublishOutcome::Start(_) if app.runner.building() => {
+                state.fail(tr("Wait for the current build to finish"));
+                Outcome::Keep
+            }
             crate::ui::publish::PublishOutcome::Start(request) => {
                 let outputs = app.runner.build_request(request);
                 crate::ui::run_windows::handle_outputs(app, outputs);

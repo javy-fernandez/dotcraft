@@ -54,6 +54,11 @@ impl PublishDialog {
         state
     }
 
+    /// Shows `message` under the fields (a publish that could not start).
+    pub fn fail(&mut self, message: impl Into<String>) {
+        self.error = Some(message.into());
+    }
+
     fn load(&mut self, name: Option<String>) {
         let Some(project) = self.projects.get(self.project_index).cloned() else {
             return;
