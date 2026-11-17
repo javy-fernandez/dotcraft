@@ -137,6 +137,59 @@ async fn requests_run_side_by_side_with_a_long_command() {
     assert!(process.wait().await.unwrap().success());
 }
 
+/// Needs the .NET SDK: a real build through the agent finishes when `dotnet` does, although
+/// MSBuild nodes and build servers it leaves running keep its output pipes open.
+#[cfg(unix)]
+#[ignore]
+#[tokio::test]
+async fn a_real_dotnet_build_returns_when_dotnet_exits() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("App.csproj"),
+        "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>\n",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("Program.cs"), "System.Console.WriteLine(\"hi\");\n").unwrap();
+    let mut process = Command::new(env!("CARGO_BIN_EXE_dotcraft-remote-agent"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let client = Client::new(
+        process.stdout.take().unwrap(),
+        process.stdin.take().unwrap(),
+    );
+    client.handshake().await.unwrap();
+    for _ in 0..2 {
+        let start = std::time::Instant::now();
+        let Value::Exit { code, stdout, stderr } = client
+            .request(Operation::Run {
+                program: "dotnet".into(),
+                args: vec!["build".into(), "App.csproj".into()],
+                cwd: dir.path().display().to_string(),
+                env: vec![
+                    ("DOTNET_NOLOGO".into(), "1".into()),
+                    ("DOTNET_CLI_UI_LANGUAGE".into(), "en".into()),
+                ],
+                timeout_ms: 300_000,
+            })
+            .await
+            .unwrap()
+        else {
+            panic!("process response")
+        };
+        let stdout = String::from_utf8(decode_data(&stdout).unwrap()).unwrap();
+        let stderr = String::from_utf8(decode_data(&stderr).unwrap()).unwrap();
+        assert_eq!(code, Some(0), "{stdout}{stderr}");
+        assert!(stdout.contains("Build succeeded"), "{stdout}");
+        eprintln!("dotnet build through the agent: {:?}", start.elapsed());
+    }
+    drop(client);
+    assert!(process.wait().await.unwrap().success());
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn local_agent_runs_dotnet_discovery_build_and_test_commands() {
