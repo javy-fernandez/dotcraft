@@ -850,7 +850,7 @@ pub fn set_central_property(text: &str, name: &str, value: &str) -> anyhow::Resu
 /// project, or in a new group right after `<Project>` when there is none.
 pub(crate) fn insert_property(doc: &roxmltree::Document, text: &str, name: &str, value: &str) -> anyhow::Result<TextEdit> {
     let nl = newline(text);
-    let unit = indent_unit(&doc, text);
+    let unit = indent_unit(doc, text);
     let elem = format!("<{name}>{}</{name}>", escape(value));
     if let Some(g) = doc.root_element().children().find(|g| g.has_tag_name("PropertyGroup") && g.attribute("Condition").is_none())
         && let Some(last) = g.children().rfind(|c| c.is_element())
