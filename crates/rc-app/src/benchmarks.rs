@@ -3,7 +3,7 @@
 use rc_core::{Inbox, Runtime, Waker};
 use rc_dotnet::{BuildEvent, Dotnet, RunEvent, RunHandle, RunRequest};
 use rc_kit::i18n::{tr, trf};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -28,10 +28,17 @@ pub struct Benchmarks {
     last: Option<(Dotnet, PathBuf, String)>,
     stop_requested: bool,
     pub running: bool,
+    /// The last run failed (build, process or report): the status is an error.
+    pub failed: bool,
     pub status: String,
     pub results: Vec<BenchmarkResult>,
-    pub output: Vec<String>,
+    pub output: VecDeque<String>,
+    /// The Output section of the window is expanded.
+    pub show_output: bool,
 }
+
+/// Lines of build and run output kept for the window.
+const OUTPUT_LINES: usize = 500;
 
 impl Benchmarks {
     pub fn new(waker: Waker) -> Self {
@@ -45,9 +52,11 @@ impl Benchmarks {
             last: None,
             stop_requested: false,
             running: false,
+            failed: false,
             status: String::new(),
             results: Vec::new(),
-            output: Vec::new(),
+            output: VecDeque::new(),
+            show_output: false,
         }
     }
 
@@ -74,10 +83,16 @@ impl Benchmarks {
         self.last = Some((dotnet, project, filter));
         self.stop_requested = false;
         self.running = true;
+        self.failed = false;
         self.status = rc_kit::i18n::tr("Building benchmark project…").into();
         self.results.clear();
         self.output.clear();
         Ok(())
+    }
+
+    /// A run or the reading of its reports is in progress.
+    pub fn busy(&self) -> bool {
+        self.running || self.parser.is_some()
     }
 
     pub fn rerun(&mut self) -> Result<(), String> {
@@ -113,6 +128,7 @@ impl Benchmarks {
                     self.push_output(rc_dotnet::strip_ansi(&line.text))
                 }
                 RunEvent::Build(BuildEvent::Finished(result)) if !result.success => {
+                    self.failed = true;
                     self.status = rc_kit::i18n::tr("Benchmark project build failed").into();
                 }
                 RunEvent::Started { .. } => {
@@ -142,6 +158,7 @@ impl Benchmarks {
                             }));
                         }
                     } else {
+                        self.failed = true;
                         self.status = rc_kit::i18n::tr("Benchmark run failed").into();
                     }
                 }
@@ -149,6 +166,7 @@ impl Benchmarks {
                     self.run.take();
                     self.running = false;
                     if !self.stop_requested {
+                        self.failed = true;
                         self.status = error;
                     }
                 }
@@ -165,16 +183,19 @@ impl Benchmarks {
                     self.results = rows;
                     self.status = rc_kit::i18n::tr("Benchmark results ready").into();
                 }
-                Err(error) => self.status = error,
+                Err(error) => {
+                    self.failed = true;
+                    self.status = error;
+                }
             }
         }
     }
 
     fn push_output(&mut self, line: String) {
-        self.output.push(line);
-        if self.output.len() > 500 {
-            self.output.remove(0);
+        if self.output.len() == OUTPUT_LINES {
+            self.output.pop_front();
         }
+        self.output.push_back(line);
     }
 }
 
@@ -288,6 +309,17 @@ pub fn format_time(ns: f64) -> String {
         format!("{:.2} µs", ns / 1_000.0)
     } else {
         format!("{ns:.2} ns")
+    }
+}
+
+/// Bytes allocated per operation, in B, KB or MB.
+pub fn format_bytes(bytes: f64) -> String {
+    if bytes >= 1024.0 * 1024.0 {
+        format!("{:.2} MB", bytes / (1024.0 * 1024.0))
+    } else if bytes >= 1024.0 {
+        format!("{:.2} KB", bytes / 1024.0)
+    } else {
+        format!("{bytes:.0} B")
     }
 }
 

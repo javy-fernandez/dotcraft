@@ -317,11 +317,11 @@ pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
 // ---------------------------------------------------------------------------------- Benchmarks
 
 pub fn benchmarks(app: &mut DotCraftApp, ui: &mut Ui) {
-    let running = app.benchmarks.running;
+    let busy = app.benchmarks.busy();
     let has_run = !app.benchmarks.status.is_empty();
     let actions = [
-        (ico::RERUN, tr("Rerun Benchmarks"), has_run && !running),
-        (ico::STOP, tr("Stop"), running),
+        (ico::RERUN, tr("Rerun Benchmarks"), has_run && !busy),
+        (ico::STOP, tr("Stop"), busy),
     ];
     match header(ui, tr("Benchmarks"), &actions) {
         Some(0) => {
@@ -337,36 +337,91 @@ pub fn benchmarks(app: &mut DotCraftApp, ui: &mut Ui) {
         empty_state(ui, ToolWindow::Benchmarks.icon(), tr("No benchmarks run yet"), tr("Click a benchmark gutter icon to see the results."));
         return;
     }
-    if running {
-        ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
+    let p = rc_kit::pal(ui);
+    let b = &mut app.benchmarks;
+    // Status line, like the Build window's summary. Updates arrive through the waker.
+    let icon = if busy {
+        ico::RUN
+    } else if b.failed {
+        ico::ERROR
+    } else if b.results.is_empty() {
+        ico::WARNING
+    } else {
+        ico::SUCCESS
+    };
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 26.0));
+    ui.allocate_rect(r, Sense::hover());
+    icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 20.0, r.center().y), vec2(16.0, 16.0)), icon, &p, true);
+    let color = if b.failed { p.error } else { p.text };
+    ui.painter().with_clip_rect(r).text(pos2(r.left() + 36.0, r.center().y), Align2::LEFT_CENTER, &b.status, FontId::proportional(13.0), color);
+    if !b.results.is_empty() {
+        let max_h = if b.show_output { ui.available_height() * 0.5 } else { ui.available_height() - 30.0 };
+        benchmark_table_header(ui, &[tr("Benchmark"), tr("Mean"), tr("Error"), tr("StdDev"), tr("Allocated")]);
+        egui::ScrollArea::vertical().id_salt("benchmark_results").max_height(max_h.max(44.0)).auto_shrink([false, true]).show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            let none = || "—".to_string();
+            for result in &b.results {
+                let cells = [
+                    crate::benchmarks::format_time(result.mean_ns),
+                    result.error_ns.map(crate::benchmarks::format_time).unwrap_or_else(none),
+                    result.stddev_ns.map(crate::benchmarks::format_time).unwrap_or_else(none),
+                    result.allocated_bytes.map(crate::benchmarks::format_bytes).unwrap_or_else(none),
+                ];
+                benchmark_table_row(ui, &result.name, &cells);
+            }
+        });
     }
-    ui.label(&app.benchmarks.status);
-    ui.add_space(8.0);
-    egui::ScrollArea::both().auto_shrink([false, true]).max_height((ui.available_height() - 80.0).max(80.0)).show(ui, |ui| {
-        egui::Grid::new("benchmark-results").striped(true).spacing([18.0, 6.0]).show(ui, |ui| {
-            for label in [tr("Benchmark"), tr("Mean"), tr("Error"), tr("StdDev"), tr("Allocated")] {
-                ui.strong(label);
-            }
-            ui.end_row();
-            for result in &app.benchmarks.results {
-                ui.label(&result.name);
-                ui.monospace(crate::benchmarks::format_time(result.mean_ns));
-                ui.monospace(result.error_ns.map(crate::benchmarks::format_time).unwrap_or_else(|| "—".into()));
-                ui.monospace(result.stddev_ns.map(crate::benchmarks::format_time).unwrap_or_else(|| "—".into()));
-                ui.monospace(result.allocated_bytes.map(|bytes| format!("{bytes:.0} B")).unwrap_or_else(|| "—".into()));
-                ui.end_row();
-            }
-        });
+    if b.output.is_empty() {
+        return;
+    }
+    ui.add_space(4.0);
+    let count = b.output.len().to_string();
+    if !crate::ui::kit::section(ui, ToolWindow::Terminal.icon(), tr("Output"), &count, &mut b.show_output) {
+        return;
+    }
+    let row_h = 18.0;
+    egui::ScrollArea::both().id_salt("benchmark_output").auto_shrink([false, false]).stick_to_bottom(true).show_rows(ui, row_h, b.output.len(), |ui, rows| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for line in b.output.range(rows) {
+            let (rr, _) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::hover());
+            ui.painter().text(pos2(rr.left() + 16.0, rr.center().y), Align2::LEFT_CENTER, line, FontId::monospace(12.0), p.text);
+        }
     });
-    if !app.benchmarks.output.is_empty() {
-        ui.add_space(8.0);
-        egui::CollapsingHeader::new(tr("Output")).show(ui, |ui| {
-            egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
-                for line in &app.benchmarks.output {
-                    ui.monospace(line);
-                }
-            });
-        });
+}
+
+/// Column positions of the results table: the name on the left, four right-aligned numbers.
+fn benchmark_columns(rect: Rect) -> [f32; 5] {
+    let right = rect.right() - 12.0;
+    [rect.left() + 12.0, right - 270.0, right - 180.0, right - 90.0, right]
+}
+
+fn benchmark_table_header(ui: &mut Ui, cols: &[&str; 5]) {
+    let p = rc_kit::pal(ui);
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::hover());
+    let xs = benchmark_columns(rect);
+    for (i, col) in cols.iter().enumerate() {
+        let align = if i == 0 { Align2::LEFT_CENTER } else { Align2::RIGHT_CENTER };
+        ui.painter().text(pos2(xs[i], rect.center().y), align, *col, theme::bold(12.0), p.muted);
+    }
+    ui.painter().hline(rect.x_range(), rect.bottom(), egui::Stroke::new(1.0, p.island_border));
+}
+
+fn benchmark_table_row(ui: &mut Ui, name: &str, cells: &[String; 4]) {
+    let p = rc_kit::pal(ui);
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::hover());
+    if resp.hovered() {
+        ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+    }
+    let xs = benchmark_columns(rect);
+    let name_rect = Rect::from_min_max(rect.min, pos2(xs[1] - 84.0, rect.bottom()));
+    ui.painter().with_clip_rect(name_rect).text(pos2(xs[0], rect.center().y), Align2::LEFT_CENTER, name, FontId::proportional(13.0), p.text);
+    for (i, cell) in cells.iter().enumerate() {
+        ui.painter().text(pos2(xs[i + 1], rect.center().y), Align2::RIGHT_CENTER, cell, FontId::monospace(12.0), p.text);
+    }
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, name));
+    let name_w = ui.painter().layout_no_wrap(name.to_string(), FontId::proportional(13.0), p.text).size().x;
+    if xs[0] + name_w > name_rect.right() {
+        resp.on_hover_text(name);
     }
 }
 
