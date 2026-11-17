@@ -337,6 +337,9 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     let mut code_vision_target = None;
     // ⌘+click: the clicked spot goes into Back/Forward history.
     let navigated_from = out.events.iter().find_map(|e| matches!(e, EditorEvent::NavigateAt(_)).then(|| (doc.path.clone(), doc.editor.caret())));
+    let proto_navigate = (doc.editor.syntax.lang == rc_syntax::Lang::Proto)
+        .then(|| out.events.iter().find_map(|e| if let EditorEvent::NavigateAt(pos) = e { Some(*pos) } else { None }))
+        .flatten();
     let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
     app.caret_screen = Some(caret_screen);
     for ev in out.events {
@@ -465,6 +468,9 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     if let Some((path, pos)) = navigated_from {
         app.push_nav_at(path, pos);
     }
+    if let Some(pos) = proto_navigate {
+        app.proto_navigate(pos, false);
+    }
     if let Some((path, pos, kind)) = code_vision_target {
         app.push_nav_at(path, pos);
         let nav = match kind {
@@ -485,6 +491,7 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
     let csharp = app.docs.active_doc().is_some_and(crate::insight::is_csharp);
     // A typo at the caret: its fixes come first, like Rider's.
     let typo_fixes = crate::spellcheck::fixes_at_caret(app).map(|(fixes, _)| fixes).unwrap_or_default();
+    let proto = app.docs.active_doc().is_some_and(|d| d.editor.syntax.lang == rc_syntax::Lang::Proto);
     let shortcut = |app: &DotCraftApp, a: Action| app.keymap.shortcut_text(a);
     let mut actions = Vec::new();
     let mut edit = None;
@@ -515,6 +522,11 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
             entry(ui, None, tr("Go to Implementation"), Action::GotoImplementation);
             entry(ui, Some(ico::TW_FIND), tr("Find Usages"), Action::FindUsages);
             entry(ui, Some(ico::EDIT), tr("Rename…"), Action::Rename);
+            ui.separator();
+        }
+        if proto {
+            entry(ui, None, tr("Go to Declaration"), Action::GotoDeclaration);
+            entry(ui, Some(ico::TW_FIND), tr("Find Usages"), Action::FindUsages);
             ui.separator();
         }
         for (icon, text, cmd) in [(ico::CUT, tr("Cut"), MenuCommand::Cut), (ico::COPY, tr("Copy"), MenuCommand::Copy), (ico::PASTE, tr("Paste"), MenuCommand::Paste)] {

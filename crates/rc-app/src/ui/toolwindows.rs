@@ -930,31 +930,35 @@ fn structure(app: &mut DotCraftApp, ui: &mut Ui) {
         empty_state(ui, ToolWindow::Structure.icon(), title, hint);
         return;
     };
-    if rc_syntax::Lang::from_path(&doc.path) == rc_syntax::Lang::Proto {
-        let source = doc.editor.buffer.rope().to_string();
-        let symbols = crate::proto::symbols(&source);
+    // .proto files: declarations from DotCraft's own parser (no language server).
+    if let Some(file) = app.active_proto() {
+        let caret_line = app.docs.active_doc().map_or(0, |d| d.editor.caret_line_col().0);
+        let symbols: Vec<_> = file.symbols.iter().filter(|s| s.kind != rc_lsp::lsp_types::SymbolKind::PACKAGE).collect();
         if symbols.is_empty() {
             empty_state(ui, ToolWindow::Structure.icon(), tr("No .proto declarations"), tr("Messages, enums, services and RPCs appear here."));
             return;
         }
-        let caret_line = doc.editor.caret_line_col().0;
         let mut goto = None;
         let mut call = None;
-        let mut methods = crate::proto::methods(&source).into_iter();
         egui::ScrollArea::vertical().id_salt("proto_structure").auto_shrink([false, false]).show(ui, |ui| {
-            for symbol in &symbols {
+            for symbol in symbols {
                 let response = list_row(ui, symbol.depth, crate::convert::symbol_icon(symbol.kind), &symbol.name, "", symbol.line == caret_line);
                 if response.clicked() {
                     goto = Some((symbol.line, symbol.col));
                 }
-                if symbol.kind == rc_lsp::lsp_types::SymbolKind::METHOD && let Some(method) = methods.next() {
+                if let Some(method) = &symbol.method {
                     response.context_menu(|ui| {
-                        if ui.button(tr("Call with gRPC Client")).clicked() { call = Some(method); ui.close(); }
+                        if theme::menu_item(ui, Some(rc_kit::ico::TW_GRPC), tr("Call with gRPC Client"), false).clicked() {
+                            call = Some(method.clone());
+                            ui.close();
+                        }
                     });
                 }
             }
         });
-        if let Some((line, col)) = goto && let Some(doc) = app.docs.active_doc_mut() {
+        if let Some((line, col)) = goto
+            && let Some(doc) = app.docs.active_doc_mut()
+        {
             doc.editor.goto(line, col);
             app.focus_editor = true;
         }

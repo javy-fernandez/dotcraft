@@ -53,15 +53,20 @@ fn collect(app: &DotCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static str
         let limit = if se.tab == SeTab::All { 8 } else { 80 };
         let mut types = 0;
         let mut syms = 0;
-        let mut symbols = se.symbols.clone();
-        if let Some(doc) = app.docs.active_doc().filter(|doc| rc_syntax::Lang::from_path(&doc.path) == rc_syntax::Lang::Proto) {
-            let container = doc.path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
-            for symbol in crate::proto::symbols(&doc.editor.buffer.rope().to_string()) {
+        // The active .proto's declarations first (the language server doesn't know them).
+        let mut symbols = Vec::new();
+        if let Some(file) = app.active_proto()
+            && let Some(doc) = app.docs.active_doc()
+        {
+            let stem = doc.path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+            for symbol in file.symbols.iter().filter(|s| s.kind != rc_lsp::lsp_types::SymbolKind::PACKAGE) {
                 if rc_editor::popup::fuzzy_score(&symbol.name, text).is_some() {
-                    symbols.push(crate::search::SymbolHit { name: symbol.name, container: container.clone(), kind: symbol.kind, path: doc.path.clone(), line: symbol.line, col: symbol.col });
+                    let container = symbol.full.strip_suffix(symbol.name.as_str()).map(|c| c.trim_end_matches('.')).filter(|c| !c.is_empty()).unwrap_or(&stem).to_string();
+                    symbols.push(crate::search::SymbolHit { name: symbol.name.clone(), container, kind: symbol.kind, path: doc.path.clone(), line: symbol.line, col: symbol.col });
                 }
             }
         }
+        symbols.extend(se.symbols.iter().cloned());
         for s in &symbols {
             let is_type = s.is_type();
             if is_type && want(SeTab::Types) && types < limit {

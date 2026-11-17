@@ -122,7 +122,11 @@ pub struct DotCraftApp {
     pub history_file: Option<std::path::PathBuf>,
     /// HTTP Client: `.http` requests and their responses.
     pub http: crate::web::HttpClient,
+    /// gRPC Client: one call through grpcurl and its response.
     pub grpc: crate::grpc::GrpcClient,
+    /// The active `.proto` document parsed (editor id, buffer version, declarations), so the
+    /// Structure, Go to Symbol and gRPC windows don't reparse it every frame.
+    pub proto_cache: std::cell::RefCell<Option<(u64, u64, std::rc::Rc<crate::proto::ProtoFile>)>>,
     /// Endpoints window.
     pub endpoints: crate::web::Endpoints,
     /// Test coverage run and report.
@@ -266,6 +270,7 @@ impl DotCraftApp {
             history_file: None,
             http: crate::web::HttpClient::new(waker.clone()),
             grpc: crate::grpc::GrpcClient::new(waker.clone()),
+            proto_cache: Default::default(),
             endpoints: crate::web::Endpoints::new(),
             coverage: crate::coverage::Coverage::new(waker.clone()),
             history_selected: None,
@@ -731,7 +736,7 @@ impl DotCraftApp {
         self.todos = None;
         self.vcs.close();
         self.http = crate::web::HttpClient::new(self.waker.clone());
-        self.grpc.cancel();
+        self.grpc = crate::grpc::GrpcClient::new(self.waker.clone());
         self.database.disconnect();
         self.database.mssql.disconnect();
         self.find_in_files = None;
@@ -1062,6 +1067,12 @@ impl DotCraftApp {
             self.handle_appsettings(outputs);
             return;
         }
+        // .proto: declarations and usages across the workspace's .proto files.
+        if self.docs.list[i].editor.syntax.lang == rc_syntax::Lang::Proto && matches!(action, Action::GotoDeclaration | Action::FindUsages) {
+            let caret = self.docs.list[i].editor.caret();
+            self.proto_navigate(caret, action == Action::FindUsages);
+            return;
+        }
         // JSON and XML are formatted here; C# by the server.
         if action == Action::Reformat && !crate::insight::is_csharp(&self.docs.list[i]) {
             self.format_locally(i);
@@ -1107,6 +1118,80 @@ impl DotCraftApp {
             Action::CallHierarchy => self.insight.prepare_hierarchy(doc, caret, crate::hierarchy::HierarchyKind::Calls),
             Action::TypeHierarchy => self.insight.prepare_hierarchy(doc, caret, crate::hierarchy::HierarchyKind::Types),
             _ => {}
+        }
+    }
+
+    /// The active document's `.proto` declarations, parsed again only when its text changes.
+    pub fn active_proto(&self) -> Option<std::rc::Rc<crate::proto::ProtoFile>> {
+        let doc = self.docs.active_doc().filter(|d| d.editor.syntax.lang == rc_syntax::Lang::Proto)?;
+        let key = (doc.editor.id, doc.editor.buffer.version());
+        let mut cache = self.proto_cache.borrow_mut();
+        if let Some((id, version, file)) = cache.as_ref()
+            && (*id, *version) == key
+        {
+            return Some(file.clone());
+        }
+        let file = std::rc::Rc::new(crate::proto::parse(&doc.editor.buffer.rope().to_string()));
+        *cache = Some((key.0, key.1, file.clone()));
+        Some(file)
+    }
+
+    /// Go to Declaration (⌘-click) or Find Usages at `pos` of the active `.proto`: the
+    /// workspace's `.proto` files are read (open ones from their editors) and resolved like
+    /// protoc, from the innermost scope outwards. On a declaration, Go to Declaration shows
+    /// its usages (Rider).
+    pub fn proto_navigate(&mut self, pos: usize, usages: bool) {
+        let Some(doc) = self.docs.active_doc() else { return };
+        let path = doc.path.clone();
+        let rope = doc.editor.buffer.rope();
+        let line = rope.char_to_line(pos.min(rope.len_chars()));
+        let col = pos.min(rope.len_chars()) - rope.line_to_char(line);
+        let mut paths: Vec<PathBuf> = self
+            .files
+            .index
+            .as_ref()
+            .map(|index| {
+                let snapshot = index.snapshot();
+                snapshot.files().iter().filter(|f| f.name().to_ascii_lowercase().ends_with(".proto")).map(|f| snapshot.abs_path(f)).collect()
+            })
+            .unwrap_or_default();
+        if !paths.contains(&path) {
+            paths.push(path.clone());
+        }
+        let texts: Vec<(PathBuf, String)> = paths
+            .into_iter()
+            .filter_map(|p| {
+                let text = match self.docs.list.iter().find(|d| d.path == p) {
+                    Some(d) => d.editor.buffer.rope().to_string(),
+                    None => std::fs::read_to_string(&p).ok().filter(|t| t.len() < 4 << 20)?,
+                };
+                Some((p, text))
+            })
+            .collect();
+        let index = crate::proto::Index::new(texts.iter().map(|(p, text)| (p.clone(), crate::proto::parse(text))).collect());
+        let Some(full) = index.type_at(&path, line, col) else {
+            self.notify(if usages { tr("No usages found") } else { tr("Cannot find declaration to go to") }, false);
+            return;
+        };
+        let target = |l: &crate::proto::Location| {
+            let text = texts.iter().find(|(p, _)| *p == l.path).map_or("", |(_, t)| t.as_str());
+            let preview = text.lines().nth(l.line).unwrap_or_default().trim().to_string();
+            Target { path: l.path.clone(), line: l.line, col: l.col, preview }
+        };
+        if usages || index.is_declaration(&path, line, col) {
+            let targets: Vec<_> = index.usages(&full).iter().map(target).collect();
+            if targets.is_empty() {
+                self.notify(tr("No usages found"), false);
+            } else {
+                self.push_nav();
+                self.handle_insight(vec![InsightOutput::Usages { title: tr("Usages").into(), targets }]);
+            }
+        } else if let Some(location) = index.declaration(&full) {
+            self.push_nav();
+            let t = target(location);
+            self.open_at(&t.path, t.line, t.col);
+        } else {
+            self.notify(tr("Cannot find declaration to go to"), false);
         }
     }
 
