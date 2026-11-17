@@ -2076,3 +2076,24 @@ fn screens_find_replace() {
     h.run_steps(2);
     h.render().unwrap().save(out.join("find-replace-dark.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/project-properties-*.png"]
+fn screens_project_properties() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::Builder::new().prefix("dotcraft-project-properties").tempdir().unwrap();
+    let project = dunce::canonicalize(dir.path()).unwrap().join("Shop.Core.csproj");
+    std::fs::write(&project, "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFrameworks>net10.0;net8.0</TargetFrameworks>\n    <Nullable>enable</Nullable>\n    <ImplicitUsings>enable</ImplicitUsings>\n    <LangVersion>latest</LangVersion>\n  </PropertyGroup>\n  <PropertyGroup>\n    <PackageId>Shop.Core</PackageId>\n    <Version>1.4.0</Version>\n    <Authors>Shop Team</Authors>\n    <Description>Orders, prices and coupons shared by the Shop applications.</Description>\n    <PackageLicenseExpression>MIT</PackageLicenseExpression>\n  </PropertyGroup>\n</Project>\n").unwrap();
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        let dialog = crate::ui::project_properties::ProjectPropertiesDialog::new(project.clone(), app.waker.clone());
+        app.dialog = Some(crate::ui::dialogs::Dialog::ProjectProperties(Box::new(dialog)));
+        let mut h = harness(app, vec2(1100.0, 760.0));
+        run_frames(&mut h, "project properties", |a| matches!(&a.dialog, Some(crate::ui::dialogs::Dialog::ProjectProperties(d)) if !d.loading()));
+        h.render().unwrap().save(out.join(format!("project-properties-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}

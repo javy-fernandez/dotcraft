@@ -37,6 +37,11 @@ impl ProjectPropertiesDialog {
         &self.path
     }
 
+    #[cfg(test)]
+    pub fn loading(&self) -> bool {
+        self.loading
+    }
+
     fn save(&mut self) {
         let (Some(original), Some(source)) = (&self.original, &self.source) else { return };
         let (draft, original, source, path) = (self.draft.clone(), original.clone(), source.clone(), self.path.clone());
