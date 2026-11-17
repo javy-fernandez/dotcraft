@@ -1966,6 +1966,58 @@ fn screens_publish() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes remote folder captures to target/snapshots"]
+fn screens_remote() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let connection = rc_core::settings::RemoteConnection {
+        wsl: false,
+        host: "dev@build-box".into(),
+        agent: crate::ui::remote_explorer::DEFAULT_AGENT.into(),
+        folder: "/home/dev/src/Shop".into(),
+    };
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        // File › Open Remote Folder…, after a failed attempt.
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.remote.form = connection.clone();
+        app.remote.form_error_for_test("remote agent disconnected\nbash: line 1: /home/dev/.cargo/bin/dotcraft-remote-agent: No such file or directory");
+        app.dialog = Some(crate::ui::dialogs::Dialog::RemoteConnect);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("remote-connect-{suffix}.png"))).unwrap();
+
+        // The folder open: its tree in the Explorer, a file previewed in the editor area.
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.remote.open_for_test(
+            connection.clone(),
+            vec![
+                (
+                    "/home/dev/src/Shop",
+                    vec![(".git", true), ("Shop.Api", true), ("Shop.Tests", true), ("Shop.slnx", false), ("README.md", false), ("global.json", false)],
+                ),
+                ("/home/dev/src/Shop/Shop.Api", vec![("Controllers", true), ("Program.cs", false), ("Shop.Api.csproj", false), ("appsettings.json", false)]),
+            ],
+        );
+        app.remote.preview_for_test(
+            "/home/dev/src/Shop/Shop.Api/Program.cs",
+            "var builder = WebApplication.CreateBuilder(args);\n\nbuilder.Services.AddControllers();\n\nvar app = builder.Build();\n\napp.MapControllers();\napp.Run();\n",
+        );
+        app.dock.show(crate::toolwindow::ToolWindow::Explorer);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("remote-explorer-{suffix}.png"))).unwrap();
+        // The connection dropped: the tree stays, with Reconnect.
+        h.state_mut().remote.lose_for_test("remote agent disconnected\nClient loop: send disconnect: Broken pipe");
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("remote-lost-{suffix}.png"))).unwrap();
+    }
+}
+
+#[test]
 #[ignore = "Requires a GPU; writes appsettings.json insight captures to target/snapshots"]
 fn screens_appsettings_insight() {
     use crate::appsettings_insight_tests::{app_with, settings_workspace, settle};

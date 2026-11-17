@@ -71,6 +71,23 @@ pub struct Settings {
     pub skipped_version: Option<String>,
     /// Custom work item links in commit messages (Rider's Issue Navigation).
     pub issue_links: Vec<IssueLink>,
+    /// The last remote folder opened (File › Open Remote Folder…), to fill the dialog.
+    pub remote: RemoteConnection,
+}
+
+/// Where a remote folder lives and how to reach its agent. No secrets: authentication is
+/// the user's own SSH configuration.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RemoteConnection {
+    /// WSL distribution instead of an SSH host.
+    pub wsl: bool,
+    /// SSH destination (`user@host` or a `Host` alias) or WSL distribution.
+    pub host: String,
+    /// Path of `dotcraft-remote-agent` on the remote machine; may start with `~/`.
+    pub agent: String,
+    /// Absolute POSIX folder on the remote machine.
+    pub folder: String,
 }
 
 /// A custom link in commit messages: text matching `pattern` opens `url`, where `$1`… are
@@ -112,6 +129,7 @@ impl Default for Settings {
             check_updates: true,
             skipped_version: None,
             issue_links: Vec::new(),
+            remote: RemoteConnection::default(),
         }
     }
 }

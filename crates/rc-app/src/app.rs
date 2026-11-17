@@ -229,6 +229,7 @@ impl DotCraftApp {
         let keymap = Keymap::new(keymap_kind(settings.keymap));
         let editor_config = editor_config(&settings);
         let pool = rc_syntax::ParserPool::new(waker.as_fn());
+        let remote_form = settings.remote.clone();
         DotCraftApp {
             keymap,
             editor_config,
@@ -244,7 +245,7 @@ impl DotCraftApp {
             fullscreen_before_focus: false,
             explorer: ExplorerState::default(),
             dependency_diagram: crate::dependency_diagram::DependencyDiagram::new(waker.clone()),
-            remote: crate::ui::remote_explorer::RemoteExplorer::new(waker.clone()),
+            remote: crate::ui::remote_explorer::RemoteExplorer::new(waker.clone(), remote_form),
             dialog: None,
             generate: None,
             generate_discovery: None,
@@ -619,6 +620,28 @@ impl DotCraftApp {
 
     pub fn close_workspace(&mut self) {
         self.remote.disconnect();
+        self.close_local_workspace();
+    }
+
+    /// A remote folder has just opened (File › Open Remote Folder…): it replaces the local
+    /// project, and its connection fills the dialog next time.
+    pub fn remote_folder_opened(&mut self) {
+        self.close_local_workspace();
+        self.dock.show(ToolWindow::Explorer);
+        if matches!(self.dialog, Some(Dialog::RemoteConnect)) {
+            self.dialog = None;
+        }
+        if let Some(connection) = self.remote.connection() {
+            self.settings.remote = connection.clone();
+        }
+        self.settings.last_workspace = None;
+        if let Err(e) = self.settings.save() {
+            self.notify(trf("Could not save the settings: {error}", &[("error", &e)]), true);
+        }
+    }
+
+    /// Closes the local project and everything it started, but not a remote folder.
+    fn close_local_workspace(&mut self) {
         if self.workspace.is_some() {
             self.save_all_docs();
             self.save_session();

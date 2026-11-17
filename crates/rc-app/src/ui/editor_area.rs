@@ -121,7 +121,11 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         return;
     }
     if app.docs.list.is_empty() {
-        empty_state(app, ui);
+        if app.remote.is_open() {
+            crate::ui::remote_explorer::editor(app, ui);
+        } else {
+            empty_state(app, ui);
+        }
         return;
     }
     let full = ui.max_rect();

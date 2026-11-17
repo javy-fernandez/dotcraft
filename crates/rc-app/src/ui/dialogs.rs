@@ -64,6 +64,8 @@ pub enum Dialog {
     Evaluate { expression: String, focus: bool },
     /// "Interactively Rebase from Here…" on a commit of the Git log.
     InteractiveRebase(Box<crate::ui::rebase::RebaseDialog>),
+    /// File › Open Remote Folder…; its fields live in `DotCraftApp::remote`.
+    RemoteConnect,
 }
 
 impl Dialog {
@@ -145,6 +147,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
             }
         },
         Dialog::InteractiveRebase(state) => if crate::ui::rebase::dialog(app, ctx, state) { Outcome::Close } else { Outcome::Keep },
+        Dialog::RemoteConnect => if crate::ui::remote_explorer::connect_dialog(app, ctx) { Outcome::Close } else { Outcome::Keep },
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
