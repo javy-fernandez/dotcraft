@@ -78,7 +78,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         {
             app.new_project = Some(d);
         }
-        if rc_kit::window_chrome::CUSTOM_CAPTION {
+        if rc_kit::window_chrome::custom_caption(&ctx) {
             rc_kit::window_chrome::resize_edges(&ctx);
         }
         return;
@@ -110,7 +110,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     {
         app.ef = Some(d);
     }
-    if rc_kit::window_chrome::CUSTOM_CAPTION {
+    if rc_kit::window_chrome::custom_caption(&ctx) {
         rc_kit::window_chrome::resize_edges(&ctx);
     }
 }

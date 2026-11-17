@@ -10,6 +10,22 @@ use egui::{Color32, CursorIcon, Id, Rect, Sense, Ui, Vec2, ViewportCommand, pos2
 /// commit ff3c5c322f918a4a1413cc6fcc0bb2cb87d79b1c.
 pub const CUSTOM_CAPTION: bool = !cfg!(target_os = "macos");
 
+fn forced_caption_id() -> Id {
+    Id::new("dotcraft_force_custom_caption")
+}
+
+/// Whether the header draws the window controls: always on Windows and Linux, and on macOS
+/// once [`force_custom_caption`] was called (offscreen captures of that layout).
+pub fn custom_caption(ctx: &egui::Context) -> bool {
+    CUSTOM_CAPTION || ctx.data(|d| d.get_temp::<bool>(forced_caption_id()).unwrap_or(false))
+}
+
+/// Lays the header out as on Windows and Linux, whatever the platform (captures only: the
+/// native window keeps its decorations).
+pub fn force_custom_caption(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.insert_temp(forced_caption_id(), true));
+}
+
 pub fn viewport() -> egui::ViewportBuilder {
     egui::ViewportBuilder::default()
         .with_title("DotCraft")

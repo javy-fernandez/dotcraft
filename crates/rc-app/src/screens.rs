@@ -2144,3 +2144,30 @@ fn screens_project_properties() {
         h.render().unwrap().save(out.join(format!("project-properties-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
 }
+
+/// The Windows/Linux title bar (DotCraft's own window controls), forced on any platform.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/custom-title-bar-*.png"]
+fn screens_custom_title_bar() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        rc_kit::window_chrome::force_custom_caption(&h.ctx);
+        h.run_steps(3);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("custom-title-bar-{suffix}.png"))).unwrap();
+        // Maximized, with the pointer on Close: Restore replaces Maximize, Close turns red.
+        h.input_mut().viewports.get_mut(&egui::ViewportId::ROOT).unwrap().maximized = Some(true);
+        h.run_steps(2);
+        assert!(h.query_by_label("Restore window").is_some());
+        h.get_by_label("Close window").hover();
+        h.run_steps(2);
+        h.render().unwrap().save(out.join(format!("custom-title-bar-maximized-{suffix}.png"))).unwrap();
+    }
+}

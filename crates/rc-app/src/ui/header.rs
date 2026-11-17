@@ -115,7 +115,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         // windows those controls can consume the entire split row's left-hand clip rect.
         ui.spacing_mut().item_spacing.x = 4.0;
         let zoom = ui.ctx().zoom_factor().max(0.1);
-        ui.add_space(rc_kit::window_chrome::leading_space(cfg!(target_os = "macos"), fullscreen, zoom));
+        let custom_caption = rc_kit::window_chrome::custom_caption(ui.ctx());
+        ui.add_space(rc_kit::window_chrome::leading_space(cfg!(target_os = "macos") && !custom_caption, fullscreen, zoom));
         let menu = theme::icon_button_sized(ui, ico::MENU, true, tr("Main Menu"), 30.0);
         if menu.clicked() { crate::ui::main_menu::reset(ui.ctx()); }
         egui::Popup::menu(&menu).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| crate::ui::main_menu::show(app, ui));
@@ -138,7 +139,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                 }
             }
             theme::Side::Right => {
-                if rc_kit::window_chrome::CUSTOM_CAPTION {
+                if custom_caption {
                     if let Some(command) = rc_kit::window_chrome::controls(ui) {
                         ui.ctx().send_viewport_cmd(command);
                     }
