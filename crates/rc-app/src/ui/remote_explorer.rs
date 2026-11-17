@@ -633,7 +633,6 @@ pub fn explorer(app: &mut DotCraftApp, ui: &mut Ui) {
             (ico::CLOSE, tr("Close Remote Folder"), true),
             (ico::REFRESH, tr("Refresh"), connected),
             (ico::COLLAPSE_ALL, tr("Collapse All"), true),
-            (ico::INFO, tr("SDK Info"), connected && remote.running.is_none()),
         ],
     );
     match click.action {
@@ -650,7 +649,6 @@ pub fn explorer(app: &mut DotCraftApp, ui: &mut Ui) {
             remote.start_command(CommandKind::Sdks);
         }
         Some(3) => remote.collapse_all(),
-        Some(4) => remote.start_command(CommandKind::Info),
         _ => {}
     }
     if connected {
@@ -661,6 +659,9 @@ pub fn explorer(app: &mut DotCraftApp, ui: &mut Ui) {
             }
             if kit::button(ui, Some(ico::RUN_ALL), tr("Test"), !busy).clicked() {
                 remote.start_command(CommandKind::Test);
+            }
+            if kit::button(ui, None, tr("SDK Info"), !busy).clicked() {
+                remote.start_command(CommandKind::Info);
             }
             if busy && remote.running != Some(CommandKind::Sdks) && kit::button(ui, Some(ico::STOP), tr("Stop"), remote.cancel_command.is_some()).clicked() {
                 remote.cancel_running();

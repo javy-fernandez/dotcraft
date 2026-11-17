@@ -2007,10 +2007,19 @@ fn screens_remote() {
             "/home/dev/src/Shop/Shop.Api/Program.cs",
             "var builder = WebApplication.CreateBuilder(args);\n\nbuilder.Services.AddControllers();\n\nvar app = builder.Build();\n\napp.MapControllers();\napp.Run();\n",
         );
+        app.remote.sdks_for_test(&["8.0.428", "10.0.100"]);
         app.dock.show(crate::toolwindow::ToolWindow::Explorer);
         let mut h = harness(app, vec2(1280.0, 800.0));
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("remote-explorer-{suffix}.png"))).unwrap();
+        // A failed remote build: its output in the editor area, beside the preview tab.
+        h.state_mut().remote.output_for_test(
+            "dotnet build",
+            1,
+            "  Determining projects to restore...\n  All projects are up-to-date for restore.\n/home/dev/src/Shop/Shop.Api/Program.cs(7,5): error CS0103: The name 'ap' does not exist in the current context [/home/dev/src/Shop/Shop.Api/Shop.Api.csproj]\n\nBuild FAILED.\n\n    0 Warning(s)\n    1 Error(s)\n",
+        );
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("remote-build-{suffix}.png"))).unwrap();
         // The connection dropped: the tree stays, with Reconnect.
         h.state_mut().remote.lose_for_test("remote agent disconnected\nClient loop: send disconnect: Broken pipe");
         h.run_steps(4);

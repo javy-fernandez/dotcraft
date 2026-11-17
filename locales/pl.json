@@ -1633,7 +1633,15 @@
     "Binary file: no preview": "Plik binarny: brak podglądu",
     "Enter a valid host or distribution and agent path": "Podaj prawidłowy host lub dystrybucję i ścieżkę agenta",
     "Enter an absolute remote folder, like /home/me/src/App": "Podaj bezwzględny folder zdalny, np. /home/me/src/App",
-    "Open Remote Folder": "Otwórz folder zdalny"
+    "Open Remote Folder": "Otwórz folder zdalny",
+    ".NET path": "Ścieżka .NET",
+    "SDK Info": "Informacje o SDK",
+    "Test": "Testuj",
+    "No .NET SDK found on the remote machine": "Nie znaleziono zestawu .NET SDK na maszynie zdalnej",
+    ".NET SDKs:": "Zestawy .NET SDK:",
+    "Preview": "Podgląd",
+    ".NET Output": "Dane wyjściowe .NET",
+    "Running…": "Uruchamianie…"
   },
   "launchprofileeditor": {
     "Add profile": "Dodaj profil",

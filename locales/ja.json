@@ -1633,7 +1633,15 @@
     "Binary file: no preview": "バイナリファイル: プレビューできません",
     "Enter a valid host or distribution and agent path": "有効なホストまたはディストリビューションとエージェントのパスを入力してください",
     "Enter an absolute remote folder, like /home/me/src/App": "/home/me/src/App のようなリモートフォルダーの絶対パスを入力してください",
-    "Open Remote Folder": "リモートフォルダーを開く"
+    "Open Remote Folder": "リモートフォルダーを開く",
+    ".NET path": ".NET のパス",
+    "SDK Info": "SDK 情報",
+    "Test": "テスト",
+    "No .NET SDK found on the remote machine": "リモートマシンに .NET SDK が見つかりません",
+    ".NET SDKs:": ".NET SDK:",
+    "Preview": "プレビュー",
+    ".NET Output": ".NET 出力",
+    "Running…": "実行中…"
   },
   "launchprofileeditor": {
     "Add profile": "プロファイルを追加",

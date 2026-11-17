@@ -1633,7 +1633,15 @@
     "Binary file: no preview": "二进制文件：无法预览",
     "Enter a valid host or distribution and agent path": "请输入有效的主机或发行版以及代理路径",
     "Enter an absolute remote folder, like /home/me/src/App": "请输入远程文件夹的绝对路径，例如 /home/me/src/App",
-    "Open Remote Folder": "打开远程文件夹"
+    "Open Remote Folder": "打开远程文件夹",
+    ".NET path": ".NET 路径",
+    "SDK Info": "SDK 信息",
+    "Test": "测试",
+    "No .NET SDK found on the remote machine": "远程机器上未找到 .NET SDK",
+    ".NET SDKs:": ".NET SDK：",
+    "Preview": "预览",
+    ".NET Output": ".NET 输出",
+    "Running…": "正在运行…"
   },
   "launchprofileeditor": {
     "Add profile": "添加配置文件",
