@@ -134,6 +134,7 @@ pub struct DotCraftApp {
     pub appsettings: crate::appsettings_insight::SettingsInsight,
     pub runner: Runner,
     user_secrets: crate::user_secrets::UserSecrets,
+    pub docker_services: crate::docker_services::DockerServices,
     pub debugger: crate::debugger::Debugger,
     window_title: String,
     pub files: crate::search::Files,
@@ -250,6 +251,7 @@ impl DotCraftApp {
             appsettings: crate::appsettings_insight::SettingsInsight::new(waker.clone()),
             runner: Runner::new(waker.clone()),
             user_secrets: crate::user_secrets::UserSecrets::new(waker.clone()),
+            docker_services: crate::docker_services::DockerServices::new(waker.clone()),
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
             files: crate::search::Files::new(),
@@ -1842,6 +1844,7 @@ impl eframe::App for DotCraftApp {
         self.appsettings.update(&mut self.docs, &mut self.insight.problems);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
+        self.docker_services.poll();
         // Monitoring follows the selected Run tab's process (or the last one started).
         let target = self.runner.runs.get(self.runner.active_run).filter(|r| r.running()).or_else(|| self.runner.runs.iter().rev().find(|r| r.running()));
         self.monitor.follow(target.and_then(|r| Some((r.name.clone(), r.handle.as_ref()?.pid()?))));

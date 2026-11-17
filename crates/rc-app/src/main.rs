@@ -10,6 +10,7 @@ mod update;
 mod convert;
 mod debugger;
 mod user_secrets;
+mod docker_services;
 mod database;
 mod insight;
 mod package_insight;

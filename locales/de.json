@@ -1473,7 +1473,16 @@
     "{method}: {title}": "{method}: {title}"
   },
   "rc-app": {
-    "Exit Focus Mode": "Exit Focus Mode"
+    "Exit Focus Mode": "Exit Focus Mode",
+    "Refresh containers": "Refresh containers",
+    "No Docker containers found": "No Docker containers found",
+    "Stop container": "Stop container",
+    "Start container": "Start container",
+    "Container logs": "Container logs",
+    "Refresh logs": "Refresh logs",
+    "Could not start Docker: {error}": "Could not start Docker: {error}",
+    "Docker exited with {status}": "Docker exited with {status}",
+    "Cancel Docker operation": "Cancel Docker operation"
   },
   "launchprofileeditor": {
     "Add profile": "Profil hinzufügen",
