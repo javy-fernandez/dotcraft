@@ -490,6 +490,9 @@ fn proto_line(line: &str, in_block_comment: &mut bool) -> Vec<Span> {
             break;
         }
         if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+            // Past the opener, so `/*/` doesn't close itself.
+            i += 2;
+            roles[start..i].fill(Hl::Comment);
             *in_block_comment = true;
             continue;
         }
@@ -620,6 +623,14 @@ mod tests {
         assert!(has(2, "Get", Hl::Method));
         assert!(has(3, "string", Hl::Class));
         assert!(has(3, "// key", Hl::Comment));
+    }
+
+    #[test]
+    fn proto_comment_opener_does_not_close_itself() {
+        let rope = Rope::from_str("/*/ message A {}\nstill */ message B {}\n");
+        let lines = highlight_lexical(Lang::Proto, &rope, 0, 2).unwrap();
+        assert!(lines[0].iter().all(|span| span.hl == Hl::Comment), "{:?}", lines[0]);
+        assert!(lines[1].iter().any(|span| span.hl == Hl::Class));
     }
 
     #[test]
