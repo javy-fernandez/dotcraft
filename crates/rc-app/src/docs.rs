@@ -302,7 +302,7 @@ impl Docs {
     }
 
     pub fn save(&mut self, i: usize) -> Result<(), String> {
-        let history = self.history;
+        let history = self.history && !crate::user_secrets::is_user_secrets_file(&self.list[i].path);
         let doc = &mut self.list[i];
         // The first revision is the file as it was before DotCraft touched it.
         if history && rc_core::local_history::revisions(&doc.path).is_empty()
@@ -410,7 +410,7 @@ impl Docs {
             doc.conflict = true;
             return;
         }
-        if self.history {
+        if self.history && !crate::user_secrets::is_user_secrets_file(path) {
             let _ = rc_core::local_history::record(path, &text.replace("\r\n", "\n"), "External change");
         }
         doc.reload(&text);
