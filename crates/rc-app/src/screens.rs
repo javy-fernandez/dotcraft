@@ -2103,6 +2103,41 @@ fn screens_view_modes() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes target/snapshots/structural-search-*.png"]
+fn screens_structural_search() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+        let mut h = harness(app, vec2(1200.0, 800.0));
+        run_frames(&mut h, "file index", |a| a.files.index.as_ref().is_some_and(|i| !i.snapshot().files().is_empty()));
+        // Code › Structural Search and Replace…: the pattern, then its placeholders' constraints.
+        let ctx = h.ctx.clone();
+        h.state_mut().run_ide_action(&ctx, rc_editor::Action::StructuralSearch);
+        {
+            let s = &mut h.state_mut().structural;
+            s.query = "Console.WriteLine(string.Format(inv, $format$, $args$))".into();
+            s.replacement = "Console.WriteLine(string.Format(CultureInfo.InvariantCulture, $format$, $args$))".into();
+            s.constraints.entry("args".into()).or_default().count = rc_search::structural::Count::Any;
+            s.constraints.entry("format".into()).or_default().kind = rc_search::structural::NodeKind::Expression;
+        }
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("structural-search-dialog-{suffix}.png"))).unwrap();
+        // The dialog's button (the Find tool window's stripe button has the same name).
+        h.get_all_by_label(rc_kit::i18n::tr("Find")).last().unwrap().click();
+        run_frames(&mut h, "structural matches", |a| a.structural.shown && !a.structural.busy && !a.structural.hits.is_empty());
+        h.state_mut().structural.hits[1].selected = false;
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("structural-search-results-{suffix}.png"))).unwrap();
+    }
+}
+
+#[test]
 #[ignore = "Requires a GPU; writes target/snapshots/find-replace-dark.png"]
 fn screens_find_replace() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
