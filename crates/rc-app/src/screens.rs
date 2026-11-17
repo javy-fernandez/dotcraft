@@ -1768,6 +1768,63 @@ fn screens_work_items() {
     }
 }
 
+#[test]
+#[ignore = "Requires a GPU; writes spelling captures to target/snapshots"]
+fn screens_spelling() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let repo = tempfile::tempdir().unwrap();
+        let root = repo.path().canonicalize().unwrap();
+        let file = crate::spellcheck::tests::sample(home.path(), &root);
+        std::fs::write(root.join("Shop.sln"), "\nMicrosoft Visual Studio Solution File, Format Version 12.00\n").unwrap();
+        let vcs = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success());
+        vcs(&["init", "-q", "-b", "main"]);
+        let mut app = test_app(home.path(), dark);
+        app.open_workspace(&root.join("Shop.sln"));
+        app.open_file(&file);
+        app.dock.show(crate::toolwindow::ToolWindow::Commit);
+        app.vcs.message = "Fix the totl of orders".into();
+        let mut h = harness(app, vec2(1280.0, 720.0));
+        run_frames(&mut h, "typos", |a| a.docs.active_doc().unwrap().editor.spelling.len() == 3 && !a.spelling.message.is_empty());
+        // ⌥⏎ on "recieved": its fixes.
+        {
+            let doc = h.state_mut().docs.active_doc_mut().unwrap();
+            let text = doc.editor.buffer.rope().to_string();
+            let at = doc.editor.buffer.rope().byte_to_char(text.find("recieved").unwrap() + 2);
+            doc.editor.set_selection(rc_text::Selection::point(at));
+        }
+        h.run_steps(2);
+        let caret = h.state().caret_screen.unwrap_or(egui::pos2(400.0, 300.0));
+        h.state_mut().run_insight_action(rc_editor::Action::ShowIntentions, caret);
+        run_frames(&mut h, "typo fixes", |a| matches!(a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { .. })));
+        h.render().unwrap().save(out.join(format!("spelling-{suffix}.png"))).unwrap();
+        // Right-click on the typo of the commit message.
+        h.state_mut().dialog = None;
+        h.run_steps(2);
+        let at = egui::pos2(108.0, 553.0);
+        h.event(egui::Event::PointerMoved(at));
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: true, modifiers: egui::Modifiers::NONE });
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: false, modifiers: egui::Modifiers::NONE });
+        run_frames(&mut h, "message suggestions", |a| a.spelling.message.first().is_some_and(|t| t.word == "totl"));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("spelling-commit-{suffix}.png"))).unwrap();
+        h.event(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE });
+        h.run_steps(2);
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(h.state().settings.clone()), page: crate::ui::dialogs::SettingsPage::Editor });
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("spelling-settings-{suffix}.png"))).unwrap();
+        // A missing dictionary says where to put it.
+        if let Some(crate::ui::dialogs::Dialog::Settings { draft, .. }) = &mut h.state_mut().dialog {
+            draft.spelling_languages.push("es_ES".into());
+        }
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("spelling-settings-missing-{suffix}.png"))).unwrap();
+    }
+}
 
 #[test]
 #[ignore = "Requires a GPU; writes pull request captures (local mock GitHub / Azure DevOps) to target/snapshots"]
