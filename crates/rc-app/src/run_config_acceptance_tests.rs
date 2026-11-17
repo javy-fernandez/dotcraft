@@ -16,8 +16,12 @@ fn shop_run_configuration_selection_persists_across_workspace_reopen() {
     let selected = app.runner.selected_config().unwrap().name.clone();
     assert_ne!(selected, cli);
     let mut h = harness(app, vec2(1800.0, 900.0));
+    // The Windows/Linux title bar, so the test behaves the same as on CI.
+    rc_kit::window_chrome::force_custom_caption(&h.ctx);
+    h.run_steps(2);
     h.get_by_label(&format!("Run configuration: {selected}")).click();
-    h.run_steps(1);
+    // The popup's first frame is a sizing pass (invisible and disabled).
+    h.run_steps(2);
     h.get_all_by_label(&cli).find(|node| node.rect().center().x > 800.0).unwrap().click();
     h.run_steps(2);
     assert_eq!(h.state().runner.selected_config().unwrap().name, cli);
