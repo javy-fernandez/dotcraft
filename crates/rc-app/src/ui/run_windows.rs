@@ -97,16 +97,11 @@ fn build_diagnostic_target(d: &rc_dotnet::Diagnostic) -> Option<(std::path::Path
 
 pub fn build(app: &mut DotCraftApp, ui: &mut Ui) {
     let running = app.runner.build.as_ref().is_some_and(|b| b.handle.is_some());
-    let target = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf());
+    let target = app.workspace_build_target();
     let actions = [(ico::BUILD, tr("Build Solution"), !running && target.is_some()), (ico::REBUILD, tr("Rebuild Solution"), !running && target.is_some()), (ico::STOP, tr("Cancel Build"), running)];
     match header(ui, tr("Build"), &actions) {
         Some(0) => app.pending.push(rc_editor::Action::Build),
-        Some(1) => {
-            if let Some(t) = target {
-                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Rebuild);
-                handle_outputs(app, outs);
-            }
-        }
+        Some(1) => app.build_workspace(rc_dotnet::BuildAction::Rebuild),
         Some(2) => app.runner.cancel_build(),
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Build),
         _ => {}

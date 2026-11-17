@@ -173,11 +173,8 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
             app.publish_project_dialog(None);
         }
         for (label, icon, action) in [(tr("Rebuild Solution"), ico::REBUILD, rc_dotnet::BuildAction::Rebuild), (tr("Clean Solution"), ico::DELETE, rc_dotnet::BuildAction::Clean), (tr("Restore NuGet Packages"), ico::DOWNLOAD, rc_dotnet::BuildAction::Restore)] {
-            if command(ui, label, Some(icon), app.workspace.is_some())
-                && let Some(target) = app.workspace.as_ref().map(|workspace| workspace.ws.key_path().to_path_buf())
-            {
-                let outputs = app.runner.build(&target, action);
-                crate::ui::run_windows::handle_outputs(app, outputs);
+            if command(ui, label, Some(icon), app.workspace_build_target().is_some()) {
+                app.build_workspace(action);
             }
         }
     }
