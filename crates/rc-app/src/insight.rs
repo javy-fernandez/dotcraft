@@ -576,6 +576,11 @@ impl Insight {
                 && doc.editor.buffer.version() == request.version
             {
                 let count = implementation_count(&value, &request.origin_uri, request.origin_position);
+                if count == 0 {
+                    // Nothing implements or overrides it: no label, as in Rider.
+                    doc.editor.code_vision.retain(|vision| vision.position != request.position || vision.kind != request.kind);
+                    return false;
+                }
                 let title = match request.kind {
                     rc_editor::CodeVisionKind::Overrides if count == 1 => trf("{count} override", &[("count", &count)]),
                     rc_editor::CodeVisionKind::Overrides => trf("{count} overrides", &[("count", &count)]),
@@ -1510,20 +1515,29 @@ fn symbols(rope: &rc_text::Rope, resp: lsp::DocumentSymbolResponse) -> Vec<Symbo
     }
 }
 
+/// Declarations that can have implementations or overrides: interfaces and their members,
+/// classes that are neither sealed nor static, and virtual, abstract or override members.
+/// Plain members and structs are skipped, so a file costs Roslyn one request per such
+/// declaration rather than one per symbol.
 fn implementation_candidates(rope: &rc_text::Rope, nodes: &[SymbolNode], tree: &rc_syntax::tree_sitter::Tree) -> Vec<(usize, usize, rc_editor::CodeVisionKind)> {
     fn collect(rope: &rc_text::Rope, nodes: &[SymbolNode], tree: &rc_syntax::tree_sitter::Tree, out: &mut Vec<(usize, usize, rc_editor::CodeVisionKind)>) {
         for node in nodes {
             let position = rope.line_to_char(node.line) + node.col;
-            let kind = if matches!(node.kind, lsp::SymbolKind::CLASS | lsp::SymbolKind::INTERFACE | lsp::SymbolKind::STRUCT) {
-                Some(rc_editor::CodeVisionKind::Implementations)
-            } else if matches!(node.kind, lsp::SymbolKind::METHOD | lsp::SymbolKind::PROPERTY) {
-                if is_override_member(rope, tree, position) {
-                    Some(rc_editor::CodeVisionKind::Overrides)
-                } else {
-                    Some(rc_editor::CodeVisionKind::Implementations)
+            let declaration = declaration_info(rope, tree, position);
+            let has = |modifier: &str| declaration.modifiers.iter().any(|m| m == modifier);
+            let kind = match node.kind {
+                lsp::SymbolKind::INTERFACE => Some(rc_editor::CodeVisionKind::Implementations),
+                lsp::SymbolKind::CLASS if !has("sealed") && !has("static") => Some(rc_editor::CodeVisionKind::Implementations),
+                lsp::SymbolKind::METHOD | lsp::SymbolKind::PROPERTY | lsp::SymbolKind::EVENT => {
+                    if has("virtual") || has("abstract") || has("override") {
+                        Some(rc_editor::CodeVisionKind::Overrides)
+                    } else if declaration.in_interface {
+                        Some(rc_editor::CodeVisionKind::Implementations)
+                    } else {
+                        None
+                    }
                 }
-            } else {
-                None
+                _ => None,
             };
             if let Some(kind) = kind {
                 out.push((node.line, position, kind));
@@ -1536,19 +1550,38 @@ fn implementation_candidates(rope: &rc_text::Rope, nodes: &[SymbolNode], tree: &
     out
 }
 
-fn is_override_member(rope: &rc_text::Rope, tree: &rc_syntax::tree_sitter::Tree, position: usize) -> bool {
+#[derive(Default)]
+struct DeclarationInfo {
+    modifiers: Vec<String>,
+    in_interface: bool,
+}
+
+/// Modifiers of the declaration whose name is at `position`, and whether it sits in an
+/// interface.
+fn declaration_info(rope: &rc_text::Rope, tree: &rc_syntax::tree_sitter::Tree, position: usize) -> DeclarationInfo {
     let byte = rope.char_to_byte(position);
     let mut node = tree.root_node().descendant_for_byte_range(byte, (byte + 1).min(rope.len_bytes()));
     while let Some(current) = node {
-        if matches!(current.kind(), "method_declaration" | "property_declaration" | "indexer_declaration" | "event_declaration") {
+        if matches!(current.kind(), "method_declaration" | "property_declaration" | "indexer_declaration" | "event_declaration" | "event_field_declaration" | "class_declaration" | "interface_declaration" | "struct_declaration" | "record_declaration") {
             let mut cursor = current.walk();
-            return current.named_children(&mut cursor).any(|child| {
-                child.kind() == "modifier" && matches!(rope.byte_slice(child.byte_range()).to_string().as_str(), "virtual" | "abstract" | "override")
-            });
+            let modifiers = current.named_children(&mut cursor).filter(|child| child.kind() == "modifier").map(|child| rope.byte_slice(child.byte_range()).to_string()).collect();
+            let mut parent = current.parent();
+            let mut in_interface = false;
+            while let Some(p) = parent {
+                if p.kind() == "interface_declaration" {
+                    in_interface = true;
+                    break;
+                }
+                if matches!(p.kind(), "class_declaration" | "struct_declaration" | "record_declaration") {
+                    break;
+                }
+                parent = p.parent();
+            }
+            return DeclarationInfo { modifiers, in_interface };
         }
         node = current.parent();
     }
-    false
+    DeclarationInfo::default()
 }
 
 fn implementation_count(value: &Value, origin_uri: &str, origin: lsp::Position) -> usize {
@@ -1588,6 +1621,30 @@ mod code_vision_tests {
         let origin = lsp::Position::new(2, 4);
         assert_eq!(implementation_count(&result, "file:///A.cs", origin), 1);
         assert_eq!(implementation_count(&Value::Null, "file:///A.cs", origin), 0);
+    }
+
+    #[test]
+    fn only_declarations_that_can_be_implemented_are_requested() {
+        let text = "interface IShape {\n double Area();\n}\nsealed class Box {\n void Pack() {}\n}\nclass Base {\n void Plain() {}\n}\nstruct Point {}\n";
+        let rope = rc_text::Rope::from_str(text);
+        let at = |needle: &str, kind| {
+            let char = rope.byte_to_char(text.find(needle).unwrap());
+            let line = rope.char_to_line(char);
+            SymbolNode { name: needle.into(), detail: String::new(), kind, line, col: char - rope.line_to_char(line), children: Vec::new() }
+        };
+        let nodes = vec![
+            at("IShape", lsp::SymbolKind::INTERFACE),
+            at("Area", lsp::SymbolKind::METHOD),
+            at("Box", lsp::SymbolKind::CLASS),
+            at("Pack", lsp::SymbolKind::METHOD),
+            at("Base", lsp::SymbolKind::CLASS),
+            at("Plain", lsp::SymbolKind::METHOD),
+            at("Point", lsp::SymbolKind::STRUCT),
+        ];
+        let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None).unwrap();
+        let lines: Vec<usize> = implementation_candidates(&rope, &nodes, &tree).into_iter().map(|(line, _, _)| line).collect();
+        // IShape, Area and Base; not the sealed class, plain methods or the struct.
+        assert_eq!(lines, vec![0, 1, 6]);
     }
 
     #[test]

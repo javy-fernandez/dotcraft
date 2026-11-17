@@ -282,7 +282,24 @@ fn source_row_of_line(state: &mut EditorState, line: usize) -> usize {
     }
 }
 
-fn vision_positions(state: &mut EditorState) -> Vec<(usize, usize)> {
+/// Code Vision rows that are visible (not inside a fold), sorted. Row and line conversions
+/// call this many times per frame, so the result is cached until the buffer, the folds or
+/// the labels change.
+fn vision_positions(state: &mut EditorState) -> std::sync::Arc<[(usize, usize)]> {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::hash::DefaultHasher::new();
+    state.buffer.version().hash(&mut hasher);
+    state.folded.hash(&mut hasher);
+    state.display_rows().map(<[usize]>::len).hash(&mut hasher);
+    for vision in &state.code_vision {
+        (vision.line, vision.position).hash(&mut hasher);
+    }
+    let key = hasher.finish();
+    if let Some((cached, positions)) = &state.vision_rows
+        && *cached == key
+    {
+        return positions.clone();
+    }
     let mut positions = state.code_vision.iter().map(|vision| (vision.line, vision.position)).collect::<Vec<_>>();
     positions.sort_unstable();
     positions.dedup();
@@ -290,6 +307,8 @@ fn vision_positions(state: &mut EditorState) -> Vec<(usize, usize)> {
         let row = source_row_of_line(state, line);
         state.display_rows().is_none_or(|rows| rows.get(row) == Some(&line))
     });
+    let positions: std::sync::Arc<[(usize, usize)]> = positions.into();
+    state.vision_rows = Some((key, positions.clone()));
     positions
 }
 

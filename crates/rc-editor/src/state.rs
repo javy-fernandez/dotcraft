@@ -201,6 +201,9 @@ pub struct EditorState {
     pub(crate) edits: Vec<Edit>,
     pub(crate) hl_cache: Option<HlCache>,
     pub(crate) display: Option<Vec<usize>>,
+    /// Visible Code Vision rows `(line, position)`, sorted, with the fingerprint of the
+    /// buffer, folds and labels they were computed from (see `view::vision_positions`).
+    pub(crate) vision_rows: Option<(u64, std::sync::Arc<[(usize, usize)]>)>,
 }
 
 pub(crate) struct HlCache {
@@ -260,6 +263,7 @@ impl EditorState {
             edits: Vec::new(),
             hl_cache: None,
             display: None,
+            vision_rows: None,
         };
         s.recompute_max_cols();
         s
