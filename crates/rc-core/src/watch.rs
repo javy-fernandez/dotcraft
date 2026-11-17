@@ -1,4 +1,5 @@
-//! File watching: changes under the workspace (outside build folders) reach the UI as
+//! File watching: changes under the workspace (outside build folders and the folders Unity
+//! generates in a Unity project) reach the UI as
 //! [`FsEvent`]s so open editors reload and the explorer refreshes.
 
 use crate::inbox::Outbox;
@@ -72,6 +73,7 @@ impl FileWatcher {
                 if rel
                     .components()
                     .any(|c| HIDDEN_DIRS.contains(&c.as_os_str().to_string_lossy().as_ref()))
+                    || crate::unity::in_generated_dir(&root_buf, e.path())
                 {
                     continue;
                 }
@@ -170,6 +172,34 @@ mod tests {
                 &[FsEvent::Removed(replacement), FsEvent::Created(renamed)],
             );
         }
+    }
+
+    #[test]
+    fn workspace_watcher_skips_unity_generated_folders_only_in_unity_roots() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let game = root.join("Game");
+        for d in ["Assets/Library", "ProjectSettings", "Library", "Temp"] {
+            std::fs::create_dir_all(game.join(d)).unwrap();
+        }
+        std::fs::create_dir(root.join("Library")).unwrap();
+        let inbox = Inbox::new(Waker::noop());
+        let _watcher = FileWatcher::new(&root, inbox.sender()).unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        std::fs::write(game.join("Library/ArtifactDB"), "cache").unwrap();
+        std::fs::write(game.join("Temp/UnityLockfile"), "").unwrap();
+        let script = game.join("Assets/Library/Shelf.cs");
+        let book = root.join("Library/Book.cs");
+        std::fs::write(&script, "class Shelf {}\n").unwrap();
+        std::fs::write(&book, "class Book {}\n").unwrap();
+        let seen = await_events(&inbox, &[FsEvent::Created(script), FsEvent::Created(book)]);
+        // Give late cache events a moment to arrive before checking they were dropped.
+        std::thread::sleep(Duration::from_millis(300));
+        let seen: Vec<FsEvent> = seen.into_iter().chain(inbox.drain()).collect();
+        assert!(
+            !seen.iter().any(|e| e.path().starts_with(game.join("Library")) || e.path().starts_with(game.join("Temp"))),
+            "{seen:?}"
+        );
     }
 
     #[test]

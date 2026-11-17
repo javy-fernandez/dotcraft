@@ -63,6 +63,9 @@ pub struct Settings {
     pub netcoredbg_path: Option<PathBuf>,
     /// Explicit path to a Godot 4 .NET editor (otherwise GODOT4/GODOT, PATH and install folders).
     pub godot_path: Option<PathBuf>,
+    /// Unity editor for Open in Unity Editor: an executable (or `Unity.app`) used for every
+    /// project, or a folder of version-named installations searched before Unity Hub's.
+    pub unity_editor_path: Option<PathBuf>,
     /// Most recent first.
     pub recent_workspaces: Vec<PathBuf>,
     /// Files opened in the editor, most recent first (File › Open Recent).
@@ -133,6 +136,7 @@ impl Default for Settings {
             roslyn_path: None,
             netcoredbg_path: None,
             godot_path: None,
+            unity_editor_path: None,
             recent_workspaces: Vec::new(),
             recent_files: Vec::new(),
             reopen_last: true,
@@ -199,6 +203,9 @@ mod tests {
         assert_eq!(s.right_margin, 120);
         assert!(s.show_debug_inline_values);
         assert_eq!(s.godot_path, None);
+        assert_eq!(s.unity_editor_path, None);
+        let s: Settings = serde_json::from_str(r#"{"unity_editor_path": "/opt/Unity/Editor/Unity"}"#).unwrap();
+        assert_eq!(s.unity_editor_path, Some(PathBuf::from("/opt/Unity/Editor/Unity")));
     }
 
     #[test]

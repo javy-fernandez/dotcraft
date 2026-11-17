@@ -175,6 +175,63 @@ fn go_to_file_over_a_scanned_tree() {
     assert_eq!(res.matches[0].entry.rel(), "src/Shop.Web/OrderController.cs");
 }
 
+/// A repository with a Unity project in `Game/` (no `.gitignore`) and a .NET tool that uses the
+/// same folder names Unity generates.
+fn unity_tree() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    write(r, "Game/Assets/Scripts/Player.cs", "class Player { } // TODO: player\n");
+    write(r, "Game/Assets/Library/Shelf.cs", "class Shelf { } // TODO: shelf\n");
+    write(r, "Game/ProjectSettings/ProjectVersion.txt", "m_EditorVersion: 2022.3.10f1\n");
+    write(r, "Game/Packages/manifest.json", "{}\n");
+    write(r, "Game/Library/PackageCache/com.unity.ugui/Button.cs", "// TODO: cached package\n");
+    write(r, "Game/Temp/Bee/Gen.cs", "// TODO: temp\n");
+    write(r, "Game/Logs/Editor.log", "TODO\n");
+    write(r, "Tool/Library/Book.cs", "// TODO: book\n");
+    write(r, "Tool/Temp/Scratch.cs", "// TODO: scratch\n");
+    dir
+}
+
+#[test]
+fn unity_generated_folders_are_skipped_only_in_unity_roots() {
+    let dir = unity_tree();
+    let r = dir.path();
+    let expected = [
+        "Game/Assets/Library/Shelf.cs",
+        "Game/Assets/Scripts/Player.cs",
+        "Game/Packages/manifest.json",
+        "Game/ProjectSettings/ProjectVersion.txt",
+        "Tool/Library/Book.cs",
+        "Tool/Temp/Scratch.cs",
+    ];
+    let index = FileIndex::scan_blocking(r);
+    assert_eq!(rels(&index), expected);
+
+    // Unity rewriting its cache does not reach the index; ordinary folders still do.
+    write(r, "Game/Library/Artifacts/ab/new.cs", "");
+    write(r, "Game/Temp/Late.cs", "");
+    write(r, "Game/Assets/Scripts/Enemy.cs", "");
+    write(r, "Tool/Library/Page.cs", "");
+    index.apply(&[
+        FsEvent::Created(r.join("Game/Library/Artifacts")),
+        FsEvent::Created(r.join("Game/Temp/Late.cs")),
+        FsEvent::Changed(r.join("Game/Library/PackageCache/com.unity.ugui/Button.cs")),
+        FsEvent::Created(r.join("Game/Assets/Scripts/Enemy.cs")),
+        FsEvent::Created(r.join("Tool/Library/Page.cs")),
+    ]);
+    let snap = index.snapshot();
+    assert!(snap.get("Game/Assets/Scripts/Enemy.cs").is_some());
+    assert!(snap.get("Tool/Library/Page.cs").is_some());
+    assert!(!snap.files().iter().any(|e| e.rel().starts_with("Game/Library/") || e.rel().starts_with("Game/Temp/")));
+
+    let (files, _) = run_find(r, opts("todo"));
+    let rels: Vec<&str> = files.iter().map(|f| f.rel.as_str()).collect();
+    assert_eq!(rels, ["Game/Assets/Library/Shelf.cs", "Game/Assets/Scripts/Player.cs", "Tool/Library/Book.cs", "Tool/Temp/Scratch.cs"]);
+    // Scoping the search to the Unity project applies the same rule at its root.
+    let (files, _) = run_find(r, FindOptions { scope: Some("Game".into()), ..opts("todo") });
+    assert_eq!(files.len(), 2);
+}
+
 fn run_find(root: &Path, options: FindOptions) -> (Vec<FileMatches>, FindSummary) {
     let inbox = Inbox::new(Waker::noop());
     let handle = find_in_files(root, options, inbox.sender()).unwrap();

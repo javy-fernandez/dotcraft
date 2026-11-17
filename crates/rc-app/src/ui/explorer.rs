@@ -2,7 +2,7 @@
 //! folders and files (read lazily from disk). Keyboard navigation like Rider: ↑/↓ move,
 //! →/← expand/collapse, Enter or double-click opens, F2 renames, ⌫ deletes.
 
-use rc_core::workspace::{FileNode, is_hidden, list_dir_with};
+use rc_core::workspace::{FileNode, is_hidden, is_hidden_in, list_dir_with};
 use rc_dotnet::{ProjectInfo, Solution, SolutionItem};
 use rc_kit::i18n::tr;
 use rc_kit::{Ico, ico, icons, theme};
@@ -395,7 +395,7 @@ impl ExplorerState {
 
     /// `dim`: the parent is not part of the solution, so neither is this node.
     fn push_node(&mut self, rows: &mut Vec<Row>, node: &FileNode, depth: usize, dim: bool) {
-        let dim = dim || is_hidden(&node.name, node.is_dir);
+        let dim = dim || node.path.parent().map_or_else(|| is_hidden(&node.name, node.is_dir), |parent| is_hidden_in(parent, &node.name, node.is_dir));
         if node.is_dir {
             let key = format!("dir:{}", node.path.display());
             let special = node.name == "Properties";
@@ -888,6 +888,39 @@ mod tests {
         assert!(state.is_dimmed(&format!("dir:{}", root.join("App/bin").display())));
         assert!(state.is_dimmed(&format!("file:{}", root.join("README.md").display())));
         assert!(!state.is_dimmed(&format!("file:{}", root.join("App/Program.cs").display())));
+    }
+
+    #[test]
+    fn unity_folder_hides_generated_folders_until_show_all_files_dims_them() {
+        let dir = tempfile::Builder::new().prefix("dotcraft-unity-explorer").tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        for d in ["Assets/Scripts", "Assets/Library", "ProjectSettings", "Packages", "Library/PackageCache", "Temp", "Logs"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        std::fs::write(root.join("ProjectSettings/ProjectVersion.txt"), "m_EditorVersion: 2022.3.10f1\n").unwrap();
+        std::fs::write(root.join("Assets/Scripts/Player.cs"), "").unwrap();
+        let ws = rc_core::Workspace::open(&root).unwrap();
+        assert_eq!(ws.kind, rc_core::WorkspaceKind::Folder);
+        let mut state = ExplorerState::default();
+        state.expanded.extend(["sln".to_string(), format!("dir:{}", root.join("Assets").display())]);
+        let labels = |s: &mut ExplorerState| s.rows(None, &root, &ws.name()).into_iter().map(|r| r.label).collect::<Vec<_>>();
+        let off = labels(&mut state);
+        for name in ["Assets", "Scripts", "ProjectSettings", "Packages"] {
+            assert!(off.contains(&name.to_string()), "{name} missing in {off:?}");
+        }
+        // Only the root's generated folders are hidden: `Assets/Library` is project content.
+        assert_eq!(off.iter().filter(|l| *l == "Library").count(), 1, "{off:?}");
+        assert!(!off.iter().any(|l| l == "Temp" || l == "Logs"));
+
+        state.set_show_all(true);
+        let on = labels(&mut state);
+        for name in ["Temp", "Logs"] {
+            assert!(on.contains(&name.to_string()), "{name} missing in {on:?}");
+        }
+        assert!(state.is_dimmed(&format!("dir:{}", root.join("Library").display())));
+        assert!(state.is_dimmed(&format!("dir:{}", root.join("Temp").display())));
+        assert!(!state.is_dimmed(&format!("dir:{}", root.join("Assets/Library").display())));
+        assert!(!state.is_dimmed(&format!("dir:{}", root.join("Assets").display())));
     }
 }
 

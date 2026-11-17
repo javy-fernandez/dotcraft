@@ -815,7 +815,15 @@
     "Remove {culture} Translation": "{culture} の翻訳を削除",
     "Resources": "リソース",
     "XML Text": "XML テキスト",
-    "Save {file} before saving the resource grid": "リソース グリッドを保存する前に {file} を保存してください"
+    "Save {file} before saving the resource grid": "リソース グリッドを保存する前に {file} を保存してください",
+    "Open in Unity Editor": "Unity Editor で開く",
+    "Unity Editor (executable or editors folder)": "Unity Editor（実行ファイルまたはエディターのフォルダー）",
+    "The open project is not a Unity project": "開いているプロジェクトは Unity プロジェクトではありません",
+    "Opening {project} in the Unity Editor": "{project} を Unity Editor で開いています",
+    "Could not start the Unity Editor: {error}": "Unity Editor を起動できませんでした: {error}",
+    "ProjectSettings/ProjectVersion.txt has no Unity Editor version. Choose a Unity Editor in Settings › Tools.": "ProjectSettings/ProjectVersion.txt に Unity Editor のバージョンがありません。[設定 › ツール] で Unity Editor を選択してください。",
+    "The Unity Editor set in Settings › Tools was not found: {path}": "[設定 › ツール] で指定した Unity Editor が見つかりません: {path}",
+    "Unity {version} is not installed. Install it with Unity Hub or choose a Unity Editor in Settings › Tools.": "Unity {version} はインストールされていません。Unity Hub でインストールするか、[設定 › ツール] で Unity Editor を選択してください。"
   },
   "terminal": {
     "Local": "ローカル",

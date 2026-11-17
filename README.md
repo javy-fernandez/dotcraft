@@ -87,11 +87,22 @@ The debugger uses [netcoredbg](https://github.com/Samsung/netcoredbg) (MIT), dow
   </tr>
 </table>
 
+### Unity projects
+
+Open the folder of a Unity project (the one with `Assets` and `ProjectSettings`) with **File › Open…**. If Unity has generated a solution (**Preferences › External Tools › Regenerate project files** in the Unity Editor), DotCraft opens it as usual and the C# code intelligence uses Unity's generated projects. Without a solution the folder opens as a folder; Unity's generated `.csproj` files are not treated as a standalone project. DotCraft reads the editor version from `ProjectSettings/ProjectVersion.txt`.
+
+Unity's cache folders at the project root (`Library`, `Temp`, `Logs`, `MemoryCaptures`, and `obj` as in any .NET project) are left out of the explorer, Search Everywhere, Go to File, Find in Files and file watching. Folders with those names elsewhere, such as `Assets/Library` or a `Temp` folder in a .NET project, are shown as usual. **Show All Files** in the explorer shows the cache folders dimmed.
+
+**Tools › Open in Unity Editor** (in the main menu, shown only for Unity projects) starts the editor the project was saved with, so opening it never upgrades the project to another version. DotCraft looks in Unity Hub's install folders: the default one (`/Applications/Unity/Hub/Editor` on macOS, `C:\Program Files\Unity\Hub\Editor` on Windows, `~/Unity/Hub/Editor` on Linux) and the custom location set in Unity Hub. In **Settings › Tools › Unity Editor** you can set either an editor executable (or `Unity.app` on macOS), which is used for every project whatever its version, or a folder of editors named by version, which is searched first. The editor is started directly with `-projectPath <folder>`; no shell is involved.
+
+Play mode, building players and debugging Unity are done in the Unity Editor; DotCraft's Run, Debug and Test commands are for .NET projects.
+
 ## Requirements
 
 - macOS 11 or later (Apple Silicon or Intel), Windows 10/11 (x64 or ARM64, DirectX 12), or Linux with glibc 2.35+ (x64 or ARM64; Vulkan or OpenGL ES, X11 or Wayland).
 - The [.NET SDK](https://dotnet.microsoft.com/download) 8 or later. DotCraft looks in the default install locations and on `PATH`; another location can be set in **Settings › Tools**.
 - Git on `PATH` for the Git features.
+- For Unity projects, optionally the Unity Editor installed with Unity Hub (to use **Open in Unity Editor**).
 - An internet connection the first time you open a C# file or start debugging, unless the language server and netcoredbg are already installed (their paths can be set in **Settings › Tools**).
 
 The interface is available in English, Spanish, German, French, Japanese, Polish, Brazilian Portuguese and Simplified Chinese.

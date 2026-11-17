@@ -27,6 +27,7 @@ mod item_templates;
 mod runner;
 mod search;
 mod structural_search;
+mod unity;
 mod vcs;
 mod work_items;
 mod assembly_explorer;

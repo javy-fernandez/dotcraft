@@ -815,7 +815,15 @@
     "Remove {culture} Translation": "Remover tradução {culture}",
     "Resources": "Recursos",
     "XML Text": "Texto XML",
-    "Save {file} before saving the resource grid": "Salve {file} antes de salvar a grade de recursos"
+    "Save {file} before saving the resource grid": "Salve {file} antes de salvar a grade de recursos",
+    "Open in Unity Editor": "Abrir no Unity Editor",
+    "Unity Editor (executable or editors folder)": "Unity Editor (executável ou pasta de editores)",
+    "The open project is not a Unity project": "O projeto aberto não é um projeto Unity",
+    "Opening {project} in the Unity Editor": "Abrindo {project} no Unity Editor",
+    "Could not start the Unity Editor: {error}": "Não foi possível iniciar o Unity Editor: {error}",
+    "ProjectSettings/ProjectVersion.txt has no Unity Editor version. Choose a Unity Editor in Settings › Tools.": "ProjectSettings/ProjectVersion.txt não indica a versão do Unity Editor. Escolha um Unity Editor em Configurações › Ferramentas.",
+    "The Unity Editor set in Settings › Tools was not found: {path}": "O Unity Editor definido em Configurações › Ferramentas não foi encontrado: {path}",
+    "Unity {version} is not installed. Install it with Unity Hub or choose a Unity Editor in Settings › Tools.": "O Unity {version} não está instalado. Instale-o com o Unity Hub ou escolha um Unity Editor em Configurações › Ferramentas."
   },
   "terminal": {
     "Local": "Local",

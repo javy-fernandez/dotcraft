@@ -8,7 +8,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | --- | --- |
 | `rc-app` (bin `dotcraft`) | Window, tool windows, editor tabs, keymaps, session. Only crate that wires everything together. |
 | `rc-kit` | Islands theme (`theme`), New UI icons (`icons`, SVGs in `assets/icons`), window chrome, branding, i18n (`i18n::tr`). |
-| `rc-core` | Shared tokio `Runtime`, `Inbox`/`Outbox`/`Waker`, settings, per-workspace session, workspace file tree, file watcher. |
+| `rc-core` | Shared tokio `Runtime`, `Inbox`/`Outbox`/`Waker`, settings, per-workspace session, workspace file tree, file watcher, Unity project detection and editor lookup (`unity`). |
 | `rc-text` | Rope buffer, change sets, multi-cursor selections, grouped undo, UTF-16 positions. No UI. |
 | `rc-syntax` | tree-sitter parsing on a background thread, highlighting, folding, bracket matching. |
 | `rc-editor` | The code editor widget (egui), keymaps (`keymap::Action`), code-insight popups. |
@@ -42,6 +42,10 @@ or on the shared tokio runtime and reports back through channels that wake the U
   NUnit / MSTest projects; `TenProjects`: ten libraries in a `.slnx`).
 - **Commits.** One commit per finished task, short one-line English messages, capitalized
   (e.g. "Add TRX parser"), no attribution trailers. Code comments in English too.
+- **Hidden folders.** `rc_core::workspace::is_hidden_in` decides what the explorer, the file
+  index, Find in Files and the watcher skip: `HIDDEN_DIRS` everywhere, plus
+  `rc_core::unity::GENERATED_DIRS` only directly below a Unity project root (`Assets` and
+  `ProjectSettings`). Use it (or `unity::in_generated_dir` for event paths) for any new walker.
 - **Third-party code.** Parts of the HTTP client, EditorConfig, SQLite browser, egui
   menu, the editor tab docking guides and the title bar project glow are adapted from
   CrabCraft (MIT); its notice is in `docs/third-party/`.

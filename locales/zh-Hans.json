@@ -815,7 +815,15 @@
     "Remove {culture} Translation": "移除 {culture} 翻译",
     "Resources": "资源",
     "XML Text": "XML 文本",
-    "Save {file} before saving the resource grid": "保存资源表格前，请先保存 {file}"
+    "Save {file} before saving the resource grid": "保存资源表格前，请先保存 {file}",
+    "Open in Unity Editor": "在 Unity Editor 中打开",
+    "Unity Editor (executable or editors folder)": "Unity Editor（可执行文件或编辑器文件夹）",
+    "The open project is not a Unity project": "打开的项目不是 Unity 项目",
+    "Opening {project} in the Unity Editor": "正在 Unity Editor 中打开 {project}",
+    "Could not start the Unity Editor: {error}": "无法启动 Unity Editor：{error}",
+    "ProjectSettings/ProjectVersion.txt has no Unity Editor version. Choose a Unity Editor in Settings › Tools.": "ProjectSettings/ProjectVersion.txt 中没有 Unity Editor 版本。请在“设置 › 工具”中选择 Unity Editor。",
+    "The Unity Editor set in Settings › Tools was not found: {path}": "未找到“设置 › 工具”中设置的 Unity Editor：{path}",
+    "Unity {version} is not installed. Install it with Unity Hub or choose a Unity Editor in Settings › Tools.": "未安装 Unity {version}。请使用 Unity Hub 安装，或在“设置 › 工具”中选择 Unity Editor。"
   },
   "terminal": {
     "Local": "本地",
