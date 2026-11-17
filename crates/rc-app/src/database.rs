@@ -111,7 +111,7 @@ fn ident(value: &str) -> Result<String, Error> {
 fn open(path: &Path, cancel: Arc<AtomicBool>, deadline: Instant) -> Result<Connection, Error> {
     check(&cancel, deadline)?;
     if path.as_os_str().len() > 8192 || !std::fs::metadata(path).is_ok_and(|m| m.is_file()) { return Err(Error::Path); }
-    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
+    let mut connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
     connection.busy_timeout(Duration::from_millis(150))?;
     connection.set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
     connection.set_db_config(DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false)?;
@@ -145,9 +145,9 @@ fn query(connection: &Connection, sql: &str, cancel: &AtomicBool, deadline: Inst
     if batch.next()?.is_some() { return Err(Error::Input); }
     if !statement.readonly() || statement.column_count() == 0 { return Err(Error::ReadOnly); }
     let count = statement.column_count();
-    let mut bytes: usize = statement.column_names().iter().map(|name| name.len()).sum();
+    let mut bytes: usize = statement.column_names().map(|name| name.len()).sum();
     if bytes > MAX_BYTES { return Err(Error::Limit); }
-    let mut grid = Grid { columns: statement.column_names().iter().map(|name| name.to_string()).collect(), ..Grid::default() };
+    let mut grid = Grid { columns: statement.column_names().map(|name| name.to_string()).collect(), ..Grid::default() };
     let mut rows = statement.query([])?;
     while let Some(row) = rows.next()? {
         check(cancel, deadline)?;
