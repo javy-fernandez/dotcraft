@@ -13,6 +13,22 @@ pub const HEADER_H: f32 = 36.0;
 pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
     match tw {
         ToolWindow::Explorer => {
+            if app.remote.visible() {
+                match crate::ui::remote_explorer::show(ui, &mut app.remote) {
+                    Some(crate::ui::remote_explorer::Action::Connect) => {
+                        app.close_workspace();
+                        app.remote.connect();
+                        app.dock.show(ToolWindow::Explorer);
+                    }
+                    Some(crate::ui::remote_explorer::Action::Close) => app.close_project(),
+                    Some(crate::ui::remote_explorer::Action::Cancel) => {
+                        if app.remote.connected() { app.remote.show_connect = false; }
+                        else { app.remote.disconnect(); }
+                    }
+                    None => {}
+                }
+                return;
+            }
             let Some(w) = &app.workspace else { return };
             let (root, name) = (w.ws.root.clone(), w.ws.name());
             let active = app.docs.active_doc().map(|d| d.path.clone());

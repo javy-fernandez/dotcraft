@@ -107,6 +107,7 @@ pub struct DotCraftApp {
     pub fullscreen_before_focus: bool,
     pub explorer: ExplorerState,
     pub dependency_diagram: crate::dependency_diagram::DependencyDiagram,
+    pub remote: crate::ui::remote_explorer::RemoteExplorer,
     pub dialog: Option<Dialog>,
     pub generate: Option<crate::generate::Dialog>,
     pub generate_discovery: Option<crate::generate_semantic::GenerateDiscovery>,
@@ -243,6 +244,7 @@ impl DotCraftApp {
             fullscreen_before_focus: false,
             explorer: ExplorerState::default(),
             dependency_diagram: crate::dependency_diagram::DependencyDiagram::new(waker.clone()),
+            remote: crate::ui::remote_explorer::RemoteExplorer::new(waker.clone()),
             dialog: None,
             generate: None,
             generate_discovery: None,
@@ -616,6 +618,7 @@ impl DotCraftApp {
     }
 
     pub fn close_workspace(&mut self) {
+        self.remote.disconnect();
         if self.workspace.is_some() {
             self.save_all_docs();
             self.save_session();

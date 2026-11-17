@@ -40,6 +40,7 @@ rc-syntax = { path = "crates/rc-syntax" }
 rc-editor = { path = "crates/rc-editor" }
 rc-kit = { path = "crates/rc-kit" }
 rc-core = { path = "crates/rc-core" }
+rc-remote = { path = "crates/rc-remote" }
 rc-lsp = { path = "crates/rc-lsp" }
 rc-dap = { path = "crates/rc-dap" }
 rc-dotnet = { path = "crates/rc-dotnet" }
