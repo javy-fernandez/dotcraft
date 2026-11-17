@@ -277,17 +277,152 @@ pub fn html_spans(text: &[u8]) -> Vec<(usize, usize, Hl)> {
     out
 }
 
-/// Highlighting of languages without a grammar (`.sln`); `None` for the others.
+/// Highlighting of languages without a grammar (`.sln`, Dockerfile, Godot); `None` for the others.
 pub fn highlight_lexical(lang: Lang, rope: &Rope, first: usize, count: usize) -> Option<Vec<Vec<Span>>> {
-    if !matches!(lang, Lang::Sln | Lang::Dockerfile) {
+    if !matches!(lang, Lang::Sln | Lang::Dockerfile | Lang::GodotResource | Lang::GdScript) {
         return None;
     }
     let last = (first + count).min(rope.len_lines());
     Some((first..last).map(|l| match lang {
         Lang::Sln => sln_line(&rope.line(l).to_string()),
         Lang::Dockerfile => dockerfile_line(&rope.line(l).to_string()),
+        Lang::GodotResource => godot_resource_line(&rope.line(l).to_string()),
+        Lang::GdScript => gdscript_line(&rope.line(l).to_string()),
         _ => unreachable!(),
     }).collect())
+}
+
+/// Merges per-character roles into spans, dropping plain text.
+fn role_spans(roles: Vec<Hl>) -> Vec<Span> {
+    let mut spans: Vec<Span> = Vec::new();
+    for (col, hl) in roles.into_iter().enumerate() {
+        match spans.last_mut() {
+            Some(sp) if sp.hl == hl && sp.end == col => sp.end = col + 1,
+            _ => spans.push(Span { start: col, end: col + 1, hl }),
+        }
+    }
+    spans.retain(|s| s.hl != Hl::Plain);
+    spans
+}
+
+/// Strings, numbers, keywords and calls shared by the Godot lexers; stops at `comment`.
+fn godot_values(chars: &[char], roles: &mut [Hl], from: usize, comment: char, keywords: &[&str]) {
+    let mut i = from;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == comment {
+            roles[i..].fill(Hl::Comment);
+            return;
+        } else if c == '"' || c == '\'' {
+            let s = i;
+            i += 1;
+            while i < chars.len() && chars[i] != c {
+                if chars[i] == '\\' {
+                    i += 1;
+                }
+                i += 1;
+            }
+            i = (i + 1).min(chars.len());
+            roles[s..i].fill(Hl::String);
+        } else if c == '@' || c.is_alphabetic() || c == '_' {
+            let s = i;
+            i += 1;
+            while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            let word: String = chars[s..i].iter().collect();
+            if c == '@' {
+                roles[s..i].fill(Hl::Attribute);
+            } else if keywords.contains(&word.as_str()) {
+                roles[s..i].fill(Hl::Keyword);
+            } else if chars.get(i) == Some(&'(') {
+                roles[s..i].fill(if c.is_uppercase() { Hl::Class } else { Hl::Method });
+            } else if c.is_uppercase() && word.chars().any(|ch| ch.is_lowercase()) {
+                roles[s..i].fill(Hl::Class);
+            }
+        } else if c.is_ascii_digit() || (c == '-' && chars.get(i + 1).is_some_and(char::is_ascii_digit) && (i == 0 || !chars[i - 1].is_alphanumeric())) {
+            let s = i;
+            i += 1;
+            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '.' || chars[i] == '_') {
+                i += 1;
+            }
+            roles[s..i].fill(Hl::Number);
+        } else {
+            i += 1;
+        }
+    }
+}
+
+/// One line of a Godot text resource: `[section attr=value]` headers, `key = value` lines
+/// and `;` comments.
+fn godot_resource_line(line: &str) -> Vec<Span> {
+    const KEYWORDS: &[&str] = &["true", "false", "null"];
+    let chars: Vec<char> = line.trim_end_matches(['\n', '\r']).chars().collect();
+    let mut roles = vec![Hl::Plain; chars.len()];
+    let lead = chars.iter().take_while(|c| c.is_whitespace()).count();
+    if chars.get(lead) == Some(&'[') {
+        let s = lead + 1;
+        let e = s + chars[s..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').count();
+        roles[lead..e].fill(Hl::Tag);
+        if let Some(close) = chars.iter().rposition(|c| *c == ']') {
+            roles[close] = Hl::Tag;
+        }
+        // Attribute names before `=`.
+        let mut i = e;
+        while i < chars.len() {
+            if chars[i].is_alphabetic() || chars[i] == '_' {
+                let s = i;
+                while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                    i += 1;
+                }
+                if chars.get(i) == Some(&'=') {
+                    roles[s..i].fill(Hl::XmlAttr);
+                }
+            } else if chars[i] == '"' {
+                i += 1;
+                while i < chars.len() && chars[i] != '"' {
+                    i += 1;
+                }
+                i += 1;
+            } else {
+                i += 1;
+            }
+        }
+        let mut values = roles.clone();
+        godot_values(&chars, &mut values, e, ';', KEYWORDS);
+        for (role, value) in roles.iter_mut().zip(values) {
+            if *role == Hl::Plain {
+                *role = value;
+            }
+        }
+        return role_spans(roles);
+    }
+    let mut from = lead;
+    if let Some(eq) = chars.iter().position(|c| *c == '=')
+        && chars[lead..eq].iter().all(|c| c.is_alphanumeric() || matches!(c, '_' | '/' | '.' | ':' | '-' | ' '))
+        && eq > lead
+    {
+        roles[lead..eq].fill(Hl::Property);
+        let trimmed = eq - chars[lead..eq].iter().rev().take_while(|c| c.is_whitespace()).count();
+        roles[trimmed..eq].fill(Hl::Plain);
+        roles[eq] = Hl::Operator;
+        from = eq + 1;
+    }
+    godot_values(&chars, &mut roles, from, ';', KEYWORDS);
+    role_spans(roles)
+}
+
+/// One line of GDScript: keywords, `@annotations`, strings, numbers, calls and `#` comments.
+fn gdscript_line(line: &str) -> Vec<Span> {
+    const KEYWORDS: &[&str] = &[
+        "if", "elif", "else", "for", "while", "match", "when", "break", "continue", "pass", "return", "class", "class_name", "extends",
+        "is", "in", "as", "self", "super", "signal", "func", "static", "const", "enum", "var", "await", "breakpoint", "preload", "yield",
+        "and", "or", "not", "true", "false", "null", "void", "PI", "TAU", "INF", "NAN",
+    ];
+    let chars: Vec<char> = line.trim_end_matches(['\n', '\r']).chars().collect();
+    let mut roles = vec![Hl::Plain; chars.len()];
+    godot_values(&chars, &mut roles, 0, '#', KEYWORDS);
+    role_spans(roles)
 }
 
 fn dockerfile_line(line: &str) -> Vec<Span> {
@@ -395,15 +530,7 @@ fn sln_line(line: &str) -> Vec<Span> {
             }
         }
     }
-    let mut spans: Vec<Span> = Vec::new();
-    for (col, hl) in roles.into_iter().enumerate() {
-        match spans.last_mut() {
-            Some(sp) if sp.hl == hl && sp.end == col => sp.end = col + 1,
-            _ => spans.push(Span { start: col, end: col + 1, hl }),
-        }
-    }
-    spans.retain(|s| s.hl != Hl::Plain);
-    spans
+    role_spans(roles)
 }
 
 #[cfg(test)]
@@ -492,5 +619,32 @@ mod tests {
         assert!(lines[2].iter().any(|s| s.hl == Hl::Keyword && text(2, s) == "ARG"));
         assert!(lines[3].iter().any(|s| s.hl == Hl::Keyword && text(3, s) == "RUN"));
         assert!(lines[3].iter().any(|s| s.hl == Hl::String && text(3, s) == "\"$VERSION\""));
+    }
+    #[test]
+    fn godot_scenes_and_scripts_highlight_without_a_grammar() {
+        assert_eq!(Lang::from_path(std::path::Path::new("/g/Main.tscn")), Lang::GodotResource);
+        assert_eq!(Lang::from_path(std::path::Path::new("/g/project.godot")), Lang::GodotResource);
+        assert_eq!(Lang::from_path(std::path::Path::new("/g/player.gd")), Lang::GdScript);
+        let rope = Rope::from_str("[ext_resource type=\"Script\" path=\"res://Main.cs\" id=\"1\"]\nscript = ExtResource(\"1\")\nposition = Vector2(-4, 2.5) ; moved\n");
+        let lines = highlight_lexical(Lang::GodotResource, &rope, 0, rope.len_lines()).unwrap();
+        let text = |l: usize, s: &Span| rope.line(l).chars().skip(s.start).take(s.end - s.start).collect::<String>();
+        let has = |l: usize, hl: Hl, t: &str| lines[l].iter().any(|s| s.hl == hl && text(l, s) == t);
+        assert!(has(0, Hl::Tag, "[ext_resource"));
+        assert!(has(0, Hl::XmlAttr, "path"));
+        assert!(has(0, Hl::String, "\"res://Main.cs\""));
+        assert!(has(1, Hl::Property, "script"));
+        assert!(has(1, Hl::Class, "ExtResource"));
+        assert!(has(2, Hl::Number, "-4"));
+        assert!(has(2, Hl::Comment, "; moved"));
+        let rope = Rope::from_str("@export var speed := 4.0 # px\nfunc _ready() -> void:\n\tprint(\"hi\")\n");
+        let lines = highlight_lexical(Lang::GdScript, &rope, 0, rope.len_lines()).unwrap();
+        let has = |l: usize, hl: Hl, t: &str| lines[l].iter().any(|s| s.hl == hl && rope.line(l).chars().skip(s.start).take(s.end - s.start).collect::<String>() == t);
+        assert!(has(0, Hl::Attribute, "@export"));
+        assert!(has(0, Hl::Keyword, "var"));
+        assert!(has(0, Hl::Number, "4.0"));
+        assert!(has(0, Hl::Comment, "# px"));
+        assert!(has(1, Hl::Keyword, "func"));
+        assert!(has(1, Hl::Method, "_ready"));
+        assert!(has(2, Hl::String, "\"hi\""));
     }
 }
