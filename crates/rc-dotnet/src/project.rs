@@ -24,6 +24,8 @@ pub struct ProjectInfo {
     pub is_test: bool,
     /// .NET Aspire app host (runs the other projects).
     pub aspire_host: bool,
+    /// Godot's C# SDK, which is launched through the Godot engine rather than `dotnet run`.
+    pub godot_sdk: bool,
 }
 
 impl ProjectInfo {
@@ -42,6 +44,7 @@ impl ProjectInfo {
             sdk: root.attribute("Sdk").unwrap_or("").to_string(),
             ..Default::default()
         };
+        info.godot_sdk = has_sdk(&info.sdk, "Godot.NET.Sdk");
         for n in root.descendants().filter(|n| n.is_element()) {
             let text = || n.text().unwrap_or("").trim().to_string();
             match n.tag_name().name() {
@@ -55,6 +58,7 @@ impl ProjectInfo {
                     let name = n.attribute("Name").unwrap_or("");
                     info.is_test |= name.to_ascii_lowercase().starts_with("mstest.sdk");
                     info.aspire_host |= name.to_ascii_lowercase().starts_with("aspire.apphost.sdk");
+                    info.godot_sdk |= has_sdk(name, "Godot.NET.Sdk");
                     if info.sdk.is_empty() {
                         info.sdk = name.to_string();
                     }
@@ -106,6 +110,11 @@ impl ProjectInfo {
         self.sdk.split('/').next().unwrap_or("").trim()
     }
 
+    /// A Godot C# project needs the .NET-enabled Godot editor to run its scenes.
+    pub fn is_godot(&self) -> bool {
+        self.godot_sdk
+    }
+
     /// Whether `dotnet run` can start it: an Exe, or a web, Blazor WebAssembly, worker or Aspire
     /// project (their SDKs make them executables).
     pub fn is_executable(&self) -> bool {
@@ -120,6 +129,10 @@ impl ProjectInfo {
         let sdk = self.sdk_name().to_ascii_lowercase();
         sdk.starts_with("microsoft.net.sdk.web") || sdk.starts_with("microsoft.net.sdk.blazorwebassembly")
     }
+}
+
+fn has_sdk(value: &str, wanted: &str) -> bool {
+    value.split(';').any(|sdk| sdk.trim().split('/').next().is_some_and(|name| name.trim().eq_ignore_ascii_case(wanted)))
 }
 
 /// Packages that make a project a test project (test SDK, frameworks, adapters, the testing
@@ -240,5 +253,14 @@ mod tests {
         assert!(parse(r#"<Project Sdk="Microsoft.NET.Sdk"><Sdk Name="Aspire.AppHost.Sdk" Version="9.0.0" /></Project>"#).is_executable());
         assert!(!parse(r#"<Project Sdk="Microsoft.NET.Sdk.Razor"></Project>"#).is_executable());
         assert!(!parse(r#"<Project Sdk="Microsoft.NET.Sdk"></Project>"#).is_executable());
+    }
+
+    #[test]
+    fn recognises_godot_sdk_in_root_and_nested_sdk_declarations() {
+        let parse = |text: &str| ProjectInfo::parse(text, Path::new("/w/Game/Game.csproj")).unwrap();
+        assert!(parse(r#"<Project Sdk="Godot.NET.Sdk/4.4.1"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>"#).is_godot());
+        assert!(parse(r#"<Project Sdk="Microsoft.NET.Sdk; Godot.NET.Sdk/4.5.0" />"#).is_godot());
+        assert!(parse(r#"<Project Sdk="Microsoft.NET.Sdk"><Sdk Name="Godot.NET.Sdk" Version="4.5.0" /></Project>"#).is_godot());
+        assert!(!parse(r#"<Project Sdk="Microsoft.NET.Sdk" />"#).is_godot());
     }
 }
