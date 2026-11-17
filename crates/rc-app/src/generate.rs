@@ -17,6 +17,9 @@ pub enum Kind {
     Properties,
     Equality,
     Formatting,
+    Implement,
+    Override,
+    Delegate,
 }
 
 impl Kind {
@@ -26,7 +29,15 @@ impl Kind {
             Self::Properties => tr("Properties"),
             Self::Equality => tr("Equality Members"),
             Self::Formatting => tr("Formatting Members"),
+            Self::Implement => tr("Missing Members"),
+            Self::Override => tr("Overriding Members"),
+            Self::Delegate => tr("Delegating Members"),
         }
+    }
+
+    /// Members of other types (interfaces, base classes, fields' types), listed as targets.
+    pub fn uses_targets(self) -> bool {
+        matches!(self, Self::Implement | Self::Override | Self::Delegate)
     }
 
     pub fn icon(self) -> rc_kit::Ico {
@@ -34,7 +45,9 @@ impl Kind {
         match self {
             Self::Constructor => ico::CONSTRUCTOR,
             Self::Properties => ico::PROPERTY,
-            Self::Equality | Self::Formatting => ico::METHOD,
+            Self::Equality | Self::Formatting | Self::Override => ico::METHOD,
+            Self::Implement => ico::INTERFACE,
+            Self::Delegate => ico::FIELD,
         }
     }
 }
@@ -158,6 +171,15 @@ pub struct Member {
     pub selected: bool,
 }
 
+/// A member of another type to implement, override or delegate to, with its generated code.
+#[derive(Clone, Debug)]
+pub struct TargetMember {
+    pub kind: Kind,
+    pub label: String,
+    pub code: String,
+    pub selected: bool,
+}
+
 /// An existing method or constructor: its name and parameter types (without spaces).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signature {
@@ -220,6 +242,7 @@ pub struct Dialog {
     pub style: Style,
     pub kind: Kind,
     pub members: Vec<Member>,
+    pub targets: Vec<TargetMember>,
     /// Names of the type's members (fields, properties, events, methods, nested types).
     pub existing: Vec<String>,
     /// Methods and constructors of the type.
@@ -279,6 +302,7 @@ impl Dialog {
             style,
             kind: Kind::Constructor,
             members: Vec::new(),
+            targets: Vec::new(),
             existing: Vec::new(),
             methods: Vec::new(),
             choosing_kind: true,
@@ -298,6 +322,7 @@ impl Dialog {
             }
         }
         dialog.read_body(source, body);
+        dialog.targets = crate::generate_targets::collect(tree, source, node, &dialog.members, &dialog.existing);
         Some(dialog)
     }
 
@@ -386,6 +411,7 @@ impl Dialog {
             kinds.push(Kind::Equality);
         }
         kinds.push(Kind::Formatting);
+        kinds.extend([Kind::Implement, Kind::Override, Kind::Delegate]);
         kinds
     }
 
@@ -404,6 +430,7 @@ impl Dialog {
             Kind::Properties => m.field && self.property_candidate(m),
             Kind::Constructor => m.assignable && !self.backed(m),
             Kind::Equality | Kind::Formatting => !self.backed(m),
+            Kind::Implement | Kind::Override | Kind::Delegate => false,
         })
     }
 
@@ -414,6 +441,13 @@ impl Dialog {
     }
 
     fn blocks(&self) -> Result<Vec<String>, String> {
+        if self.kind.uses_targets() {
+            let code: Vec<String> = self.targets.iter().filter(|m| m.kind == self.kind && m.selected).map(|m| m.code.clone()).collect();
+            if code.is_empty() {
+                return Err(tr("Select at least one member").into());
+            }
+            return Ok(code);
+        }
         let selected: Vec<&Member> = self.candidates().filter(|(_, m)| m.selected).map(|(_, m)| m).collect();
         if selected.is_empty() && self.kind != Kind::Constructor {
             return Err(tr("Select at least one member").into());
@@ -485,6 +519,7 @@ impl Dialog {
                 let values = selected.iter().map(|m| format!("{{nameof({0})}}: {{{0}}}", m.name)).collect::<Vec<_>>().join(", ");
                 vec![format!("public override string ToString() => $\"{values}\";")]
             }
+            Kind::Implement | Kind::Override | Kind::Delegate => unreachable!(),
         })
     }
 }
@@ -723,7 +758,7 @@ mod tests {
         let source = "public record Person(string Name, int Age)\n{\n    public string? Nickname { get; init; }\n}\n";
         let mut d = dialog_at(source, "Nickname", Style::default());
         assert_eq!(d.type_kind, TypeKind::Record);
-        assert_eq!(d.kinds(), [Kind::Formatting]);
+        assert_eq!(d.kinds(), [Kind::Formatting, Kind::Implement, Kind::Override, Kind::Delegate]);
         d.kind = Kind::Formatting;
         let out = apply(source, &d);
         assert!(out.contains("public override string ToString() => $\"{nameof(Name)}: {Name}, {nameof(Age)}: {Age}, {nameof(Nickname)}: {Nickname}\";"), "{out}");
@@ -789,5 +824,49 @@ mod tests {
         let source = "interface I\n{\n    void M();\n}\n";
         let tree = parse(source);
         assert!(Dialog::from_source(source, &tree, source.find("M()").unwrap(), 1, 0, "    ", Style::default()).is_none());
+    }
+
+    const TARGETS: &str = "interface IName { string Name { get; set; } void Rename(string value); event System.EventHandler Changed; string this[int i] { get; set; } }\nclass Base { public virtual int Score() => 1; }\nclass Service { public string Format(int n) => n.ToString(); }\nclass Derived : Base, IName { private Service _service = new(); }";
+
+    #[test]
+    fn picker_offers_interface_override_and_delegate_members() {
+        let mut d = dialog_at(TARGETS, "_service", Style::default());
+        let has = |kind: Kind, label: &str| d.targets.iter().any(|m| m.kind == kind && m.label.contains(label));
+        for label in ["Rename", "Name", "Changed", "this"] {
+            assert!(has(Kind::Implement, label), "{label}");
+        }
+        assert!(has(Kind::Override, "Score"));
+        assert!(has(Kind::Delegate, "Format"));
+        for kind in [Kind::Implement, Kind::Override, Kind::Delegate] {
+            d.kind = kind;
+            let out = apply(TARGETS, &d);
+            assert!(out.contains("public"), "{kind:?}: {out}");
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a .NET SDK; run with DOTNET_BIN set to the SDK executable"]
+    fn generated_target_members_build_with_dotnet() {
+        let mut source = TARGETS.to_string();
+        for kind in [Kind::Implement, Kind::Override, Kind::Delegate] {
+            let mut d = dialog_at(&source, "_service", Style::default());
+            d.kind = kind;
+            source = apply(&source, &d);
+        }
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Generate.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup></Project>").unwrap();
+        std::fs::write(dir.path().join("Generated.cs"), source).unwrap();
+        let dotnet = std::env::var("DOTNET_BIN").unwrap_or_else(|_| "dotnet".into());
+        let output = std::process::Command::new(dotnet).args(["build", "--nologo", "--verbosity", "quiet"]).current_dir(dir.path()).env("DOTNET_CLI_TELEMETRY_OPTOUT", "1").output().unwrap();
+        assert!(output.status.success(), "{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    }
+
+    #[test]
+    fn generic_interface_arguments_are_substituted() {
+        let source = "interface IRepository<T> { T Find(T value); } class App : IRepository<string> { }";
+        let mut d = dialog_at(source, "App :", Style::default());
+        d.kind = Kind::Implement;
+        let out = apply(source, &d);
+        assert!(out.contains("string Find(string value)"), "{out}");
     }
 }

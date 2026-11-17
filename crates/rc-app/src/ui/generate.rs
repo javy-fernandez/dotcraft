@@ -14,6 +14,8 @@ enum Outcome {
     Keep,
     Close,
     Generate,
+    /// Nothing was found here: offer Roslyn's code actions instead.
+    Roslyn,
 }
 
 /// Opens the picker for the type at the caret of the active document.
@@ -33,6 +35,10 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
     match outcome {
         Outcome::Keep => app.generate = Some(dialog),
         Outcome::Close => app.focus_editor = true,
+        Outcome::Roslyn => {
+            app.focus_editor = true;
+            app.run_insight_action(rc_editor::Action::ShowIntentions, app.caret_screen.unwrap_or(pos2(200.0, 200.0)));
+        }
         Outcome::Generate => match insert(app, &dialog) {
             Ok(()) => app.focus_editor = true,
             Err(error) => {
@@ -107,20 +113,29 @@ fn kind_popup(app: &DotCraftApp, ctx: &Context, dialog: &mut Dialog) -> Outcome 
 
 /// The second step: the members to generate from, with check boxes.
 fn members_dialog(ctx: &Context, dialog: &mut Dialog) -> Outcome {
-    let rows: Vec<usize> = dialog.candidates().map(|(i, _)| i).collect();
+    let targets = dialog.kind.uses_targets();
+    let rows: Vec<usize> = if targets {
+        dialog.targets.iter().enumerate().filter(|(_, t)| t.kind == dialog.kind).map(|(i, _)| i).collect()
+    } else {
+        dialog.candidates().map(|(i, _)| i).collect()
+    };
+    fn selected(dialog: &mut Dialog, targets: bool, i: usize) -> &mut bool {
+        if targets { &mut dialog.targets[i].selected } else { &mut dialog.members[i].selected }
+    }
     arrows(ctx, &mut dialog.cursor, rows.len());
     dialog.cursor = dialog.cursor.min(rows.len().saturating_sub(1));
     let (space, all, enter) = ctx.input(|i| (i.key_pressed(Key::Space), i.modifiers.command && i.key_pressed(Key::A), i.key_pressed(Key::Enter)));
     if space && let Some(&m) = rows.get(dialog.cursor) {
-        dialog.members[m].selected ^= true;
+        *selected(dialog, targets, m) ^= true;
     }
     if all {
-        let on = !rows.iter().all(|&m| dialog.members[m].selected);
-        rows.iter().for_each(|&m| dialog.members[m].selected = on);
+        let on = !rows.iter().all(|&m| *selected(dialog, targets, m));
+        rows.iter().for_each(|&m| *selected(dialog, targets, m) = on);
     }
-    let selected = rows.iter().filter(|&&m| dialog.members[m].selected).count();
+    let chosen = rows.iter().filter(|&&m| *selected(dialog, targets, m)).count();
     // A constructor without parameters is fine; everything else needs a member.
-    let can_generate = selected > 0 || dialog.kind == Kind::Constructor;
+    let can_generate = chosen > 0 || dialog.kind == Kind::Constructor;
+    let mut roslyn = false;
     let ((ok, cancel), esc) = modal(ctx, "generate_members", 480.0, |ui| {
         hold_focus(ui, "generate_members_list");
         title(ui, dialog.kind.label());
@@ -129,17 +144,28 @@ fn members_dialog(ctx: &Context, dialog: &mut Dialog) -> Outcome {
         let p = rc_kit::pal(ui);
         egui::Frame::new().stroke(egui::Stroke::new(1.0, p.control_border)).corner_radius(6).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
             egui::ScrollArea::vertical().max_height(300.0).min_scrolled_height(120.0).auto_shrink([false, true]).show(ui, |ui| {
-                if rows.is_empty() {
+                if rows.is_empty() && targets {
+                    ui.add_space(6.0);
+                    kit::note(ui, tr("No local members found"));
+                    roslyn = kit::button(ui, Some(ico::BULB), tr("Try Roslyn code actions"), true).clicked();
+                    ui.add_space(6.0);
+                } else if rows.is_empty() {
                     ui.add_space(6.0);
                     kit::note(ui, tr("The type has no members to use"));
                     ui.add_space(6.0);
                 }
                 for (row, &m) in rows.iter().enumerate() {
-                    let member = &dialog.members[m];
-                    let icon = if member.field { ico::FIELD } else { ico::PROPERTY };
-                    if member_row(ui, row == dialog.cursor, member.selected, icon, &member.name, &member.ty) {
+                    let clicked = if targets {
+                        let target = &dialog.targets[m];
+                        member_row(ui, row == dialog.cursor, target.selected, dialog.kind.icon(), &target.label, "")
+                    } else {
+                        let member = &dialog.members[m];
+                        let icon = if member.field { ico::FIELD } else { ico::PROPERTY };
+                        member_row(ui, row == dialog.cursor, member.selected, icon, &member.name, &member.ty)
+                    };
+                    if clicked {
                         dialog.cursor = row;
-                        dialog.members[m].selected ^= true;
+                        *selected(dialog, targets, m) ^= true;
                     }
                 }
             });
@@ -147,10 +173,10 @@ fn members_dialog(ctx: &Context, dialog: &mut Dialog) -> Outcome {
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             if kit::button(ui, None, tr("Select All"), !rows.is_empty()).clicked() {
-                rows.iter().for_each(|&m| dialog.members[m].selected = true);
+                rows.iter().for_each(|&m| *selected(dialog, targets, m) = true);
             }
             if kit::button(ui, None, tr("Select None"), !rows.is_empty()).clicked() {
-                rows.iter().for_each(|&m| dialog.members[m].selected = false);
+                rows.iter().for_each(|&m| *selected(dialog, targets, m) = false);
             }
         });
         if let Some(error) = &dialog.error {
@@ -159,6 +185,9 @@ fn members_dialog(ctx: &Context, dialog: &mut Dialog) -> Outcome {
         }
         buttons(ui, tr("Generate"), can_generate)
     });
+    if roslyn {
+        return Outcome::Roslyn;
+    }
     if (ok || enter) && can_generate {
         return Outcome::Generate;
     }
