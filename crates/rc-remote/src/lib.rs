@@ -203,7 +203,16 @@ where
                 let Some(line) = line? else { break };
                 let req: Request = match serde_json::from_slice(&line) {
                     Ok(req) => req,
-                    Err(_) => continue,
+                    Err(error) => {
+                        // Answer instead of staying silent, so a client waiting for this id
+                        // (an unknown operation from a newer DotCraft, say) gets an error.
+                        let id = serde_json::from_slice::<serde_json::Value>(&line)
+                            .ok()
+                            .and_then(|value| value.get("id")?.as_u64())
+                            .unwrap_or(0);
+                        tx.send((reply(id, Err(format!("invalid request: {error}"))), false))?;
+                        continue;
+                    }
                 };
                 if req.version != PROTOCOL_VERSION {
                     tx.send((reply(req.id, Err(format!("unsupported protocol version {}", req.version))), false))?;
@@ -467,15 +476,40 @@ pub struct Client<R, W> {
     next_id: u64,
 }
 
-/// Owns one SSH or WSL agent process and its checked protocol connection.
+/// An error the agent answered for one request. The connection itself is still usable;
+/// any other error from [`Client`] means the connection is broken.
+#[derive(Debug)]
+pub struct RemoteError(pub String);
+
+impl std::fmt::Display for RemoteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for RemoteError {}
+
+/// Whether `error` came from the connection (agent gone, ssh dropped, stream out of sync)
+/// rather than from a request the agent answered with an error.
+pub fn is_connection_error(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<RemoteError>().is_none()
+}
+
+/// Bytes of the launcher's stderr kept to explain a failed or dropped connection.
+const STDERR_TAIL_BYTES: usize = 4096;
+
+/// Owns one SSH or WSL agent process and its checked protocol connection. Dropping it
+/// kills the launcher, which closes the agent's stdin; the agent then stops its processes.
 pub struct RemoteSession {
     pub client: Client<ChildStdout, ChildStdin>,
+    stderr: Arc<Mutex<Vec<u8>>>,
+    stderr_task: Option<JoinHandle<()>>,
     _child: Child,
 }
 
 impl RemoteSession {
     pub async fn connect(endpoint: &Endpoint) -> Result<Self> {
-        let mut child = endpoint.spawn()?;
+        let mut child = endpoint.spawn().context("could not start the remote launcher")?;
         let stdout = child
             .stdout
             .take()
@@ -484,15 +518,71 @@ impl RemoteSession {
             .stdin
             .take()
             .context("remote agent stdin is unavailable")?;
+        // Always drain stderr: ssh reports authentication and host key failures there, and
+        // a full pipe would block it.
+        let stderr = Arc::new(Mutex::new(Vec::new()));
+        let mut stderr_task = child
+            .stderr
+            .take()
+            .map(|pipe| tokio::spawn(keep_tail(pipe, stderr.clone())));
         let mut client = Client::new(stdout, stdin);
-        tokio::time::timeout(Duration::from_secs(10), client.handshake())
-            .await
-            .context("remote agent handshake timed out")??;
-        Ok(Self {
-            client,
-            _child: child,
+        let error = match tokio::time::timeout(Duration::from_secs(30), client.handshake()).await
+        {
+            Ok(Ok(())) => {
+                return Ok(Self {
+                    client,
+                    stderr,
+                    stderr_task,
+                    _child: child,
+                });
+            }
+            Ok(Err(error)) => error,
+            Err(_) => anyhow::anyhow!("remote agent handshake timed out"),
+        };
+        let _ = child.start_kill();
+        // ssh usually exits on its own here; give it a moment to finish its message.
+        if let Some(task) = stderr_task.as_mut() {
+            let _ = tokio::time::timeout(Duration::from_secs(1), task).await;
+        }
+        let detail = tail_text(&stderr);
+        Err(if detail.is_empty() {
+            error
+        } else {
+            anyhow::anyhow!("{error}\n{detail}")
         })
     }
+
+    /// The last lines ssh or wsl.exe wrote to stderr, to explain a dropped connection.
+    pub fn stderr_tail(&self) -> String {
+        tail_text(&self.stderr)
+    }
+}
+
+impl Drop for RemoteSession {
+    fn drop(&mut self) {
+        if let Some(task) = &self.stderr_task {
+            task.abort();
+        }
+    }
+}
+
+async fn keep_tail<R: AsyncRead + Unpin>(mut pipe: R, tail: Arc<Mutex<Vec<u8>>>) {
+    let mut chunk = [0u8; 1024];
+    while let Ok(count) = pipe.read(&mut chunk).await {
+        if count == 0 {
+            return;
+        }
+        let mut tail = tail.lock().unwrap_or_else(|e| e.into_inner());
+        tail.extend_from_slice(&chunk[..count]);
+        let excess = tail.len().saturating_sub(STDERR_TAIL_BYTES);
+        tail.drain(..excess);
+    }
+}
+
+fn tail_text(tail: &Mutex<Vec<u8>>) -> String {
+    String::from_utf8_lossy(&tail.lock().unwrap_or_else(|e| e.into_inner()))
+        .trim()
+        .to_string()
 }
 
 #[cfg(test)]
@@ -798,7 +888,9 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> Client<R, W> {
         if response.version != PROTOCOL_VERSION || response.id != id {
             bail!("unexpected remote response");
         }
-        response.result.map_err(anyhow::Error::msg)
+        response
+            .result
+            .map_err(|message| anyhow::Error::new(RemoteError(message)))
     }
 
     pub async fn handshake(&mut self) -> Result<()> {
@@ -846,6 +938,145 @@ mod limits_tests {
         .unwrap_err();
         assert!(error.to_string().contains("output exceeds"));
         assert!(start.elapsed() < Duration::from_secs(4));
+    }
+}
+
+#[cfg(test)]
+mod framing_tests {
+    use super::*;
+    use tokio::io::{DuplexStream, Lines, ReadHalf, WriteHalf};
+
+    type Wire = (
+        Lines<BufReader<ReadHalf<DuplexStream>>>,
+        WriteHalf<DuplexStream>,
+        JoinHandle<Result<()>>,
+    );
+
+    fn agent() -> Wire {
+        let (client, server) = tokio::io::duplex(64 * 1024);
+        let (read, write) = tokio::io::split(client);
+        let (server_read, server_write) = tokio::io::split(server);
+        let task = tokio::spawn(serve(server_read, server_write));
+        (BufReader::new(read).lines(), write, task)
+    }
+
+    async fn response(lines: &mut Lines<BufReader<ReadHalf<DuplexStream>>>) -> Response {
+        let line = tokio::time::timeout(Duration::from_secs(5), lines.next_line())
+            .await
+            .expect("the agent did not answer")
+            .unwrap()
+            .expect("the agent closed the stream");
+        serde_json::from_str(&line).unwrap()
+    }
+
+    #[tokio::test]
+    async fn requests_batched_in_one_write_are_all_answered() {
+        let (mut lines, mut write, task) = agent();
+        write
+            .write_all(
+                b"{\"version\":1,\"id\":1,\"operation\":\"hello\"}\n\
+                  {\"version\":1,\"id\":2,\"operation\":\"hello\"}\r\n",
+            )
+            .await
+            .unwrap();
+        let mut ids = vec![response(&mut lines).await.id, response(&mut lines).await.id];
+        ids.sort();
+        assert_eq!(ids, [1, 2]);
+        write.shutdown().await.unwrap();
+        task.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_request_split_across_writes_is_reassembled() {
+        let (mut lines, mut write, task) = agent();
+        for byte in b"{\"version\":1,\"id\":3,\"operation\":\"hello\"}\n" {
+            write.write_all(&[*byte]).await.unwrap();
+            write.flush().await.unwrap();
+        }
+        let reply = response(&mut lines).await;
+        assert_eq!(reply.id, 3);
+        assert!(matches!(reply.result, Ok(Value::Hello { version: 1 })));
+        write.shutdown().await.unwrap();
+        task.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn malformed_and_unknown_requests_get_an_error_and_the_agent_keeps_serving() {
+        let (mut lines, mut write, task) = agent();
+        write.write_all(b"not json\n").await.unwrap();
+        let reply = response(&mut lines).await;
+        assert_eq!(reply.id, 0);
+        assert!(reply.result.is_err());
+        write
+            .write_all(b"{\"version\":1,\"id\":9,\"operation\":\"teleport\"}\n")
+            .await
+            .unwrap();
+        let reply = response(&mut lines).await;
+        assert_eq!(reply.id, 9);
+        assert!(reply.result.unwrap_err().contains("invalid request"));
+        write
+            .write_all(b"{\"version\":1,\"id\":10,\"operation\":\"hello\"}\n")
+            .await
+            .unwrap();
+        assert!(response(&mut lines).await.result.is_ok());
+        write.shutdown().await.unwrap();
+        task.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_request_cut_off_by_the_end_of_the_stream_is_an_error() {
+        let (_lines, mut write, task) = agent();
+        write
+            .write_all(b"{\"version\":1,\"id\":1,\"operation\":")
+            .await
+            .unwrap();
+        write.shutdown().await.unwrap();
+        let error = task.await.unwrap().unwrap_err();
+        assert!(error.to_string().contains("truncated"));
+    }
+
+    #[tokio::test]
+    async fn agent_errors_and_connection_errors_are_told_apart() {
+        let (client, server) = tokio::io::duplex(64 * 1024);
+        let (read, write) = tokio::io::split(client);
+        let (server_read, server_write) = tokio::io::split(server);
+        let task = tokio::spawn(serve(server_read, server_write));
+        let mut client = Client::new(read, write);
+        let missing = std::env::temp_dir().join("dotcraft-remote-missing/file.txt");
+        let error = client
+            .request(Operation::Read {
+                path: missing.display().to_string(),
+            })
+            .await
+            .unwrap_err();
+        assert!(!is_connection_error(&error));
+        task.abort();
+        let _ = task.await;
+        let error = client.request(Operation::Hello).await.unwrap_err();
+        assert!(is_connection_error(&error));
+    }
+}
+
+#[cfg(test)]
+mod session_tests {
+    use super::*;
+
+    /// Needs the `ssh` client: a failed connection reports what ssh said, quickly.
+    #[ignore]
+    #[tokio::test]
+    async fn a_failed_ssh_connection_explains_itself() {
+        let start = std::time::Instant::now();
+        let Err(error) = RemoteSession::connect(&Endpoint::Ssh {
+            host: "dotcraft-remote-test.invalid".into(),
+            agent: "dotcraft-remote-agent".into(),
+        })
+        .await
+        else {
+            panic!("connected to an invalid host")
+        };
+        let text = error.to_string();
+        assert!(text.contains("dotcraft-remote-test.invalid"), "{text}");
+        assert!(start.elapsed() < Duration::from_secs(20));
     }
 }
 
