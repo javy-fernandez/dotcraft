@@ -57,7 +57,7 @@ pub struct Settings {
     /// Explicit path to the Roslyn language server DLL or executable.
     pub roslyn_path: Option<PathBuf>,
     pub netcoredbg_path: Option<PathBuf>,
-    /// Explicit path to a Godot 4 .NET editor (otherwise searched on PATH).
+    /// Explicit path to a Godot 4 .NET editor (otherwise GODOT4/GODOT, PATH and install folders).
     pub godot_path: Option<PathBuf>,
     /// Most recent first.
     pub recent_workspaces: Vec<PathBuf>,
