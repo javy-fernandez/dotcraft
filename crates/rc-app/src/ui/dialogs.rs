@@ -300,6 +300,8 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
                         ui.end_row();
                         ui.label("");
                         ui.checkbox(&mut draft.show_inlay_hints, tr("Show inlay hints"));
+                        ui.end_row();
+                        ui.label("");
                         ui.checkbox(&mut draft.show_debug_inline_values, tr("Show inline variable values while debugging"));
                         ui.end_row();
                         ui.label("");
