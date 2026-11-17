@@ -884,7 +884,7 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
         } else if let Some(icon) = state.gutter_icons.get(&l) {
             let ic = match icon {
                 GutterIcon::RunTest => ico::GUTTER_RUN,
-                GutterIcon::RunBenchmark => ico::TW_MONITORING,
+                GutterIcon::RunBenchmark => ico::GUTTER_RUN,
                 GutterIcon::TestPassed => ico::GUTTER_RUN_SUCCESS,
                 GutterIcon::TestFailed => ico::GUTTER_RUN_FAILED,
                 GutterIcon::RunApp => ico::GUTTER_RUN,
