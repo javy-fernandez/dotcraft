@@ -99,6 +99,12 @@ Right-click the line numbers (or use **Git › Annotate with Git Blame**) to sho
   </tr>
 </table>
 
+### XAML preview
+
+`.axaml` files, and `.xaml` files of Avalonia projects, open beside a live preview, switched with the Editor / Editor and Preview / Preview buttons at the top right as for Markdown. DotCraft runs Avalonia's own previewer (`Avalonia.Designer.HostApp` from the project's Avalonia package, the one Rider and the Avalonia extensions use) inside the built application: build the project once (the preview has a Build button), then the view follows your typing. XAML errors show under the view with their line, and in the editor and the Problems window. The bar under the preview zooms (fit, 100%, in and out) and offers a build when the code changed since the last one; the previewer restarts by itself after a build. XAML in a class library is previewed inside an application of the solution that references it.
+
+.NET MAUI, WPF and WinUI have no previewer outside Visual Studio's designers, so their XAML files show a note instead: run the app to see them.
+
 ### Unity projects
 
 Open the folder of a Unity project (the one with `Assets` and `ProjectSettings`) with **File › Open…**. DotCraft opens the `.sln` Unity generated, and the C# code intelligence uses Unity's generated projects. Unity writes those files only for the editors of its IDE packages: if they are missing or out of date, choose Visual Studio or Visual Studio Code in Unity's **Preferences › External Tools**, click **Regenerate project files**, then choose DotCraft again. DotCraft reminds you of this when a Unity folder has no solution or projects yet.

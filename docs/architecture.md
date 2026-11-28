@@ -14,7 +14,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | `rc-editor` | The code editor widget (egui), keymaps (`keymap::Action`), code-insight popups. |
 | `rc-lsp` | JSON-RPC/LSP client and the Roslyn adapter. |
 | `rc-dap` | DAP client and netcoredbg session; which evaluations may run code in the program (`side_effects`). |
-| `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX, NuGet; Aspire app hosts (`aspire`: IDE session endpoint, resource service client). |
+| `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX, NuGet; Aspire app hosts (`aspire`: IDE session endpoint, resource service client); the Avalonia XAML previewer (`avalonia_preview`). |
 | `rc-vcs` | Git through the `git` CLI; pull requests on GitHub and Azure DevOps (REST, tokens in the OS keychain). |
 | `rc-search` | File index, fuzzy search, find/replace in files. |
 | `rc-term` | Terminal emulator (alacritty_terminal + portable-pty) rendered in egui. |
@@ -52,6 +52,16 @@ or on the shared tokio runtime and reports back through channels that wake the U
 - **Third-party code.** Parts of the HTTP client, EditorConfig, SQLite browser, egui
   menu, the editor tab docking guides and the title bar project glow are adapted from
   CrabCraft (MIT); its notice is in `docs/third-party/`.
+- **XAML preview.** `rc_dotnet::avalonia_preview` speaks Avalonia's remote designer protocol
+  (`tcp-bson`: an `i32` length, the message GUID, a BSON body; the small BSON subset is
+  hand-written in `bson.rs`). DotCraft listens on a local port and starts
+  `dotnet exec --runtimeconfig … --depsfile … Avalonia.Designer.HostApp.dll --transport
+  tcp-bson://127.0.0.1:<port>/ --method avalonia-remote <app.dll>`, with the paths from
+  `dotnet msbuild -getProperty` (`AvaloniaPreviewerNetCoreToolPath` comes from Avalonia's
+  props). `rc-app/src/xaml_preview.rs` keeps one host per previewed file: restarted after a
+  build or a crash, stopped when out of sight for two minutes, killed when the file closes.
+  Frames are acknowledged only when the UI takes them, so a hidden or animated preview never
+  queues frames.
 - **Spelling.** Typo checks use the `spellbook` crate (MPL-2.0, unmodified, source on
   crates.io) with Hunspell `.aff`/`.dic` pairs found in `<data folder>/dictionaries`,
   `DOTCRAFT_DICTIONARIES` and the system folders (`~/Library/Spelling`, `/usr/share/hunspell`…).
