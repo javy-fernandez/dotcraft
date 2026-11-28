@@ -38,6 +38,8 @@ pub struct DockerServices {
     pub logs: String,
     pub error: Option<String>,
     pub busy: bool,
+    /// The Docker section of the Services window is expanded.
+    pub open: bool,
     pub loaded: bool,
     inbox: Inbox<Event>,
     task: Option<tokio::task::JoinHandle<()>>,
@@ -48,7 +50,7 @@ impl DockerServices {
     pub fn new(waker: Waker) -> Self {
         Self {
             containers: Vec::new(), selected: None, logs: String::new(), error: None,
-            busy: false, loaded: false, inbox: Inbox::new(waker), task: None,
+            busy: false, open: true, loaded: false, inbox: Inbox::new(waker), task: None,
             docker: docker_path(),
         }
     }

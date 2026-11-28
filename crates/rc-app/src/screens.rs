@@ -944,6 +944,88 @@ fn screens_show_all_files() {
     h.render().unwrap().save(out.join("show-all-files-dark.png")).unwrap();
 }
 
+/// An Aspire solution folder (app host, API, web front end) whose projects are only read
+/// statically, and sample resources as its app host's resource service reports them.
+pub fn aspire_sample(root: &Path) -> Vec<rc_dotnet::aspire::Resource> {
+    use rc_dotnet::aspire::resources::{ResourceCommand, ResourceProperty, ResourceUrl};
+    let write = |rel: &str, text: &str| {
+        let p = root.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
+    };
+    write("Shop.AppHost/Shop.AppHost.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"Aspire.Hosting.AppHost\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>\n");
+    write("Shop.AppHost/AppHost.cs", "var builder = DistributedApplication.CreateBuilder(args);\n\nvar cache = builder.AddRedis(\"cache\");\n\nvar api = builder.AddDotnetProject(\"apiservice\", \"../Shop.ApiService/Shop.ApiService.csproj\")\n    .WithHttpHealthCheck(\"/health\");\n\nbuilder.AddDotnetProject(\"webfrontend\", \"../Shop.Web/Shop.Web.csproj\")\n    .WithExternalHttpEndpoints()\n    .WithReference(cache)\n    .WithReference(api)\n    .WaitFor(api);\n\nbuilder.Build().Run();\n");
+    write("Shop.AppHost/Properties/launchSettings.json", "{ \"profiles\": { \"https\": { \"commandName\": \"Project\", \"applicationUrl\": \"https://localhost:17175\" } } }");
+    write("Shop.ApiService/Shop.ApiService.csproj", "<Project Sdk=\"Microsoft.NET.Sdk.Web\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>\n");
+    write("Shop.Web/Shop.Web.csproj", "<Project Sdk=\"Microsoft.NET.Sdk.Web\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>\n");
+    let command = |name: &str, enabled: bool| ResourceCommand { name: name.into(), display_name: name.into(), enabled, ..Default::default() };
+    let url = |u: &str| ResourceUrl { url: u.into(), ..Default::default() };
+    let project = |name: &str, display: &str, file: &str, urls: Vec<ResourceUrl>, health: rc_dotnet::aspire::Health| rc_dotnet::aspire::Resource {
+        name: name.into(),
+        resource_type: "Project".into(),
+        display_name: display.into(),
+        state: Some("Running".into()),
+        urls,
+        commands: vec![command("resource-start", false), command("resource-stop", true), command("resource-restart", true)],
+        properties: vec![ResourceProperty { name: "project.path".into(), value: root.join(file).display().to_string(), ..Default::default() }],
+        health: Some(health),
+        ..Default::default()
+    };
+    vec![
+        rc_dotnet::aspire::Resource {
+            name: "cache-qzmkx2".into(),
+            resource_type: "Container".into(),
+            display_name: "cache".into(),
+            state: Some("Running".into()),
+            urls: vec![url("tcp://localhost:6379")],
+            commands: vec![command("resource-stop", true), command("resource-restart", true)],
+            health: Some(rc_dotnet::aspire::Health::Healthy),
+            ..Default::default()
+        },
+        project("apiservice-hvbaw3", "apiservice", "Shop.ApiService/Shop.ApiService.csproj", vec![url("https://localhost:7426"), url("http://localhost:5500")], rc_dotnet::aspire::Health::Healthy),
+        project("webfrontend-c8kd1p", "webfrontend", "Shop.Web/Shop.Web.csproj", vec![url("https://localhost:7166")], rc_dotnet::aspire::Health::Unhealthy),
+    ]
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/aspire-services-*.png"]
+fn screens_aspire() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(home.path()).unwrap().join("Shop");
+        let resources = aspire_sample(&root);
+        let mut app = test_app(home.path(), dark);
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&root);
+        app.open_file(&root.join("Shop.AppHost/AppHost.cs"));
+        let config = app.runner.configs.iter().find(|c| crate::aspire::is_app_host(c)).cloned().expect("app host configuration");
+        app.runner.selected = app.runner.configs.iter().position(|c| *c == config).unwrap();
+        app.aspire.demo(&config, resources, "https://localhost:17175/login?t=5b1c0e7a9d2f4b3c");
+        app.aspire.demo_logs("apiservice-hvbaw3", &[
+            "\x1b[32minfo\x1b[0m: Microsoft.Hosting.Lifetime[14]",
+            "      Now listening on: https://localhost:7426",
+            "\x1b[32minfo\x1b[0m: Microsoft.Hosting.Lifetime[0]",
+            "      Application started. Press Ctrl+C to shut down.",
+            "\x1b[32minfo\x1b[0m: Microsoft.AspNetCore.Hosting.Diagnostics[1]",
+            "      Request starting HTTP/2 GET https://localhost:7426/weatherforecast",
+        ]);
+        app.dock.show(crate::toolwindow::ToolWindow::Services);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Services, 430.0);
+        let mut h = harness(app, vec2(1440.0, 900.0));
+        h.run_steps(6);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("aspire-services-{suffix}.png"))).unwrap();
+        if dark {
+            h.state_mut().aspire.selection = Some(crate::aspire::Selection::Host);
+            h.run_steps(4);
+            h.render().unwrap().save(out.join("aspire-host-dark.png")).unwrap();
+        }
+    }
+}
+
 #[test]
 #[ignore = "Requires a GPU; writes target/snapshots/update-notice-dark.png"]
 fn screens_update_notice() {

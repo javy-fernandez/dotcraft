@@ -147,6 +147,8 @@ pub struct DotCraftApp {
     pub runner: Runner,
     user_secrets: crate::user_secrets::UserSecrets,
     pub docker_services: crate::docker_services::DockerServices,
+    /// The Aspire app host started from the IDE and its resources (Services window).
+    pub aspire: crate::aspire::Aspire,
     pub docker_runs: crate::docker_runs::DockerRuns,
     pub continuous: crate::continuous_testing::ContinuousTesting,
     pub benchmarks: crate::benchmarks::Benchmarks,
@@ -284,6 +286,7 @@ impl DotCraftApp {
             runner: Runner::new(waker.clone()),
             user_secrets: crate::user_secrets::UserSecrets::new(waker.clone()),
             docker_services: crate::docker_services::DockerServices::new(waker.clone()),
+            aspire: crate::aspire::Aspire::new(waker.clone()),
             docker_runs: crate::docker_runs::DockerRuns::new(waker.clone()),
             continuous: crate::continuous_testing::ContinuousTesting::new(waker.clone()),
             benchmarks: crate::benchmarks::Benchmarks::new(waker.clone()),
@@ -644,11 +647,83 @@ impl DotCraftApp {
                 self.docker_runs.start(config);
                 self.dock.show(ToolWindow::Run);
             }
+            Some(config) if crate::aspire::is_app_host(&config) => {
+                self.docker_runs.stop();
+                self.docker_runs.active = false;
+                let Some(mut request) = self.runner.request_for(&config) else { return };
+                match self.aspire.start(&config, &mut request, false) {
+                    Ok(()) => {
+                        let outs = self.runner.run_app_with(config, Some(request));
+                        crate::ui::run_windows::handle_outputs(self, outs);
+                    }
+                    Err(error) => self.notify(error, true),
+                }
+            }
             _ => {
                 self.docker_runs.stop();
                 self.docker_runs.active = false;
                 let outs = self.runner.run_selected();
                 crate::ui::run_windows::handle_outputs(self, outs);
+            }
+        }
+    }
+
+    /// The login URL of the running Aspire app host's dashboard.
+    pub fn aspire_dashboard(&self) -> Option<String> {
+        self.aspire.host.as_ref().filter(|h| h.running).and_then(|h| h.dashboard.clone())
+    }
+
+    /// Debugs an Aspire app host and, through its orchestrator, every .NET project it runs.
+    fn debug_app_host(&mut self, config: RunConfig) {
+        let Some(mut request) = self.runner.request_for(&config) else { return };
+        if let Err(error) = self.aspire.start(&config, &mut request, true) {
+            self.notify(error, true);
+            return;
+        }
+        let dotnet = dotnet_path(&self.settings);
+        let outs = self.debugger.start(config, Some(request), &dotnet, self.settings.netcoredbg_path.as_deref(), &self.docs);
+        self.handle_debug(outs);
+    }
+
+    /// Follows the app host (its run or debug session) and does what the orchestrator asks.
+    pub(crate) fn update_aspire(&mut self) {
+        if let Some(host) = &mut self.aspire.host
+            && host.running
+            && host.tracked
+        {
+            let ended = if host.debug {
+                if host.debug_session.is_none() && self.debugger.session.is_some() && self.debugger.name == host.config.name && !self.debugger.session_ended(self.debugger.session_id) {
+                    host.debug_session = Some(self.debugger.session_id);
+                }
+                host.dashboard = host.dashboard.take().or_else(|| self.debugger.dashboard.clone());
+                match host.debug_session {
+                    Some(id) => self.debugger.session_ended(id),
+                    None => self.debugger.downloading.is_none() && !self.debugger.active(),
+                }
+            } else {
+                let run = self.runner.runs.iter().find(|r| r.config == host.config);
+                if let Some(url) = run.and_then(|r| r.urls.first()).filter(|u| u.contains("/login?t=")) {
+                    host.dashboard = Some(url.clone());
+                }
+                !run.is_some_and(|r| r.running())
+            };
+            if ended {
+                // Services the orchestrator asked for do not outlive their app host.
+                if host.debug {
+                    self.debugger.stop_aspire_services();
+                }
+                self.aspire.host_finished();
+            }
+        }
+        let dotnet = dotnet_path(&self.settings);
+        for out in self.aspire.update(&dotnet) {
+            match out {
+                crate::aspire::AspireOutput::DebugService { id, name, request, notifier } => {
+                    let outs = self.debugger.start_aspire_service(id, name, *request, notifier.0, &dotnet, self.settings.netcoredbg_path.as_deref(), &self.docs);
+                    self.handle_debug(outs);
+                }
+                crate::aspire::AspireOutput::StopService(id) => self.debugger.stop_aspire_service(&id),
+                crate::aspire::AspireOutput::Notify(message, error) => self.notify(message, error),
             }
         }
     }
@@ -731,6 +806,7 @@ impl DotCraftApp {
         self.insight.stop();
         self.user_secrets.cancel();
         self.docker_runs.clear();
+        self.aspire.clear();
         self.continuous.reset();
         self.benchmarks.reset();
         self.godot_debug_build = None;
@@ -1446,6 +1522,10 @@ impl DotCraftApp {
                     s.continue_();
                 }
             }
+            Action::OpenAspireDashboard => match self.aspire_dashboard() {
+                Some(url) => crate::ui::run_windows::open_url(&url),
+                None => self.notify(tr("Run or debug an Aspire app host to open its dashboard"), false),
+            },
             Action::AttachProcess => {
                 self.dialog = Some(Dialog::AttachProcess { pid: String::new(), focus: true });
             }
@@ -1472,6 +1552,7 @@ impl DotCraftApp {
                     Some(RunConfig { kind: ConfigKind::Godot { editor: true, .. }, .. }) => {
                         self.notify(tr("Choose a Godot game or scene configuration to debug"), false);
                     }
+                    Some(config) if crate::aspire::is_app_host(&config) => self.debug_app_host(config),
                     Some(config) => {
                         let dotnet = dotnet_path(&self.settings);
                         let request = self.runner.request_for(&config);
@@ -2304,6 +2385,7 @@ impl eframe::App for DotCraftApp {
         }
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
+        self.update_aspire();
         for (_, ev) in self.terminals.poll() {
             if let rc_term::SessionEvent::Clipboard(text) = ev {
                 ctx.copy_text(text);

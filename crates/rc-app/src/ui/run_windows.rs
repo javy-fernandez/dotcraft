@@ -239,10 +239,12 @@ pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
     let active = app.runner.active_run;
     let running = app.runner.runs.get(active).is_some_and(|r| r.running());
     let url = app.runner.runs.get(active).and_then(|r| r.urls.first().cloned());
+    // An Aspire app host's link is its dashboard (the login URL it printed).
+    let aspire = app.runner.runs.get(active).is_some_and(|r| crate::aspire::is_app_host(&r.config));
     let actions = [
         (ico::RERUN, tr("Rerun"), !app.runner.runs.is_empty()),
         (ico::STOP, tr("Stop"), running),
-        (ico::EXTERNAL_LINK, tr("Open in Browser"), url.is_some()),
+        (ico::EXTERNAL_LINK, if aspire { tr("Open Dashboard") } else { tr("Open in Browser") }, url.is_some() && (running || !aspire)),
         (ico::SETTINGS, tr("Edit Run Configuration…"), !app.runner.configs.is_empty()),
     ];
     match header(ui, tr("Run"), &actions) {
@@ -251,8 +253,8 @@ pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
                 && let Some(i) = app.runner.configs.iter().position(|c| *c == cfg)
             {
                 app.runner.selected = i;
-                let outs = app.runner.run_selected();
-                handle_outputs(app, outs);
+                // Through the app: an Aspire app host is started with its endpoints again.
+                app.run_selected_configuration();
             }
         }
         Some(1) => {

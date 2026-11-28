@@ -1,0 +1,28 @@
+# .NET Aspire: run configurations, Services window, multi-process debugging. Import: python3 scripts/i18n_tsv.py rc-app scripts/i18n/aspire.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Aspire	Aspire	Aspire	Aspire	Aspire	Aspire	Aspire	Aspire
+Open Aspire Dashboard	Abrir panel de Aspire	Ouvrir le tableau de bord Aspire	Abrir painel do Aspire	Aspire-Dashboard öffnen	Otwórz pulpit Aspire	打开 Aspire 仪表板	Aspire ダッシュボードを開く
+Open Dashboard	Abrir panel	Ouvrir le tableau de bord	Abrir painel	Dashboard öffnen	Otwórz pulpit	打开仪表板	ダッシュボードを開く
+Run or debug an Aspire app host to open its dashboard	Ejecuta o depura un app host de Aspire para abrir su panel	Exécutez ou déboguez un hôte d'application Aspire pour ouvrir son tableau de bord	Execute ou depure um app host do Aspire para abrir o painel	Führen Sie einen Aspire-App-Host aus oder debuggen Sie ihn, um sein Dashboard zu öffnen	Uruchom lub debuguj host aplikacji Aspire, aby otworzyć jego pulpit	运行或调试 Aspire 应用主机以打开其仪表板	ダッシュボードを開くには Aspire のアプリ ホストを実行またはデバッグしてください
+Could not start the Aspire session endpoint: {error}	No se pudo iniciar el endpoint de sesión de Aspire: {error}	Impossible de démarrer le point de terminaison de session Aspire : {error}	Não foi possível iniciar o endpoint de sessão do Aspire: {error}	Der Aspire-Sitzungsendpunkt konnte nicht gestartet werden: {error}	Nie można uruchomić punktu końcowego sesji Aspire: {error}	无法启动 Aspire 会话终结点：{error}	Aspire のセッション エンドポイントを開始できませんでした: {error}
+netcoredbg or the .NET SDK is missing: the service cannot be debugged	Falta netcoredbg o el SDK de .NET: no se puede depurar el servicio	netcoredbg ou le SDK .NET est introuvable : le service ne peut pas être débogué	netcoredbg ou o SDK do .NET não foi encontrado: o serviço não pode ser depurado	netcoredbg oder das .NET SDK fehlt: Der Dienst kann nicht debuggt werden	Brak netcoredbg lub zestawu .NET SDK: nie można debugować usługi	缺少 netcoredbg 或 .NET SDK：无法调试该服务	netcoredbg または .NET SDK が見つからないため、サービスをデバッグできません
+Run or debug the app host to see its resources here.	Ejecuta o depura el app host para ver aquí sus recursos.	Exécutez ou déboguez l'hôte d'application pour voir ses ressources ici.	Execute ou depure o app host para ver os recursos aqui.	Führen Sie den App-Host aus oder debuggen Sie ihn, um hier seine Ressourcen zu sehen.	Uruchom lub debuguj host aplikacji, aby zobaczyć tu jego zasoby.	运行或调试应用主机以在此查看其资源。	アプリ ホストを実行またはデバッグすると、ここにリソースが表示されます。
+Waiting for the app host's resource service…	Esperando al servicio de recursos del app host…	En attente du service de ressources de l'hôte d'application…	Aguardando o serviço de recursos do app host…	Warten auf den Ressourcendienst des App-Hosts…	Oczekiwanie na usługę zasobów hosta aplikacji…	正在等待应用主机的资源服务…	アプリ ホストのリソース サービスを待機しています…
+{count} resources	{count} recursos	{count} ressources	{count} recursos	{count} Ressourcen	Zasoby: {count}	{count} 个资源	{count} 個のリソース
+Every .NET project the app host starts runs under the debugger in its own Debug tab.	Cada proyecto .NET que inicia el app host se ejecuta con el depurador en su propia pestaña de Depuración.	Chaque projet .NET démarré par l'hôte d'application s'exécute sous le débogueur dans son propre onglet Débogage.	Cada projeto .NET iniciado pelo app host é executado no depurador em sua própria guia de Depuração.	Jedes .NET-Projekt, das der App-Host startet, läuft im Debugger in einem eigenen Debug-Tab.	Każdy projekt .NET uruchamiany przez host aplikacji działa w debugerze na własnej karcie Debugowanie.	应用主机启动的每个 .NET 项目都在调试器下运行，并有自己的调试选项卡。	アプリ ホストが起動する各 .NET プロジェクトは、それぞれのデバッグ タブでデバッガーの下で実行されます。
+The resource is no longer running.	El recurso ya no se está ejecutando.	La ressource ne s'exécute plus.	O recurso não está mais em execução.	Die Ressource wird nicht mehr ausgeführt.	Zasób nie jest już uruchomiony.	该资源已不再运行。	このリソースは実行されていません。
+Debugging	Depurando	Débogage en cours	Depurando	Wird debuggt	Debugowanie	正在调试	デバッグ中
+Not started	No iniciado	Non démarré	Não iniciado	Nicht gestartet	Nie uruchomiono	未启动	未開始
+Container	Contenedor	Conteneur	Contêiner	Container	Kontener	容器	コンテナー
+Executable	Ejecutable	Exécutable	Executável	Ausführbare Datei	Plik wykonywalny	可执行文件	実行可能ファイル
+Parameter	Parámetro	Paramètre	Parâmetro	Parameter	Parametr	参数	パラメーター
+Unknown	Desconocido	Inconnu	Desconhecido	Unbekannt	Nieznany	未知	不明
+Waiting	En espera	En attente	Aguardando	Wartend	Oczekiwanie	等待中	待機中
+Stopping…	Deteniendo…	Arrêt…	Parando…	Wird beendet…	Zatrzymywanie…	正在停止…	停止しています…
+Finished	Finalizado	Terminé	Concluído	Beendet	Zakończono	已完成	終了
+Failed to start	Error al iniciar	Échec du démarrage	Falha ao iniciar	Start fehlgeschlagen	Nie udało się uruchomić	启动失败	開始に失敗しました
+Container runtime unhealthy	Runtime de contenedores no disponible	Runtime de conteneurs défaillant	Runtime de contêiner com problemas	Container-Runtime fehlerhaft	Środowisko kontenerów nie działa poprawnie	容器运行时不正常	コンテナー ランタイムが異常です
+Hidden	Oculto	Masqué	Oculto	Ausgeblendet	Ukryty	已隐藏	非表示
+Unhealthy	Con errores	Défaillant	Com problemas	Fehlerhaft	W złej kondycji	不正常	異常
+Degraded	Degradado	Dégradé	Degradado	Beeinträchtigt	Obniżona sprawność	已降级	低下
+Start	Iniciar	Démarrer	Iniciar	Starten	Uruchom	启动	開始

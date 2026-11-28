@@ -11,6 +11,7 @@ mod monitor;
 mod update;
 mod convert;
 mod debugger;
+mod aspire;
 mod user_secrets;
 mod docker_services;
 mod dependency_diagram;
@@ -40,6 +41,8 @@ mod shelves_tests;
 mod runner_tests;
 #[cfg(test)]
 mod debugger_tests;
+#[cfg(test)]
+mod aspire_tests;
 #[cfg(test)]
 mod insight_tests;
 #[cfg(test)]

@@ -11,8 +11,8 @@ use std::time::Instant;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ConfigKind {
-    /// An executable project, with an optional launch profile.
-    App { project: PathBuf, profile: Option<String>, web: bool },
+    /// An executable project, with an optional launch profile; `aspire` for app hosts.
+    App { project: PathBuf, profile: Option<String>, web: bool, aspire: bool },
     /// A Godot project, its editor, or one scene.
     Godot { project_root: PathBuf, scene: Option<PathBuf>, editor: bool },
     /// Every test of a solution or test project.
@@ -32,6 +32,7 @@ pub struct RunConfig {
 impl RunConfig {
     pub fn icon(&self) -> rc_kit::Ico {
         match &self.kind {
+            ConfigKind::App { aspire: true, .. } => rc_kit::ico::CONFIG_ASPIRE,
             ConfigKind::App { web: true, .. } => rc_kit::ico::CONFIG_WEB,
             ConfigKind::App { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Godot { editor: true, .. } => rc_kit::ico::EDIT,
@@ -230,10 +231,10 @@ impl Runner {
                 .map(|s| s.profiles.iter().filter(|p| p.command_name == "Project").map(|p| p.name.clone()).collect())
                 .unwrap_or_default();
             if profiles.len() <= 1 {
-                self.configs.push(RunConfig { name: info.name.clone(), kind: ConfigKind::App { project: path.clone(), profile: profiles.into_iter().next(), web: info.is_web() } });
+                self.configs.push(RunConfig { name: info.name.clone(), kind: ConfigKind::App { project: path.clone(), profile: profiles.into_iter().next(), web: info.is_web(), aspire: info.aspire_host } });
             } else {
                 for p in profiles {
-                    self.configs.push(RunConfig { name: format!("{}: {p}", info.name), kind: ConfigKind::App { project: path.clone(), profile: Some(p), web: info.is_web() } });
+                    self.configs.push(RunConfig { name: format!("{}: {p}", info.name), kind: ConfigKind::App { project: path.clone(), profile: Some(p), web: info.is_web(), aspire: info.aspire_host } });
                 }
             }
         }
@@ -521,7 +522,7 @@ impl Runner {
 
     /// What to run for an application configuration, with the user's edits applied.
     pub fn request_for(&self, cfg: &RunConfig) -> Option<RunRequest> {
-        let ConfigKind::App { project, profile, web } = &cfg.kind else { return None };
+        let ConfigKind::App { project, profile, web, .. } = &cfg.kind else { return None };
         let mut req = RunRequest::new(project);
         req.launch_profile = profile.clone();
         // Web apps run under `dotnet watch` by default: saving a view refreshes the browser.
@@ -544,6 +545,12 @@ impl Runner {
     }
 
     fn run_app(&mut self, cfg: RunConfig) -> Vec<RunnerOutput> {
+        self.run_app_with(cfg, None)
+    }
+
+    /// Runs an application configuration; `request` replaces the configuration's (an Aspire
+    /// app host started with the IDE's endpoints).
+    pub fn run_app_with(&mut self, cfg: RunConfig, request: Option<RunRequest>) -> Vec<RunnerOutput> {
         let dotnet = match self.dotnet() {
             Ok(d) => d,
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
@@ -555,7 +562,7 @@ impl Runner {
                 h.stop();
             }
         }
-        let Some(req) = self.request_for(&cfg) else { return Vec::new() };
+        let Some(req) = request.or_else(|| self.request_for(&cfg)) else { return Vec::new() };
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
@@ -831,7 +838,15 @@ impl Runner {
                         }
                         r.urls = plan.urls.clone();
                     }
-                    RunEvent::Output(line) => r.console.line(&line),
+                    RunEvent::Output(line) => {
+                        // An Aspire app host prints its dashboard login URL: "Open in Browser".
+                        if matches!(r.config.kind, ConfigKind::App { aspire: true, .. })
+                            && let Some(url) = rc_dotnet::aspire::login_url(&line.text)
+                        {
+                            r.urls = vec![url];
+                        }
+                        r.console.line(&line);
+                    }
                     RunEvent::Exited { code, cancelled, .. } => {
                         r.console.note(&match (cancelled, code) {
                             (true, _) => tr("Process stopped").to_string(),

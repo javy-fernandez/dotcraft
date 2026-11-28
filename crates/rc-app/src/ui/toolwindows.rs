@@ -58,7 +58,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Commit => crate::ui::git::commit_window(app, ui),
         ToolWindow::Git => crate::ui::git::git_window(app, ui),
         ToolWindow::PullRequests => crate::ui::pull_requests::window(app, ui),
-        ToolWindow::Services => crate::ui::docker_services::show(app, ui),
+        ToolWindow::Services => crate::ui::services::show(app, ui),
         ToolWindow::Problems => {
             if header(ui, tw.title()) {
                 app.toggle_tool(tw);

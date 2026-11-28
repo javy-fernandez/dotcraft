@@ -456,6 +456,7 @@ pub mod ico {
         CONFIG_WEB = "runConfigurations/webApp",
         CONFIG_TESTS = "runConfigurations/junit",
         CONFIG_COMPOUND = "runConfigurations/compound",
+        CONFIG_ASPIRE = "runConfigurations/aspire",
         // misc
         EXTERNAL_LINK = "ide/externalLink",
         HIERARCHY = "hierarchy/classHierarchy",

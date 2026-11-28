@@ -12,3 +12,5 @@ at the root of this repository. Files ending in `_dark.svg` are the dark-theme v
 (IntelliJ Community has no database icon).
 
 `toolwindows/pullRequests.svg` and `toolwindows/grpcClient.svg` are DotCraft's own as well, drawn in the same style.
+
+`runConfigurations/aspire.svg` (.NET Aspire app hosts) is DotCraft's own, drawn in the same style.

@@ -113,6 +113,8 @@ pub enum Action {
     Run,
     Debug,
     AttachProcess,
+    /// Opens the dashboard of the running Aspire app host.
+    OpenAspireDashboard,
     StopRun,
     RunTests,
     StepOver,
@@ -204,6 +206,7 @@ impl Action {
                 | Run
                 | Debug
                 | AttachProcess
+                | OpenAspireDashboard
                 | StopRun
                 | RunTests
                 | StepOver

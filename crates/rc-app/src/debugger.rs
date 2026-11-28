@@ -251,6 +251,18 @@ impl Debugger {
         }
     }
 
+    /// Stops every debugged Aspire service (their app host is gone).
+    pub fn stop_aspire_services(&mut self) {
+        if self.aspire.is_some()
+            && let Some(s) = &mut self.session
+        {
+            s.stop();
+        }
+        for other in self.others.iter_mut().filter(|o| o.aspire.is_some()) {
+            other.session.stop();
+        }
+    }
+
     /// Shows session `id` in the Debug window (and its execution point in the editor).
     pub fn select_session(&mut self, id: u64) -> Vec<DebugOutput> {
         let Some(i) = self.others.iter().position(|o| o.id == id) else { return Vec::new() };

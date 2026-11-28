@@ -10,14 +10,14 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-fn test_home() -> PathBuf {
+pub(crate) fn test_home() -> PathBuf {
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/test-home");
     std::fs::create_dir_all(&p).unwrap();
     p.canonicalize().unwrap()
 }
 
 /// netcoredbg, downloaded once into `target/test-home` (kept between runs).
-fn netcoredbg() -> PathBuf {
+pub(crate) fn netcoredbg() -> PathBuf {
     // SAFETY: serialized by HOME_LOCK.
     unsafe { std::env::set_var("DOTCRAFT_HOME", test_home()) };
     if let Some(cmd) = rc_dap::netcoredbg::locate(None).filter(|c| c.origin != rc_dap::netcoredbg::Origin::Path) {
