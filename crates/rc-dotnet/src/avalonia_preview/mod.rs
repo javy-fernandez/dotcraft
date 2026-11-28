@@ -38,12 +38,17 @@ pub struct PreviewProject {
     pub app_assembly: PathBuf,
     pub runtime_config: PathBuf,
     pub deps_file: PathBuf,
-    /// `Avalonia.Designer.HostApp.dll` of the app's Avalonia package.
+    /// `Avalonia.Designer.HostApp.dll` of the app's Avalonia package (empty when the app does
+    /// not reference Avalonia).
     pub host_app: PathBuf,
 }
 
 impl PreviewProject {
     /// The files that must exist before the previewer can start.
+    pub fn references_avalonia(&self) -> bool {
+        !self.host_app.as_os_str().is_empty()
+    }
+
     pub fn missing_outputs(&self) -> bool {
         ![&self.assembly, &self.app_assembly, &self.runtime_config, &self.deps_file].iter().all(|p| p.is_file())
     }
@@ -88,9 +93,8 @@ pub async fn resolve(dotnet: &Dotnet, project: &Path, app_project: &Path) -> any
     let app = properties(dotnet, app_project).await?;
     let lib = if app_project == project { app.clone() } else { properties(dotnet, project).await? };
     let path = |m: &std::collections::BTreeMap<String, String>, k: &str| PathBuf::from(m.get(k).map(|v| v.trim()).unwrap_or_default());
-    let host_app = path(&app, "AvaloniaPreviewerNetCoreToolPath");
-    anyhow::ensure!(!host_app.as_os_str().is_empty(), "{} does not reference Avalonia", app_project.display());
     // The props write the path with Windows separators (`build\..\tools\…`).
+    let host_app = path(&app, "AvaloniaPreviewerNetCoreToolPath");
     let host_app = PathBuf::from(host_app.to_string_lossy().replace(if cfg!(windows) { '/' } else { '\\' }, std::path::MAIN_SEPARATOR_STR));
     Ok(PreviewProject {
         project: project.to_path_buf(),
@@ -108,8 +112,8 @@ pub async fn resolve(dotnet: &Dotnet, project: &Path, app_project: &Path) -> any
 pub enum HostEvent {
     /// The host connected and started its designer session.
     Connected,
-    /// A rendered frame of the current XAML.
-    Frame(Frame),
+    /// A rendered frame waits in [`DesignerHost::take_frame`].
+    FrameReady,
     /// The result of the last XAML update: `None` when it loaded.
     Result(Option<XamlError>),
     /// The host stopped (crashed, failed to start or was killed from outside). `log` holds its
@@ -143,7 +147,10 @@ impl XamlError {
         };
         let (mut line, mut column) = exception.map_or((None, None), |e| (e.line, e.column));
         if line.is_none() {
-            (line, column) = position_in(message.lines().next().unwrap_or_default()).map_or((None, None), |(l, c)| (Some(l), c));
+            // The first error's position: in the message, or in the first inner exception.
+            let first_inner = error.lines().find(|l| l.contains("---> ")).unwrap_or_default();
+            let at = position_in(message.lines().next().unwrap_or_default()).or_else(|| if aggregate { position_in(first_inner) } else { None });
+            (line, column) = at.map_or((None, None), |(l, c)| (Some(l), c));
         }
         XamlError { message, line: line.filter(|&l| l > 0), column: column.filter(|&c| c > 0), details: error.to_string() }
     }
@@ -161,12 +168,19 @@ fn inner_messages(text: &str) -> Vec<String> {
             Some(r) => r.split_once(") ").map_or(r, |(_, m)| m),
             None => rest,
         };
-        let message = rest.split_once(": ").map_or(rest, |(_, m)| m).trim().to_string();
+        let message = without_position(rest.split_once(": ").map_or(rest, |(_, m)| m).trim()).to_string();
         if !message.is_empty() && !out.contains(&message) {
             out.push(message);
         }
     }
     out
+}
+
+/// `message` without XamlX's trailing ` Line 8, position 6.` (the position is shown apart).
+fn without_position(message: &str) -> &str {
+    let Some(at) = message.rfind(" Line ") else { return message };
+    let numbers: Vec<&str> = message[at + 6..].trim_end_matches('.').split(", position ").collect();
+    if numbers.len() == 2 && numbers.iter().all(|n| n.parse::<u32>().is_ok()) { message[..at].trim_end() } else { message }
 }
 
 /// `Line 5, position 12` (XmlException, XamlX) or `(line 5 position 12)` in a message.
@@ -185,6 +199,8 @@ fn position_in(text: &str) -> Option<(u32, Option<u32>)> {
 /// A running `Avalonia.Designer.HostApp`. Dropping it kills the process.
 pub struct DesignerHost {
     writer: Arc<Mutex<Option<TcpStream>>>,
+    /// The last frame received and not taken yet.
+    frame: Arc<Mutex<Option<Frame>>>,
     /// Messages sent before the host connected.
     queued: Arc<Mutex<Vec<Message>>>,
     stopped: Arc<AtomicBool>,
@@ -236,13 +252,13 @@ impl DesignerHost {
                 }
             });
         }
-        let host = DesignerHost { writer: Default::default(), queued: Default::default(), stopped: Default::default(), pid };
+        let host = DesignerHost { writer: Default::default(), frame: Default::default(), queued: Default::default(), stopped: Default::default(), pid };
         let dpi = 96.0 * f64::from(scale.max(0.5));
         host.send(Message::ClientSupportedPixelFormats { formats: vec![PixelFormat::Rgba8888] });
         host.send(Message::ClientRenderInfo { dpi_x: dpi, dpi_y: dpi });
-        let (writer, queued, stopped) = (host.writer.clone(), host.queued.clone(), host.stopped.clone());
+        let (writer, frame, queued, stopped) = (host.writer.clone(), host.frame.clone(), host.queued.clone(), host.stopped.clone());
         std::thread::Builder::new().name("avalonia-designer".into()).spawn(move || {
-            serve(listener, &mut child, &writer, &queued, &stopped, &outbox);
+            serve(listener, &mut child, &writer, &frame, &queued, &stopped, &outbox);
             // Whatever ended the session, the process goes too.
             crate::process::kill_tree(child.id());
             let code = child.wait().ok().and_then(|s| s.code());
@@ -258,6 +274,14 @@ impl DesignerHost {
 
     pub fn pid(&self) -> u32 {
         self.pid
+    }
+
+    /// The frame waiting to be shown. Taking it lets the host send the next one, so a
+    /// preview nobody looks at (or an animation) never floods the IDE.
+    pub fn take_frame(&self) -> Option<Frame> {
+        let frame = self.frame.lock().unwrap().take()?;
+        self.send(Message::FrameReceived { sequence_id: frame.sequence_id });
+        Some(frame)
     }
 
     /// Sends a message now, or once the host has connected.
@@ -303,7 +327,7 @@ impl Drop for DesignerHost {
 }
 
 /// Accepts the host's connection and pumps its messages until it disconnects.
-fn serve(listener: TcpListener, child: &mut Child, writer: &Mutex<Option<TcpStream>>, queued: &Mutex<Vec<Message>>, stopped: &AtomicBool, outbox: &Outbox<HostEvent>) {
+fn serve(listener: TcpListener, child: &mut Child, writer: &Mutex<Option<TcpStream>>, frames: &Mutex<Option<Frame>>, queued: &Mutex<Vec<Message>>, stopped: &AtomicBool, outbox: &Outbox<HostEvent>) {
     if listener.set_nonblocking(true).is_err() {
         return;
     }
@@ -342,11 +366,9 @@ fn serve(listener: TcpListener, child: &mut Child, writer: &Mutex<Option<TcpStre
                 outbox.send(HostEvent::Connected);
             }
             Message::Frame(frame) => {
-                // The host renders the next frame only after this acknowledgement.
-                if let Some(w) = writer.lock().unwrap().as_mut() {
-                    let _ = w.write_all(&Message::FrameReceived { sequence_id: frame.sequence_id }.encode());
-                }
-                outbox.send(HostEvent::Frame(frame));
+                // The host renders the next frame once this one is acknowledged (taken).
+                *frames.lock().unwrap() = Some(frame);
+                outbox.send(HostEvent::FrameReady);
             }
             Message::UpdateXamlResult { error, exception, .. } => {
                 outbox.send(HostEvent::Result(error.filter(|e| !e.is_empty()).map(|e| XamlError::from_result(&e, exception.as_ref()))));
@@ -386,7 +408,7 @@ mod tests {
         assert_eq!((e.line, e.column), (Some(9), Some(5)));
         let aggregate = "System.AggregateException: One or more errors occurred. (Unable to resolve type TextBlok Line 2, position 4.) (Unable to resolve type TextBlok Line 2, position 4.)\n ---> XamlX.XamlTransformException: Unable to resolve type TextBlok Line 2, position 4.\n   at XamlX.Transform…\n   --- End of inner exception stack trace ---\n ---> (Inner Exception #1) XamlX.XamlTransformException: Unable to resolve type TextBlok Line 2, position 4.<---\n\n ---> (Inner Exception #2) XamlX.XamlTransformException: Unable to resolve suitable regular or attached property Text on type :.{Unknown type} Line 2, position 4.<---\n";
         let e = XamlError::from_result(aggregate, Some(&protocol::ExceptionDetails { exception_type: "AggregateException".into(), message: "One or more errors occurred.".into(), line: None, column: None }));
-        assert_eq!(e.message, "Unable to resolve type TextBlok Line 2, position 4.\nUnable to resolve suitable regular or attached property Text on type :.{Unknown type} Line 2, position 4.");
+        assert_eq!(e.message, "Unable to resolve type TextBlok\nUnable to resolve suitable regular or attached property Text on type :.{Unknown type}");
         assert_eq!((e.line, e.column), (Some(2), Some(4)));
         let e = XamlError::from_result("System.InvalidOperationException: No entry point", Some(&protocol::ExceptionDetails { line: Some(0), column: Some(0), ..Default::default() }));
         assert_eq!((e.message.as_str(), e.line, e.column), ("No entry point", None, None));

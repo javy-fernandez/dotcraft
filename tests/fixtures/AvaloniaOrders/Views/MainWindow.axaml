@@ -1,0 +1,19 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Orders.Views.MainWindow"
+        Width="380" Height="300"
+        Title="New Order">
+  <StackPanel Margin="20" Spacing="12">
+    <TextBlock Text="New order" FontSize="22" FontWeight="SemiBold" />
+    <TextBox Watermark="Customer" />
+    <ComboBox SelectedIndex="0" HorizontalAlignment="Stretch">
+      <ComboBoxItem>Standard shipping</ComboBoxItem>
+      <ComboBoxItem>Express shipping</ComboBoxItem>
+    </ComboBox>
+    <CheckBox Content="Gift wrap" IsChecked="True" />
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Content="Cancel" />
+      <Button Content="Place Order" Classes="accent" />
+    </StackPanel>
+  </StackPanel>
+</Window>
