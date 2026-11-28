@@ -65,8 +65,11 @@ pub fn open_link(app: &mut DotCraftApp, link: rc_term::Link, cwd: Option<std::pa
     match link {
         rc_term::Link::Url(u) => open_url(&u),
         rc_term::Link::File { path, line, column } => {
+            // A path printed on the remote machine (a remote build's error) is its local copy.
+            let remote = app.remote.mirror().and_then(|m| m.local(&path));
             let path = std::path::PathBuf::from(path);
             let p = if path.is_absolute() { path } else { cwd.unwrap_or_default().join(path) };
+            let p = remote.filter(|_| !p.is_file()).unwrap_or(p);
             if p.is_file() {
                 app.open_at(&p, line.unwrap_or(1).saturating_sub(1) as usize, column.unwrap_or(1).saturating_sub(1) as usize);
             }

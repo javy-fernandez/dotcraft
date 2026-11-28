@@ -1071,6 +1071,9 @@ pub fn explorer(app: &mut DotCraftApp, ui: &mut Ui) {
             if kit::button(ui, Some(ico::DEBUG), tr("Debug"), remote.debugging.is_none()).clicked() {
                 remote.start_debug();
             }
+            if kit::button(ui, None, tr("SDK Info"), !busy).clicked() {
+                remote.start_command(CommandKind::Info);
+            }
             if busy && kit::button(ui, Some(ico::STOP), tr("Stop"), remote.running.as_ref().is_some_and(|r| r.2.is_some())).clicked() {
                 remote.cancel_running();
             }
