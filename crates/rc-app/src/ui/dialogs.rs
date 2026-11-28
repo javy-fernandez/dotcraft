@@ -1904,15 +1904,23 @@ mod responsive_settings_tests {
             let start = harness.get(field()).rect();
             let first_browse = harness.get_all_by_label(tr("Browse…")).next().unwrap().rect().center();
             harness.input_mut().events.push(egui::Event::PointerMoved(first_browse));
-            harness.input_mut().events.push(egui::Event::MouseWheel {
-                unit: egui::MouseWheelUnit::Point,
-                delta: vec2(0.0, -1000.0),
-                phase: egui::TouchPhase::Move,
-                modifiers: egui::Modifiers::NONE,
-            });
-            harness.run_steps(20);
-            let rect = harness.get(field()).rect();
+            // Scroll down until the field comes into view above the footer (scrolling to the
+            // very end would hide it again behind the page header: notes follow it).
             let ok_top = harness.get_by_label(tr("OK")).rect().top();
+            for _ in 0..100 {
+                // The scroll area ends a little above the footer.
+                if harness.get(field()).rect().bottom() <= ok_top - 24.0 {
+                    break;
+                }
+                harness.input_mut().events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: vec2(0.0, -20.0),
+                    phase: egui::TouchPhase::Move,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(10);
+            }
+            let rect = harness.get(field()).rect();
             assert!(rect.top() >= modal.top() && rect.bottom() <= ok_top && rect.left() >= modal.left() && rect.right() <= modal.right(), "Unity field hidden at {size:?}: {rect:?} (started at {start:?}, footer at {ok_top})");
             assert!(rect.width() > 60.0, "Unity field too narrow at {size:?}: {rect:?}");
             // Click with real pointer events: a field still clipped by the scroll area would not take focus.
