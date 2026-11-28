@@ -16,8 +16,11 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, Command};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::AtomicBool;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, oneshot};
 
 const STOPPED: &str = "the debug adapter stopped";
@@ -67,11 +70,39 @@ pub enum Incoming {
 
 type Responder = oneshot::Sender<Result<Value, DapError>>;
 
+/// Rewrites every message on its way out and in: the paths of an adapter that runs on
+/// another machine (see [`crate::remote::PathMap`]).
+pub trait MessageMap: Send + Sync {
+    fn outgoing(&self, message: &mut Value);
+    fn incoming(&self, message: &mut Value);
+}
+
+/// The pipes of an adapter started elsewhere (on a remote machine, through its agent).
+pub struct Transport {
+    pub stdin: Box<dyn AsyncWrite + Send + Unpin>,
+    pub stdout: Box<dyn AsyncRead + Send + Unpin>,
+    pub stderr: Box<dyn AsyncRead + Send + Unpin>,
+    /// Resolves with the exit code once the adapter ended.
+    pub exit: Pin<Box<dyn Future<Output = Option<i32>> + Send>>,
+    /// Kills the adapter and the program it debugs.
+    pub kill: Arc<dyn Fn() + Send + Sync>,
+}
+
 struct Shared {
     pending: Mutex<HashMap<i64, Responder>>,
     out: mpsc::UnboundedSender<Vec<u8>>,
     seq: AtomicI64,
     waker: Waker,
+    map: Option<Arc<dyn MessageMap>>,
+}
+
+/// How to stop the adapter.
+enum Process {
+    Local(Child),
+    Remote(Arc<dyn Fn() + Send + Sync>),
+    /// The transport is still being set up; `true` once a kill was asked for.
+    Connecting(bool),
+    Gone,
 }
 
 impl Shared {
@@ -84,7 +115,10 @@ impl Shared {
 #[derive(Clone)]
 pub struct DapClient {
     shared: Arc<Shared>,
-    child: Arc<Mutex<Option<Child>>>,
+    process: Arc<Mutex<Process>>,
+    /// Set once a remote adapter's stream ended.
+    ended: Arc<AtomicBool>,
+    /// The local adapter's process id (0 for a remote one).
     pid: u32,
 }
 
@@ -181,12 +215,12 @@ impl DapClient {
         let stdout = child.stdout.take().expect("piped");
         let stderr = child.stderr.take().expect("piped");
         let (out_tx, out_rx) = mpsc::unbounded_channel::<Vec<u8>>();
-        let shared = Arc::new(Shared { pending: Mutex::new(HashMap::new()), out: out_tx, seq: AtomicI64::new(1), waker });
+        let shared = Arc::new(Shared { pending: Mutex::new(HashMap::new()), out: out_tx, seq: AtomicI64::new(1), waker, map: None });
         tokio::spawn(write_loop(stdin, out_rx));
-        let child = Arc::new(Mutex::new(Some(child)));
+        let process = Arc::new(Mutex::new(Process::Local(child)));
         let reader_shared = shared.clone();
         let reader_incoming = incoming.clone();
-        let exit_child = child.clone();
+        let exit_process = process.clone();
         let stderr_task = tokio::spawn(async move {
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
@@ -200,13 +234,14 @@ impl DapClient {
                 // stderr before its exit. Bounded, in case a child process keeps the pipe.
                 let _ = tokio::time::timeout(std::time::Duration::from_millis(500), stderr_task).await;
             }
-            for (_, tx) in reader_shared.pending.lock().drain() {
-                let _ = tx.send(Err(DapError::stopped()));
-            }
+            fail_pending(&reader_shared);
             // Give the process a moment to be reaped so the exit code is known.
             let mut code = None;
             for _ in 0..20 {
-                let status = exit_child.lock().as_mut().map(|c| c.try_wait());
+                let status = match &mut *exit_process.lock() {
+                    Process::Local(c) => Some(c.try_wait()),
+                    _ => None,
+                };
                 match status {
                     Some(Ok(Some(s))) => {
                         code = s.code();
@@ -218,7 +253,54 @@ impl DapClient {
             }
             reader_incoming.send(Incoming::Exited(code));
         });
-        Ok(DapClient { shared, child, pid })
+        Ok(DapClient { shared, process, ended: Arc::new(AtomicBool::new(false)), pid })
+    }
+
+    /// Talks DAP with an adapter started elsewhere: `transport` resolves once its pipes are
+    /// ready (messages sent before then wait), and `map` rewrites every message (remote
+    /// paths). A transport that fails reports its error on stderr and an exit. Must be called
+    /// inside the tokio runtime.
+    pub fn connect(transport: impl Future<Output = std::io::Result<Transport>> + Send + 'static, map: Option<Arc<dyn MessageMap>>, incoming: Outbox<Incoming>, waker: Waker) -> DapClient {
+        let (out_tx, out_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        let shared = Arc::new(Shared { pending: Mutex::new(HashMap::new()), out: out_tx, seq: AtomicI64::new(1), waker, map });
+        let process = Arc::new(Mutex::new(Process::Connecting(false)));
+        let ended = Arc::new(AtomicBool::new(false));
+        let (task_shared, task_process, task_ended) = (shared.clone(), process.clone(), ended.clone());
+        tokio::spawn(async move {
+            let transport = match transport.await {
+                Ok(transport) => transport,
+                Err(error) => {
+                    *task_process.lock() = Process::Gone;
+                    task_ended.store(true, Ordering::SeqCst);
+                    incoming.send(Incoming::Stderr(error.to_string()));
+                    fail_pending(&task_shared);
+                    incoming.send(Incoming::Exited(None));
+                    return;
+                }
+            };
+            {
+                let mut process = task_process.lock();
+                if matches!(*process, Process::Connecting(true)) {
+                    (transport.kill)();
+                }
+                *process = Process::Remote(transport.kill.clone());
+            }
+            tokio::spawn(write_loop(transport.stdin, out_rx));
+            let stderr_incoming = incoming.clone();
+            let mut stderr = transport.stderr;
+            tokio::spawn(async move {
+                let mut lines = BufReader::new(&mut stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    stderr_incoming.send(Incoming::Stderr(line));
+                }
+            });
+            read_loop(transport.stdout, &task_shared, &incoming).await;
+            fail_pending(&task_shared);
+            let code = tokio::time::timeout(std::time::Duration::from_secs(2), transport.exit).await.ok().flatten();
+            task_ended.store(true, Ordering::SeqCst);
+            incoming.send(Incoming::Exited(code));
+        });
+        DapClient { shared, process, ended, pid: 0 }
     }
 
     /// Process id of the adapter.
@@ -240,7 +322,10 @@ impl DapClient {
         self.write(json!({"seq": seq, "type": "request", "command": command, "arguments": arguments}));
     }
 
-    fn write(&self, msg: Value) {
+    fn write(&self, mut msg: Value) {
+        if let Some(map) = &self.shared.map {
+            map.outgoing(&mut msg);
+        }
         let _ = self.shared.out.send(frame(&msg.to_string()));
     }
 
@@ -260,17 +345,27 @@ impl DapClient {
 
     /// Kills the adapter and everything in its process group (the debuggee it launched).
     pub fn kill(&self) {
-        rc_dotnet::kill_tree(self.pid);
-        if let Some(mut c) = self.child.lock().take() {
-            let _ = c.start_kill();
+        if self.pid != 0 {
+            rc_dotnet::kill_tree(self.pid);
+        }
+        let mut process = self.process.lock();
+        match std::mem::replace(&mut *process, Process::Gone) {
+            Process::Local(mut child) => {
+                let _ = child.start_kill();
+            }
+            // The agent kills the adapter's whole process group, the program included.
+            Process::Remote(kill) => kill(),
+            Process::Connecting(_) => *process = Process::Connecting(true),
+            Process::Gone => {}
         }
     }
 
     /// Whether the adapter process has exited.
     pub fn has_exited(&self) -> bool {
-        match self.child.lock().as_mut() {
-            Some(c) => !matches!(c.try_wait(), Ok(None)),
-            None => true,
+        match &mut *self.process.lock() {
+            Process::Local(c) => !matches!(c.try_wait(), Ok(None)),
+            Process::Remote(_) | Process::Connecting(_) => self.ended.load(Ordering::SeqCst),
+            Process::Gone => true,
         }
     }
 
@@ -402,7 +497,13 @@ pub(crate) mod args {
     }
 }
 
-async fn write_loop(mut stdin: ChildStdin, mut rx: mpsc::UnboundedReceiver<Vec<u8>>) {
+fn fail_pending(shared: &Shared) {
+    for (_, tx) in shared.pending.lock().drain() {
+        let _ = tx.send(Err(DapError::stopped()));
+    }
+}
+
+async fn write_loop(mut stdin: impl AsyncWrite + Unpin, mut rx: mpsc::UnboundedReceiver<Vec<u8>>) {
     while let Some(msg) = rx.recv().await {
         if stdin.write_all(&msg).await.is_err() || stdin.flush().await.is_err() {
             return;
@@ -410,7 +511,7 @@ async fn write_loop(mut stdin: ChildStdin, mut rx: mpsc::UnboundedReceiver<Vec<u
     }
 }
 
-async fn read_loop(mut stdout: tokio::process::ChildStdout, shared: &Shared, incoming: &Outbox<Incoming>) {
+async fn read_loop(mut stdout: impl AsyncRead + Unpin, shared: &Shared, incoming: &Outbox<Incoming>) {
     let mut decoder = FrameDecoder::new();
     let mut chunk = vec![0u8; 64 * 1024];
     loop {
@@ -420,7 +521,12 @@ async fn read_loop(mut stdout: tokio::process::ChildStdout, shared: &Shared, inc
         }
         while let Some(msg) = decoder.next_message() {
             match msg {
-                Ok(msg) => dispatch(msg, shared, incoming),
+                Ok(mut msg) => {
+                    if let Some(map) = &shared.map {
+                        map.incoming(&mut msg);
+                    }
+                    dispatch(msg, shared, incoming)
+                }
                 Err(BadFrame(why)) => {
                     incoming.send(Incoming::Stderr(format!("invalid DAP message: {why}")));
                 }

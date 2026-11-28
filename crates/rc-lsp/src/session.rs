@@ -62,8 +62,22 @@ impl LanguageSession {
         let inbox = Inbox::new(waker);
         let _rt = rc_core::Runtime::handle().enter();
         let client = roslyn::start(cmd, root, dotnet_root, inbox.sender())?;
-        let init = roslyn::initialize(&client, root);
-        Ok(LanguageSession {
+        Ok(Self::with_client(client, inbox, root, solution, projects, Some(std::process::id())))
+    }
+
+    /// Starts a session over a server started by `connect` (a remote one, through its agent):
+    /// it gets the outbox for the server's messages and returns the client. No process id is
+    /// sent, as the server cannot watch a process of another machine.
+    pub fn start_with(connect: impl FnOnce(rc_core::inbox::Outbox<Incoming>) -> Client, root: &Path, solution: Option<&Path>, projects: Vec<PathBuf>, waker: Waker) -> Self {
+        let inbox = Inbox::new(waker);
+        let _rt = rc_core::Runtime::handle().enter();
+        let client = connect(inbox.sender());
+        Self::with_client(client, inbox, root, solution, projects, None)
+    }
+
+    fn with_client(client: Client, inbox: Inbox<Incoming>, root: &Path, solution: Option<&Path>, projects: Vec<PathBuf>, process_id: Option<u32>) -> Self {
+        let init = roslyn::initialize(&client, root, process_id);
+        LanguageSession {
             client,
             inbox,
             state: ServerState::Starting,
@@ -77,7 +91,7 @@ impl LanguageSession {
             progress: HashMap::new(),
             started: Instant::now(),
             stderr: Vec::new(),
-        })
+        }
     }
 
     pub fn is_ready(&self) -> bool {

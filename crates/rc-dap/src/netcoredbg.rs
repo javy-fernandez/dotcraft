@@ -16,7 +16,6 @@ pub const VERSION: &str = "3.2.0-1092";
 /// 2.34 and GLIBCXX_3.4.30, 3.0.0 glibc 2.17 and GLIBCXX_3.4.26. 3.1.3 starts at glibc 2.35
 /// because the distributions on 2.34 (RHEL 9, Fedora 35) ship GCC 11's libstdc++, which
 /// stops at GLIBCXX_3.4.29.
-#[cfg(any(target_os = "linux", test))]
 const LINUX_RELEASES: [(&str, (u32, u32)); 3] = [(VERSION, (2, 38)), ("3.1.3-1062", (2, 35)), ("3.0.0-1018", (2, 17))];
 
 /// The release downloaded on this machine: [`VERSION`], or on a Linux system whose glibc is
@@ -30,8 +29,8 @@ pub fn release() -> &'static str {
     VERSION
 }
 
-#[cfg(any(target_os = "linux", test))]
-fn release_for_glibc(glibc: (u32, u32)) -> &'static str {
+/// The newest official Linux build that runs with `glibc` (this machine's or a remote one's).
+pub fn release_for_glibc(glibc: (u32, u32)) -> &'static str {
     LINUX_RELEASES.iter().find(|(_, oldest)| glibc >= *oldest).unwrap_or(&LINUX_RELEASES[LINUX_RELEASES.len() - 1]).0
 }
 

@@ -303,9 +303,14 @@ struct LogPointEval {
     outstanding: usize,
 }
 
+/// Starts an adapter somewhere else (on a remote machine): gets the outbox for its messages
+/// and the waker, returns its client.
+pub type Launcher = std::sync::Arc<dyn Fn(rc_core::inbox::Outbox<Incoming>, Waker) -> DapClient + Send + Sync>;
+
 /// See the module documentation.
 pub struct DebugSession {
     adapter: AdapterCommand,
+    launcher: Option<Launcher>,
     options: DebugOptions,
     attach_pid: Option<u32>,
     waker: Waker,
@@ -363,11 +368,23 @@ impl DebugSession {
     /// Starts a session (never blocks): builds first for [`DebugTarget::Project`], then starts
     /// the adapter. `breakpoints` are the ones set before the session (their debugger state
     /// is reset).
-    pub fn start(adapter: AdapterCommand, target: DebugTarget, options: DebugOptions, mut breakpoints: Breakpoints, waker: Waker) -> DebugSession {
+    pub fn start(adapter: AdapterCommand, target: DebugTarget, options: DebugOptions, breakpoints: Breakpoints, waker: Waker) -> DebugSession {
+        Self::start_inner(adapter, None, target, options, breakpoints, waker)
+    }
+
+    /// Like [`DebugSession::start`] with an adapter `launcher` starts (a remote netcoredbg);
+    /// `adapter` only names it in messages. The target is launched or attached as given:
+    /// a project must be prepared (built, its program resolved) by the caller.
+    pub fn start_with(launcher: Launcher, adapter: AdapterCommand, target: DebugTarget, options: DebugOptions, breakpoints: Breakpoints, waker: Waker) -> DebugSession {
+        Self::start_inner(adapter, Some(launcher), target, options, breakpoints, waker)
+    }
+
+    fn start_inner(adapter: AdapterCommand, launcher: Option<Launcher>, target: DebugTarget, options: DebugOptions, mut breakpoints: Breakpoints, waker: Waker) -> DebugSession {
         breakpoints.reset_state();
         breakpoints.reset_hits();
         let mut s = DebugSession {
             adapter,
+            launcher,
             exception_filters: options.exception_filters.clone(),
             options,
             attach_pid: None,
@@ -448,7 +465,11 @@ impl DebugSession {
     fn spawn_adapter(&mut self, command: &'static str, arguments: Value) {
         self.set_state(SessionState::Starting);
         let _guard = Runtime::handle().enter();
-        match DapClient::spawn(&self.adapter.program, &self.adapter.args(), None, &[], self.dap.sender(), self.waker.clone()) {
+        let client = match &self.launcher {
+            Some(launch) => Ok(launch(self.dap.sender(), self.waker.clone())),
+            None => DapClient::spawn(&self.adapter.program, &self.adapter.args(), None, &[], self.dap.sender(), self.waker.clone()),
+        };
+        match client {
             Ok(client) => {
                 let init = json!({
                     "clientID": "dotcraft",

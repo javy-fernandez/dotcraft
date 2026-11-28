@@ -13,8 +13,10 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, Command};
+use std::future::Future;
+use std::pin::Pin;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, oneshot};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -49,17 +51,53 @@ pub enum Incoming {
 
 type Responder = oneshot::Sender<Result<Value, RpcError>>;
 
+/// Rewrites every message on its way out and in: the paths of a server that runs on another
+/// machine (see [`crate::remote::UriMap`]).
+pub trait MessageMap: Send + Sync {
+    fn outgoing(&self, message: &mut Value);
+    fn incoming(&self, message: &mut Value);
+}
+
+/// The pipes of a server started elsewhere (on a remote machine, through its agent).
+pub struct Transport {
+    pub stdin: Box<dyn AsyncWrite + Send + Unpin>,
+    pub stdout: Box<dyn AsyncRead + Send + Unpin>,
+    pub stderr: Box<dyn AsyncRead + Send + Unpin>,
+    /// Resolves with the exit code once the server ended.
+    pub exit: Pin<Box<dyn Future<Output = Option<i32>> + Send>>,
+    pub kill: Arc<dyn Fn() + Send + Sync>,
+}
+
 struct Shared {
     pending: Mutex<HashMap<i64, Responder>>,
     out: mpsc::UnboundedSender<String>,
     next_id: AtomicI64,
+    map: Option<Arc<dyn MessageMap>>,
+}
+
+impl Shared {
+    fn send(&self, mut message: Value) {
+        if let Some(map) = &self.map {
+            map.outgoing(&mut message);
+        }
+        let _ = self.out.send(frame(&message.to_string()));
+    }
+}
+
+/// How to stop the server.
+enum Process {
+    Local(Child),
+    Remote(Arc<dyn Fn() + Send + Sync>),
+    /// The transport is still being set up; `true` once a kill was asked for.
+    Connecting(bool),
+    Gone,
 }
 
 /// Handle to a running server. Cheap to clone.
 #[derive(Clone)]
 pub struct Client {
     shared: Arc<Shared>,
-    child: Arc<Mutex<Option<Child>>>,
+    process: Arc<Mutex<Process>>,
 }
 
 /// The response of a request, polled without blocking.
@@ -145,28 +183,61 @@ impl Client {
         let stdout = child.stdout.take().expect("piped");
         let stderr = child.stderr.take().expect("piped");
         let (out_tx, out_rx) = mpsc::unbounded_channel::<String>();
-        let shared = Arc::new(Shared { pending: Mutex::new(HashMap::new()), out: out_tx, next_id: AtomicI64::new(1) });
+        let shared = Arc::new(Shared { pending: Mutex::new(HashMap::new()), out: out_tx, next_id: AtomicI64::new(1), map: None });
         tokio::spawn(write_loop(stdin, out_rx));
         let reader_shared = shared.clone();
         let reader_incoming = incoming.clone();
-        let child = Arc::new(Mutex::new(Some(child)));
-        let exit_child = child.clone();
+        let process = Arc::new(Mutex::new(Process::Local(child)));
+        let exit_process = process.clone();
         tokio::spawn(async move {
             read_loop(stdout, reader_shared.clone(), reader_incoming.clone()).await;
             // Pipes closed: fail every pending request and report the exit code.
-            for (_, tx) in reader_shared.pending.lock().drain() {
-                let _ = tx.send(Err(RpcError { code: -1, message: "the language server stopped".into() }));
-            }
-            let code = exit_child.lock().as_mut().and_then(|c| c.try_wait().ok().flatten()).and_then(|s| s.code());
+            fail_pending(&reader_shared);
+            let code = match &mut *exit_process.lock() {
+                Process::Local(c) => c.try_wait().ok().flatten().and_then(|s| s.code()),
+                _ => None,
+            };
             reader_incoming.send(Incoming::Exited(code));
         });
+        tokio::spawn(forward_stderr(stderr, incoming));
+        Ok(Client { shared, process })
+    }
+
+    /// Talks LSP over a server started elsewhere: `transport` resolves once its pipes are
+    /// ready (messages sent before then wait), and `map` rewrites every message (remote
+    /// paths). A transport that fails reports its error on stderr and an exit. Must be called
+    /// inside the tokio runtime.
+    pub fn connect(transport: impl Future<Output = std::io::Result<Transport>> + Send + 'static, map: Option<Arc<dyn MessageMap>>, incoming: Outbox<Incoming>) -> Client {
+        let (out_tx, out_rx) = mpsc::unbounded_channel::<String>();
+        let shared = Arc::new(Shared { pending: Mutex::new(HashMap::new()), out: out_tx, next_id: AtomicI64::new(1), map });
+        let process = Arc::new(Mutex::new(Process::Connecting(false)));
+        let (task_shared, task_process) = (shared.clone(), process.clone());
         tokio::spawn(async move {
-            let mut lines = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                incoming.send(Incoming::Stderr(line));
+            let transport = match transport.await {
+                Ok(transport) => transport,
+                Err(error) => {
+                    *task_process.lock() = Process::Gone;
+                    incoming.send(Incoming::Stderr(error.to_string()));
+                    fail_pending(&task_shared);
+                    incoming.send(Incoming::Exited(None));
+                    return;
+                }
+            };
+            {
+                let mut process = task_process.lock();
+                if matches!(*process, Process::Connecting(true)) {
+                    (transport.kill)();
+                }
+                *process = Process::Remote(transport.kill.clone());
             }
+            tokio::spawn(write_loop(transport.stdin, out_rx));
+            tokio::spawn(forward_stderr(transport.stderr, incoming.clone()));
+            read_loop(transport.stdout, task_shared.clone(), incoming.clone()).await;
+            fail_pending(&task_shared);
+            let code = tokio::time::timeout(std::time::Duration::from_secs(2), transport.exit).await.ok().flatten();
+            incoming.send(Incoming::Exited(code));
         });
-        Ok(Client { shared, child })
+        Client { shared, process }
     }
 
     /// Sends a request; the response is parsed with `serde` into `T`.
@@ -174,8 +245,7 @@ impl Client {
         let id = self.shared.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
         self.shared.pending.lock().insert(id, tx);
-        let body = json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string();
-        let _ = self.shared.out.send(frame(&body));
+        self.shared.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         fn parse<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, RpcError> {
             serde_json::from_value(v).map_err(|e| RpcError { code: -2, message: format!("unexpected response: {e}") })
         }
@@ -191,8 +261,7 @@ impl Client {
     }
 
     pub fn notify_raw(&self, method: &str, params: Value) {
-        let body = json!({"jsonrpc": "2.0", "method": method, "params": params}).to_string();
-        let _ = self.shared.out.send(frame(&body));
+        self.shared.send(json!({"jsonrpc": "2.0", "method": method, "params": params}));
     }
 
     pub fn notify<N: lsp_types::notification::Notification>(&self, params: N::Params) {
@@ -205,7 +274,7 @@ impl Client {
             Ok(v) => json!({"jsonrpc": "2.0", "id": id, "result": v}),
             Err(e) => json!({"jsonrpc": "2.0", "id": id, "error": {"code": e.code, "message": e.message}}),
         };
-        let _ = self.shared.out.send(frame(&body.to_string()));
+        self.shared.send(body);
     }
 
     fn cancel(&self, id: i64) {
@@ -216,8 +285,14 @@ impl Client {
 
     /// Kills the server process.
     pub fn kill(&self) {
-        if let Some(mut c) = self.child.lock().take() {
-            let _ = c.start_kill();
+        let mut process = self.process.lock();
+        match std::mem::replace(&mut *process, Process::Gone) {
+            Process::Local(mut child) => {
+                let _ = child.start_kill();
+            }
+            Process::Remote(kill) => kill(),
+            Process::Connecting(_) => *process = Process::Connecting(true),
+            Process::Gone => {}
         }
     }
 
@@ -226,7 +301,20 @@ impl Client {
     }
 }
 
-async fn write_loop(mut stdin: ChildStdin, mut rx: mpsc::UnboundedReceiver<String>) {
+fn fail_pending(shared: &Shared) {
+    for (_, tx) in shared.pending.lock().drain() {
+        let _ = tx.send(Err(RpcError { code: -1, message: "the language server stopped".into() }));
+    }
+}
+
+async fn forward_stderr(stderr: impl AsyncRead + Unpin, incoming: Outbox<Incoming>) {
+    let mut lines = BufReader::new(stderr).lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        incoming.send(Incoming::Stderr(line));
+    }
+}
+
+async fn write_loop(mut stdin: impl AsyncWrite + Unpin, mut rx: mpsc::UnboundedReceiver<String>) {
     while let Some(msg) = rx.recv().await {
         if stdin.write_all(msg.as_bytes()).await.is_err() || stdin.flush().await.is_err() {
             return;
@@ -235,7 +323,7 @@ async fn write_loop(mut stdin: ChildStdin, mut rx: mpsc::UnboundedReceiver<Strin
 }
 
 /// Reads framed messages until the pipe closes.
-async fn read_loop(stdout: tokio::process::ChildStdout, shared: Arc<Shared>, incoming: Outbox<Incoming>) {
+async fn read_loop(stdout: impl AsyncRead + Unpin, shared: Arc<Shared>, incoming: Outbox<Incoming>) {
     let mut reader = BufReader::new(stdout);
     loop {
         let mut len: Option<usize> = None;
@@ -258,7 +346,10 @@ async fn read_loop(stdout: tokio::process::ChildStdout, shared: Arc<Shared>, inc
         if reader.read_exact(&mut body).await.is_err() {
             return;
         }
-        let Ok(msg) = serde_json::from_slice::<Value>(&body) else { continue };
+        let Ok(mut msg) = serde_json::from_slice::<Value>(&body) else { continue };
+        if let Some(map) = &shared.map {
+            map.incoming(&mut msg);
+        }
         dispatch(msg, &shared, &incoming);
     }
 }

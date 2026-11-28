@@ -186,6 +186,72 @@ pub fn args(cmd: &ServerCommand, log_dir: &Path) -> Vec<String> {
     a
 }
 
+/// Folder of the server on a remote machine (`~` is the remote home).
+pub fn remote_dir() -> String {
+    format!("~/.dotcraft/remote/roslyn/{PINNED_VERSION}")
+}
+
+/// The server's dll on a remote machine; it runs through the remote `dotnet`.
+pub fn remote_dll() -> String {
+    format!("{}/Microsoft.CodeAnalysis.LanguageServer.dll", remote_dir())
+}
+
+/// Arguments of a remote stdio session: the dll first; no client process to watch.
+pub fn remote_args(dll: &str, log_dir: &str) -> Vec<String> {
+    vec![dll.to_string(), "--stdio".into(), "--logLevel".into(), "Information".into(), "--telemetryLevel".into(), "off".into(), "--extensionLogDirectory".into(), log_dir.to_string()]
+}
+
+/// The runtime identifier of a remote machine from its `uname -sm`.
+pub fn rid_for_uname(uname: &str) -> Option<&'static str> {
+    let mut words = uname.split_whitespace();
+    match (words.next()?, words.next()?) {
+        ("Linux", "x86_64" | "amd64") => Some("linux-x64"),
+        ("Linux", "aarch64" | "arm64") => Some("linux-arm64"),
+        ("Darwin", "arm64") => Some("osx-arm64"),
+        ("Darwin", "x86_64") => Some("osx-x64"),
+        _ => None,
+    }
+}
+
+/// The pinned server package for `rid` (any platform, for a remote machine), from the
+/// download cache or the feed.
+pub async fn fetch_package(rid: &str) -> anyhow::Result<Vec<u8>> {
+    let id = format!("roslyn-language-server.{rid}");
+    let cache = rc_core::paths::tools_dir().join("roslyn-packages").join(format!("{id}.{PINNED_VERSION}.nupkg"));
+    if let Ok(bytes) = std::fs::read(&cache) {
+        return Ok(bytes);
+    }
+    let url = format!("{FEED}/{id}/{PINNED_VERSION}/{id}.{PINNED_VERSION}.nupkg");
+    let bytes = reqwest::Client::builder().build()?.get(&url).send().await?.error_for_status()?.bytes().await?.to_vec();
+    if let Some(parent) = cache.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = rc_core::paths::write_atomic(&cache, &bytes);
+    Ok(bytes)
+}
+
+/// The server's files in a package for `rid`: relative path, contents, executable.
+pub fn package_files(package: &[u8], rid: &str) -> anyhow::Result<Vec<(String, Vec<u8>, bool)>> {
+    let prefix = format!("tools/net10.0/{rid}/");
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(package))?;
+    let mut files = Vec::new();
+    for i in 0..zip.len() {
+        let mut f = zip.by_index(i)?;
+        let Some(name) = f.enclosed_name() else { continue };
+        let name = name.to_string_lossy().replace('\\', "/");
+        let Some(rel) = name.strip_prefix(&prefix) else { continue };
+        if rel.is_empty() || f.is_dir() {
+            continue;
+        }
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut f, &mut bytes)?;
+        let exec = rel == "Microsoft.CodeAnalysis.LanguageServer" || rel == "roslyn-language-server";
+        files.push((rel.to_string(), bytes, exec));
+    }
+    anyhow::ensure!(files.iter().any(|(rel, ..)| rel == "Microsoft.CodeAnalysis.LanguageServer.dll"), "the package has no language server for {rid}");
+    Ok(files)
+}
+
 /// Starts the server; must run inside the tokio runtime.
 pub fn start(cmd: &ServerCommand, workspace: &Path, dotnet_root: Option<&Path>, incoming: Outbox<Incoming>) -> std::io::Result<Client> {
     let log_dir = rc_core::paths::logs_dir().join("roslyn");
@@ -285,14 +351,14 @@ pub fn client_capabilities() -> Value {
     })
 }
 
-/// Sends `initialize` for `root`.
-pub fn initialize(client: &Client, root: &Path) -> Pending<lsp_types::InitializeResult> {
+/// Sends `initialize` for `root`; `process_id` is DotCraft's when the server runs here.
+pub fn initialize(client: &Client, root: &Path, process_id: Option<u32>) -> Pending<lsp_types::InitializeResult> {
     let uri = path_to_uri(root);
     let name = root.file_name().map_or_else(|| "workspace".to_string(), |n| n.to_string_lossy().into_owned());
     client.request_raw(
         "initialize",
         json!({
-            "processId": std::process::id(),
+            "processId": process_id,
             "clientInfo": { "name": "DotCraft", "version": env!("CARGO_PKG_VERSION") },
             "locale": "en",
             "rootUri": uri.as_str(),

@@ -14,11 +14,12 @@ pub mod client;
 pub mod launch;
 pub mod netcoredbg;
 pub mod protocol;
+pub mod remote;
 pub mod session;
 pub mod side_effects;
 
 pub use breakpoints::{BreakpointSpec, BreakpointState, Breakpoints};
-pub use client::{DapClient, DapError, Incoming, Pending};
+pub use client::{DapClient, DapError, Incoming, MessageMap, Pending, Transport};
 pub use launch::{DebugOptions, DebugTarget, LaunchConfig};
 pub use netcoredbg::{AdapterCommand, DownloadEvent};
 pub use protocol::{EvalContext, ExceptionInfo, Scope, StackFrame, Thread, Variable};
