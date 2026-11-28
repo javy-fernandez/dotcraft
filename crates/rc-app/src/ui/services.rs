@@ -264,6 +264,8 @@ mod tests {
         assert_eq!(config.icon(), rc_kit::ico::CONFIG_ASPIRE);
         app.aspire.demo(&config, resources, "https://localhost:17175/login?t=abc");
         assert_eq!(app.aspire_dashboard().as_deref(), Some("https://localhost:17175/login?t=abc"));
+        app.docker_services.loaded = true;
+        app.docker_services.unavailable = Some(crate::docker_services::Unavailable { installed: true, details: "failed to connect to the docker API".into() });
         let mut first = true;
         let mut h = Harness::builder().with_size(egui::vec2(1100.0, 700.0)).build_ui_state(
             move |ui, app: &mut crate::app::DotCraftApp| {
@@ -276,6 +278,9 @@ mod tests {
             app,
         );
         h.run_steps(2);
+        // A stopped Docker daemon is a short note, not the CLI's error.
+        assert!(h.query_by_label(tr("Docker isn't running")).is_some());
+        assert!(h.query_by_label_contains("failed to connect").is_none());
         h.get_by_label("webfrontend").click();
         h.run_steps(2);
         assert_eq!(h.state().aspire.selection, Some(Selection::Resource("webfrontend-c8kd1p".into())));

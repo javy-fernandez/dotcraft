@@ -1792,7 +1792,9 @@
     "Hidden": "非表示",
     "Unhealthy": "異常",
     "Degraded": "低下",
-    "Start": "開始"
+    "Start": "開始",
+    "Docker isn't running": "Docker が実行されていません",
+    "Docker isn't installed": "Docker がインストールされていません"
   },
   "launchprofileeditor": {
     "Add profile": "プロファイルを追加",

@@ -1792,7 +1792,9 @@
     "Hidden": "已隐藏",
     "Unhealthy": "不正常",
     "Degraded": "已降级",
-    "Start": "启动"
+    "Start": "启动",
+    "Docker isn't running": "Docker 未运行",
+    "Docker isn't installed": "未安装 Docker"
   },
   "launchprofileeditor": {
     "Add profile": "添加配置文件",

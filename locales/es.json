@@ -1792,7 +1792,9 @@
     "Hidden": "Oculto",
     "Unhealthy": "Con errores",
     "Degraded": "Degradado",
-    "Start": "Iniciar"
+    "Start": "Iniciar",
+    "Docker isn't running": "Docker no se está ejecutando",
+    "Docker isn't installed": "Docker no está instalado"
   },
   "launchprofileeditor": {
     "Add profile": "Añadir perfil",

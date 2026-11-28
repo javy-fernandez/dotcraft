@@ -1012,6 +1012,9 @@ fn screens_aspire() {
             "\x1b[32minfo\x1b[0m: Microsoft.AspNetCore.Hosting.Diagnostics[1]",
             "      Request starting HTTP/2 GET https://localhost:7426/weatherforecast",
         ]);
+        // Docker's state is faked so the capture does not depend on the machine.
+        app.docker_services.loaded = true;
+        app.docker_services.unavailable = Some(crate::docker_services::Unavailable { installed: true, details: "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?".into() });
         app.dock.show(crate::toolwindow::ToolWindow::Services);
         app.dock.sizes.insert(crate::toolwindow::ToolWindow::Services, 430.0);
         let mut h = harness(app, vec2(1440.0, 900.0));

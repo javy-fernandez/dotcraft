@@ -14,6 +14,15 @@ pub fn list(app: &mut DotCraftApp, ui: &mut Ui, depth: usize) {
     let busy = app.docker_services.busy;
     let containers = app.docker_services.containers.clone();
     let error = app.docker_services.error.clone();
+    // Docker missing or stopped is a state, not an error: a short note, the CLI's words on hover.
+    if let Some(unavailable) = &app.docker_services.unavailable {
+        let text = if unavailable.installed { tr("Docker isn't running") } else { tr("Docker isn't installed") };
+        let details = unavailable.details.clone();
+        kit::content(ui, |ui| {
+            ui.horizontal(|ui| kit::note(ui, text)).response.on_hover_text(details);
+        });
+        return;
+    }
     let empty = containers.is_empty() && app.docker_services.loaded;
     if error.is_some() || empty {
         kit::content(ui, |ui| {

@@ -1,0 +1,4 @@
+# Docker unavailable in the Services window. Import: python3 scripts/i18n_tsv.py rc-app scripts/i18n/aspire-docker.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Docker isn't running	Docker no se está ejecutando	Docker n'est pas en cours d'exécution	O Docker não está em execução	Docker läuft nicht	Docker nie jest uruchomiony	Docker 未运行	Docker が実行されていません
+Docker isn't installed	Docker no está instalado	Docker n'est pas installé	O Docker não está instalado	Docker ist nicht installiert	Docker nie jest zainstalowany	未安装 Docker	Docker がインストールされていません

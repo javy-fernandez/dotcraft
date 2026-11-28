@@ -1792,7 +1792,9 @@
     "Hidden": "Ukryty",
     "Unhealthy": "W złej kondycji",
     "Degraded": "Obniżona sprawność",
-    "Start": "Uruchom"
+    "Start": "Uruchom",
+    "Docker isn't running": "Docker nie jest uruchomiony",
+    "Docker isn't installed": "Docker nie jest zainstalowany"
   },
   "launchprofileeditor": {
     "Add profile": "Dodaj profil",

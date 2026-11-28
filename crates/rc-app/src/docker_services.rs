@@ -37,6 +37,9 @@ pub struct DockerServices {
     pub selected: Option<String>,
     pub logs: String,
     pub error: Option<String>,
+    /// Docker cannot be used (not installed, or its daemon is not running): the CLI's
+    /// message, shown on hover behind a short note.
+    pub unavailable: Option<Unavailable>,
     pub busy: bool,
     /// The Docker section of the Services window is expanded.
     pub open: bool,
@@ -49,7 +52,7 @@ pub struct DockerServices {
 impl DockerServices {
     pub fn new(waker: Waker) -> Self {
         Self {
-            containers: Vec::new(), selected: None, logs: String::new(), error: None,
+            containers: Vec::new(), selected: None, logs: String::new(), error: None, unavailable: None,
             busy: false, open: true, loaded: false, inbox: Inbox::new(waker), task: None,
             docker: docker_path(),
         }
@@ -104,10 +107,19 @@ impl DockerServices {
                     self.containers = containers;
                     self.loaded = true;
                     self.error = None;
+                    self.unavailable = None;
                     if self.selected.as_ref().is_some_and(|id| !self.containers.iter().any(|c| &c.id == id)) {
                         self.selected = None;
                         self.logs.clear();
                     }
+                }
+                Event::Containers(Err(error)) if !self.docker.is_file() || daemon_unreachable(&error) => {
+                    let installed = self.docker.is_file();
+                    self.unavailable = Some(Unavailable { installed, details: error });
+                    self.containers.clear();
+                    self.selected = None;
+                    self.error = None;
+                    self.loaded = true;
                 }
                 Event::Containers(Err(error)) | Event::Action(Err(error)) | Event::Logs(_, Err(error)) => {
                     self.error = Some(error);
@@ -133,6 +145,21 @@ impl Drop for DockerServices {
     fn drop(&mut self) {
         if let Some(task) = self.task.take() { task.abort(); }
     }
+}
+
+/// Why Docker cannot be used, for the Services window's note.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unavailable {
+    /// The CLI was found (so its daemon is what is missing).
+    pub installed: bool,
+    /// What the CLI said.
+    pub details: String,
+}
+
+/// Whether the CLI failed because no daemon answers (Docker Desktop, Colima… not started).
+pub(crate) fn daemon_unreachable(error: &str) -> bool {
+    let e = error.to_ascii_lowercase();
+    ["cannot connect to the docker daemon", "failed to connect to the docker api", "is the docker daemon running", "error during connect", "docker.sock", "docker_engine"].iter().any(|s| e.contains(s))
 }
 
 /// The Docker CLI: on PATH, or where Docker Desktop, Homebrew and Colima install it (apps
@@ -176,5 +203,22 @@ mod tests {
         assert_eq!(row.name, "web");
         assert_eq!(row.state, "running");
         assert!(Container::parse("bad row").is_none());
+    }
+
+    #[test]
+    fn a_stopped_daemon_is_not_an_error() {
+        assert!(super::daemon_unreachable("failed to connect to the docker API at unix:///Users/me/.docker/run/docker.sock; check if the path is correct and if the daemon is running"));
+        assert!(super::daemon_unreachable("Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"));
+        assert!(super::daemon_unreachable("error during connect: Get \"http://%2F%2F.%2Fpipe%2Fdocker_engine/v1.47/containers/json\""));
+        assert!(!super::daemon_unreachable("Error response from daemon: No such container: web"));
+        let mut services = super::DockerServices::new(rc_core::Waker::noop());
+        services.docker = std::env::current_exe().unwrap();
+        services.inbox.sender().send(super::Event::Containers(Err("Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?".into())));
+        services.poll();
+        assert!(services.error.is_none());
+        assert!(services.unavailable.as_ref().is_some_and(|u| u.installed && u.details.contains("daemon")));
+        services.inbox.sender().send(super::Event::Containers(Ok(Vec::new())));
+        services.poll();
+        assert!(services.unavailable.is_none());
     }
 }
