@@ -270,13 +270,17 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         }
         crate::ui::resource_editor::switcher(app, ui, active, editor_rect);
     }
-    // Markdown: the rendered page beside or instead of the editor.
+    // Markdown and XAML: the rendered page or view beside or instead of the editor.
     let pane = editor_rect;
     let mut preview_clicked = false;
     if let Some(view) = app.docs.list[active].md_view {
         let (ed, preview) = crate::ui::markdown::layout(view, editor_rect);
         if let Some(r) = preview {
-            preview_clicked = crate::ui::markdown::preview(app, ui, active, r);
+            preview_clicked = if crate::xaml_preview::is_xaml(&app.docs.list[active].path) {
+                crate::ui::xaml_preview::preview(app, ui, active, r)
+            } else {
+                crate::ui::markdown::preview(app, ui, active, r)
+            };
         }
         crate::ui::markdown::switcher(app, ui, active, pane);
         match ed {

@@ -23,7 +23,7 @@ pub struct Doc {
     pub preview: bool,
     /// The file changed on disk while it had unsaved edits.
     pub conflict: bool,
-    /// Markdown files: editor, preview or both side by side.
+    /// Markdown and XAML files: editor, preview or both side by side.
     pub md_view: Option<MdView>,
     /// `.resx` files: the resource grid (Rider's Resources editor) and its edits.
     pub resx: Option<Box<crate::resource_editor::ResxEditor>>,
@@ -32,7 +32,7 @@ pub struct Doc {
     resolved_style: rc_core::editorconfig::Indentation,
 }
 
-/// How a Markdown file is shown (Rider's editor / editor and preview / preview switch).
+/// How a Markdown or XAML file is shown (Rider's editor / editor and preview / preview switch).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MdView {
     Editor,
@@ -239,7 +239,8 @@ impl Docs {
         if path.components().any(|c| c.as_os_str() == "MetadataAsSource") || crate::assembly_explorer::is_decompiled(&path) {
             editor.read_only = true;
         }
-        let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
+        let markdown = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"));
+        let md_view = (markdown || crate::xaml_preview::is_xaml(&path)).then_some(MdView::Split);
         if let Some(marks) = self.bookmarks.remove(&path) {
             let lines = editor.buffer.len_lines();
             editor.bookmarks = marks.into_iter().filter(|(l, _)| *l < lines).collect();

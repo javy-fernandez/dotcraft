@@ -86,6 +86,7 @@ mod generate_targets;
 mod resource_editor;
 mod toolwindow;
 mod ui;
+mod xaml_preview;
 
 /// Opened from Finder, the app gets a bare PATH (/usr/bin:/bin:…) without what Terminal adds
 /// from /etc/paths and /etc/paths.d, such as /usr/local/share/dotnet: the tools it starts

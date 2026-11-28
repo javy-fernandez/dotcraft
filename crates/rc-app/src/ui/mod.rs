@@ -19,6 +19,7 @@ pub mod git;
 pub mod generate;
 pub mod main_menu;
 pub mod markdown;
+pub mod xaml_preview;
 pub mod merge;
 pub mod monitoring;
 pub mod grpc_client;

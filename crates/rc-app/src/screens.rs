@@ -2941,3 +2941,78 @@ fn screens_debugger_views() {
         h.run_steps(2);
     }
 }
+
+#[test]
+#[ignore = "Requires a GPU, the .NET SDK and the Avalonia packages (nuget.org); writes target/snapshots/xaml-preview-*.png"]
+fn screens_xaml_preview() {
+    use crate::xaml_preview::{Preview, Stage};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    // The Avalonia fixture, built in a copy so the repository stays clean.
+    let tmp = tempfile::Builder::new().prefix("dotcraft-avalonia").tempdir().unwrap();
+    let dir = dunce::canonicalize(tmp.path()).unwrap().join("AvaloniaOrders");
+    copy_tree(&fixtures().join("AvaloniaOrders"), &dir);
+    let view = dir.join("Views/MainWindow.axaml");
+    fn preview(a: &DotCraftApp) -> Option<&Preview> {
+        a.docs.active_doc().and_then(|d| a.xaml_previews.map.get(&d.editor.id))
+    }
+    let home = tempfile::tempdir().unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let mut app = test_app(home.path(), dark);
+        app.open_path(&dir);
+        app.open_file(&view);
+        let mut h = harness(app, vec2(1440.0, 900.0));
+        if dark {
+            // Not built yet: the preview offers to build the application.
+            run_frames(&mut h, "the project", |a| matches!(preview(a).map(|p| &p.stage), Some(Stage::NeedsBuild(_))));
+            h.render().unwrap().save(out.join("xaml-preview-build-dark.png")).unwrap();
+            let outs = h.state_mut().runner.build(&dir.join("Orders.csproj"), rc_dotnet::BuildAction::Build);
+            crate::ui::run_windows::handle_outputs(h.state_mut(), outs);
+            run_frames(&mut h, "the build", |a| a.runner.build.as_ref().is_some_and(|b| b.result.is_some() || b.failed.is_some()));
+            assert!(h.state().runner.build.as_ref().and_then(|b| b.result.as_ref()).is_some_and(|r| r.success));
+            if h.state().dock.is_open(crate::toolwindow::ToolWindow::Build) {
+                h.state_mut().dock.toggle(crate::toolwindow::ToolWindow::Build);
+            }
+        }
+        // The rendered window.
+        run_frames(&mut h, "a frame", |a| preview(a).is_some_and(|p| p.texture.is_some() && !p.updating));
+        h.render().unwrap().save(out.join(format!("xaml-preview-{suffix}.png"))).unwrap();
+        if !dark {
+            continue;
+        }
+        // A typo: the error under the view (which keeps the last frame) and in the editor.
+        let doc = h.state_mut().docs.active_doc_mut().unwrap();
+        let at = doc.editor.buffer.rope().to_string().find("<TextBox").unwrap() + 1;
+        doc.editor.replace(at, at + "TextBox".len(), "TextBx");
+        run_frames(&mut h, "the error", |a| preview(a).is_some_and(|p| p.error.is_some()));
+        let error = preview(h.state()).and_then(|p| p.error.clone()).unwrap();
+        assert_eq!((error.line, error.column), (Some(8), Some(6)), "{error:?}");
+        assert!(h.state().docs.active_doc().unwrap().editor.diagnostics.iter().any(|d| d.message.contains("TextBx")));
+        h.render().unwrap().save(out.join("xaml-preview-error-dark.png")).unwrap();
+        // Closing the file (which saves it, so the typo is undone first) kills its previewer.
+        let doc = h.state_mut().docs.active_doc_mut().unwrap();
+        doc.editor.replace(at, at + "TextBx".len(), "TextBox");
+        let pid = match preview(h.state()).map(|p| &p.stage) {
+            Some(Stage::Running(r)) => r.host.pid(),
+            _ => panic!("the previewer is not running"),
+        };
+        let i = h.state().docs.active.unwrap();
+        h.state_mut().close_tab(i);
+        h.run_steps(2);
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        #[cfg(unix)]
+        // SAFETY: signal 0 only checks that the process exists.
+        assert_ne!(unsafe { libc::kill(pid as i32, 0) }, 0, "the previewer is still running");
+    }
+    // .NET MAUI: no previewer exists, the pane says so.
+    let maui = dir.join("Views/OrdersPage.xaml");
+    std::fs::write(&maui, "<ContentPage xmlns=\"http://schemas.microsoft.com/dotnet/2021/maui\"\n             xmlns:x=\"http://schemas.microsoft.com/winfx/2009/xaml\">\n  <Label Text=\"Orders\" />\n</ContentPage>\n").unwrap();
+    let mut app = test_app(home.path(), true);
+    app.open_file(&maui);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(4);
+    h.get_by_label("No preview for .NET MAUI");
+    h.render().unwrap().save(out.join("xaml-preview-maui-dark.png")).unwrap();
+}

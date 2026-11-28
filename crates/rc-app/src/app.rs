@@ -201,6 +201,8 @@ pub struct DotCraftApp {
     pub nav_forward: Vec<(PathBuf, usize)>,
     /// Parsed Markdown and loaded images of the previews.
     pub md_cache: egui_commonmark::CommonMarkCache,
+    /// Avalonia previewers of the open XAML files.
+    pub xaml_previews: crate::xaml_preview::XamlPreviews,
     applied_dark: Option<bool>,
     applied_zoom: Option<f32>,
     pub shift_taps: (f64, u8, bool),
@@ -326,6 +328,7 @@ impl DotCraftApp {
             nav_back: Vec::new(),
             nav_forward: Vec::new(),
             md_cache: Default::default(),
+            xaml_previews: Default::default(),
             applied_dark: None,
             applied_zoom: None,
             shift_taps: (0.0, 0, false),
@@ -2422,6 +2425,7 @@ impl eframe::App for DotCraftApp {
             self.dialog = Some(crate::ui::dialogs::Dialog::DeleteBranch { name, force: true });
         }
         self.database.update();
+        self.xaml_previews.prune(&mut self.docs, &mut self.insight.problems);
         for doc in &mut self.docs.list { doc.editor.custom_templates = self.editor_workflows.templates.clone(); }
         crate::ui::frame(self, ui, editor_actions);
         crate::ui::editor_workflows::show(self, &ctx);
@@ -2437,6 +2441,7 @@ impl eframe::App for DotCraftApp {
 
     fn on_exit(&mut self) {
         self.runner.kill_all_now();
+        self.xaml_previews.stop_all();
         self.debugger.stop();
         self.insight.stop();
         self.save_all_docs();
