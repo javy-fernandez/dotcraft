@@ -2828,6 +2828,10 @@ fn screens_debugger_views() {
             let Some(s) = a.debugger.session.as_ref().filter(|s| s.state().is_stopped()) else { return false };
             s.watches().iter().all(|w| !matches!(w.value, rc_dap::WatchValue::Evaluating)) && s.scopes(10).is_some_and(|sc| s.variables(sc[0].variables_reference).is_some())
         });
+        // The scripted adapter stops in /w/Calc.cs, which does not exist: showing the
+        // execution point reports it. Not part of what this capture shows.
+        h.state_mut().notices.clear();
+        h.run_steps(2);
         let doc = h.state().docs.active_doc().unwrap().editor.id;
         h.state_mut().debugger.hover_held = Some((doc, 0, egui::pos2(420.0, 300.0), "order.Customer".into()));
         h.run_steps(4);
