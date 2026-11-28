@@ -63,6 +63,8 @@ Run configurations are created from the solution: one per executable project and
 
 The debugger uses [netcoredbg](https://github.com/Samsung/netcoredbg) (MIT), downloaded on first use. It supports line and conditional breakpoints, step over/into/out, Run to Cursor, threads and frames, a lazily expanded variables tree, watches, Evaluate Expression, values on hover and stopping on exceptions.
 
+Evaluation without side effects: with **Allow property evaluation and other implicit function calls** off (Settings › Tools, or the Variables toolbar and context menu), hovers, watches and the Variables tree never run property getters, indexers or user-defined operators. netcoredbg runs getters for every member it reads or lists, so DotCraft only sends expressions it can prove harmless (locals, literals and arithmetic on primitive values) and objects are expanded on request; the rest shows *Evaluation disabled: may have side effects (click to evaluate)*. **Allow method calls in watches** does the same for calls, `new` and assignments. Data breakpoints and the memory view are not available: netcoredbg does not implement them, so their menu entries are disabled.
+
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/debug-dark.png" alt="Paused on a conditional breakpoint with frames, watches and variables"></td>

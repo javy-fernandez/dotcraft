@@ -13,7 +13,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | `rc-syntax` | tree-sitter parsing on a background thread, highlighting, folding, bracket matching. |
 | `rc-editor` | The code editor widget (egui), keymaps (`keymap::Action`), code-insight popups. |
 | `rc-lsp` | JSON-RPC/LSP client and the Roslyn adapter. |
-| `rc-dap` | DAP client and netcoredbg session. |
+| `rc-dap` | DAP client and netcoredbg session; which evaluations may run code in the program (`side_effects`). |
 | `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX, NuGet. |
 | `rc-vcs` | Git through the `git` CLI; pull requests on GitHub and Azure DevOps (REST, tokens in the OS keychain). |
 | `rc-search` | File index, fuzzy search, find/replace in files. |
