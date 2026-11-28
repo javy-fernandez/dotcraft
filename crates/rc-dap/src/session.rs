@@ -1169,7 +1169,9 @@ impl DebugSession {
         self.shutdown_started = true;
         let Some(client) = self.client.clone() else { return };
         let launched = self.attach_pid.is_none();
-        let debuggee = if launched { self.debuggee_pid } else { None };
+        // A remote debuggee's id means nothing here: the agent kills the adapter's process
+        // group, the program included.
+        let debuggee = if launched && self.launcher.is_none() { self.debuggee_pid } else { None };
         let _guard = Runtime::handle().enter();
         let disconnect = if client.has_exited() { None } else { Some(client.disconnect(launched)) };
         Runtime::spawn(async move {

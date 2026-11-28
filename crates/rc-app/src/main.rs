@@ -11,6 +11,7 @@ mod monitor;
 mod update;
 mod convert;
 mod debugger;
+mod remote_backend;
 mod aspire;
 mod user_secrets;
 mod docker_services;
@@ -41,6 +42,8 @@ mod shelves_tests;
 mod runner_tests;
 #[cfg(test)]
 mod debugger_tests;
+#[cfg(all(test, unix))]
+mod remote_backend_tests;
 #[cfg(test)]
 mod aspire_tests;
 #[cfg(test)]

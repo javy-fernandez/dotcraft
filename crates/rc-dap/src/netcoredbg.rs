@@ -139,6 +139,11 @@ pub fn asset_for(os: &str, arch: &str) -> Option<&'static str> {
     }
 }
 
+/// Where `asset` of `release` is downloaded from (for any platform: a remote machine's too).
+pub fn asset_url(release: &str, asset: &str) -> String {
+    format!("{RELEASES}/{release}/{asset}")
+}
+
 pub fn download_url() -> Option<String> {
     asset_name().map(|a| format!("{RELEASES}/{}/{a}", release()))
 }

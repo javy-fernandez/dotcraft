@@ -119,6 +119,8 @@ pub struct Insight {
     projects: Vec<PathBuf>,
     dotnet: PathBuf,
     configured: Option<PathBuf>,
+    /// Starts the server on a remote machine instead of here (a remote folder).
+    remote: Option<RemoteConnect>,
     /// Diagnostics per file, for the Problems window (also closed files the server reports).
     pub problems: BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>>,
     raw_items: Vec<lsp::CompletionItem>,
@@ -166,6 +168,10 @@ pub struct Insight {
     pending_apply: Vec<(Value, lsp::WorkspaceEdit)>,
 }
 
+/// Connects to a language server on a remote machine: gets the outbox for its messages,
+/// returns its client (see `remote_backend`).
+pub type RemoteConnect = std::sync::Arc<dyn Fn(rc_core::inbox::Outbox<rc_lsp::Incoming>) -> rc_lsp::Client + Send + Sync>;
+
 /// Add Missing Usings in flight: document, version, fixes still pending, fixes received.
 type UsingsRequest = (u64, u64, Vec<Pending<Value>>, Vec<Value>);
 
@@ -186,6 +192,7 @@ impl Insight {
             projects: Vec::new(),
             dotnet: PathBuf::from("dotnet"),
             configured: None,
+            remote: None,
             problems: BTreeMap::new(),
             raw_items: Vec::new(),
             completion: None,
@@ -235,6 +242,7 @@ impl Insight {
         self.projects = projects;
         self.dotnet = dotnet;
         self.configured = configured;
+        self.remote = None;
         if self.solution.is_none() && self.projects.is_empty() {
             self.status = InsightStatus::Idle;
             return;
@@ -242,8 +250,30 @@ impl Insight {
         self.launch();
     }
 
+    /// Starts C# support for a remote folder: `root`, `solution` and `projects` are their
+    /// local copies (mirror paths); `connect` starts the server on the remote machine.
+    pub fn start_remote(&mut self, root: &Path, solution: Option<&Path>, projects: Vec<PathBuf>, connect: RemoteConnect) {
+        self.stop();
+        self.root = Some(root.to_path_buf());
+        self.solution = solution.map(Path::to_path_buf);
+        self.projects = projects;
+        self.remote = Some(connect);
+        self.launch();
+    }
+
+    /// Whether the server runs on a remote machine.
+    pub fn is_remote(&self) -> bool {
+        self.remote.is_some()
+    }
+
     fn launch(&mut self) {
         let Some(root) = self.root.clone() else { return };
+        if let Some(connect) = self.remote.clone() {
+            let session = LanguageSession::start_with(move |out| connect(out), &root, self.solution.as_deref(), self.projects.clone(), self.waker.clone());
+            self.session = Some(session);
+            self.status = InsightStatus::Starting;
+            return;
+        }
         match roslyn::locate(self.configured.as_deref(), &self.dotnet) {
             None => self.status = InsightStatus::NotInstalled,
             Some(cmd) => {

@@ -613,6 +613,8 @@ struct ClientInner {
     waiters: Waiters,
     next_id: std::sync::atomic::AtomicU64,
     reader: JoinHandle<()>,
+    /// Notified when the connection ends.
+    closed: Arc<Notify>,
 }
 
 impl Drop for ClientInner {
@@ -650,7 +652,7 @@ fn outcome(response: Response) -> Result<Value> {
 }
 
 /// Routes responses to their requests until the stream ends or breaks.
-async fn route_responses<R: AsyncRead + Unpin>(read: R, waiters: Waiters) {
+async fn route_responses<R: AsyncRead + Unpin>(read: R, waiters: Waiters, closed: Arc<Notify>) {
     let mut read = BufReader::new(read);
     while let Ok(Some(line)) = read_line_bounded(&mut read, MAX_RESPONSE_BYTES).await {
         // A line that is not a response of this protocol means the stream is not ours.
@@ -680,6 +682,7 @@ async fn route_responses<R: AsyncRead + Unpin>(read: R, waiters: Waiters) {
         }
     }
     lock(&waiters).take();
+    closed.notify_waiters();
 }
 
 impl Client {
@@ -690,14 +693,27 @@ impl Client {
         W: AsyncWrite + Send + 'static,
     {
         let waiters: Waiters = Arc::new(Mutex::new(Some(HashMap::new())));
-        let reader = tokio::spawn(route_responses(read, waiters.clone()));
+        let closed = Arc::new(Notify::new());
+        let reader = tokio::spawn(route_responses(read, waiters.clone(), closed.clone()));
         Self {
             inner: Arc::new(ClientInner {
                 write: tokio::sync::Mutex::new(Box::pin(write)),
                 waiters,
                 next_id: std::sync::atomic::AtomicU64::new(1),
                 reader,
+                closed,
             }),
+        }
+    }
+
+    /// Resolves once the connection is gone (the agent exited, ssh dropped).
+    pub async fn closed(&self) {
+        loop {
+            let notified = self.inner.closed.notified();
+            if lock(&self.inner.waiters).is_none() {
+                return;
+            }
+            notified.await;
         }
     }
 
