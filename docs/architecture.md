@@ -14,7 +14,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | `rc-editor` | The code editor widget (egui), keymaps (`keymap::Action`), code-insight popups. |
 | `rc-lsp` | JSON-RPC/LSP client and the Roslyn adapter. |
 | `rc-dap` | DAP client and netcoredbg session; which evaluations may run code in the program (`side_effects`). |
-| `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX, NuGet. |
+| `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX, NuGet; Aspire app hosts (`aspire`: IDE session endpoint, resource service client). |
 | `rc-vcs` | Git through the `git` CLI; pull requests on GitHub and Azure DevOps (REST, tokens in the OS keychain). |
 | `rc-search` | File index, fuzzy search, find/replace in files. |
 | `rc-term` | Terminal emulator (alacritty_terminal + portable-pty) rendered in egui. |
@@ -59,6 +59,19 @@ or on the shared tokio runtime and reports back through channels that wake the U
   in `docs/third-party/SCOWL-en_US-LICENSE.txt`), embedded from `assets/dictionaries/`, is
   written to `<data folder>/dictionaries/bundled` and used. Saved words go to
   `<data folder>/spelling/user-dictionary.txt` and to the solution's Rider `.DotSettings` file.
+
+## Aspire
+
+`rc_dotnet::aspire` speaks to an app host without the `aspire` CLI. The app host is started
+with the resource service endpoint of its launch profile (or a free port) and a fresh API key
+(`ASPIRE_DASHBOARD_RESOURCESERVICE_APIKEY`), so `resources` can stream its resources over gRPC
+(`aspire.v1.DashboardService`, hand-written protobuf over reqwest's HTTP/2). When debugging,
+`ide_session` listens on loopback and the app host gets `DEBUG_SESSION_PORT`/`_TOKEN`/
+`_RUN_MODE`: its orchestrator (DCP) then sends `PUT /run_session` for every project instead of
+starting it. `rc-app/src/aspire.rs` turns those into extra sessions of the debugger
+(`Debugger::others`, one tab each), which report the pid, output lines and exit back over the
+notification WebSocket. `aspire_tests.rs` checks a breakpoint in a service of a real
+`aspire-starter` solution (ignored: it needs nuget.org).
 
 ## Packaging
 

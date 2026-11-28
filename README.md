@@ -40,7 +40,7 @@ DotCraft takes its layout and keyboard from JetBrains Rider's New UI — islands
 
 | Edit | Build and debug | Navigate and review |
 | --- | --- | --- |
-| A custom editor with tree-sitter highlighting, folding, multi-caret editing and Roslyn semantic colors, completion, signature help, quick fixes, rename and inlay hints. | Build, run and test (xUnit, NUnit, MSTest) with the dotnet CLI; debug console and ASP.NET apps with netcoredbg; manage NuGet packages. | Search Everywhere, Find in Files, recent files and locations, an integrated terminal, and Git: changes, commit, branches, side-by-side diff, gutter marks and blame. |
+| A custom editor with tree-sitter highlighting, folding, multi-caret editing and Roslyn semantic colors, completion, signature help, quick fixes, rename and inlay hints. | Build, run and test (xUnit, NUnit, MSTest) with the dotnet CLI; debug console and ASP.NET apps with netcoredbg, and .NET Aspire app hosts with all their services; manage NuGet packages. | Search Everywhere, Find in Files, recent files and locations, an integrated terminal, and Git: changes, commit, branches, side-by-side diff, gutter marks and blame. |
 
 ### Code intelligence
 
@@ -75,6 +75,14 @@ Evaluation without side effects: with **Allow property evaluation and other impl
     <td align="center"><sub>Tests from three frameworks in one run.</sub></td>
   </tr>
 </table>
+
+### .NET Aspire
+
+An Aspire app host (a project with `IsAspireHost`, the `Aspire.AppHost.Sdk` or the `Aspire.Hosting.AppHost` package) gets run configurations with the Aspire icon, one per launch profile. **Run** starts it like any project; its console links the dashboard login URL, and **Open Dashboard** (Run window, Services window, **Run › Open Aspire Dashboard**) opens it.
+
+**Debug** debugs the app host and every .NET project it starts: DotCraft acts as the IDE of Aspire's [IDE execution protocol](https://github.com/dotnet/aspire/blob/main/docs/specs/IDE-execution.md), the one Visual Studio and Rider use, so the orchestrator asks DotCraft to launch each service and each one runs under its own netcoredbg session from its first line. The Debug window shows one tab per process; a service that stops at a breakpoint comes to the front. The services' output still reaches the dashboard.
+
+The **Services** window lists the app host's resources (projects, containers, executables) with their state, health and endpoints, streamed from the app host's resource service (the one the dashboard reads), with Start, Stop and Restart and each resource's console. The `aspire` CLI is not needed.
 
 ### Git
 
