@@ -1749,7 +1749,14 @@
     "Could not rename {name}: {error}": "{name} の名前を変更できませんでした: {error}",
     "To open Unity's scripts here, choose {path} as External Script Editor in Unity's Preferences › External Tools and set External Script Editor Args to {args}": "Unity のスクリプトをここで開くには、Unity の Preferences › External Tools で External Script Editor に {path} を選び、External Script Editor Args を {args} に設定してください",
     "Unity generates the .sln and .csproj files only for the editors of its IDE packages: to update them, choose Visual Studio or Visual Studio Code there, click Regenerate project files and choose DotCraft again.": "Unity は IDE パッケージのエディターに対してのみ .sln と .csproj ファイルを生成します。更新するには、そこで Visual Studio または Visual Studio Code を選び、Regenerate project files をクリックしてから DotCraft を選び直してください。",
-    "Unity has not generated the .sln and .csproj files of this project yet. In Unity, choose Visual Studio or Visual Studio Code in Preferences › External Tools, click Regenerate project files and open the folder again.": "Unity はまだこのプロジェクトの .sln と .csproj ファイルを生成していません。Unity の Preferences › External Tools で Visual Studio または Visual Studio Code を選び、Regenerate project files をクリックしてから、フォルダーを開き直してください。"
+    "Unity has not generated the .sln and .csproj files of this project yet. In Unity, choose Visual Studio or Visual Studio Code in Preferences › External Tools, click Regenerate project files and open the folder again.": "Unity はまだこのプロジェクトの .sln と .csproj ファイルを生成していません。Unity の Preferences › External Tools で Visual Studio または Visual Studio Code を選び、Regenerate project files をクリックしてから、フォルダーを開き直してください。",
+    "Close Annotations": "注釈を閉じる",
+    "Copy Revision Number": "リビジョン番号をコピー",
+    "Commit {hash} is older than the loaded Git log": "コミット {hash} は読み込まれた Git ログより古いです",
+    "You": "あなた",
+    "1 line": "1 行",
+    "{count} lines": "{count} 行",
+    "Show code authors in Code Vision": "Code Vision にコード作成者を表示"
   },
   "launchprofileeditor": {
     "Add profile": "プロファイルを追加",

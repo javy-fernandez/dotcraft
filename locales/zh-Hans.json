@@ -1749,7 +1749,14 @@
     "Could not rename {name}: {error}": "无法重命名 {name}：{error}",
     "To open Unity's scripts here, choose {path} as External Script Editor in Unity's Preferences › External Tools and set External Script Editor Args to {args}": "要在此处打开 Unity 的脚本，请在 Unity 的 Preferences › External Tools 中将 External Script Editor 设为 {path}，并将 External Script Editor Args 设为 {args}",
     "Unity generates the .sln and .csproj files only for the editors of its IDE packages: to update them, choose Visual Studio or Visual Studio Code there, click Regenerate project files and choose DotCraft again.": "Unity 只为其 IDE 包支持的编辑器生成 .sln 和 .csproj 文件：要更新它们，请在那里选择 Visual Studio 或 Visual Studio Code，点击 Regenerate project files，然后重新选择 DotCraft。",
-    "Unity has not generated the .sln and .csproj files of this project yet. In Unity, choose Visual Studio or Visual Studio Code in Preferences › External Tools, click Regenerate project files and open the folder again.": "Unity 尚未生成此项目的 .sln 和 .csproj 文件。请在 Unity 的 Preferences › External Tools 中选择 Visual Studio 或 Visual Studio Code，点击 Regenerate project files，然后重新打开该文件夹。"
+    "Unity has not generated the .sln and .csproj files of this project yet. In Unity, choose Visual Studio or Visual Studio Code in Preferences › External Tools, click Regenerate project files and open the folder again.": "Unity 尚未生成此项目的 .sln 和 .csproj 文件。请在 Unity 的 Preferences › External Tools 中选择 Visual Studio 或 Visual Studio Code，点击 Regenerate project files，然后重新打开该文件夹。",
+    "Close Annotations": "关闭注解",
+    "Copy Revision Number": "复制修订号",
+    "Commit {hash} is older than the loaded Git log": "提交 {hash} 早于已加载的 Git 日志",
+    "You": "你",
+    "1 line": "1 行",
+    "{count} lines": "{count} 行",
+    "Show code authors in Code Vision": "在 Code Vision 中显示代码作者"
   },
   "launchprofileeditor": {
     "Add profile": "添加配置文件",

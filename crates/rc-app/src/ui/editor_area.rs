@@ -297,7 +297,17 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
     let touched = preview_clicked || out.response.clicked() || out.response.secondary_clicked() || out.events.contains(&EditorEvent::Focused);
-    editor_context_menu(app, &out.response);
+    // Right-click on the gutter opens its own menu instead of the editor's.
+    let gutter_menu = out.events.iter().find_map(|e| match e {
+        EditorEvent::GutterSecondaryClicked { line, .. } if !app.docs.list[active].editor.breakpoints.contains_key(line) => Some(GutterMenu::LineNumbers),
+        EditorEvent::AnnotationSecondaryClicked { line, .. } => Some(GutterMenu::Annotations(*line)),
+        _ => None,
+    });
+    let gutter_click = out.events.iter().any(|e| matches!(e, EditorEvent::GutterSecondaryClicked { .. } | EditorEvent::AnnotationSecondaryClicked { .. }));
+    if !gutter_click {
+        editor_context_menu(app, &out.response);
+    }
+    gutter_menus(app, &out.response, active, gutter_menu);
     let doc = &mut app.docs.list[active];
     // While paused, hovering shows the debugger's value instead of the symbol's documentation.
     if app.debugger.stopped() {
@@ -335,6 +345,9 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
     let mut run_benchmark_line = None;
     let mut http_line = None;
     let mut code_vision_target = None;
+    let mut annotation_hover = None;
+    let mut annotation_click = None;
+    let mut author_click = false;
     // ⌘+click: the clicked spot goes into Back/Forward history.
     let navigated_from = out.events.iter().find_map(|e| matches!(e, EditorEvent::NavigateAt(_)).then(|| (doc.path.clone(), doc.editor.caret())));
     let proto_navigate = (doc.editor.syntax.lang == rc_syntax::Lang::Proto)
@@ -351,22 +364,23 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
                 }
                 app.session_dirty = true;
             }
+            EditorEvent::CodeVisionClicked { kind: rc_editor::CodeVisionKind::Author, .. } => author_click = true,
             EditorEvent::CodeVisionClicked { position, kind } => {
                 if position <= doc.editor.buffer.len_chars() {
                     code_vision_target = Some((doc.path.clone(), position, kind));
                 }
             }
-            EditorEvent::GutterSecondaryClicked { line, .. } => {
+            // Right-click on a breakpoint: its properties (other lines get the gutter menu).
+            EditorEvent::GutterSecondaryClicked { line, .. } if doc.editor.breakpoints.contains_key(&line) => {
                 let path = doc.path.clone();
                 let present = doc.editor.breakpoints.get(&line).copied();
-                if present.is_none() {
-                    doc.editor.breakpoints.insert(line, rc_editor::BreakpointKind::Normal);
-                }
                 let condition = app.debugger.conditions.get(&(path.clone(), line)).cloned().unwrap_or_default();
                 let enabled = present != Some(rc_editor::BreakpointKind::Disabled);
                 app.dialog = Some(crate::ui::dialogs::Dialog::BreakpointProperties { path, line, condition, enabled, focus: true });
                 app.session_dirty = true;
             }
+            EditorEvent::AnnotationHovered { line, screen } => annotation_hover = Some((line, screen)),
+            EditorEvent::AnnotationClicked { line } => annotation_click = Some(line),
             EditorEvent::CaretMoved => app.session_dirty = true,
             // Editing a preview tab keeps it.
             EditorEvent::Changed => doc.preview = false,
@@ -472,17 +486,137 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
         app.proto_navigate(pos, false);
     }
     if let Some((path, pos, kind)) = code_vision_target {
-        app.push_nav_at(path, pos);
         let nav = match kind {
-            rc_editor::CodeVisionKind::Usages => crate::insight::NavKind::Usages,
-            rc_editor::CodeVisionKind::Implementations | rc_editor::CodeVisionKind::Overrides => crate::insight::NavKind::Implementation,
+            rc_editor::CodeVisionKind::Usages => Some(crate::insight::NavKind::Usages),
+            rc_editor::CodeVisionKind::Implementations | rc_editor::CodeVisionKind::Overrides => Some(crate::insight::NavKind::Implementation),
+            rc_editor::CodeVisionKind::Author => None,
         };
-        app.insight.navigate(&app.docs.list[active], pos, nav);
+        if let Some(nav) = nav {
+            app.push_nav_at(path, pos);
+            app.insight.navigate(&app.docs.list[active], pos, nav);
+        }
+    }
+    // The author label opens the annotations, as in Rider.
+    if author_click && app.vcs.blame_for.as_deref() != Some(app.docs.list[active].path.as_path()) {
+        let path = app.docs.list[active].path.clone();
+        app.vcs.toggle_blame(&path, &mut app.docs);
+    }
+    if let Some(line) = annotation_click {
+        show_annotated_commit(app, active, line);
+    }
+    // No commit tooltip over the gutter's open menu.
+    if let Some((line, screen)) = annotation_hover
+        && !egui::Popup::is_id_open(ui.ctx(), out.response.id.with("gutter_menu"))
+    {
+        annotation_tooltip(app, ui, active, line, screen);
     }
     for a in insight_actions {
         app.run_insight_action(a, caret_screen);
     }
     touched
+}
+
+/// The gutter's context menus: the line numbers' and the blame annotation column's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GutterMenu {
+    LineNumbers,
+    /// The annotation of this line was right-clicked.
+    Annotations(usize),
+}
+
+/// Shows the gutter menu opened by a right-click this frame (`opening`) or before.
+fn gutter_menus(app: &mut DotCraftApp, resp: &egui::Response, active: usize, opening: Option<GutterMenu>) {
+    let id = resp.id.with("gutter_menu");
+    let path = app.docs.list[active].path.clone();
+    let in_repo = app.vcs.in_repository(&path);
+    // Outside a repository the line numbers have nothing to offer yet.
+    let opening = opening.filter(|menu| in_repo || *menu != GutterMenu::LineNumbers);
+    if let Some(menu) = opening {
+        resp.ctx.data_mut(|d| d.insert_temp(id, menu));
+    }
+    let Some(menu) = resp.ctx.data(|d| d.get_temp::<GutterMenu>(id)) else { return };
+    let open = if opening.is_some() {
+        Some(egui::SetOpenCommand::Bool(true))
+    } else if resp.clicked() {
+        Some(egui::SetOpenCommand::Bool(false))
+    } else {
+        None
+    };
+    let (mut toggle, mut close, mut copy) = (false, false, None);
+    egui::Popup::context_menu(resp).id(id).open_memory(open).show(|ui| {
+        ui.set_min_width(240.0);
+        ui.set_max_width(300.0);
+        match menu {
+            GutterMenu::LineNumbers => {
+                let on = app.vcs.blame_for.as_deref() == Some(path.as_path());
+                if theme::menu_entry(ui, Some(ico::HISTORY), tr("Annotate with Git Blame"), None, on, in_repo).clicked() {
+                    toggle = true;
+                    ui.close();
+                }
+            }
+            GutterMenu::Annotations(line) => {
+                if theme::menu_item(ui, Some(ico::CLOSE), tr("Close Annotations"), false).clicked() {
+                    close = true;
+                    ui.close();
+                }
+                let hash = app.vcs.annotation_commit(&path, line).filter(|c| !c.is_uncommitted()).map(|c| c.hash.clone());
+                if theme::menu_entry(ui, Some(ico::COPY), tr("Copy Revision Number"), None, false, hash.is_some()).clicked() {
+                    copy = hash;
+                    ui.close();
+                }
+            }
+        }
+    });
+    if toggle {
+        app.vcs.toggle_blame(&path, &mut app.docs);
+    }
+    if close {
+        app.vcs.close_blame(&mut app.docs);
+    }
+    if let Some(hash) = copy {
+        resp.ctx.copy_text(hash);
+    }
+}
+
+/// Git › Annotate with Git Blame for the active file.
+pub fn toggle_active_blame(app: &mut DotCraftApp) {
+    if let Some(path) = app.docs.active_doc().map(|d| d.path.clone()) {
+        app.vcs.toggle_blame(&path, &mut app.docs);
+    }
+}
+
+/// A click on an annotation: its commit in the Git log.
+fn show_annotated_commit(app: &mut DotCraftApp, active: usize, line: usize) {
+    let path = app.docs.list[active].path.clone();
+    let Some(hash) = app.vcs.annotation_commit(&path, line).filter(|c| !c.is_uncommitted()).map(|c| c.hash.clone()) else { return };
+    if app.vcs.show_commit(&hash) {
+        app.dock.show(crate::toolwindow::ToolWindow::Git);
+    } else {
+        let short = &hash[..hash.len().min(8)];
+        app.notify(rc_kit::i18n::trf("Commit {hash} is older than the loaded Git log", &[("hash", &short)]), false);
+    }
+}
+
+/// The commit of the annotation under the pointer: hash, author, date and full message.
+fn annotation_tooltip(app: &mut DotCraftApp, ui: &Ui, active: usize, line: usize, screen: egui::Pos2) {
+    let path = app.docs.list[active].path.clone();
+    let Some(c) = app.vcs.annotation_commit(&path, line).cloned() else { return };
+    let message = if c.is_uncommitted() { None } else { app.vcs.commit_message(&c.hash) };
+    let p = rc_kit::pal(ui);
+    egui::Area::new(egui::Id::new("blame_tooltip")).order(egui::Order::Tooltip).interactable(false).fixed_pos(screen + vec2(14.0, 16.0)).show(ui.ctx(), |ui| {
+        egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::symmetric(10, 7)).show(ui, |ui| {
+            ui.set_max_width(480.0);
+            ui.spacing_mut().item_spacing.y = 3.0;
+            if c.is_uncommitted() {
+                ui.label(egui::RichText::new(tr("Not committed yet")).size(12.5).color(p.text));
+                return;
+            }
+            ui.label(egui::RichText::new(format!("{}  {} <{}>", &c.hash[..c.hash.len().min(8)], c.author, c.author_email)).size(12.5).color(p.text));
+            ui.label(egui::RichText::new(crate::vcs::blame::format_time(c.author_time, &c.author_tz)).size(12.0).color(p.muted));
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(message.unwrap_or(c.summary)).size(12.5).color(p.text));
+        });
+    });
 }
 
 /// Right-click in the editor (Rider): code actions and navigation for C#, editing, formatting.
@@ -497,6 +631,11 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
     let mut edit = None;
     let mut usings = false;
     let mut typo_fix = None;
+    let path = app.docs.active_doc().map(|d| d.path.clone());
+    let in_repo = path.as_deref().is_some_and(|p| app.vcs.in_repository(p));
+    let blame_on = path.is_some() && app.vcs.blame_for == path;
+    // Git › entries: Some(true) annotates, Some(false) shows the diff.
+    let mut git = None;
     resp.context_menu(|ui| {
         ui.set_min_width(260.0);
         ui.set_max_width(320.0);
@@ -550,7 +689,32 @@ fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
             entry(ui, None, tr("Type Hierarchy"), Action::TypeHierarchy);
         }
         entry(ui, None, tr("Toggle Bookmark with Mnemonic"), Action::ToggleBookmarkMnemonic);
+        // Git › (Rider): the file's annotations and its diff.
+        if in_repo {
+            ui.separator();
+            let git_entry = theme::menu_entry(ui, Some(ico::VCS), tr("Git"), Some("›"), false, true);
+            egui::containers::menu::SubMenu::new().show(ui, &git_entry, |ui| {
+                ui.set_min_width(240.0);
+                ui.set_max_width(300.0);
+                if theme::menu_entry(ui, Some(ico::HISTORY), tr("Annotate with Git Blame"), None, blame_on, true).clicked() {
+                    git = Some(true);
+                    ui.close();
+                }
+                if theme::menu_item(ui, Some(ico::DIFF), tr("Show Diff"), false).clicked() {
+                    git = Some(false);
+                    ui.close();
+                }
+            });
+        }
     });
+    if let (Some(annotate), Some(path)) = (git, path) {
+        if annotate {
+            app.vcs.toggle_blame(&path, &mut app.docs);
+        } else if let Some(rel) = app.vcs.repo.as_ref().and_then(|r| r.rel_path(&path)) {
+            app.save_all_docs();
+            app.vcs.open_diff(&rel);
+        }
+    }
     if let Some(fix) = typo_fix {
         crate::spellcheck::apply(app, fix);
     }
@@ -911,8 +1075,8 @@ fn run_tab_commands(app: &mut DotCraftApp, ui: &Ui, commands: Vec<TabCommand>) {
             }
             TabCommand::Reveal(i) => crate::app::reveal_in_file_manager(&app.docs.list[i].path),
             TabCommand::Blame(i) => {
-                let (path, text) = (app.docs.list[i].path.clone(), app.docs.list[i].editor.buffer.rope().to_string());
-                app.vcs.toggle_blame(&path, text, &mut app.docs);
+                let path = app.docs.list[i].path.clone();
+                app.vcs.toggle_blame(&path, &mut app.docs);
             }
             TabCommand::Diff(i) => {
                 let path = app.docs.list[i].path.clone();

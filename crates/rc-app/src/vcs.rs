@@ -16,6 +16,9 @@ pub mod tools;
 #[path = "merge_tool.rs"]
 pub mod merge;
 
+#[path = "vcs_blame.rs"]
+pub mod blame;
+
 enum VcsEvent {
     ToolReport(String, Option<PathBuf>),
     Repo(Option<Repository>),
@@ -24,7 +27,9 @@ enum VcsEvent {
     Stashes(Result<Vec<rc_vcs::Stash>, String>),
     Log(Vec<Commit>),
     Head(PathBuf, Option<String>),
-    Blame(PathBuf, Result<Blame, String>),
+    Blamed(PathBuf, blame::BlameKey, Result<Blame, String>),
+    /// The full message of a commit (blame tooltips).
+    Message(String, String),
     /// An operation finished: (what, error).
     Done(&'static str, Option<String>),
     CommitFiles(String, Vec<rc_vcs::ChangedFile>),
@@ -112,7 +117,11 @@ pub struct Vcs {
     marks_version: HashMap<u64, u64>,
     status_requested: Option<Instant>,
     status_dirty: bool,
+    /// The file whose annotation column (Git blame) is shown.
     pub blame_for: Option<PathBuf>,
+    pub blames: blame::BlameCache,
+    /// The Git log scrolls to the selected commit on its next frame.
+    pub scroll_to_commit: bool,
     pub diff: Option<DiffView>,
     /// The merge tool (conflicted files and the three-way merge), shown in the editor area.
     pub merge: Option<merge::MergeTool>,
@@ -158,6 +167,8 @@ impl Vcs {
             status_requested: None,
             status_dirty: false,
             blame_for: None,
+            blames: Default::default(),
+            scroll_to_commit: false,
             diff: None,
             merge: None,
             next_doc_id: 1 << 40,
@@ -207,6 +218,9 @@ impl Vcs {
             self.heads.clear();
             self.marks_version.clear();
         }
+        if s.contains("/.git/") && (s.ends_with("HEAD") || s.contains("/refs/")) {
+            self.blame_head_changed();
+        }
         self.status_dirty = true;
     }
 
@@ -215,6 +229,7 @@ impl Vcs {
         self.status_requested = None;
         self.heads.clear();
         self.marks_version.clear();
+        self.blame_head_changed();
         self.load_log();
     }
 
@@ -663,25 +678,6 @@ impl Vcs {
         });
     }
 
-    pub fn toggle_blame(&mut self, path: &Path, text: String, docs: &mut Docs) {
-        if self.blame_for.as_deref() == Some(path) {
-            self.blame_for = None;
-            if let Some(i) = docs.index_of(path) {
-                docs.list[i].editor.annotations = None;
-            }
-            return;
-        }
-        let Some(repo) = self.repo.clone() else { return };
-        let Some(rel) = repo.rel_path(path) else { return };
-        self.blame_for = Some(path.to_path_buf());
-        let out = self.inbox.sender();
-        let p = path.to_path_buf();
-        Runtime::spawn(async move {
-            let b = repo.blame(&rel, Some(&text), None, None).await.map_err(|e| e.to_string());
-            out.send(VcsEvent::Blame(p, b));
-        });
-    }
-
     // ------------------------------------------------------------------ per frame
 
     pub fn update(&mut self, docs: &mut Docs, dark: bool) -> Vec<String> {
@@ -715,25 +711,8 @@ impl Vcs {
                     self.heads.insert(p, t);
                     self.marks_version.clear();
                 }
-                VcsEvent::Blame(p, Ok(b)) => {
-                    if self.blame_for.as_deref() == Some(p.as_path())
-                        && let Some(i) = docs.index_of(&p)
-                    {
-                        docs.list[i].editor.annotations = Some(
-                            b.lines
-                                .iter()
-                                .map(|l| {
-                                    let c = &b.commits[l.commit];
-                                    if c.is_uncommitted() { tr("Not committed yet").to_string() } else { format!("{}  {}", format_date(c.author_time), short_author(&c.author)) }
-                                })
-                                .collect(),
-                        );
-                    }
-                }
-                VcsEvent::Blame(_, Err(e)) => {
-                    self.blame_for = None;
-                    notices.push(e);
-                }
+                VcsEvent::Blamed(path, key, result) => self.blamed(path, key, result),
+                VcsEvent::Message(hash, message) => self.message_loaded(hash, message),
                 VcsEvent::State(st) => self.state = st,
                 VcsEvent::Rebase(r) => self.rebase = r,
                 VcsEvent::RebasePlan(from, plan) => self.rebase_plan = Some((from, plan)),
@@ -814,6 +793,7 @@ impl Vcs {
             }
         }
         self.update_marks(docs);
+        self.update_blame(docs, &mut notices);
         notices
     }
 

@@ -1,0 +1,9 @@
+# Blame from the gutter and Code Vision authors. Import: python3 scripts/i18n_tsv.py rc-app scripts/i18n/blame-gutter.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Close Annotations	Cerrar anotaciones	Fermer les annotations	Fechar anotações	Anmerkungen schließen	Zamknij adnotacje	关闭注解	注釈を閉じる
+Copy Revision Number	Copiar número de revisión	Copier le numéro de révision	Copiar número da revisão	Revisionsnummer kopieren	Kopiuj numer rewizji	复制修订号	リビジョン番号をコピー
+Commit {hash} is older than the loaded Git log	El commit {hash} es anterior al historial de Git cargado	Le commit {hash} est plus ancien que l’historique Git chargé	O commit {hash} é mais antigo que o histórico do Git carregado	Der Commit {hash} ist älter als das geladene Git-Log	Commit {hash} jest starszy niż wczytana historia Git	提交 {hash} 早于已加载的 Git 日志	コミット {hash} は読み込まれた Git ログより古いです
+You	Tú	Vous	Você	Sie	Ty	你	あなた
+1 line	1 línea	1 ligne	1 linha	1 Zeile	1 wiersz	1 行	1 行
+{count} lines	{count} líneas	{count} lignes	{count} linhas	{count} Zeilen	Wierszy: {count}	{count} 行	{count} 行
+Show code authors in Code Vision	Mostrar autores del código en Code Vision	Afficher les auteurs du code dans Code Vision	Mostrar autores do código no Code Vision	Code-Autoren in Code Vision anzeigen	Pokazuj autorów kodu w Code Vision	在 Code Vision 中显示代码作者	Code Vision にコード作成者を表示

@@ -53,13 +53,18 @@ pub struct CodeVision {
     pub position: usize,
     pub title: String,
     pub kind: CodeVisionKind,
+    /// Shown when the pointer rests on the label.
+    pub tooltip: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Kinds of Code Vision labels, in the order a row shows them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CodeVisionKind {
     Usages,
     Implementations,
     Overrides,
+    /// The last author of the declaration's lines (Git blame).
+    Author,
 }
 
 /// A misspelled word (char range), underlined with the scheme's typo colour.
@@ -129,6 +134,12 @@ pub enum EditorEvent {
     CodeVisionClicked { position: usize, kind: CodeVisionKind },
     /// Right-click on a line number (0-based line).
     GutterSecondaryClicked { line: usize, screen: egui::Pos2 },
+    /// Click on the blame annotation of a line.
+    AnnotationClicked { line: usize },
+    /// Right-click on the blame annotation column.
+    AnnotationSecondaryClicked { line: usize, screen: egui::Pos2 },
+    /// The pointer rests on the blame annotation of a line (sent every frame it does).
+    AnnotationHovered { line: usize, screen: egui::Pos2 },
     /// Click on an icon of the gutter's icon column.
     GutterIconClicked { line: usize, icon: GutterIcon },
     /// Shift-click on a test icon to debug that test or class.

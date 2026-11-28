@@ -308,6 +308,9 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
                         ui.checkbox(&mut draft.show_code_vision, tr("Show Code Vision"));
                         ui.end_row();
                         ui.label("");
+                        ui.add_enabled(draft.show_code_vision, egui::Checkbox::new(&mut draft.show_code_vision_author, tr("Show code authors in Code Vision")));
+                        ui.end_row();
+                        ui.label("");
                         ui.checkbox(&mut draft.spellcheck_enabled, tr("Check spelling"));
                         ui.end_row();
                         ui.label(tr("Dictionaries"));

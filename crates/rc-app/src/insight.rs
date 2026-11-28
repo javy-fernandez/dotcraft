@@ -541,7 +541,7 @@ impl Insight {
                         if let Some(command) = &lens.command {
                             if !command.title.is_empty() {
                                 let position = convert::char_of(doc.editor.buffer.rope(), lens.range.start);
-                                set_code_vision(&mut doc.editor, rc_editor::CodeVision { line: lens.range.start.line as usize, position, title: command.title.clone(), kind: rc_editor::CodeVisionKind::Usages });
+                                set_code_vision(&mut doc.editor, rc_editor::CodeVision { line: lens.range.start.line as usize, position, title: command.title.clone(), kind: rc_editor::CodeVisionKind::Usages, tooltip: None });
                             }
                         } else {
                             unresolved.push((id, *version, lens));
@@ -566,7 +566,7 @@ impl Insight {
                 && !command.title.is_empty()
             {
                 let position = convert::char_of(doc.editor.buffer.rope(), lens.range.start);
-                set_code_vision(&mut doc.editor, rc_editor::CodeVision { line: lens.range.start.line as usize, position, title: command.title, kind: rc_editor::CodeVisionKind::Usages });
+                set_code_vision(&mut doc.editor, rc_editor::CodeVision { line: lens.range.start.line as usize, position, title: command.title, kind: rc_editor::CodeVisionKind::Usages, tooltip: None });
             }
             false
         });
@@ -587,7 +587,7 @@ impl Insight {
                     _ if count == 1 => trf("{count} implementation", &[("count", &count)]),
                     _ => trf("{count} implementations", &[("count", &count)]),
                 };
-                set_code_vision(&mut doc.editor, rc_editor::CodeVision { line: request.line, position: request.position, title, kind: request.kind });
+                set_code_vision(&mut doc.editor, rc_editor::CodeVision { line: request.line, position: request.position, title, kind: request.kind, tooltip: None });
             }
             false
         });

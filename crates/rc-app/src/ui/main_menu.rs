@@ -22,7 +22,7 @@ fn groups() -> Vec<(&'static str, Vec<(&'static str, Action)>)> {
         (tr("Build"), vec![(tr("Build Solution"), Build)]),
         (tr("Run"), vec![(tr("Run"), Run), (tr("Debug"), Debug), (tr("Stop"), StopRun), (tr("Run Tests"), RunTests), (tr("Step Over"), StepOver), (tr("Step Into"), StepInto), (tr("Step Out"), StepOut), (tr("Run to Cursor"), RunToCursor), (tr("Resume Program"), Resume), (tr("Evaluate Expression…"), Evaluate), (tr("Attach to Process…"), AttachProcess)]),
         (tr("Tools"), vec![(tr("Settings…"), ShowSettings)]),
-        (tr("Git"), vec![(tr("Commit…"), Commit)]),
+        (tr("Git"), vec![(tr("Commit…"), Commit), (tr("Annotate with Git Blame"), AnnotateWithGitBlame)]),
         (tr("Window"), vec![(tr("Next Tab"), NextTab), (tr("Previous Tab"), PreviousTab)]),
         (tr("Help"), vec![]),
     ]
@@ -46,6 +46,7 @@ fn enabled(app: &DotCraftApp, action: Action) -> bool {
         Action::RunTests | Action::HideToolWindows | Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => app.workspace.is_some(),
         Action::StructuralSearch => app.workspace.is_some(),
         Action::Commit => app.vcs.repo.is_some(),
+        Action::AnnotateWithGitBlame => app.docs.active_doc().is_some_and(|doc| app.vcs.in_repository(&doc.path)),
         Action::ShowBookmarks => app.workspace.is_some(),
         Action::SaveAll => !app.docs.list.is_empty(),
         Action::Cut | Action::Paste => app.docs.active_doc().is_some_and(|doc| !doc.editor.read_only),
@@ -146,7 +147,9 @@ fn category_commands(app: &mut DotCraftApp, ui: &mut Ui, category: &str, actions
     }
     for (label, action) in actions {
         let shortcut = app.keymap.shortcut_text(action);
-        if theme::menu_entry(ui, crate::search::action_icon(action), label, shortcut.as_deref(), false, enabled(app, action)).clicked() {
+        // Annotate with Git Blame is checked while the active file shows its annotations.
+        let checked = action == Action::AnnotateWithGitBlame && app.docs.active_doc().is_some_and(|doc| app.vcs.blame_for.as_deref() == Some(doc.path.as_path()));
+        if theme::menu_entry(ui, crate::search::action_icon(action), label, shortcut.as_deref(), checked, enabled(app, action)).clicked() {
             app.focus_editor = true;
             let clipboard = match action {
                 Action::Copy => Some(crate::native_menu::MenuCommand::Copy),

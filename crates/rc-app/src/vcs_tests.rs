@@ -149,8 +149,8 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     pump(&mut app, "log", |a| a.vcs.log.iter().any(|c| c.subject == "Second"));
 
     // Blame annotates every line.
-    let (path, text) = (root.join("Program.cs"), app.docs.active_doc().unwrap().editor.buffer.rope().to_string());
-    app.vcs.toggle_blame(&path, text, &mut app.docs);
+    let path = root.join("Program.cs");
+    app.vcs.toggle_blame(&path, &mut app.docs);
     pump(&mut app, "blame", |a| a.docs.active_doc().unwrap().editor.annotations.is_some());
     let ann = app.docs.active_doc().unwrap().editor.annotations.clone().unwrap();
     assert_eq!(ann.len(), app.docs.active_doc().unwrap().editor.buffer.len_lines() - 1);
@@ -402,4 +402,66 @@ fn interactive_rebase_drag_conflict_pause_and_continue() {
     let log = std::process::Command::new("git").args(["log", "--format=%s"]).current_dir(&root).output().unwrap();
     assert_eq!(String::from_utf8_lossy(&log.stdout).lines().collect::<Vec<_>>(), ["c3", "c1", "c2", "init"]);
     assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "one\n");
+}
+
+#[test]
+fn code_vision_authors_follow_edits_and_commits() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    let repo = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(repo.path()).unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "user.name", "Ana"]);
+    git(&root, &["config", "user.email", "ana@example.com"]);
+    std::fs::write(root.join("Shapes.cs"), "class Shapes\n{\n    int Area()\n    {\n        return 1;\n    }\n\n    int Side()\n    {\n        return 2;\n    }\n}\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-q", "--date", "2026-10-01T10:00:00+0000", "-m", "Shapes"]);
+    let text = std::fs::read_to_string(root.join("Shapes.cs")).unwrap();
+    std::fs::write(root.join("Shapes.cs"), text.replace("return 2;", "return 3;")).unwrap();
+    git(&root, &["-c", "user.name=Luis", "-c", "user.email=luis@example.com", "commit", "-q", "--date", "2026-11-01T10:00:00+0000", "-am", "Bigger side"]);
+
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&root);
+    app.open_file(&root.join("Shapes.cs"));
+    app.vcs.blames.author_lens = true;
+    let labels = |a: &DotCraftApp| {
+        let mut l: Vec<(usize, String)> = a.docs.active_doc().unwrap().editor.code_vision.iter().filter(|v| v.kind == rc_editor::CodeVisionKind::Author).map(|v| (v.line, v.title.clone())).collect();
+        l.sort();
+        l
+    };
+    let parse = |a: &mut DotCraftApp| {
+        let doc = a.docs.active_doc_mut().unwrap();
+        let (rope, version) = (doc.editor.buffer.rope().clone(), doc.editor.buffer.version());
+        doc.editor.syntax.parse_blocking(&rope, version);
+    };
+    pump(&mut app, "author labels", |a| {
+        parse(a);
+        labels(a).len() == 3
+    });
+    assert_eq!(labels(&app), vec![(0, "Luis +1".to_string()), (2, "Ana".to_string()), (7, "Luis +1".to_string())]);
+
+    // An unsaved edit in Area: it is yours.
+    let doc = app.docs.active_doc_mut().unwrap();
+    let at = doc.editor.buffer.rope().to_string().find("return 1;").unwrap();
+    let at = doc.editor.buffer.rope().byte_to_char(at);
+    doc.editor.replace(at + 7, at + 8, "4");
+    let you = format!("{} +1", rc_kit::i18n::tr("You"));
+    pump(&mut app, "your label", |a| {
+        parse(a);
+        labels(a).get(1).is_some_and(|(_, t)| *t == you)
+    });
+
+    // Committed: the label names the committer; turned off, the labels go away.
+    app.save_all_docs();
+    git(&root, &["commit", "-q", "-am", "Area"]);
+    app.vcs.refresh();
+    pump(&mut app, "committed label", |a| {
+        parse(a);
+        labels(a).get(1).is_some_and(|(_, t)| t == "Ana")
+    });
+    app.vcs.blames.author_lens = false;
+    pump(&mut app, "no labels", |a| labels(a).is_empty());
 }

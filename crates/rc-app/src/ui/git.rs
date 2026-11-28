@@ -339,7 +339,14 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
     crate::work_items::sync(app);
     let linker = app.vcs.work_items.linker();
     let graph_rows = rc_vcs::Graph::new().rows(&log);
-    egui::ScrollArea::vertical().id_salt("git_log").auto_shrink([false, false]).show_rows(&mut lu, 24.0, log.len(), |ui, range| {
+    let mut scroll = egui::ScrollArea::vertical().id_salt("git_log").auto_shrink([false, false]);
+    // A commit shown from elsewhere (a blame annotation) scrolls into view.
+    if std::mem::take(&mut app.vcs.scroll_to_commit)
+        && let Some(index) = app.vcs.selected_commit.as_ref().and_then(|h| log.iter().position(|c| &c.hash == h))
+    {
+        scroll = scroll.vertical_scroll_offset((index as f32 * 24.0 - left.height() / 3.0).max(0.0));
+    }
+    scroll.show_rows(&mut lu, 24.0, log.len(), |ui, range| {
         ui.spacing_mut().item_spacing.y = 0.0;
         for (index, c) in log[range.clone()].iter().enumerate() {
             let selected = app.vcs.selected_commit.as_deref() == Some(c.hash.as_str());

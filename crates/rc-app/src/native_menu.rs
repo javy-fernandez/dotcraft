@@ -624,7 +624,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::ToggleBreakpoint, || tr("Toggle Line Breakpoint")),
         ],
     )?;
-    let git_menu = submenu(|| tr("Git"), &[&act(Action::Commit, || tr("Commit…"))])?;
+    let git_menu = submenu(|| tr("Git"), &[&act(Action::Commit, || tr("Commit…")), &sep(), &act(Action::AnnotateWithGitBlame, || tr("Annotate with Git Blame"))])?;
     let window_menu = submenu(
         || tr("Window"),
         &[

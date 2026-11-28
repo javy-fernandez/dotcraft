@@ -140,6 +140,8 @@ pub enum Action {
     TogglePresentationMode,
     ToggleDistractionFreeMode,
     ToggleZenMode,
+    /// Git › Annotate with Git Blame (no default shortcut, like Rider).
+    AnnotateWithGitBlame,
 }
 
 impl Action {
@@ -226,6 +228,7 @@ impl Action {
                 | TogglePresentationMode
                 | ToggleDistractionFreeMode
                 | ToggleZenMode
+                | AnnotateWithGitBlame
         )
     }
 }

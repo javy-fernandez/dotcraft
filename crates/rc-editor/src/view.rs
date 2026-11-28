@@ -47,6 +47,8 @@ pub(crate) struct Metrics {
     /// Y offset of the galley inside a row (centres the glyphs).
     pub text_dy: f32,
     pub gutter_w: f32,
+    /// Right edge of the blame annotation column (the editor's left edge without one).
+    pub ann_right: f32,
     /// Centre x of the bookmark column.
     pub bookmark_x: f32,
     pub num_right: f32,
@@ -201,7 +203,9 @@ fn paint_code_vision(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m:
         visions.entry((vision.line, vision.position)).or_default().push(vision.clone());
     }
     let visible = vision_positions(state);
-    for ((line, position), labels) in visions {
+    for ((line, position), mut labels) in visions {
+        // Usages, implementations, overrides, then the author (Rider's order).
+        labels.sort_by_key(|vision| vision.kind);
         if visible.binary_search(&(line, position)).is_err() {
             continue;
         }
@@ -223,13 +227,22 @@ fn paint_code_vision(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m:
             if available <= 10.0 {
                 break;
             }
-            let width = (galley.size().x + 10.0).min(available);
+            // The author label starts with a person icon, as in Rider.
+            let icon_w = if vision.kind == CodeVisionKind::Author { 16.0 } else { 0.0 };
+            let width = (galley.size().x + icon_w + 10.0).min(available);
             let rect = Rect::from_min_size(pos2(x - 5.0, y + 1.0), vec2(width, m.row_h - 2.0));
-            let response = ui.interact(rect, Id::new(("code_vision", state.id, line, position, index)), Sense::click());
+            let mut response = ui.interact(rect, Id::new(("code_vision", state.id, line, position, index)), Sense::click());
             painter.rect_filled(rect, 3.0, if response.hovered() { pal.row_hover } else { pal.editor_bg });
-            painter.galley(rect.min + vec2(5.0, (rect.height() - galley.size().y) / 2.0), galley, pal.muted);
+            if icon_w > 0.0 {
+                let icon = Rect::from_center_size(pos2(rect.left() + 11.0, rect.center().y), Vec2::splat(12.0));
+                icons::paint_sized(&painter, icon, ico::USER, &pal, true, 12.0);
+            }
+            painter.galley(rect.min + vec2(5.0 + icon_w, (rect.height() - galley.size().y) / 2.0), galley, pal.muted);
             if response.hovered() {
                 ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+            }
+            if let Some(tooltip) = &vision.tooltip {
+                response = response.on_hover_text(tooltip);
             }
             if response.clicked() {
                 clicked.push((vision.position, vision.kind));
@@ -262,7 +275,7 @@ pub(crate) fn metrics(ui: &Ui, state: &EditorState, config: &EditorConfig, rect:
     let vcs_x = icons_x + 18.0;
     let fold_x = vcs_x + 5.0;
     let gutter_w = snap(fold_x + 14.0 - rect.left() + 2.0);
-    Metrics { row_h, char_w, text_dy, gutter_w, bookmark_x: rect.left() + ann_w + 12.0, num_right, icons_x, vcs_x, fold_x }
+    Metrics { row_h, char_w, text_dy, gutter_w, ann_right: rect.left() + ann_w, bookmark_x: rect.left() + ann_w + 12.0, num_right, icons_x, vcs_x, fold_x }
 }
 
 fn display_row_count(state: &mut EditorState) -> usize {
@@ -348,9 +361,9 @@ mod code_vision_layout_tests {
     fn labels_have_their_own_rows_before_declarations() {
         let mut state = EditorState::new(1, Some("A.cs".into()), "class A {\n void M() {}\n}\n");
         state.code_vision = vec![
-            CodeVision { line: 0, position: 0, title: "1 reference".into(), kind: CodeVisionKind::Usages },
-            CodeVision { line: 1, position: 10, title: "2 overrides".into(), kind: CodeVisionKind::Overrides },
-            CodeVision { line: 1, position: 10, title: "3 references".into(), kind: CodeVisionKind::Usages },
+            CodeVision { line: 0, position: 0, title: "1 reference".into(), kind: CodeVisionKind::Usages, tooltip: None },
+            CodeVision { line: 1, position: 10, title: "2 overrides".into(), kind: CodeVisionKind::Overrides, tooltip: None },
+            CodeVision { line: 1, position: 10, title: "3 references".into(), kind: CodeVisionKind::Usages, tooltip: None },
         ];
         assert_eq!(display_row_count(&mut state), 6);
         assert_eq!(row_of_line(&mut state, 0), 1);
@@ -366,9 +379,9 @@ mod code_vision_layout_tests {
     fn declarations_on_one_line_get_separate_label_rows() {
         let mut state = EditorState::new(1, Some("A.cs".into()), "interface I { void M(); }\n");
         state.code_vision = vec![
-            CodeVision { line: 0, position: 10, title: "2 references".into(), kind: CodeVisionKind::Usages },
-            CodeVision { line: 0, position: 10, title: "1 implementation".into(), kind: CodeVisionKind::Implementations },
-            CodeVision { line: 0, position: 19, title: "3 references".into(), kind: CodeVisionKind::Usages },
+            CodeVision { line: 0, position: 10, title: "2 references".into(), kind: CodeVisionKind::Usages, tooltip: None },
+            CodeVision { line: 0, position: 10, title: "1 implementation".into(), kind: CodeVisionKind::Implementations, tooltip: None },
+            CodeVision { line: 0, position: 19, title: "3 references".into(), kind: CodeVisionKind::Usages, tooltip: None },
         ];
         assert_eq!(display_row_count(&mut state), 4);
         assert_eq!(row_of_line(&mut state, 0), 2);
@@ -833,6 +846,7 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
     let font = mono(12.0);
     let hover_pos = ui.input(|i| i.pointer.hover_pos()).filter(|p| gutter.contains(*p));
     let fold_hover = hover_pos.is_some();
+    let annotation_hover = hover_pos.and_then(|p| annotation_line_at(state, m, text_rect, p));
     let folds: Vec<rc_syntax::FoldRange> = state.syntax.folds().to_vec();
     let fold_start_lines: std::collections::HashMap<usize, rc_syntax::FoldRange> = folds.iter().map(|f| (f.start_line, *f)).collect();
     let fold_end_lines: std::collections::HashMap<usize, usize> = folds.iter().filter(|f| !state.is_folded(f.start_line)).map(|f| (f.end_line, f.start_line)).collect();
@@ -852,6 +866,9 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
         if let Some(text) = state.annotations.as_ref().and_then(|a| a.get(l)) {
             if let Some(bg) = state.line_backgrounds.get(&l) {
                 painter.rect_filled(Rect::from_min_max(pos2(gutter.left(), y), pos2(gutter.left() + (m.num_right - 10.0 - gutter.left()) - 6.0, y + m.row_h)), 0.0, *bg);
+            }
+            if annotation_hover == Some(l) {
+                painter.rect_filled(Rect::from_min_max(pos2(gutter.left() + 3.0, y + 1.0), pos2(m.ann_right - 3.0, y + m.row_h - 1.0)), 3.0, pal.row_hover);
             }
             let g = painter.layout_no_wrap(text.clone(), egui::FontId::proportional(11.5), pal.text_muted);
             painter.galley(pos2(gutter.left() + 8.0, (center_y - g.size().y / 2.0).round()), g, pal.text_muted);
@@ -1073,6 +1090,19 @@ pub(crate) fn pos_at(ui: &Ui, state: &mut EditorState, config: &EditorConfig, m:
     (state.buffer.rope().line_to_char(line) + col, on_placeholder)
 }
 
+/// The line whose blame annotation is at `p`, if the annotation column shows one there.
+fn annotation_line_at(state: &mut EditorState, m: &Metrics, text_rect: Rect, p: Pos2) -> Option<usize> {
+    if p.x >= m.ann_right || p.y < text_rect.top() {
+        return None;
+    }
+    let row = ((p.y - text_rect.top() + state.scroll.y) / m.row_h).floor().max(0.0) as usize;
+    if row >= display_row_count(state) || is_vision_row(state, row) {
+        return None;
+    }
+    let line = line_of_row(state, row);
+    state.annotations.as_ref()?.get(line).filter(|text| !text.is_empty()).map(|_| line)
+}
+
 fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_rect: Rect, response: &egui::Response, out: &mut crate::view::EditorOutput) {
     let config = EditorConfig::default();
     let (pointer, now, mods) = ui.input(|i| (i.pointer.clone(), i.time, i.modifiers));
@@ -1085,7 +1115,7 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
         }
     }
 
-    // Right-click on the line numbers: breakpoint properties.
+    // Right-click on the blame annotations or on the line numbers: the gutter's menus.
     if response.secondary_clicked()
         && let Some(p) = response.interact_pointer_pos()
         && gutter.contains(p)
@@ -1093,7 +1123,12 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
     {
         let row = ((p.y - text_rect.top() + state.scroll.y) / m.row_h).floor().max(0.0) as usize;
         if row < display_row_count(state) {
-            out.events.push(EditorEvent::GutterSecondaryClicked { line: line_of_row(state, row), screen: p });
+            let line = line_of_row(state, row);
+            if state.annotations.is_some() && p.x < m.ann_right {
+                out.events.push(EditorEvent::AnnotationSecondaryClicked { line, screen: p });
+            } else {
+                out.events.push(EditorEvent::GutterSecondaryClicked { line, screen: p });
+            }
         }
         return;
     }
@@ -1118,7 +1153,9 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
         let row = ((p.y - text_rect.top() + state.scroll.y) / m.row_h).floor().max(0.0) as usize;
         if row < display_row_count(state) {
             let line = line_of_row(state, row);
-            if p.x >= m.fold_x - 2.0 {
+            if state.annotations.is_some() && p.x < m.ann_right {
+                out.events.push(EditorEvent::AnnotationClicked { line });
+            } else if p.x >= m.fold_x - 2.0 {
                 if state.is_folded(line) || state.syntax.folds().iter().any(|f| f.start_line == line) {
                     state.toggle_fold(line);
                 } else if let Some(f) = state.syntax.folds().iter().find(|f| f.end_line == line).copied() {
@@ -1140,8 +1177,16 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
         }
         return;
     }
-    if gutter.contains(pointer.hover_pos().unwrap_or(Pos2::ZERO)) && pointer.hover_pos().is_some() {
+    if let Some(p) = pointer.hover_pos().filter(|p| gutter.contains(*p)) {
         ui.ctx().set_cursor_icon(CursorIcon::Default);
+        // The pointer on a blame annotation: the app shows that commit.
+        if let Some(line) = annotation_line_at(state, m, text_rect, p)
+            && response.hovered()
+            && !pointer.any_down()
+        {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+            out.events.push(EditorEvent::AnnotationHovered { line, screen: p });
+        }
     }
 
     // Press in the text area.

@@ -1749,7 +1749,14 @@
     "Could not rename {name}: {error}": "No se pudo cambiar el nombre de {name}: {error}",
     "To open Unity's scripts here, choose {path} as External Script Editor in Unity's Preferences › External Tools and set External Script Editor Args to {args}": "Para abrir aquí los scripts de Unity, elige {path} como External Script Editor en Preferences › External Tools de Unity y pon {args} en External Script Editor Args",
     "Unity generates the .sln and .csproj files only for the editors of its IDE packages: to update them, choose Visual Studio or Visual Studio Code there, click Regenerate project files and choose DotCraft again.": "Unity solo genera los archivos .sln y .csproj para los editores de sus paquetes de IDE: para actualizarlos, elige allí Visual Studio o Visual Studio Code, pulsa Regenerate project files y vuelve a elegir DotCraft.",
-    "Unity has not generated the .sln and .csproj files of this project yet. In Unity, choose Visual Studio or Visual Studio Code in Preferences › External Tools, click Regenerate project files and open the folder again.": "Unity aún no ha generado los archivos .sln y .csproj de este proyecto. En Unity, elige Visual Studio o Visual Studio Code en Preferences › External Tools, pulsa Regenerate project files y vuelve a abrir la carpeta."
+    "Unity has not generated the .sln and .csproj files of this project yet. In Unity, choose Visual Studio or Visual Studio Code in Preferences › External Tools, click Regenerate project files and open the folder again.": "Unity aún no ha generado los archivos .sln y .csproj de este proyecto. En Unity, elige Visual Studio o Visual Studio Code en Preferences › External Tools, pulsa Regenerate project files y vuelve a abrir la carpeta.",
+    "Close Annotations": "Cerrar anotaciones",
+    "Copy Revision Number": "Copiar número de revisión",
+    "Commit {hash} is older than the loaded Git log": "El commit {hash} es anterior al historial de Git cargado",
+    "You": "Tú",
+    "1 line": "1 línea",
+    "{count} lines": "{count} líneas",
+    "Show code authors in Code Vision": "Mostrar autores del código en Code Vision"
   },
   "launchprofileeditor": {
     "Add profile": "Añadir perfil",

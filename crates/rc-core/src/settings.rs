@@ -37,6 +37,8 @@ pub struct Settings {
     /// Show local variable values beside source lines while the debugger is paused.
     pub show_debug_inline_values: bool,
     pub show_code_vision: bool,
+    /// Code Vision's author label (Git blame of each declaration).
+    pub show_code_vision_author: bool,
     /// Typo inspection of comments, strings, prose and declared names.
     pub spellcheck_enabled: bool,
     /// Hunspell dictionaries (locales) checked against; a word is right if any knows it.
@@ -122,6 +124,7 @@ impl Default for Settings {
             show_inlay_hints: true,
             show_debug_inline_values: true,
             show_code_vision: true,
+            show_code_vision_author: true,
             spellcheck_enabled: true,
             spelling_languages: vec!["en_US".into()],
             show_indent_guides: true,

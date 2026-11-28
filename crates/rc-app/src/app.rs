@@ -1506,6 +1506,7 @@ impl DotCraftApp {
                 }
             }
             Action::Commit => self.dock.show(ToolWindow::Commit),
+            Action::AnnotateWithGitBlame => crate::ui::editor_area::toggle_active_blame(self),
             Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => {
                 if self.workspace.is_some() {
                     let tab = match action {
@@ -2321,6 +2322,7 @@ impl eframe::App for DotCraftApp {
         }
         self.coverage.mark(&mut self.docs);
         let dark = self.dark(&ctx);
+        self.vcs.blames.author_lens = self.settings.show_code_vision && self.settings.show_code_vision_author;
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
         }
