@@ -47,12 +47,12 @@ impl Frame {
             match self.format {
                 PixelFormat::Rgba8888 => out.extend_from_slice(&row[..(self.width * 4).min(row.len())]),
                 PixelFormat::Bgra8888 => {
-                    for px in row.chunks_exact(4).take(self.width) {
+                    for px in row.as_chunks::<4>().0.iter().take(self.width) {
                         out.extend_from_slice(&[px[2], px[1], px[0], px[3]]);
                     }
                 }
                 PixelFormat::Rgb565 => {
-                    for px in row.chunks_exact(2).take(self.width) {
+                    for px in row.as_chunks::<2>().0.iter().take(self.width) {
                         let v = u16::from_le_bytes([px[0], px[1]]);
                         let (r, g, b) = ((v >> 11) & 0x1F, (v >> 5) & 0x3F, v & 0x1F);
                         out.extend_from_slice(&[(r * 255 / 31) as u8, (g * 255 / 63) as u8, (b * 255 / 31) as u8, 255]);
