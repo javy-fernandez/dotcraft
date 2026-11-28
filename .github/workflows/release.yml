@@ -1,6 +1,6 @@
 # macOS and Windows builds for the releases. Publishing a release starts this workflow, which builds
 # the universal dmg and the macOS zip on a Mac and the Windows zips on Windows (x64 and ARM64), and
-# uploads them to it.
+# uploads them to it, plus the macOS remote agent (rc-remote-<version>-macos-universal.tar.gz).
 # A pull request that touches this file builds without uploading, and "Run workflow" rebuilds the
 # files of an existing release (or only builds them, without a tag).
 name: macOS and Windows release build
@@ -62,6 +62,63 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" "$DMG" "$ZIP" --clobber
+
+  # The remote agent for SSH connections to Macs: rc-remote-<version>-macos-universal.tar.gz
+  # (dotcraft-remote-agent at its top, Intel and Apple silicon) and its .sha256.
+  macos-agent:
+    runs-on: macos-15
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.sha }}
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --target aarch64-apple-darwin,x86_64-apple-darwin
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-agent
+
+      - name: Build
+        run: |
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --locked --release -p rc-remote --bin dotcraft-remote-agent --target "$target"
+          done
+
+      - name: Package
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          mkdir -p agent
+          lipo -create -output agent/dotcraft-remote-agent \
+            target/aarch64-apple-darwin/release/dotcraft-remote-agent \
+            target/x86_64-apple-darwin/release/dotcraft-remote-agent
+          lipo -archs agent/dotcraft-remote-agent
+          chmod 755 agent/dotcraft-remote-agent
+          # It starts and answers the handshake (stdin stays open until the answer is out).
+          { echo '{"version":1,"id":1,"operation":"hello"}'; sleep 2; } | agent/dotcraft-remote-agent | tee hello.json
+          grep -q '"kind":"hello"' hello.json
+          archive="rc-remote-$version-macos-universal.tar.gz"
+          tar -czf "$archive" -C agent dotcraft-remote-agent
+          shasum -a 256 "$archive" > "$archive.sha256"
+          cat "$archive.sha256"
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-macos-universal
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
+
+      - name: Upload to the release
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
 
   windows:
     strategy:

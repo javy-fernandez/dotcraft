@@ -1,6 +1,7 @@
 # Linux builds for the releases. Publishing a release starts this workflow (and release.yml, which
 # builds the macOS and Windows files), which builds DotCraft on Ubuntu (x64 and ARM64) and uploads
-# DotCraft-<version>-linux-<arch>.tar.gz to it.
+# DotCraft-<version>-linux-<arch>.tar.gz to it, plus the remote agent
+# rc-remote-<version>-linux-<arch>.tar.gz and its .sha256.
 # A pull request that touches this file builds without uploading, and "Run workflow" rebuilds
 # the archives of an existing release.
 name: Linux release build
@@ -18,6 +19,7 @@ on:
       - .github/workflows/linux.yml
       - assets/dotcraft.desktop
       - crates/rc-app/Cargo.toml
+      - crates/rc-remote/Cargo.toml
 
 permissions:
   contents: write
@@ -81,3 +83,73 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" "$ARCHIVE" --clobber
+
+  # The remote agent that DotCraft installs on SSH hosts and WSL distributions
+  # (~/.dotcraft/remote/<version>/): statically linked with musl, so it runs on any Linux,
+  # old glibc and Alpine included. rc-remote-<version>-linux-<arch>.tar.gz holds
+  # dotcraft-remote-agent at its top; the .sha256 next to it is checked before installing.
+  agent:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-musl
+    runs-on: ${{ matrix.runner }}
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.sha }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --target ${{ matrix.target }}
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: agent-${{ matrix.arch }}
+
+      - name: Build
+        run: cargo build --locked --release -p rc-remote --bin dotcraft-remote-agent --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          bin=target/${{ matrix.target }}/release/dotcraft-remote-agent
+          file "$bin"
+          file "$bin" | grep -Eq 'statically linked|static-pie linked'
+          # It starts and answers the handshake (stdin stays open until the answer is out).
+          { echo '{"version":1,"id":1,"operation":"hello"}'; sleep 2; } | "$bin" | tee hello.json
+          grep -q '"kind":"hello"' hello.json
+          mkdir -p agent
+          install -m 755 "$bin" agent/dotcraft-remote-agent
+          archive="rc-remote-$version-linux-${{ matrix.arch }}.tar.gz"
+          tar -czf "$archive" -C agent dotcraft-remote-agent
+          sha256sum "$archive" > "$archive.sha256"
+          cat "$archive.sha256"
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-linux-${{ matrix.arch }}
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
+
+      - name: Upload to the release
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
