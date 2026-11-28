@@ -465,6 +465,11 @@ pub mod ico {
         BOOKMARK = "bookmarks/bookmark",
         JSON_OBJECT = "json/object",
         JSON_ARRAY = "json/array",
+        // image
+        ZOOM_IN = "image/zoomIn",
+        ZOOM_OUT = "image/zoomOut",
+        ZOOM_ACTUAL = "image/actualZoom",
+        ZOOM_FIT = "image/fitContent",
     }
 }
 
