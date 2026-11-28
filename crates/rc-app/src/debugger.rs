@@ -71,6 +71,74 @@ pub struct Debugger {
     /// Values from the last two stops, used to highlight changes in source.
     previous_inline: HashMap<(PathBuf, String), String>,
     current_inline: HashMap<(PathBuf, String), String>,
+    /// Id of the selected session (the one in `session`), for the session tabs.
+    pub session_id: u64,
+    next_session_id: u64,
+    /// The selected session runs an Aspire service for the app host's orchestrator.
+    aspire: Option<AspireLink>,
+    /// The other sessions of a multi-process debug (Aspire services), shown as tabs.
+    pub others: Vec<OtherSession>,
+    /// The Aspire dashboard login URL the debugged app host printed.
+    pub dashboard: Option<String>,
+}
+
+/// A debug session that is not the selected one.
+pub struct OtherSession {
+    pub id: u64,
+    pub session: DebugSession,
+    pub console: Option<crate::runner::Console>,
+    pub name: String,
+    aspire: Option<AspireLink>,
+}
+
+/// Reports a debugged Aspire service to the app host's orchestrator (DCP): its process id,
+/// its output (whole lines) and its end.
+struct AspireLink {
+    id: String,
+    notifier: rc_dotnet::aspire::Notifier,
+    pid_sent: bool,
+    ended: bool,
+    partial: [String; 2],
+}
+
+impl AspireLink {
+    fn forward(&mut self, event: &DebugEvent) {
+        match event {
+            DebugEvent::ProcessStarted(pid) if !self.pid_sent => {
+                self.pid_sent = true;
+                self.notifier.process_started(&self.id, *pid);
+            }
+            DebugEvent::Output { category: category @ (OutputCategory::Stdout | OutputCategory::Stderr), text } => {
+                let stderr = *category == OutputCategory::Stderr;
+                let buffer = &mut self.partial[usize::from(stderr)];
+                buffer.push_str(text);
+                while let Some(end) = buffer.find('\n') {
+                    let line: String = buffer.drain(..=end).collect();
+                    self.notifier.log(&self.id, stderr, line.trim_end_matches(['\n', '\r']));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Once the session is over: the rest of the output and the exit code.
+    fn finish(&mut self, state: &SessionState) {
+        if self.ended || !state.is_ended() {
+            return;
+        }
+        self.ended = true;
+        for (stderr, rest) in self.partial.iter_mut().enumerate() {
+            if !rest.is_empty() {
+                self.notifier.log(&self.id, stderr == 1, rest.trim_end_matches(['\n', '\r']));
+                rest.clear();
+            }
+        }
+        if let SessionState::Failed(f) = state {
+            self.notifier.message(&self.id, true, &f.to_string());
+        }
+        let code = if let SessionState::Exited(code) = state { Some(*code) } else { None };
+        self.notifier.terminated(&self.id, code);
+    }
 }
 
 impl Debugger {
@@ -100,6 +168,11 @@ impl Debugger {
             env: Vec::new(),
             previous_inline: HashMap::new(),
             current_inline: HashMap::new(),
+            session_id: 0,
+            next_session_id: 0,
+            aspire: None,
+            others: Vec::new(),
+            dashboard: None,
         }
     }
 
@@ -108,8 +181,122 @@ impl Debugger {
         self
     }
 
+    /// Any session (the selected one or another process) is still running.
     pub fn active(&self) -> bool {
-        self.session.as_ref().is_some_and(|s| !s.state().is_ended())
+        self.session.as_ref().is_some_and(|s| !s.state().is_ended()) || self.others.iter().any(|o| !o.session.state().is_ended())
+    }
+
+    /// Whether the session `id` is over (or gone).
+    pub fn session_ended(&self, id: u64) -> bool {
+        if id == self.session_id {
+            return self.session.as_ref().is_none_or(|s| s.state().is_ended());
+        }
+        self.others.iter().find(|o| o.id == id).is_none_or(|o| o.session.state().is_ended())
+    }
+
+    /// Starts a new top-level session: the previous one and every other process stop.
+    fn begin(&mut self, session: DebugSession) {
+        self.stop_others();
+        self.others.clear();
+        self.aspire = None;
+        self.dashboard = None;
+        self.next_session_id += 1;
+        self.session_id = self.next_session_id;
+        self.session = Some(session);
+    }
+
+    fn stop_others(&mut self) {
+        for other in &mut self.others {
+            other.session.stop();
+            if let Some(link) = &mut other.aspire {
+                link.finish(other.session.state());
+            }
+        }
+    }
+
+    /// Debugs a service of an Aspire app host that its orchestrator asked to run (run session
+    /// `id`), next to the sessions already running. Its output, process id and exit go back
+    /// to the orchestrator through `notifier`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn start_aspire_service(&mut self, id: String, name: String, run: rc_dotnet::RunRequest, notifier: rc_dotnet::aspire::Notifier, dotnet: &Path, configured: Option<&Path>, docs: &Docs) -> Vec<DebugOutput> {
+        let adapter = rc_dap::netcoredbg::locate(configured);
+        let dotnet = rc_dotnet::Dotnet::locate(Some(dotnet));
+        let (Some(adapter), Some(dotnet)) = (adapter, dotnet) else {
+            let message = tr("netcoredbg or the .NET SDK is missing: the service cannot be debugged");
+            notifier.message(&id, true, message);
+            notifier.terminated(&id, None);
+            return vec![DebugOutput::Notify(message.into(), true)];
+        };
+        // A restarted service replaces its finished tab.
+        self.others.retain(|o| !(o.name == name && o.session.state().is_ended()));
+        let console = crate::runner::Console::new(&self.waker);
+        console.note(&trf("Starting {name}…", &[("name", &name)]));
+        let session = DebugSession::start(adapter, DebugTarget::Project { dotnet, run }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        self.next_session_id += 1;
+        let link = AspireLink { id, notifier, pid_sent: false, ended: false, partial: Default::default() };
+        self.others.push(OtherSession { id: self.next_session_id, session, console: Some(console), name, aspire: Some(link) });
+        Vec::new()
+    }
+
+    /// Stops the service of Aspire run session `id` (the orchestrator asked).
+    pub fn stop_aspire_service(&mut self, id: &str) {
+        if self.aspire.as_ref().is_some_and(|l| l.id == id) {
+            if let Some(s) = &mut self.session {
+                s.stop();
+            }
+            return;
+        }
+        if let Some(other) = self.others.iter_mut().find(|o| o.aspire.as_ref().is_some_and(|l| l.id == id)) {
+            other.session.stop();
+        }
+    }
+
+    /// Shows session `id` in the Debug window (and its execution point in the editor).
+    pub fn select_session(&mut self, id: u64) -> Vec<DebugOutput> {
+        let Some(i) = self.others.iter().position(|o| o.id == id) else { return Vec::new() };
+        let Some(session) = self.session.take() else { return Vec::new() };
+        let previous = OtherSession { id: self.session_id, session, console: self.console.take(), name: std::mem::take(&mut self.name), aspire: self.aspire.take() };
+        let next = std::mem::replace(&mut self.others[i], previous);
+        self.session_id = next.id;
+        self.session = Some(next.session);
+        self.console = next.console;
+        self.name = next.name;
+        self.aspire = next.aspire;
+        self.others.sort_by_key(|o| o.id);
+        self.expanded.clear();
+        self.eval = None;
+        self.hover = None;
+        self.hover_result = None;
+        self.hover_waiting = None;
+        self.temp = None;
+        self.previous_inline.clear();
+        self.current_inline.clear();
+        let mut out = Vec::new();
+        if let Some((path, line)) = self.session.as_ref().filter(|s| s.state().is_stopped()).and_then(|s| s.execution_point()) {
+            out.push(DebugOutput::ShowLine(path, line.saturating_sub(1) as usize));
+        }
+        out
+    }
+
+    /// The sessions as tabs, in start order: (id, name, state).
+    pub fn session_tabs(&self) -> Vec<(u64, &str, &SessionState)> {
+        let mut tabs: Vec<(u64, &str, &SessionState)> = self.others.iter().map(|o| (o.id, o.name.as_str(), o.session.state())).collect();
+        if let Some(s) = &self.session {
+            tabs.push((self.session_id, self.name.as_str(), s.state()));
+        }
+        tabs.sort_by_key(|t| t.0);
+        tabs
+    }
+
+    /// The Debug window's Stop: an Aspire service alone, anything else with every process.
+    pub fn stop_selected(&mut self) {
+        if self.aspire.is_some() {
+            if let Some(s) = &mut self.session {
+                s.stop();
+            }
+        } else {
+            self.stop();
+        }
     }
 
     pub fn stopped(&self) -> bool {
@@ -143,6 +330,7 @@ impl Debugger {
         if let Some(s) = &mut self.session {
             s.stop();
         }
+        self.stop_others();
         let Some(adapter) = rc_dap::netcoredbg::locate(configured) else {
             if self.download.is_none() {
                 self.downloading = Some((0, None));
@@ -167,7 +355,7 @@ impl Debugger {
         for w in watches {
             session.add_watch(w);
         }
-        self.session = Some(session);
+        self.begin(session);
         vec![DebugOutput::ShowDebugWindow]
     }
 
@@ -198,7 +386,7 @@ impl Debugger {
         for watch in watches {
             session.add_watch(watch);
         }
-        self.session = Some(session);
+        self.begin(session);
         vec![DebugOutput::ShowDebugWindow]
     }
 
@@ -236,7 +424,7 @@ impl Debugger {
         for watch in watches {
             session.add_watch(watch);
         }
-        self.session = Some(session);
+        self.begin(session);
         vec![DebugOutput::ShowDebugWindow]
     }
 
@@ -253,37 +441,23 @@ impl Debugger {
         if let Some(s) = &mut self.session {
             s.stop();
         }
+        if let Some(link) = &mut self.aspire
+            && let Some(s) = &self.session
+        {
+            link.finish(s.state());
+        }
+        self.stop_others();
     }
 
     /// Keeps the session's breakpoints equal to the editors' (toggled in the gutter, edited
     /// conditions, lines moved by edits).
     fn sync_breakpoints(&mut self, docs: &Docs) {
-        let Some(s) = &mut self.session else { return };
-        if s.state().is_ended() {
-            return;
+        let (conditions, temp) = (&self.conditions, &self.temp);
+        if let Some(s) = &mut self.session {
+            sync_session(s, docs, conditions, temp.as_ref());
         }
-        for d in &docs.list {
-            let current: Vec<(u32, Option<String>, bool)> = s.breakpoints().in_file(&d.path).iter().map(|b| (b.spec.line, b.spec.condition.clone(), b.spec.enabled)).collect();
-            let wanted: Vec<(u32, Option<String>, bool)> = d
-                .editor
-                .breakpoints
-                .iter()
-                .map(|(&l, k)| (l as u32 + 1, self.conditions.get(&(d.path.clone(), l)).cloned(), *k != rc_editor::BreakpointKind::Disabled))
-                .chain(self.temp.iter().filter(|(p, _)| *p == d.path).map(|(_, l)| (*l, None, true)))
-                .collect();
-            let same = current.len() == wanted.len() && wanted.iter().all(|w| current.contains(w));
-            if !same {
-                let specs = wanted
-                    .into_iter()
-                    .map(|(line, cond, enabled)| {
-                        let mut spec = BreakpointSpec::new(d.path.clone(), line);
-                        spec.condition = cond;
-                        spec.enabled = enabled;
-                        spec
-                    })
-                    .collect();
-                s.set_file_breakpoints(&d.path, specs);
-            }
+        for other in &mut self.others {
+            sync_session(&mut other.session, docs, conditions, None);
         }
     }
 
@@ -372,13 +546,20 @@ impl Debugger {
         if let Some(s) = &mut self.session {
             s.set_eval_policy(self.eval_policy);
         }
+        for other in &mut self.others {
+            other.session.set_eval_policy(self.eval_policy);
+        }
         if let Some((doc, pos, screen, expression)) = self.hover_waiting.take() {
             self.hover(doc, pos, screen, expression);
         }
+        out.extend(self.pump_others());
         let temp = self.temp.clone();
         let Some(session) = &mut self.session else { return out };
         let events = session.pump();
         for ev in events {
+            if let Some(link) = &mut self.aspire {
+                link.forward(&ev);
+            }
             match ev {
                 DebugEvent::Build(rc_dotnet::BuildEvent::Output(line)) => {
                     if let Some(c) = &self.console {
@@ -396,6 +577,12 @@ impl Debugger {
                     }
                 }
                 DebugEvent::Output { category, text } => {
+                    if self.aspire.is_none()
+                        && self.dashboard.is_none()
+                        && let Some(url) = rc_dotnet::aspire::login_url(&text)
+                    {
+                        self.dashboard = Some(url);
+                    }
                     if let Some(c) = &self.console {
                         let stream = if category == OutputCategory::Stderr { rc_dotnet::Stream::Stderr } else { rc_dotnet::Stream::Stdout };
                         let console_msg = matches!(category, OutputCategory::Console | OutputCategory::Important);
@@ -474,6 +661,9 @@ impl Debugger {
                 _ => {}
             }
         }
+        if let Some(link) = &mut self.aspire {
+            link.finish(session.state());
+        }
         let inline_variables = if session.state().is_stopped() {
             session.selected_frame().map(|frame| frame.id).and_then(|frame_id| {
                 session.request_scopes(frame_id);
@@ -545,6 +735,51 @@ impl Debugger {
         out
     }
 
+    /// Output, process ids and ends of the other sessions; one that stops at a breakpoint
+    /// becomes the selected session unless the selected one is paused too.
+    fn pump_others(&mut self) -> Vec<DebugOutput> {
+        let mut out = Vec::new();
+        let mut focus = None;
+        for other in &mut self.others {
+            for ev in other.session.pump() {
+                if let Some(link) = &mut other.aspire {
+                    link.forward(&ev);
+                }
+                let Some(c) = &other.console else { continue };
+                match ev {
+                    DebugEvent::Build(rc_dotnet::BuildEvent::Output(line)) => c.line(&line),
+                    DebugEvent::Prepared(plan) => c.note(&plan.command_line()),
+                    DebugEvent::Output { category, text } => match category {
+                        OutputCategory::Console | OutputCategory::Important => c.note(text.trim_end()),
+                        OutputCategory::Stderr => c.raw(&text, rc_dotnet::Stream::Stderr),
+                        _ => c.raw(&text, rc_dotnet::Stream::Stdout),
+                    },
+                    DebugEvent::Stopped(_) => focus = focus.or(Some(other.id)),
+                    DebugEvent::Exited(code) => c.note(&trf("Process finished with exit code {code}", &[("code", &code)])),
+                    DebugEvent::Terminated => c.note(tr("Debugger disconnected")),
+                    DebugEvent::Failed(f) => {
+                        let (tpl, args) = f.user_message();
+                        let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
+                        let msg = trf(tpl, &args);
+                        c.note(&msg);
+                        out.push(DebugOutput::Notify(format!("{}: {msg}", other.name), true));
+                    }
+                    _ => {}
+                }
+            }
+            if let Some(link) = &mut other.aspire {
+                link.finish(other.session.state());
+            }
+        }
+        if let Some(id) = focus
+            && !self.stopped()
+        {
+            out.extend(self.select_session(id));
+            out.push(DebugOutput::ShowDebugWindow);
+        }
+        out
+    }
+
     pub fn state_label(&self) -> String {
         match self.session.as_ref().map(|s| s.state()) {
             None => String::new(),
@@ -559,6 +794,37 @@ impl Debugger {
                 let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
                 trf(tpl, &args)
             }
+        }
+    }
+}
+
+/// Keeps a session's breakpoints equal to the editors' (toggled in the gutter, edited
+/// conditions, lines moved by edits), plus Run to Cursor's one-shot breakpoint.
+fn sync_session(s: &mut DebugSession, docs: &Docs, conditions: &HashMap<(PathBuf, usize), String>, temp: Option<&(PathBuf, u32)>) {
+    if s.state().is_ended() {
+        return;
+    }
+    for d in &docs.list {
+        let current: Vec<(u32, Option<String>, bool)> = s.breakpoints().in_file(&d.path).iter().map(|b| (b.spec.line, b.spec.condition.clone(), b.spec.enabled)).collect();
+        let wanted: Vec<(u32, Option<String>, bool)> = d
+            .editor
+            .breakpoints
+            .iter()
+            .map(|(&l, k)| (l as u32 + 1, conditions.get(&(d.path.clone(), l)).cloned(), *k != rc_editor::BreakpointKind::Disabled))
+            .chain(temp.into_iter().filter(|(p, _)| *p == d.path).map(|(_, l)| (*l, None, true)))
+            .collect();
+        let same = current.len() == wanted.len() && wanted.iter().all(|w| current.contains(w));
+        if !same {
+            let specs = wanted
+                .into_iter()
+                .map(|(line, cond, enabled)| {
+                    let mut spec = BreakpointSpec::new(d.path.clone(), line);
+                    spec.condition = cond;
+                    spec.enabled = enabled;
+                    spec
+                })
+                .collect();
+            s.set_file_breakpoints(&d.path, specs);
         }
     }
 }

@@ -58,7 +58,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
                 s.pause();
             }
         }
-        Some(3) => app.debugger.stop(),
+        Some(3) => app.debugger.stop_selected(),
         Some(4) => app.run_ide_action(&ctx, Action::StepOver),
         Some(5) => app.run_ide_action(&ctx, Action::StepInto),
         Some(6) => app.run_ide_action(&ctx, Action::StepOut),
@@ -76,6 +76,36 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
             empty_state(ui, ico::DEBUG, t, h);
         }
         return;
+    }
+    // One tab per process of a multi-process debug (an Aspire app host and its services).
+    if !app.debugger.others.is_empty() {
+        let tabs: Vec<(u64, String, Ico)> = app
+            .debugger
+            .session_tabs()
+            .into_iter()
+            .map(|(id, name, state)| {
+                let icon = match state {
+                    rc_dap::SessionState::Stopped(_) => ico::THREAD_AT_BREAKPOINT,
+                    s if s.is_ended() => ico::TEST_TERMINATED,
+                    _ => ico::DEBUG,
+                };
+                (id, name.to_string(), icon)
+            })
+            .collect();
+        let mut picked = None;
+        ui.horizontal(|ui| {
+            ui.add_space(8.0);
+            for (id, name, icon) in &tabs {
+                if theme::tab(ui, *id == app.debugger.session_id, Some(*icon), name, false).0.clicked() {
+                    picked = Some(*id);
+                }
+            }
+        });
+        if let Some(id) = picked {
+            let outs = app.debugger.select_session(id);
+            app.handle_debug(outs);
+        }
+        ui.add_space(2.0);
     }
     // Tabs and the state of the session.
     let p = rc_kit::pal(ui);
