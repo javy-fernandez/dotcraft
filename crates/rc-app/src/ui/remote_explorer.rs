@@ -1,34 +1,31 @@
 //! File › Open Remote Folder…: a folder on another machine (over SSH) or in a WSL
-//! distribution, served by `dotcraft-remote-agent`. On connect DotCraft installs the agent of
-//! its own version when the remote machine does not have it yet (`rc_remote::deploy`). The
-//! Explorer shows the folder's tree, the editor area edits the selected file (saved through
-//! the agent), builds and tests run on the remote machine, and Run and the Terminal open an
-//! SSH or WSL session there. Every request runs on one worker task, never on the UI thread;
-//! closing the folder saves the open file, then ends the connection, and the agent stops
-//! whatever it was running.
+//! distribution, served by `dotcraft-remote-agent`, which DotCraft installs there on connect
+//! (`rc_remote::deploy`). The folder is copied into a local mirror once
+//! (`remote_backend`); its files open in ordinary editor tabs and every save goes back to the
+//! remote machine. Roslyn and netcoredbg are installed on the remote machine and run there,
+//! so code insight, builds, tests, runs and debugging all use the remote SDK. Every remote
+//! request runs on the shared runtime, never on the UI thread.
 
 use crate::app::DotCraftApp;
+use crate::remote_backend::{self, Backend, Machine, Tools};
 use crate::toolwindow::ToolWindow;
 use crate::ui::{dialogs, kit};
 use egui::{Align2, Context, FontId, Rect, Sense, Ui, pos2, vec2};
+use rc_core::mirror::{Mirror, folder_name};
 use rc_core::settings::RemoteConnection;
+use rc_core::watch::{FileWatcher, FsEvent};
 use rc_core::{Inbox, Runtime, Waker, inbox::Outbox};
-use rc_editor::{Action, EditorState, EditorView};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{Ico, ico, icons, theme};
 use rc_remote::deploy::{self, Release, Step};
-use rc_remote::{Client, Endpoint, Entry, Operation, RemoteSession, Value, is_connection_error, shell_word};
+use rc_remote::{Client, Endpoint, Entry, Killer, Operation, RemoteSession, Value, is_connection_error, shell_word};
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::sync::{mpsc, oneshot};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::sync::mpsc;
 
 /// Where `cargo install` puts the agent: the hint of a custom agent path.
 pub const DEFAULT_AGENT: &str = "~/.cargo/bin/dotcraft-remote-agent";
-/// The agent reads and writes files up to 1 MiB.
-const MAX_FILE_BYTES: usize = 1024 * 1024;
-
-/// Editor ids of remote files, apart from the local documents' ids.
-static NEXT_EDITOR_ID: AtomicU64 = AtomicU64::new(1 << 43);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Status {
@@ -56,67 +53,69 @@ fn phase_text(phase: Phase) -> &'static str {
     }
 }
 
+/// Requests for the connection worker.
 enum Request {
     List(String),
-    Read(String),
-    /// Saves a file: its path, bytes and the buffer version they come from.
-    Write(String, Vec<u8>, u64),
-    /// A `dotnet` command in the folder, with a project or solution as target; firing the
-    /// sender cancels it.
-    Command(CommandKind, Option<String>, oneshot::Receiver<()>),
-    /// Finishes the writes sent before, then closes the connection.
+    /// Ends the connection.
     Shutdown,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum CommandKind {
     Info,
-    Sdks,
     Build,
     Test,
 }
 
-struct CommandResult {
-    code: Option<i32>,
-    stdout: String,
-    output: String,
-}
-
-/// The last `dotnet` command: its command line and how it ended.
-struct CommandOutput {
-    command: String,
-    /// `Some(Ok(None))` once cancelled.
-    result: Option<Result<Option<CommandResult>, String>>,
+/// C# support for the folder.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Language {
+    Idle,
+    /// Copying the folder, finding its solution, installing Roslyn on the remote machine.
+    Preparing,
+    Started,
+    Failed(String),
 }
 
 enum Event {
     Progress(Phase),
     /// The agent could not be installed: the dialog offers the manual install.
     DeployFailed(String),
-    Connected(String, Vec<Entry>),
+    Connected(String, Vec<Entry>, Client, Machine),
     Listed(String, Vec<Entry>),
     ListFailed(String, String),
-    Read(String, Result<Vec<u8>, String>),
-    Saved(String, u64, Result<(), String>),
-    CommandDone(CommandKind, Result<Option<CommandResult>, String>),
+    /// The folder's copy in the mirror (SHA-256 per file).
+    Synced(Result<HashMap<PathBuf, String>, String>),
+    /// The remote language server to start (its dll), or why there is none.
+    LanguageReady(Result<String, String>),
+    Fetched { remote: String, line: usize, col: usize, result: Result<(PathBuf, String), String> },
+    Pushed(PathBuf, Result<String, String>),
+    Sdks(Vec<String>),
+    CommandStarted(u64, Killer),
+    CommandText(u64, String, bool),
+    CommandDone(u64, Result<Option<i32>, String>),
+    /// A project built and resolved for debugging (console key, name, launch, adapter).
+    DebugReady(u64, String, rc_dap::LaunchConfig, String),
+    DebugFailed(u64, String),
     /// The connection could not be made, or broke.
     Lost(String),
 }
 
-/// The file open in the editor area.
-pub struct RemoteFile {
-    pub path: String,
-    /// The editor once the file arrived, or why it cannot be edited; `None` while it loads.
-    pub body: Option<Result<EditorState, String>>,
-    bom: bool,
-    saving: bool,
-    save_error: Option<String>,
-}
-
-impl RemoteFile {
-    fn modified(&self) -> bool {
-        matches!(&self.body, Some(Ok(editor)) if editor.buffer.is_modified())
-    }
+/// What the rest of the app does for the remote folder.
+pub enum RemoteOutput {
+    /// The folder has just opened.
+    Opened,
+    /// Open this local copy at (line, column).
+    Open(PathBuf, usize, usize),
+    /// Start C# support: the mirror folder, solution and projects, and the remote server.
+    Language { root: PathBuf, solution: Option<PathBuf>, projects: Vec<PathBuf>, connect: crate::insight::RemoteConnect },
+    /// A console tab for a remote command (key, title), its output and its end.
+    Console(u64, String),
+    ConsoleText(u64, String, bool),
+    ConsoleDone(u64, Option<i32>),
+    /// Debug a prepared program with the remote adapter.
+    Debug { name: String, launch: rc_dap::LaunchConfig, launcher: rc_dap::session::Launcher },
+    Notify(String, bool),
 }
 
 pub struct RemoteExplorer {
@@ -135,16 +134,29 @@ pub struct RemoteExplorer {
     cache: HashMap<String, Vec<Entry>>,
     loading: HashSet<String>,
     expanded: HashSet<String>,
-    file: Option<RemoteFile>,
-    running: Option<CommandKind>,
-    cancel_command: Option<oneshot::Sender<()>>,
+    /// The Explorer's selected file (remote path).
+    selected: Option<String>,
+    backend: Option<Backend>,
+    /// The SHA-256 of each mirror file as the remote machine has it.
+    hashes: HashMap<PathBuf, String>,
+    pushing: HashSet<PathBuf>,
+    watcher: Option<FileWatcher>,
+    fs_events: Inbox<FsEvent>,
+    language: Language,
+    /// A running `dotnet` command: its kind, console key and killer.
+    running: Option<(CommandKind, u64, Option<Killer>)>,
+    /// Preparing a debug session (its console key).
+    debugging: Option<u64>,
+    next_key: u64,
     sdk_versions: Option<Vec<String>>,
-    output: Option<CommandOutput>,
-    /// The editor area shows the command output instead of the file.
-    show_output: bool,
+    /// Remote tools already in place (tests).
+    pub tools: Tools,
+    /// Overrides the mirror folder (tests).
+    pub mirror_root: Option<PathBuf>,
     requests: Option<mpsc::UnboundedSender<Request>>,
     worker: Option<tokio::task::JoinHandle<()>>,
     events: Inbox<Event>,
+    outputs: Vec<RemoteOutput>,
     waker: Waker,
 }
 
@@ -168,15 +180,23 @@ impl RemoteExplorer {
             cache: HashMap::new(),
             loading: HashSet::new(),
             expanded: HashSet::new(),
-            file: None,
+            selected: None,
+            backend: None,
+            hashes: HashMap::new(),
+            pushing: HashSet::new(),
+            watcher: None,
+            fs_events: Inbox::new(waker.clone()),
+            language: Language::Idle,
             running: None,
-            cancel_command: None,
+            debugging: None,
+            next_key: 1,
             sdk_versions: None,
-            output: None,
-            show_output: false,
+            tools: Tools::default(),
+            mirror_root: None,
             requests: None,
             worker: None,
             events: Inbox::new(waker.clone()),
+            outputs: Vec::new(),
             waker,
         }
     }
@@ -195,18 +215,25 @@ impl RemoteExplorer {
         self.status == Status::Connecting && self.root.is_none()
     }
 
-    /// Closes the remote folder. Unsaved edits of the open file are saved first: the worker
-    /// finishes that write, then drops the session, which ends ssh or wsl.exe; the agent sees
-    /// its input close and kills the processes it started.
+    /// The local copies of this connection's files.
+    fn mirror_for(&self, connection: &RemoteConnection) -> Mirror {
+        let root = self.mirror_root.clone().unwrap_or_else(|| {
+            let host = if connection.wsl { format!("wsl-{}", connection.host.trim()) } else { connection.host.trim().to_string() };
+            rc_core::paths::data_dir().join("remote").join(folder_name(&host))
+        });
+        Mirror::new(root)
+    }
+
+    /// The mirror of the open folder.
+    pub fn mirror(&self) -> Option<&Mirror> {
+        self.backend.as_ref().map(|b| &b.mirror)
+    }
+
+    /// Closes the remote folder: the session ends (ssh or wsl.exe exits, the agent kills what
+    /// it was running). Save and [`RemoteExplorer::flush`] first.
     pub fn disconnect(&mut self) {
-        let modified = self.file.as_ref().is_some_and(RemoteFile::modified);
-        if modified && self.status == Status::Connected {
-            self.save();
-            if let Some(tx) = self.requests.take() {
-                let _ = tx.send(Request::Shutdown);
-            }
-            // Let it finish on its own.
-            self.worker = None;
+        if let Some(tx) = self.requests.take() {
+            let _ = tx.send(Request::Shutdown);
         }
         self.stop_worker();
         self.connection = None;
@@ -217,12 +244,18 @@ impl RemoteExplorer {
         self.cache.clear();
         self.loading.clear();
         self.expanded.clear();
-        self.file = None;
-        self.running = None;
-        self.cancel_command = None;
+        self.selected = None;
+        self.backend = None;
+        self.hashes.clear();
+        self.pushing.clear();
+        self.watcher = None;
+        self.language = Language::Idle;
+        if let Some((_, _, Some(killer))) = self.running.take() {
+            killer.kill();
+        }
+        self.debugging = None;
         self.sdk_versions = None;
-        self.output = None;
-        self.show_output = false;
+        self.outputs.clear();
     }
 
     fn stop_worker(&mut self) {
@@ -251,8 +284,7 @@ impl RemoteExplorer {
         self.start(endpoint, folder);
     }
 
-    /// Connects again after the connection dropped, keeping the expanded folders and the
-    /// open file (with its unsaved edits).
+    /// Connects again after the connection dropped, keeping the expanded folders.
     pub fn reconnect(&mut self) {
         let (Some(connection), Some(root)) = (&self.connection, &self.root) else { return };
         let Some(endpoint) = endpoint(connection) else { return };
@@ -260,7 +292,7 @@ impl RemoteExplorer {
         self.cache.clear();
         self.loading.clear();
         self.running = None;
-        self.cancel_command = None;
+        self.debugging = None;
         self.start(endpoint, root);
     }
 
@@ -286,6 +318,28 @@ impl RemoteExplorer {
         self.worker = Some(Runtime::spawn(serve(endpoint, connection, folder, rx, self.events.sender())));
     }
 
+    /// Opens `folder` through an agent served in this process (the "remote machine" is this
+    /// one): for tests.
+    #[cfg(test)]
+    pub fn connect_local_for_test(&mut self, connection: RemoteConnection) {
+        self.disconnect();
+        let folder = connection.folder.clone();
+        self.connection = Some(connection);
+        self.status = Status::Connecting;
+        let client = remote_backend::test_support::local_client();
+        let out = self.events.sender();
+        self.worker = Some(Runtime::spawn(async move {
+            match (list(&client, &folder).await, remote_backend::probe(&client).await) {
+                (Ok(entries), Ok(machine)) => {
+                    out.send(Event::Connected(folder, entries, client, machine));
+                }
+                (Err(e), _) | (_, Err(e)) => {
+                    out.send(Event::Lost(e.to_string()));
+                }
+            }
+        }));
+    }
+
     /// Lists every expanded folder again.
     pub fn refresh(&mut self) {
         if self.status == Status::Connected {
@@ -298,90 +352,147 @@ impl RemoteExplorer {
         self.expanded.retain(|path| Some(path) == self.root.as_ref());
     }
 
-    /// Applies what the worker sent. Returns true when a remote folder has just opened.
-    pub fn pump(&mut self) -> bool {
-        let mut opened = false;
+    /// Runs `task` on the shared runtime with the back end; what it returns goes to the UI.
+    fn spawn<F>(&self, task: impl FnOnce(Backend) -> F)
+    where
+        F: std::future::Future<Output = Event> + Send + 'static,
+    {
+        let Some(backend) = self.backend.clone() else { return };
+        let out = self.events.sender();
+        let future = task(backend);
+        Runtime::spawn(async move {
+            out.send(future.await);
+        });
+    }
+
+    /// Applies what the worker and the tasks sent; returns what the app must do.
+    pub fn pump(&mut self) -> Vec<RemoteOutput> {
         for event in self.events.drain() {
-            match event {
-                Event::Progress(phase) => self.phase = Some(phase),
-                Event::DeployFailed(error) => {
-                    self.lose(error);
-                    self.deploy_failed = self.root.is_none();
-                }
-                Event::Connected(folder, entries) => {
-                    opened = self.root.is_none();
-                    self.status = Status::Connected;
-                    self.phase = None;
-                    self.expanded.insert(folder.clone());
-                    self.cache.insert(folder.clone(), sorted(entries));
-                    self.root = Some(folder);
-                    self.start_command(CommandKind::Sdks);
-                    // A file that was loading when the connection dropped.
-                    if let Some(path) = self.file.as_ref().filter(|f| matches!(f.body, None | Some(Err(_)))).map(|f| f.path.clone()) {
-                        self.file = None;
-                        self.select_file(&path);
-                    }
-                }
-                Event::Listed(path, entries) => {
-                    self.loading.remove(&path);
-                    self.cache.insert(path, sorted(entries));
-                }
-                Event::ListFailed(path, error) => {
-                    self.loading.remove(&path);
-                    self.expanded.remove(&path);
-                    self.error = Some(error);
-                }
-                Event::Read(path, bytes) => {
-                    if let Some(file) = self.file.as_mut().filter(|f| f.path == path) {
-                        match bytes.and_then(|bytes| file_text(&bytes)) {
-                            Ok((text, bom)) => {
-                                let id = NEXT_EDITOR_ID.fetch_add(1, Ordering::Relaxed);
-                                let mut editor = EditorState::new(id, Some(path.into()), &text);
-                                editor.parse_blocking();
-                                file.body = Some(Ok(editor));
-                                file.bom = bom;
-                            }
-                            Err(error) => file.body = Some(Err(error)),
-                        }
-                    }
-                }
-                Event::Saved(path, version, result) => match self.file.as_mut().filter(|f| f.path == path) {
-                    Some(file) => {
-                        file.saving = false;
-                        match result {
-                            Ok(()) => {
-                                file.save_error = None;
-                                if let Some(Ok(editor)) = &mut file.body
-                                    && editor.buffer.version() == version
-                                {
-                                    editor.buffer.mark_saved();
-                                }
-                            }
-                            Err(error) => file.save_error = Some(error),
-                        }
-                    }
-                    None => {
-                        if let Err(error) = result {
-                            self.error = Some(trf("Could not save {file}: {error}", &[("file", &file_name(&path)), ("error", &error)]));
-                        }
-                    }
-                },
-                Event::CommandDone(kind, result) => {
-                    self.running = None;
-                    self.cancel_command = None;
-                    if kind == CommandKind::Sdks {
-                        self.sdk_versions = Some(match &result {
-                            Ok(Some(r)) if r.code == Some(0) => sdk_versions(&r.stdout),
-                            _ => Vec::new(),
-                        });
-                    } else if let Some(output) = &mut self.output {
-                        output.result = Some(result);
-                    }
-                }
-                Event::Lost(error) => self.lose(error),
+            self.on_event(event);
+        }
+        for event in self.fs_events.drain() {
+            if let FsEvent::Changed(path) | FsEvent::Created(path) = event {
+                self.push_if_changed(&path);
             }
         }
-        opened
+        std::mem::take(&mut self.outputs)
+    }
+
+    fn on_event(&mut self, event: Event) {
+        match event {
+            Event::Progress(phase) => self.phase = Some(phase),
+            Event::DeployFailed(error) => {
+                self.lose(error);
+                self.deploy_failed = self.root.is_none();
+            }
+            Event::Connected(folder, entries, client, machine) => {
+                let first = self.root.is_none();
+                let connection = self.connection.clone().unwrap_or_default();
+                self.backend = Some(Backend {
+                    client,
+                    mirror: self.mirror_for(&connection),
+                    root: folder.clone(),
+                    dotnet: connection.dotnet.trim().to_string(),
+                    machine,
+                    tools: self.tools.clone(),
+                });
+                self.status = Status::Connected;
+                self.phase = None;
+                self.expanded.insert(folder.clone());
+                self.cache.insert(folder.clone(), sorted(entries));
+                self.root = Some(folder);
+                self.spawn(|b| async move {
+                    match remote_backend::capture(&b.client, sdk_list(&b), None).await {
+                        Ok(out) if out.code == Some(0) => Event::Sdks(sdk_versions(&String::from_utf8_lossy(&out.stdout))),
+                        _ => Event::Sdks(Vec::new()),
+                    }
+                });
+                if first {
+                    self.outputs.push(RemoteOutput::Opened);
+                    self.language = Language::Preparing;
+                    self.spawn(|b| async move { Event::Synced(b.sync_folder().await.map_err(|e| format!("{e:#}"))) });
+                }
+            }
+            Event::Listed(path, entries) => {
+                self.loading.remove(&path);
+                self.cache.insert(path, sorted(entries));
+            }
+            Event::ListFailed(path, error) => {
+                self.loading.remove(&path);
+                self.expanded.remove(&path);
+                self.error = Some(error);
+            }
+            Event::Synced(result) => match result {
+                Ok(hashes) => {
+                    self.hashes.extend(hashes);
+                    self.watch_mirror();
+                    self.start_language();
+                }
+                Err(error) => {
+                    self.language = Language::Failed(error.clone());
+                    self.error = Some(trf("Could not copy the folder: {error}", &[("error", &error)]));
+                }
+            },
+            Event::LanguageReady(result) => match result {
+                Ok(dll) => self.language_started(dll),
+                Err(error) => self.language = Language::Failed(error),
+            },
+            Event::Fetched { remote, line, col, result } => match result {
+                Ok((local, hash)) => {
+                    self.hashes.insert(local.clone(), hash);
+                    self.watch_mirror();
+                    self.outputs.push(RemoteOutput::Open(local, line, col));
+                }
+                Err(error) => self.outputs.push(RemoteOutput::Notify(trf("Could not open {file}: {error}", &[("file", &file_name(&remote)), ("error", &error)]), true)),
+            },
+            Event::Pushed(local, result) => {
+                self.pushing.remove(&local);
+                match result {
+                    Ok(hash) => {
+                        self.hashes.insert(local.clone(), hash);
+                        // Saved again while the push ran.
+                        self.push_if_changed(&local);
+                    }
+                    Err(error) => {
+                        let name = local.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                        self.outputs.push(RemoteOutput::Notify(trf("Could not save {file}: {error}", &[("file", &name), ("error", &error)]), true));
+                    }
+                }
+            }
+            Event::Sdks(versions) => self.sdk_versions = Some(versions),
+            Event::CommandStarted(key, killer) => {
+                if let Some(running) = self.running.as_mut().filter(|r| r.1 == key) {
+                    running.2 = Some(killer);
+                }
+            }
+            Event::CommandText(key, text, stderr) => self.outputs.push(RemoteOutput::ConsoleText(key, text, stderr)),
+            Event::CommandDone(key, result) => {
+                if self.running.as_ref().is_some_and(|r| r.1 == key) {
+                    self.running = None;
+                }
+                match result {
+                    Ok(code) => self.outputs.push(RemoteOutput::ConsoleDone(key, code)),
+                    Err(error) => self.outputs.push(RemoteOutput::ConsoleText(key, format!("{error}\n"), true)),
+                }
+            }
+            Event::DebugReady(key, name, launch, exe) => {
+                self.debugging = None;
+                if let Some(backend) = self.backend.clone() {
+                    self.outputs.push(RemoteOutput::ConsoleDone(key, Some(0)));
+                    let launcher: rc_dap::session::Launcher = Arc::new(move |out, waker| {
+                        let map = rc_dap::remote::PathMap { mirror: backend.mirror.clone() };
+                        rc_dap::DapClient::connect(backend.dap_transport(exe.clone()), Some(Arc::new(map)), out, waker)
+                    });
+                    self.outputs.push(RemoteOutput::Debug { name, launch, launcher });
+                }
+            }
+            Event::DebugFailed(key, error) => {
+                self.debugging = None;
+                self.outputs.push(RemoteOutput::ConsoleText(key, format!("{error}\n"), true));
+                self.outputs.push(RemoteOutput::Notify(error, true));
+            }
+            Event::Lost(error) => self.lose(error),
+        }
     }
 
     fn lose(&mut self, error: String) {
@@ -390,20 +501,7 @@ impl RemoteExplorer {
         self.phase = None;
         self.loading.clear();
         self.running = None;
-        self.cancel_command = None;
-        // A command in flight died with the connection.
-        if let Some(output) = self.output.as_mut().filter(|o| o.result.is_none()) {
-            output.result = Some(Err(tr("Connection lost").into()));
-        }
-        if let Some(file) = self.file.as_mut() {
-            if file.body.is_none() {
-                file.body = Some(Err(tr("Connection lost").into()));
-            }
-            if file.saving {
-                file.saving = false;
-                file.save_error = Some(tr("Connection lost").into());
-            }
-        }
+        self.debugging = None;
         if self.root.is_some() {
             self.status = Status::Lost;
             self.error = Some(error);
@@ -411,6 +509,79 @@ impl RemoteExplorer {
             self.disconnect();
             self.form_error = Some(error);
         }
+    }
+
+    /// Watches the mirror of the folder: a saved file goes back to the remote machine.
+    fn watch_mirror(&mut self) {
+        if self.watcher.is_some() {
+            return;
+        }
+        let Some(root) = self.backend.as_ref().and_then(|b| b.mirror.local("/")) else { return };
+        let _ = std::fs::create_dir_all(&root);
+        self.watcher = FileWatcher::new(&root, self.fs_events.sender()).ok();
+    }
+
+    /// Pushes a mirror file whose bytes differ from the remote machine's.
+    fn push_if_changed(&mut self, local: &Path) {
+        let Some(known) = self.hashes.get(local).cloned() else { return };
+        if self.pushing.contains(local) || self.status != Status::Connected {
+            return;
+        }
+        let Ok(bytes) = std::fs::read(local) else { return };
+        if deploy::sha256_hex(&bytes) == known {
+            return;
+        }
+        self.pushing.insert(local.to_path_buf());
+        let local = local.to_path_buf();
+        self.spawn(move |b| async move {
+            let result = b.push(&local, Some(&known)).await.map_err(|e| format!("{e:#}"));
+            Event::Pushed(local, result)
+        });
+    }
+
+    /// Writes every saved file that has not reached the remote machine yet, waiting for it
+    /// (closing the folder).
+    pub fn flush(&mut self) {
+        let Some(backend) = self.backend.clone().filter(|_| self.status == Status::Connected) else { return };
+        let changed: Vec<(PathBuf, String)> = self
+            .hashes
+            .iter()
+            .filter(|(path, hash)| std::fs::read(path).is_ok_and(|bytes| deploy::sha256_hex(&bytes) != **hash))
+            .map(|(p, h)| (p.clone(), h.clone()))
+            .collect();
+        if changed.is_empty() {
+            return;
+        }
+        let _ = Runtime::block_on(tokio::time::timeout(std::time::Duration::from_secs(10), async move {
+            for (path, hash) in changed {
+                let _ = backend.push(&path, Some(&hash)).await;
+            }
+        }));
+    }
+
+    /// Finds the solution (or projects) in the mirror and installs Roslyn on the remote
+    /// machine.
+    fn start_language(&mut self) {
+        let (Some(backend), Some(root)) = (&self.backend, &self.root) else { return };
+        let Some(local_root) = backend.mirror.local(root) else { return };
+        let (solution, projects) = find_solution(&local_root);
+        if solution.is_none() && projects.is_empty() {
+            self.language = Language::Idle;
+            return;
+        }
+        self.spawn(|b| async move { Event::LanguageReady(b.ensure_roslyn().await.map_err(|e| format!("{e:#}"))) });
+    }
+
+    fn language_started(&mut self, dll: String) {
+        let (Some(backend), Some(root)) = (self.backend.clone(), self.root.clone()) else { return };
+        let Some(local_root) = backend.mirror.local(&root) else { return };
+        let (solution, projects) = find_solution(&local_root);
+        let connect: crate::insight::RemoteConnect = Arc::new(move |out| {
+            let map = rc_lsp::remote::UriMap { mirror: backend.mirror.clone() };
+            rc_lsp::Client::connect(backend.lsp_transport(dll.clone()), Some(Arc::new(map)), out)
+        });
+        self.language = Language::Started;
+        self.outputs.push(RemoteOutput::Language { root: local_root, solution, projects, connect });
     }
 
     fn send(&mut self, request: Request) -> bool {
@@ -425,76 +596,88 @@ impl RemoteExplorer {
         }
     }
 
-    /// Opens a file in the editor area; the one open before is saved when it was edited
-    /// (like Rider, which saves when you leave a file).
-    fn select_file(&mut self, path: &str) {
-        if self.file.as_ref().is_some_and(|f| f.path == path && matches!(f.body, Some(Ok(_)))) {
-            self.show_output = false;
+    /// Opens a remote file in an editor tab, fetched fresh.
+    pub fn open(&mut self, remote: &str, line: usize, col: usize) {
+        let remote = remote.to_string();
+        if self.status != Status::Connected {
             return;
         }
-        if self.file.as_ref().is_some_and(RemoteFile::modified) {
-            self.save();
-        }
-        self.show_output = false;
-        self.file = Some(RemoteFile { path: path.to_string(), body: None, bom: false, saving: false, save_error: None });
-        if !self.send(Request::Read(path.to_string()))
-            && let Some(file) = &mut self.file
-        {
-            file.body = Some(Err(tr("Not connected").into()));
-        }
+        self.spawn(move |b| async move {
+            let result = b.fetch(&remote).await.map(|(local, bytes)| (local, deploy::sha256_hex(&bytes))).map_err(|e| format!("{e:#}"));
+            Event::Fetched { remote, line, col, result }
+        });
     }
 
-    /// Saves the open file through the agent (File › Save, ⌘S).
-    pub fn save(&mut self) {
-        let Some(file) = &self.file else { return };
-        let Some(Ok(editor)) = &file.body else { return };
-        if !editor.buffer.is_modified() || file.saving {
-            return;
+    /// The app opens `path`: a mirror file that is not open in an editor is fetched first
+    /// (`true`: it opens when it arrives).
+    pub fn intercept_open(&mut self, path: &Path, line: usize, col: usize, already_open: bool) -> bool {
+        if already_open || self.status != Status::Connected {
+            return false;
         }
-        let mut bytes = if file.bom { vec![0xEF, 0xBB, 0xBF] } else { Vec::new() };
-        bytes.extend_from_slice(editor.buffer.to_disk_string().as_bytes());
-        let (path, version) = (file.path.clone(), editor.buffer.version());
-        let error = if bytes.len() > MAX_FILE_BYTES {
-            Some(tr("Remote files are saved up to 1 MiB").to_string())
-        } else if !self.send(Request::Write(path, bytes, version)) {
-            Some(tr("Not connected").to_string())
-        } else {
-            None
-        };
-        if let Some(file) = &mut self.file {
-            file.saving = error.is_none();
-            file.save_error = error;
-        }
+        let Some(remote) = self.mirror().and_then(|m| m.remote(path)) else { return false };
+        self.open(&remote, line, col);
+        true
     }
 
-    /// Runs a `dotnet` command in the folder: on the selected project or solution, or on
-    /// whatever `dotnet` finds in the folder.
+    /// Runs a `dotnet` command in the folder, its output in a console tab: on the selected
+    /// project or solution, or on whatever `dotnet` finds in the folder.
     fn start_command(&mut self, kind: CommandKind) {
-        if self.running.is_some() {
+        if self.running.is_some() || self.status != Status::Connected {
             return;
         }
         let target = self.selected_target();
-        let (cancel, receiver) = oneshot::channel();
+        let args = dotnet_args(kind, target.clone());
         let dotnet = self.connection.as_ref().map(|c| c.dotnet.trim().to_string()).unwrap_or_default();
-        let command = std::iter::once(dotnet).chain(dotnet_args(kind, target.clone())).collect::<Vec<_>>().join(" ");
-        if self.send(Request::Command(kind, target, receiver)) {
-            self.running = Some(kind);
-            self.cancel_command = Some(cancel);
-            if kind != CommandKind::Sdks {
-                self.output = Some(CommandOutput { command, result: None });
-                self.show_output = true;
-            }
-        }
+        let key = self.next_key;
+        self.next_key += 1;
+        self.running = Some((kind, key, None));
+        self.outputs.push(RemoteOutput::Console(key, std::iter::once(dotnet).chain(args.iter().map(|a| file_name(a).to_string())).collect::<Vec<_>>().join(" ")));
+        let out = self.events.sender();
+        self.spawn(move |b| async move { stream_dotnet(&b, key, args, &out).await });
     }
 
-    /// The open file when it is a project or solution.
+    /// Builds the selected project on the remote machine, installs netcoredbg there if
+    /// needed, and debugs it there.
+    fn start_debug(&mut self) {
+        if self.debugging.is_some() || self.status != Status::Connected {
+            return;
+        }
+        let Some(project) = self.selected_target().filter(|p| !is_solution(p)) else {
+            self.outputs.push(RemoteOutput::Notify(tr("Select a project in the Explorer to debug it").into(), false));
+            return;
+        };
+        let key = self.next_key;
+        self.next_key += 1;
+        self.debugging = Some(key);
+        let name = file_stem(&project).to_string();
+        self.outputs.push(RemoteOutput::Console(key, trf("Debug {name}", &[("name", &name)])));
+        let out = self.events.sender();
+        self.spawn(move |b| async move {
+            out.send(Event::CommandText(key, format!("{}\n", tr("Preparing the debugger on the remote machine…")), false));
+            let exe = match b.ensure_netcoredbg().await {
+                Ok(exe) => exe,
+                Err(e) => return Event::DebugFailed(key, format!("{e:#}")),
+            };
+            match stream_dotnet(&b, key, vec!["build".into(), project.clone()], &out).await {
+                Event::CommandDone(_, Ok(Some(0))) => {}
+                Event::CommandDone(_, Err(e)) => return Event::DebugFailed(key, e),
+                _ => return Event::DebugFailed(key, tr("The build failed").into()),
+            }
+            match b.launch_config(&project).await {
+                Ok(launch) => Event::DebugReady(key, name, launch, exe),
+                Err(e) => Event::DebugFailed(key, format!("{e:#}")),
+            }
+        });
+    }
+
+    /// The selected file when it is a project or solution.
     fn selected_target(&self) -> Option<String> {
-        self.file.as_ref().map(|f| f.path.clone()).filter(|path| is_dotnet_target(path))
+        self.selected.clone().filter(|path| is_dotnet_target(path))
     }
 
     fn cancel_running(&mut self) {
-        if let Some(cancel) = self.cancel_command.take() {
-            let _ = cancel.send(());
+        if let Some((_, _, Some(killer))) = &self.running {
+            killer.kill();
         }
     }
 
@@ -514,8 +697,8 @@ impl RemoteExplorer {
         Some((program, args, connection.host.trim().to_string()))
     }
 
-    /// `dotnet run` on the remote machine (the open project, or the one in the folder), in a
-    /// terminal so its output streams and it reads input; closing the tab stops it.
+    /// `dotnet run` on the remote machine (the selected project, or the one in the folder),
+    /// in a terminal so its output streams and it reads input; closing the tab stops it.
     pub fn run_command(&self) -> Option<(String, Vec<String>, String)> {
         let (connection, root) = (self.connection.as_ref()?, self.root.as_ref()?);
         let project = self.selected_target().filter(|path| !is_solution(path));
@@ -527,6 +710,52 @@ impl RemoteExplorer {
         let (program, args) = session_command(connection, root, Some(&words));
         Some((program, args, name))
     }
+}
+
+/// `dotnet --list-sdks`.
+fn sdk_list(b: &Backend) -> Operation {
+    Operation::Spawn { program: b.dotnet.clone(), args: vec!["--list-sdks".into()], cwd: b.root.clone(), env: vec![("DOTNET_NOLOGO".into(), "1".into())], path: Vec::new() }
+}
+
+/// Runs `dotnet <args>` with its output streamed to console `key`.
+async fn stream_dotnet(b: &Backend, key: u64, args: Vec<String>, out: &Outbox<Event>) -> Event {
+    use tokio::io::AsyncReadExt;
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let mut process = match b.dotnet_stream(&args).await {
+        Ok(process) => process,
+        Err(e) => return Event::CommandDone(key, Err(format!("{e:#}"))),
+    };
+    out.send(Event::CommandStarted(key, process.killer()));
+    let forward = |mut pipe: Box<dyn tokio::io::AsyncRead + Send + Unpin>, stderr: bool| {
+        let out = out.clone();
+        async move {
+            let mut buffer = vec![0u8; 16 * 1024];
+            while let Ok(count) = pipe.read(&mut buffer).await {
+                if count == 0 {
+                    return;
+                }
+                out.send(Event::CommandText(key, String::from_utf8_lossy(&buffer[..count]).into_owned(), stderr));
+            }
+        }
+    };
+    let (stdout, stderr) = (process.stdout.take().expect("stdout"), process.stderr.take().expect("stderr"));
+    tokio::join!(forward(stdout, false), forward(stderr, true));
+    Event::CommandDone(key, Ok(process.wait().await))
+}
+
+/// The solution of a folder (at its top, else one level down) or its projects.
+fn find_solution(root: &Path) -> (Option<PathBuf>, Vec<PathBuf>) {
+    let is_solution = |p: &Path| p.extension().is_some_and(|e| e == "sln" || e == "slnx");
+    let mut dirs = vec![root.to_path_buf()];
+    dirs.extend(rc_core::workspace::list_dir(root).into_iter().filter(|n| n.is_dir).map(|n| n.path));
+    for dir in dirs {
+        let mut found: Vec<PathBuf> = rc_core::workspace::list_dir(&dir).into_iter().map(|n| n.path).filter(|p| is_solution(p)).collect();
+        found.sort();
+        if let Some(sln) = found.into_iter().next() {
+            return (Some(sln), Vec::new());
+        }
+    }
+    (None, crate::app::find_projects(root, 3))
 }
 
 fn endpoint(c: &RemoteConnection) -> Option<Endpoint> {
@@ -573,9 +802,9 @@ impl deploy::Fetch for HttpFetch {
     }
 }
 
-/// The worker: installs the agent when needed, then one connection; requests run side by
-/// side (browse while a build runs). Aborting it drops the session and every request in
-/// flight.
+/// The connection worker: installs the agent when needed, connects, lists the folder and
+/// probes the machine, then serves listings until the connection ends. Aborting it drops
+/// the session.
 async fn serve(endpoint: Endpoint, connection: RemoteConnection, root: String, mut requests: mpsc::UnboundedReceiver<Request>, out: Outbox<Event>) {
     if !connection.custom_agent {
         let progress = |step: Step| {
@@ -600,61 +829,40 @@ async fn serve(endpoint: Endpoint, connection: RemoteConnection, root: String, m
         }
     };
     let client = session.client.clone();
-    match list(&client, &root).await {
-        Ok(entries) => out.send(Event::Connected(root.clone(), entries)),
+    let connected = async {
+        let entries = list(&client, &root).await?;
+        let machine = remote_backend::probe(&client).await?;
+        anyhow::Ok((entries, machine))
+    };
+    match connected.await {
+        Ok((entries, machine)) => out.send(Event::Connected(root.clone(), entries, client.clone(), machine)),
         Err(error) => {
             out.send(Event::Lost(describe(&session, &error)));
             return;
         }
     };
-    let dotnet = connection.dotnet.trim().to_string();
-    let mut tasks = tokio::task::JoinSet::new();
     loop {
         tokio::select! {
             request = requests.recv() => match request {
                 None | Some(Request::Shutdown) => return,
-                // In order, so a shutdown right after a save waits for it.
-                Some(Request::Write(path, bytes, version)) => {
-                    let result = write(&client, &path, bytes).await;
-                    if let Some(error) = result.as_ref().err().filter(|e| is_connection_error(e)) {
-                        out.send(Event::Lost(describe(&session, error)));
-                        return;
-                    }
-                    out.send(Event::Saved(path, version, result.map_err(|e| e.to_string())));
-                }
-                Some(request) => {
-                    let (client, root, dotnet) = (client.clone(), root.clone(), dotnet.clone());
-                    tasks.spawn(async move { handle(&client, &root, &dotnet, request).await });
+                Some(Request::List(path)) => {
+                    let event = match list(&client, &path).await {
+                        Ok(entries) => Event::Listed(path, entries),
+                        Err(error) if is_connection_error(&error) => {
+                            out.send(Event::Lost(describe(&session, &error)));
+                            return;
+                        }
+                        Err(error) => Event::ListFailed(path, error.to_string()),
+                    };
+                    out.send(event);
                 }
             },
-            Some(Ok((event, error))) = tasks.join_next() => {
-                // A broken connection ends the worker; the agent kills what it was running.
-                if let Some(error) = error.filter(is_connection_error) {
-                    out.send(Event::Lost(describe(&session, &error)));
-                    return;
-                }
-                out.send(event);
+            _ = client.closed() => {
+                let tail = session.stderr_tail();
+                out.send(Event::Lost(if tail.is_empty() { "remote agent disconnected".into() } else { format!("remote agent disconnected\n{tail}") }));
+                return;
             }
         }
-    }
-}
-
-/// One request: the event for the UI, and the error behind a failure.
-async fn handle(client: &Client, root: &str, dotnet: &str, request: Request) -> (Event, Option<anyhow::Error>) {
-    match request {
-        Request::List(path) => match list(client, &path).await {
-            Ok(entries) => (Event::Listed(path, entries), None),
-            Err(error) => (Event::ListFailed(path, error.to_string()), Some(error)),
-        },
-        Request::Read(path) => match read(client, &path).await {
-            Ok(bytes) => (Event::Read(path, Ok(bytes)), None),
-            Err(error) => (Event::Read(path, Err(error.to_string())), Some(error)),
-        },
-        Request::Command(kind, target, cancel) => match remote_command(client, root, dotnet, kind, target, cancel).await {
-            Ok(result) => (Event::CommandDone(kind, Ok(result)), None),
-            Err(error) => (Event::CommandDone(kind, Err(error.to_string())), Some(error)),
-        },
-        Request::Write(..) | Request::Shutdown => unreachable!("handled by the worker loop"),
     }
 }
 
@@ -671,71 +879,10 @@ async fn list(client: &Client, path: &str) -> anyhow::Result<Vec<Entry>> {
     }
 }
 
-async fn read(client: &Client, path: &str) -> anyhow::Result<Vec<u8>> {
-    let Value::Data { data } = client.request(Operation::Read { path: path.to_string() }).await? else {
-        anyhow::bail!("unexpected remote file response");
-    };
-    rc_remote::decode_data(&data)
-}
-
-async fn write(client: &Client, path: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
-    let data = rc_remote::encode_data(&bytes);
-    match client.request(Operation::Write { path: path.to_string(), data }).await? {
-        Value::Written => Ok(()),
-        _ => anyhow::bail!("unexpected remote write response"),
-    }
-}
-
-/// Runs `dotnet`; `None` when it was cancelled.
-async fn remote_command(
-    client: &Client,
-    root: &str,
-    dotnet: &str,
-    kind: CommandKind,
-    target: Option<String>,
-    cancel: oneshot::Receiver<()>,
-) -> anyhow::Result<Option<CommandResult>> {
-    // Builds and tests can take long (a first restore, a big test suite); Stop ends them.
-    let timeout_ms = if matches!(kind, CommandKind::Build | CommandKind::Test) { 30 * 60 * 1000 } else { 60_000 };
-    let Some(value) = client
-        .request_cancellable(
-            Operation::Run {
-                program: dotnet.into(),
-                args: dotnet_args(kind, target),
-                cwd: root.to_string(),
-                env: vec![
-                    ("DOTNET_CLI_UI_LANGUAGE".into(), "en".into()),
-                    ("DOTNET_NOLOGO".into(), "1".into()),
-                    ("DOTNET_CLI_TELEMETRY_OPTOUT".into(), "1".into()),
-                ],
-                timeout_ms,
-            },
-            cancel,
-        )
-        .await?
-    else {
-        return Ok(None);
-    };
-    let Value::Exit { code, stdout, stderr } = value else {
-        anyhow::bail!("unexpected remote process response");
-    };
-    let stdout = String::from_utf8_lossy(&rc_remote::decode_data(&stdout)?).into_owned();
-    let stderr = String::from_utf8_lossy(&rc_remote::decode_data(&stderr)?).into_owned();
-    let mut output = stdout.clone();
-    if !stderr.is_empty() {
-        if !output.is_empty() && !output.ends_with('\n') {
-            output.push('\n');
-        }
-        output.push_str(&stderr);
-    }
-    Ok(Some(CommandResult { code, stdout, output }))
-}
-
 /// Arguments only, never a shell line: the agent starts `dotnet` directly.
 fn dotnet_args(kind: CommandKind, target: Option<String>) -> Vec<String> {
     let mut args = match kind {
         CommandKind::Info => vec!["--info".to_string()],
-        CommandKind::Sdks => vec!["--list-sdks".to_string()],
         CommandKind::Build => vec!["build".to_string()],
         CommandKind::Test => vec!["test".to_string()],
     };
@@ -760,19 +907,6 @@ fn is_dotnet_target(path: &str) -> bool {
 /// The versions in `dotnet --list-sdks` output (`8.0.428 [/usr/share/dotnet/sdk]`).
 fn sdk_versions(stdout: &str) -> Vec<String> {
     stdout.lines().filter_map(|line| line.split_whitespace().next()).map(str::to_string).collect()
-}
-
-/// A file's text and whether it starts with a UTF-8 BOM, like local files; binary files are
-/// not edited.
-fn file_text(bytes: &[u8]) -> Result<(String, bool), String> {
-    let (bytes, bom) = match bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
-        Some(rest) => (rest, true),
-        None => (bytes, false),
-    };
-    if bytes.iter().take(8000).any(|&b| b == 0) {
-        return Err(tr("This is a binary file and cannot be edited").to_string());
-    }
-    Ok((String::from_utf8_lossy(bytes).into_owned(), bom))
 }
 
 /// An absolute POSIX folder without trailing slashes; remote paths never use the host's
@@ -913,10 +1047,7 @@ pub fn explorer(app: &mut DotCraftApp, ui: &mut Ui) {
             app.close_project();
             return;
         }
-        Some(2) => {
-            remote.refresh();
-            remote.start_command(CommandKind::Sdks);
-        }
+        Some(2) => remote.refresh(),
         Some(3) => remote.collapse_all(),
         _ => {}
     }
@@ -931,21 +1062,35 @@ pub fn explorer(app: &mut DotCraftApp, ui: &mut Ui) {
                 remote.start_command(CommandKind::Test);
             }
             run = kit::button(ui, Some(ico::RUN), tr("Run"), true).clicked();
-            if kit::button(ui, None, tr("SDK Info"), !busy).clicked() {
-                remote.start_command(CommandKind::Info);
+            if kit::button(ui, Some(ico::DEBUG), tr("Debug"), remote.debugging.is_none()).clicked() {
+                remote.start_debug();
             }
-            if busy && remote.running != Some(CommandKind::Sdks) && kit::button(ui, Some(ico::STOP), tr("Stop"), remote.cancel_command.is_some()).clicked() {
+            if busy && kit::button(ui, Some(ico::STOP), tr("Stop"), remote.running.as_ref().is_some_and(|r| r.2.is_some())).clicked() {
                 remote.cancel_running();
             }
-            if busy {
+            if busy || remote.debugging.is_some() {
                 ui.spinner();
             }
         });
-        match &remote.sdk_versions {
-            Some(versions) if versions.is_empty() => kit::content(ui, |ui| kit::message(ui, tr("No .NET SDK found on the remote machine"), false)),
-            Some(versions) => kit::content(ui, |ui| kit::note(ui, &format!("{} {}", tr(".NET SDKs:"), versions.join(", ")))),
-            None => {}
-        }
+        let language = match &remote.language {
+            Language::Preparing => Some((tr("Preparing C# support on the remote machine…").to_string(), false)),
+            Language::Failed(error) => Some((trf("C# support is not available: {error}", &[("error", error)]), true)),
+            Language::Idle | Language::Started => None,
+        };
+        kit::content(ui, |ui| {
+            match &remote.sdk_versions {
+                Some(versions) if versions.is_empty() => kit::message(ui, tr("No .NET SDK found on the remote machine"), false),
+                Some(versions) => kit::note(ui, &format!("{} {}", tr(".NET SDKs:"), versions.join(", "))),
+                None => {}
+            }
+            if let Some((text, error)) = &language {
+                if *error {
+                    kit::message(ui, text, true);
+                } else {
+                    kit::note(ui, text);
+                }
+            }
+        });
     }
     match remote.status {
         Status::Lost => {
@@ -970,16 +1115,25 @@ pub fn explorer(app: &mut DotCraftApp, ui: &mut Ui) {
     }
     let Some(root) = remote.root.clone() else { return };
     let location = remote.location();
+    let mut open = None;
     egui::ScrollArea::both().id_salt("remote_tree").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
-        let open = remote.expanded.contains(&root);
-        if tree_row(ui, 0, Some(open), ico::FOLDER, file_name(&root), &location, false).clicked() {
+        let expanded = remote.expanded.contains(&root);
+        if tree_row(ui, 0, Some(expanded), ico::FOLDER, file_name(&root), &location, false).clicked() {
             toggle(remote, &root);
         }
-        if open {
-            tree(ui, remote, &root, 1);
+        if expanded {
+            tree(ui, remote, &root, 1, &mut open);
         }
     });
+    if let Some(path) = open {
+        // An open tab shows at once; the others are fetched fresh first.
+        let local = app.remote.mirror().and_then(|m| m.local(&path));
+        match local.filter(|l| app.docs.list.iter().any(|d| &d.path == l)) {
+            Some(local) => app.open_file(&local),
+            None => app.remote.open(&path, 0, 0),
+        }
+    }
     if run && let Some((program, args, name)) = app.remote.run_command() {
         app.open_remote_session(program, args, name, true);
     }
@@ -991,7 +1145,8 @@ fn toggle(remote: &mut RemoteExplorer, dir: &str) {
     }
 }
 
-fn tree(ui: &mut Ui, remote: &mut RemoteExplorer, dir: &str, depth: usize) {
+/// The tree under `dir`; a double-clicked file (or a single click on a file) lands in `open`.
+fn tree(ui: &mut Ui, remote: &mut RemoteExplorer, dir: &str, depth: usize, open: &mut Option<String>) {
     remote.list_missing(dir);
     let Some(entries) = remote.cache.get(dir).cloned() else {
         if remote.loading.contains(dir) {
@@ -1005,17 +1160,25 @@ fn tree(ui: &mut Ui, remote: &mut RemoteExplorer, dir: &str, depth: usize) {
     for entry in entries {
         let path = join_remote(dir, &entry.name);
         if entry.is_dir {
-            let open = remote.expanded.contains(&path);
-            if tree_row(ui, depth, Some(open), ico::FOLDER, &entry.name, "", false).clicked() {
+            let expanded = remote.expanded.contains(&path);
+            if tree_row(ui, depth, Some(expanded), ico::FOLDER, &entry.name, "", false).clicked() {
                 toggle(remote, &path);
             }
-            if open && depth < 64 {
-                tree(ui, remote, &path, depth + 1);
+            if expanded && depth < 64 {
+                tree(ui, remote, &path, depth + 1, open);
             }
         } else {
-            let selected = remote.file.as_ref().is_some_and(|f| f.path == path);
-            if tree_row(ui, depth, None, file_icon(&entry.name), &entry.name, "", selected).clicked() {
-                remote.select_file(&path);
+            let selected = remote.selected.as_deref() == Some(path.as_str());
+            let response = tree_row(ui, depth, None, file_icon(&entry.name), &entry.name, "", selected);
+            if response.clicked() {
+                remote.selected = Some(path.clone());
+                // Projects and solutions are targets (Build, Debug): open them on double-click.
+                if !is_dotnet_target(&path) {
+                    *open = Some(path.clone());
+                }
+            }
+            if response.double_clicked() {
+                *open = Some(path);
             }
         }
     }
@@ -1056,103 +1219,12 @@ fn tree_row(ui: &mut Ui, depth: usize, open: Option<bool>, icon: Ico, text: &str
     resp
 }
 
-/// The editor area while a remote folder is open and no local file is: the open remote
-/// file or the output of the last `dotnet` command. `editor_actions` come from the menus.
-pub fn editor(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
-    let remote = &mut app.remote;
-    let file_title = remote.file.as_ref().map_or_else(
-        || tr("Editor").to_string(),
-        |f| format!("{}{}", file_name(&f.path), if f.modified() { " *" } else { "" }),
-    );
-    let file_status = remote.file.as_ref().map(|f| if f.saving { format!("{} · {}", f.path, tr("Saving…")) } else { f.path.clone() }).unwrap_or_default();
-    if remote.output.is_some() {
-        let file_icon = remote.file.as_ref().map_or(ico::FILE_TEXT, |f| file_icon(&f.path));
-        let tabs = [(file_icon, file_title.as_str(), !remote.show_output), (ico::TW_BUILD, tr(".NET Output"), remote.show_output)];
-        let status = if remote.show_output { remote.output.as_ref().map(|o| o.command.clone()).unwrap_or_default() } else { file_status };
-        if let Some(tab) = kit::header(ui, "", &tabs, &status, &[]).tab {
-            remote.show_output = tab == 1;
-        }
-    } else if remote.file.is_some() {
-        kit::header(ui, &file_title, &[], &file_status, &[]);
-    }
-    if remote.show_output && let Some(output) = &remote.output {
-        command_output(ui, output, app.settings.editor_font_size);
-        return;
-    }
+/// The editor area while a remote folder is open and no file is: how to open one.
+pub fn editor(_app: &mut DotCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
-    let Some(file) = &mut remote.file else {
-        let rect = ui.max_rect();
-        ui.painter().text(rect.center(), Align2::CENTER_CENTER, tr("Select a file in the Explorer to open it"), FontId::proportional(13.0), p.text_muted);
-        ui.allocate_rect(rect, Sense::hover());
-        return;
-    };
-    if let Some(error) = &file.save_error {
-        kit::content(ui, |ui| kit::message(ui, &trf("Could not save {file}: {error}", &[("file", &file_name(&file.path)), ("error", error)]), true));
-    }
-    match &mut file.body {
-        None => loading(ui, tr("Loading…")),
-        Some(Err(error)) => {
-            kit::content(ui, |ui| kit::message(ui, error, true));
-        }
-        Some(Ok(state)) => {
-            let rect = ui.available_rect_before_wrap();
-            let mut ed_ui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
-            ed_ui.set_clip_rect(rect.intersect(ui.clip_rect()));
-            for action in &editor_actions {
-                for other in rc_editor::run_action(&ed_ui, state, &app.editor_config, *action) {
-                    if other.is_ide() {
-                        app.pending.push(other);
-                    }
-                }
-            }
-            let out = EditorView::new(state, &app.editor_config, &app.keymap).show(&mut ed_ui);
-            ui.allocate_rect(rect, Sense::hover());
-            // Remote files are at most 1 MiB: reparse right away (incremental) after edits.
-            if state.syntax.lang != rc_syntax::Lang::Plain && !state.syntax.is_current() {
-                state.parse_blocking();
-            }
-            // Global shortcuts (⌘S saves through `run_ide_action`); language features need
-            // Roslyn, which does not run on the remote machine yet.
-            app.pending.extend(out.actions.into_iter().filter(|a| a.is_ide()));
-        }
-    }
-}
-
-fn command_output(ui: &mut Ui, output: &CommandOutput, font_size: f32) {
-    match &output.result {
-        None => loading(ui, tr("Running…")),
-        Some(Err(error)) => {
-            kit::content(ui, |ui| kit::message(ui, error, true));
-        }
-        Some(Ok(None)) => {
-            kit::content(ui, |ui| kit::message(ui, tr("Cancelled"), false));
-        }
-        Some(Ok(Some(result))) => {
-            if result.code != Some(0) {
-                let code = result.code.map_or_else(|| "?".to_string(), |code| code.to_string());
-                kit::content(ui, |ui| kit::message(ui, &trf("Exited with code {code}", &[("code", &code)]), true));
-            }
-            monospace(ui, "remote_output", &result.output, font_size);
-        }
-    }
-}
-
-fn loading(ui: &mut Ui, text: &str) {
-    kit::content(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.spinner();
-            kit::note(ui, text);
-        });
-    });
-}
-
-fn monospace(ui: &mut Ui, id: &str, text: &str, font_size: f32) {
-    let p = rc_kit::pal(ui);
-    egui::ScrollArea::both().id_salt(id).auto_shrink([false, false]).show(ui, |ui| {
-        kit::content(ui, |ui| {
-            ui.label(egui::RichText::new(text).font(FontId::monospace(font_size)).color(p.text));
-        });
-    });
+    let rect = ui.max_rect();
+    ui.painter().text(rect.center(), Align2::CENTER_CENTER, tr("Select a file in the Explorer to open it"), FontId::proportional(13.0), p.text_muted);
+    ui.allocate_rect(rect, Sense::hover());
 }
 
 #[cfg(test)]
@@ -1170,15 +1242,8 @@ impl RemoteExplorer {
         self.root = Some(root);
     }
 
-    /// A file open in the editor, as if the agent had read it.
-    pub fn file_for_test(&mut self, path: &str, text: &str) {
-        self.file = Some(RemoteFile { path: path.into(), body: None, bom: false, saving: false, save_error: None });
-        self.events.sender().send(Event::Read(path.into(), Ok(text.as_bytes().to_vec())));
-        self.pump();
-    }
-
-    pub fn file_editor_for_test(&mut self) -> Option<&mut EditorState> {
-        self.file.as_mut().and_then(|f| f.body.as_mut()).and_then(|b| b.as_mut().ok())
+    pub fn select_for_test(&mut self, path: &str) {
+        self.selected = Some(path.into());
     }
 
     pub fn lose_for_test(&mut self, error: &str) {
@@ -1200,12 +1265,13 @@ impl RemoteExplorer {
         self.sdk_versions = Some(versions.iter().map(|v| v.to_string()).collect());
     }
 
-    pub fn output_for_test(&mut self, command: &str, code: i32, output: &str) {
-        self.output = Some(CommandOutput {
-            command: command.into(),
-            result: Some(Ok(Some(CommandResult { code: Some(code), stdout: output.into(), output: output.into() }))),
-        });
-        self.show_output = true;
+    pub fn preparing_language_for_test(&mut self) {
+        self.language = Language::Preparing;
+    }
+
+    /// Whether C# support was handed to the app.
+    pub fn language_started_for_test(&self) -> bool {
+        self.language == Language::Started
     }
 }
 
@@ -1237,7 +1303,7 @@ mod tests {
         assert!(!is_dotnet_target("/repo/Program.cs"));
         assert_eq!(dotnet_args(CommandKind::Build, Some("/repo/App.sln".into())), ["build", "/repo/App.sln"]);
         assert_eq!(dotnet_args(CommandKind::Test, Some("/repo/tests/App Tests.csproj".into())), ["test", "/repo/tests/App Tests.csproj"]);
-        assert_eq!(dotnet_args(CommandKind::Sdks, Some("/repo/App.sln".into())), ["--list-sdks"]);
+        assert_eq!(dotnet_args(CommandKind::Info, Some("/repo/App.sln".into())), ["--info"]);
         assert_eq!(sdk_versions("8.0.428 [/usr/share/dotnet/sdk]\n10.0.100 [/usr/share/dotnet/sdk]\n"), ["8.0.428", "10.0.100"]);
     }
 
@@ -1250,13 +1316,6 @@ mod tests {
         ]);
         let names: Vec<_> = entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, ["src", "A.cs", "b.cs"]);
-    }
-
-    #[test]
-    fn files_keep_their_bom_and_binary_files_are_not_edited() {
-        assert_eq!(file_text(b"\xEF\xBB\xBFclass A {}\r\n").unwrap(), ("class A {}\r\n".to_string(), true));
-        assert_eq!(file_text(b"x").unwrap(), ("x".to_string(), false));
-        assert!(file_text(&[0x4d, 0x5a, 0x00, 0x01]).is_err());
     }
 
     #[test]
@@ -1319,13 +1378,13 @@ mod tests {
     }
 
     #[test]
-    fn run_uses_the_open_project() {
+    fn run_uses_the_selected_project() {
         let mut remote = RemoteExplorer::new(Waker::noop(), RemoteConnection::default());
         remote.open_for_test(connection(), vec![("/srv/app", vec![("Api", true)])]);
         let (_, args, name) = remote.run_command().unwrap();
         assert_eq!(name, "app");
         assert!(args[3].contains("run") && !args[3].contains("--project"), "{}", args[3]);
-        remote.file_for_test("/srv/app/Api/Api.csproj", "<Project />");
+        remote.select_for_test("/srv/app/Api/Api.csproj");
         let (_, args, name) = remote.run_command().unwrap();
         assert_eq!(name, "Api");
         assert!(args[3].contains("--project"), "{}", args[3]);
@@ -1333,47 +1392,16 @@ mod tests {
         assert_eq!(title, "dev@build-box");
     }
 
-    /// Edits are saved through the agent; the buffer is clean once the write of that
-    /// version is confirmed, and a failed write says why.
     #[test]
-    fn saving_writes_the_edited_text() {
-        let mut remote = RemoteExplorer::new(Waker::noop(), RemoteConnection::default());
-        remote.open_for_test(connection(), vec![("/srv/app", vec![("Program.cs", false)])]);
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        remote.requests = Some(tx);
-        remote.file_for_test("/srv/app/Program.cs", "\u{feff}class A {}\r\n");
-        let editor = remote.file_editor_for_test().unwrap();
-        editor.apply_text_edits(vec![rc_text::Change::insert(0, "// x\n")]);
-        remote.save();
-        let Ok(Request::Write(path, bytes, version)) = rx.try_recv() else { panic!("no write") };
-        assert_eq!(path, "/srv/app/Program.cs");
-        assert_eq!(bytes, b"\xEF\xBB\xBF// x\r\nclass A {}\r\n");
-        assert!(remote.file.as_ref().unwrap().saving);
-        remote.events.sender().send(Event::Saved(path.clone(), version, Err("Permission denied (os error 13)".into())));
-        remote.pump();
-        let file = remote.file.as_ref().unwrap();
-        assert!(file.modified() && !file.saving && file.save_error.as_deref() == Some("Permission denied (os error 13)"));
-        remote.events.sender().send(Event::Saved(path, version, Ok(())));
-        remote.pump();
-        assert!(!remote.file.as_ref().unwrap().modified());
-        // Opening another file saves nothing more: there are no edits left.
-        remote.select_file("/srv/app/Other.cs");
-        assert!(matches!(rx.try_recv(), Ok(Request::Read(p)) if p == "/srv/app/Other.cs"));
-    }
-
-    /// Closing the folder with unsaved edits saves them before the connection ends.
-    #[test]
-    fn closing_saves_unsaved_edits_first() {
-        let mut remote = RemoteExplorer::new(Waker::noop(), RemoteConnection::default());
-        remote.open_for_test(connection(), vec![("/srv/app", vec![("a.txt", false)])]);
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        remote.requests = Some(tx);
-        remote.file_for_test("/srv/app/a.txt", "a");
-        remote.file_editor_for_test().unwrap().apply_text_edits(vec![rc_text::Change::insert(1, "b")]);
-        remote.disconnect();
-        assert!(matches!(rx.try_recv(), Ok(Request::Write(_, bytes, _)) if bytes == b"ab"));
-        assert!(matches!(rx.try_recv(), Ok(Request::Shutdown)));
-        assert!(!remote.is_open());
+    fn solutions_are_found_at_the_top_or_one_level_down() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("src/App")).unwrap();
+        std::fs::write(dir.path().join("src/App/App.csproj"), "<Project />").unwrap();
+        assert_eq!(find_solution(dir.path()), (None, vec![dir.path().join("src/App/App.csproj")]));
+        std::fs::write(dir.path().join("src/Shop.slnx"), "<Solution />").unwrap();
+        assert_eq!(find_solution(dir.path()).0, Some(dir.path().join("src/Shop.slnx")));
+        std::fs::write(dir.path().join("Top.sln"), "").unwrap();
+        assert_eq!(find_solution(dir.path()).0, Some(dir.path().join("Top.sln")));
     }
 
     /// A dropped connection keeps the tree; a failed first connection goes back to the
@@ -1383,7 +1411,7 @@ mod tests {
         let mut remote = RemoteExplorer::new(Waker::noop(), RemoteConnection::default());
         remote.status = Status::Connecting;
         remote.events.sender().send(Event::Lost("Permission denied (publickey).".into()));
-        assert!(!remote.pump());
+        remote.pump();
         assert!(!remote.is_open());
         assert_eq!(remote.form_error.as_deref(), Some("Permission denied (publickey)."));
         assert!(!remote.deploy_failed);
@@ -1394,15 +1422,9 @@ mod tests {
         remote.events.sender().send(Event::DeployFailed("there is no DotCraft agent for Linux armv7l".into()));
         remote.pump();
         assert!(remote.deploy_failed && remote.phase.is_none());
-        remote.connection = Some(connection());
-        remote.status = Status::Connecting;
-        remote.events.sender().send(Event::Connected("/srv".into(), vec![Entry { name: "App".into(), is_dir: true }]));
-        assert!(remote.pump());
-        assert!(remote.is_open());
-        remote.output = Some(CommandOutput { command: "dotnet build".into(), result: None });
+        remote.open_for_test(connection(), vec![("/srv", vec![("App", true)])]);
         remote.events.sender().send(Event::Lost("Broken pipe".into()));
-        assert!(!remote.pump());
-        assert!(matches!(remote.output.as_ref().and_then(|o| o.result.as_ref()), Some(Err(_))));
+        remote.pump();
         assert!(remote.is_open());
         assert_eq!(remote.status, Status::Lost);
         assert!(remote.cache.contains_key("/srv"));

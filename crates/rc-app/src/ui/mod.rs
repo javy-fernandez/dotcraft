@@ -52,8 +52,8 @@ pub const STATUS_H: f32 = 30.0;
 
 pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     let ctx = ui.ctx().clone();
-    if app.remote.pump() {
-        app.remote_folder_opened();
+    for output in app.remote.pump() {
+        app.handle_remote(output);
     }
     status::tick_notices(app, &ctx);
     let p = rc_kit::pal(ui);

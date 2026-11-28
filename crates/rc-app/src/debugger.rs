@@ -402,6 +402,31 @@ impl Debugger {
         vec![DebugOutput::ShowDebugWindow]
     }
 
+    /// Debugs a program on a remote machine (built and resolved there) with the remote
+    /// netcoredbg `launcher` starts; breakpoints and stops use the mirror's local copies.
+    pub fn start_remote(&mut self, name: String, launch: rc_dap::LaunchConfig, launcher: rc_dap::session::Launcher, docs: &Docs) -> Vec<DebugOutput> {
+        if self.active() {
+            return vec![DebugOutput::Notify(tr("Stop the current debug session first").into(), true)];
+        }
+        self.pending = None;
+        self.previous_inline.clear();
+        self.current_inline.clear();
+        self.urls.clear();
+        self.expanded.clear();
+        let console = crate::runner::Console::new(&self.waker);
+        console.note(&trf("Starting {name}…", &[("name", &name)]));
+        self.console = Some(console);
+        self.name = name;
+        let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
+        let adapter = rc_dap::AdapterCommand::new("netcoredbg", rc_dap::netcoredbg::Origin::Settings);
+        let mut session = DebugSession::start_with(launcher, adapter, DebugTarget::Launch(launch), DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        for watch in watches {
+            session.add_watch(watch);
+        }
+        self.begin(session);
+        vec![DebugOutput::ShowDebugWindow]
+    }
+
     /// Attach without building or launching the target. Stopping this session detaches.
     pub fn attach(&mut self, pid: u32, configured: Option<&Path>, docs: &Docs) -> Vec<DebugOutput> {
         if pid == 0 || pid == std::process::id() {

@@ -185,3 +185,74 @@ fn remote_netcoredbg_stops_at_a_breakpoint_in_the_shop_fixture() {
         std::thread::sleep(Duration::from_millis(10));
     }
 }
+
+/// The whole remote folder through the app: it opens over an agent served in this process,
+/// is copied into the mirror, C# support starts on the "remote machine", a file opens in an
+/// editor tab, its save reaches the remote folder, and going to a declaration in a file not
+/// open yet fetches it.
+#[test]
+fn a_remote_folder_opens_edits_saves_and_navigates_in_the_app() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let remote = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(remote.path()).unwrap();
+    write(&root.join("Lib/Lib.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>\n</Project>\n");
+    write(&root.join("Lib/Greeter.cs"), "namespace Lib;\n\npublic class Greeter\n{\n    public string Hello(string name) => $\"Hello {name}\";\n}\n");
+    write(&root.join("App/App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup>\n  <ItemGroup><ProjectReference Include=\"..\\Lib\\Lib.csproj\" /></ItemGroup>\n</Project>\n");
+    write(&root.join("App/Program.cs"), "using Lib;\n\nvar greeter = new Greeter();\nSystem.Console.WriteLine(greeter.Hello(\"world\"));\n");
+    write(&root.join("Demo.slnx"), "<Solution>\n  <Project Path=\"App/App.csproj\" />\n  <Project Path=\"Lib/Lib.csproj\" />\n</Solution>\n");
+    assert!(std::process::Command::new("dotnet").args(["restore", root.join("Demo.slnx").to_str().unwrap()]).output().unwrap().status.success());
+
+    let home = tempfile::tempdir().unwrap();
+    let mirror = tempfile::tempdir().unwrap();
+    let mirror_root = dunce::canonicalize(mirror.path()).unwrap();
+    let mut app = crate::screens::test_app(home.path(), true);
+    app.remote.tools = crate::remote_backend::test_support::test_tools();
+    app.remote.mirror_root = Some(mirror_root.clone());
+    let dotnet = rc_dotnet::Dotnet::locate(None).map(|d| d.path.display().to_string()).unwrap_or_else(|| "dotnet".into());
+    let connection = rc_core::settings::RemoteConnection { host: "test".into(), folder: root.display().to_string(), dotnet, ..Default::default() };
+    app.remote.connect_local_for_test(connection);
+    let local = |rel: &str| mirror_root.join(root.strip_prefix("/").unwrap()).join(rel);
+
+    fn pump(app: &mut crate::app::DotCraftApp, what: &str, done: impl Fn(&crate::app::DotCraftApp) -> bool) {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(180) {
+            for output in app.remote.pump() {
+                app.handle_remote(output);
+            }
+            let out = app.insight.update(&mut app.docs, true, false);
+            app.handle_insight(out);
+            app.docs.poll_parses();
+            if let InsightStatus::Failed(why) = &app.insight.status {
+                panic!("server failed: {why}");
+            }
+            if done(app) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        panic!("timed out waiting for {what}; insight {:?}", app.insight.status);
+    }
+    pump(&mut app, "the folder and C# support", |a| a.remote.is_open() && a.insight.is_remote() && a.insight.status == InsightStatus::Ready);
+    assert!(app.remote.language_started_for_test());
+    // The whole folder was copied, without opening anything.
+    assert!(local("Lib/Greeter.cs").is_file());
+
+    app.remote.open(&format!("{}/App/Program.cs", root.display()), 0, 0);
+    pump(&mut app, "Program.cs in a tab", |a| a.docs.active_doc().is_some_and(|d| d.path == local("App/Program.cs")));
+
+    // Edit and save: the remote file follows.
+    let doc = app.docs.active_doc_mut().unwrap();
+    doc.editor.replace(0, 0, "// edited\n");
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Save);
+    pump(&mut app, "the save on the remote machine", |_| std::fs::read_to_string(root.join("App/Program.cs")).unwrap().starts_with("// edited\n"));
+
+    // Go to declaration: Greeter.cs is fetched and opens at its line.
+    std::fs::remove_file(local("Lib/Greeter.cs")).unwrap();
+    let i = app.docs.active.unwrap();
+    let pos = app.docs.list[i].editor.buffer.rope().to_string().find("greeter.Hello(").unwrap() + "greeter.".len() + 1;
+    app.insight.navigate(&app.docs.list[i], pos, NavKind::Declaration);
+    pump(&mut app, "Greeter.cs", |a| a.docs.active_doc().is_some_and(|d| d.path == local("Lib/Greeter.cs")));
+    assert_eq!(app.docs.active_doc().unwrap().editor.caret_line_col().0, 4);
+    app.close_workspace();
+    assert!(!app.remote.is_open());
+}

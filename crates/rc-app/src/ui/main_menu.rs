@@ -49,7 +49,7 @@ fn enabled(app: &DotCraftApp, action: Action) -> bool {
         Action::Commit => app.vcs.repo.is_some(),
         Action::AnnotateWithGitBlame => app.docs.active_doc().is_some_and(|doc| app.vcs.in_repository(&doc.path)),
         Action::ShowBookmarks => app.workspace.is_some(),
-        Action::SaveAll => !app.docs.list.is_empty() || app.remote.is_open(),
+        Action::SaveAll => !app.docs.list.is_empty(),
         Action::Cut | Action::Paste => app.docs.active_doc().is_some_and(|doc| !doc.editor.read_only),
         _ => document,
     }

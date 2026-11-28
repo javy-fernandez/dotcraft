@@ -194,6 +194,8 @@ pub struct DotCraftApp {
     doc_watch_dirs: Vec<PathBuf>,
     /// Actions waiting for the UI pass (from the native menu or global shortcuts).
     pub pending: Vec<Action>,
+    /// Console tabs of remote commands: their key → terminal tab.
+    pub remote_consoles: std::collections::HashMap<u64, u64>,
     /// Give the editor keyboard focus on the next frame.
     pub focus_editor: bool,
     /// Back/forward navigation: (file, char offset).
@@ -324,6 +326,7 @@ impl DotCraftApp {
             _watcher: None,
             _filter_watcher: None,
             pending: Vec::new(),
+            remote_consoles: std::collections::HashMap::new(),
             focus_editor: false,
             nav_back: Vec::new(),
             nav_forward: Vec::new(),
@@ -773,8 +776,54 @@ impl DotCraftApp {
     }
 
     pub fn close_workspace(&mut self) {
+        if self.remote.is_open() {
+            // Remote files are local copies: save them, and wait until they reach the remote
+            // machine.
+            self.save_all_docs();
+            self.remote.pump();
+            self.remote.flush();
+        }
         self.remote.disconnect();
+        self.remote_consoles.clear();
         self.close_local_workspace();
+    }
+
+    /// Carries out what the remote folder asks for (see `RemoteOutput`).
+    pub fn handle_remote(&mut self, output: crate::ui::remote_explorer::RemoteOutput) {
+        use crate::ui::remote_explorer::RemoteOutput;
+        match output {
+            RemoteOutput::Opened => self.remote_folder_opened(),
+            RemoteOutput::Open(path, line, col) => self.open_local_at(&path, line, col),
+            RemoteOutput::Language { root, solution, projects, connect } => self.insight.start_remote(&root, solution.as_deref(), projects, connect),
+            RemoteOutput::Console(key, title) => {
+                let console = crate::runner::Console::new(&self.waker);
+                let id = self.terminals.push(console.term);
+                self.terminals.rename(id, Some(title));
+                self.remote_consoles.insert(key, id);
+                self.dock.show(ToolWindow::Terminal);
+            }
+            RemoteOutput::ConsoleText(key, text, stderr) => {
+                if let Some(tab) = self.remote_consoles.get(&key).and_then(|id| self.terminals.get(*id)) {
+                    let mut text = text.replace("\r\n", "\n").replace('\n', "\r\n");
+                    if stderr {
+                        text = format!("\x1b[31m{text}\x1b[0m");
+                    }
+                    tab.session.feed(text.as_bytes());
+                }
+            }
+            RemoteOutput::ConsoleDone(key, code) => {
+                if let Some(tab) = self.remote_consoles.get(&key).and_then(|id| self.terminals.get(*id)) {
+                    let code = code.map_or_else(|| "?".to_string(), |c| c.to_string());
+                    let note = trf("Process finished with exit code {code}", &[("code", &code)]);
+                    tab.session.feed(format!("\r\n\x1b[90m{note}\x1b[0m\r\n").as_bytes());
+                }
+            }
+            RemoteOutput::Debug { name, launch, launcher } => {
+                let outs = self.debugger.start_remote(name, launch, launcher, &self.docs);
+                self.handle_debug(outs);
+            }
+            RemoteOutput::Notify(text, error) => self.notify(text, error),
+        }
     }
 
     /// A remote folder has just opened (File › Open Remote Folder…): it replaces the local
@@ -1322,8 +1371,17 @@ impl DotCraftApp {
 
     // ------------------------------------------------------------------ documents
 
-    /// Opens a file in an editor tab, remembering the current place for "Back".
+    /// Opens a file in an editor tab, remembering the current place for "Back". A file of the
+    /// open remote folder is fetched first (it opens when it arrives).
     pub fn open_file(&mut self, path: &Path) {
+        let open = self.docs.list.iter().any(|d| d.path == path);
+        if self.remote.intercept_open(path, 0, 0, open) {
+            return;
+        }
+        self.open_local_file(path);
+    }
+
+    fn open_local_file(&mut self, path: &Path) {
         self.push_nav();
         match self.docs.open(path) {
             Ok(i) => {
@@ -1384,7 +1442,16 @@ impl DotCraftApp {
 
     /// Opens `path` and puts the caret at (line, col).
     pub fn open_at(&mut self, path: &Path, line: usize, col: usize) {
-        self.open_file(path);
+        let open = self.docs.list.iter().any(|d| d.path == path);
+        if self.remote.intercept_open(path, line, col, open) {
+            return;
+        }
+        self.open_local_at(path, line, col);
+    }
+
+    /// [`DotCraftApp::open_at`] for a file on this machine (a remote file's fetched copy).
+    pub fn open_local_at(&mut self, path: &Path, line: usize, col: usize) {
+        self.open_local_file(path);
         if let Some(d) = self.docs.active_doc_mut() {
             d.editor.goto(line, col);
         }
@@ -1446,7 +1513,6 @@ impl DotCraftApp {
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
         match action {
             // The editor area shows the remote file while a remote folder is open.
-            Action::Save | Action::SaveAll if self.remote.is_open() && self.docs.list.is_empty() => self.remote.save(),
             Action::Save => {
                 if let Some(i) = self.docs.active && !self.docs.list[i].editor.read_only {
                     let path = self.docs.list[i].path.clone();

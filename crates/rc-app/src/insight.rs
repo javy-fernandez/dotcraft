@@ -1483,6 +1483,8 @@ fn locations(v: &Value, docs: &Docs) -> Vec<Target> {
                 let (l, c) = d.editor.buffer.line_col(pos);
                 (l, c, d.editor.buffer.line_text(l))
             }
+            // Not here (yet): a remote file is fetched when it opens; keep the server's place.
+            None if !path.exists() => (r.start.line as usize, r.start.character as usize, String::new()),
             None => {
                 let text = std::fs::read_to_string(&path).unwrap_or_default().replace("\r\n", "\n");
                 let rope = rc_text::Rope::from_str(&text);

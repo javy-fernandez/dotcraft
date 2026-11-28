@@ -136,7 +136,8 @@ fn unpack_into_mirror(archive: &[u8], mirror: &Mirror, root: &str) -> anyhow::Re
         }
         let rel = entry.path()?.to_string_lossy().replace('\\', "/");
         let rel = rel.trim_start_matches("./");
-        if rel.is_empty() || rel.split('/').any(|part| part == "..") {
+        // `._name`: the extended attributes a Mac's tar adds next to each file.
+        if rel.is_empty() || rel.split('/').any(|part| part == ".." || part.starts_with("._")) {
             continue;
         }
         let Some(local) = mirror.local(&format!("{}/{rel}", root.trim_end_matches('/'))) else { continue };
@@ -231,7 +232,12 @@ impl Backend {
             args.push(skip);
         }
         args.extend(["-C", &self.root, "."]);
-        let archive = capture(&self.client, spawn_op("tar", &args, "/", Vec::new()), None).await?.ok("copying the folder")?;
+        let mut operation = spawn_op("tar", &args, "/", Vec::new());
+        if let Operation::Spawn { env, .. } = &mut operation {
+            // A Mac's tar would add `._` files with extended attributes.
+            env.push(("COPYFILE_DISABLE".into(), "1".into()));
+        }
+        let archive = capture(&self.client, operation, None).await?.ok("copying the folder")?;
         let (mirror, root) = (self.mirror.clone(), self.root.clone());
         tokio::task::spawn_blocking(move || unpack_into_mirror(&archive, &mirror, &root)).await?
     }
@@ -391,7 +397,6 @@ pub mod test_support {
 #[cfg(all(test, unix))]
 mod tests {
     use super::test_support::*;
-    use super::*;
     use rc_core::Runtime;
 
     #[test]
