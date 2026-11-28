@@ -262,6 +262,7 @@ impl Insight {
     }
 
     /// Whether the server runs on a remote machine.
+    #[cfg(test)]
     pub fn is_remote(&self) -> bool {
         self.remote.is_some()
     }
