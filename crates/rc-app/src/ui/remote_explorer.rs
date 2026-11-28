@@ -1246,6 +1246,12 @@ impl RemoteExplorer {
         self.selected = Some(path.into());
     }
 
+    /// The Explorer's Debug button on `project`.
+    pub fn debug_for_test(&mut self, project: &str) {
+        self.selected = Some(project.into());
+        self.start_debug();
+    }
+
     pub fn lose_for_test(&mut self, error: &str) {
         self.status = Status::Lost;
         self.error = Some(error.into());

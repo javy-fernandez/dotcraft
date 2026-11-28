@@ -256,3 +256,55 @@ fn a_remote_folder_opens_edits_saves_and_navigates_in_the_app() {
     app.close_workspace();
     assert!(!app.remote.is_open());
 }
+
+/// Debug from the remote Explorer: the project builds on the "remote machine" (output in a
+/// console tab), netcoredbg runs there, and the Debug window stops at a breakpoint set in
+/// the editor on the file's local copy.
+#[test]
+fn the_explorer_debugs_a_remote_project_into_the_debug_window() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let remote = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(remote.path()).unwrap();
+    copy_tree(&crate::screens::fixtures().join("Shop"), &root);
+    let home = tempfile::tempdir().unwrap();
+    let mirror = tempfile::tempdir().unwrap();
+    let mirror_root = dunce::canonicalize(mirror.path()).unwrap();
+    let mut app = crate::screens::test_app(home.path(), true);
+    app.remote.tools = crate::remote_backend::test_support::test_tools();
+    app.remote.mirror_root = Some(mirror_root.clone());
+    let dotnet = rc_dotnet::Dotnet::locate(None).map(|d| d.path.display().to_string()).unwrap_or_else(|| "dotnet".into());
+    app.remote.connect_local_for_test(rc_core::settings::RemoteConnection { host: "test".into(), folder: root.display().to_string(), dotnet, ..Default::default() });
+    let local = |rel: &str| mirror_root.join(root.strip_prefix("/").unwrap()).join(rel);
+
+    fn pump(app: &mut crate::app::DotCraftApp, what: &str, done: impl Fn(&crate::app::DotCraftApp) -> bool) {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(240) {
+            for output in app.remote.pump() {
+                app.handle_remote(output);
+            }
+            let outs = app.debugger.update(&mut app.docs);
+            app.handle_debug(outs);
+            if done(app) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        panic!("timed out waiting for {what}; debugger {:?}", app.debugger.session.as_ref().map(|s| s.state().clone()));
+    }
+    pump(&mut app, "the folder copy", |a| a.remote.is_open() && a.remote.mirror().is_some() && local("src/Shop.Core/PriceCalculator.cs").is_file());
+    let calc = local("src/Shop.Core/PriceCalculator.cs");
+    let line = std::fs::read_to_string(&calc).unwrap().lines().position(|l| l.contains("Breakpoint here")).unwrap();
+    app.remote.open(&format!("{}/src/Shop.Core/PriceCalculator.cs", root.display()), line, 0);
+    pump(&mut app, "PriceCalculator.cs", |a| a.docs.active_doc().is_some_and(|d| d.path == calc));
+    app.docs.active_doc_mut().unwrap().editor.toggle_breakpoint(line);
+
+    app.remote.debug_for_test(&format!("{}/src/Shop.Cli/Shop.Cli.csproj", root.display()));
+    pump(&mut app, "the stop", |a| a.debugger.session.as_ref().is_some_and(|s| s.state().is_stopped() || s.state().is_ended()));
+    let session = app.debugger.session.as_ref().unwrap();
+    assert!(session.state().is_stopped(), "{:?}", session.state());
+    assert_eq!(session.execution_point(), Some((calc.clone(), line as u32 + 1)));
+    // The build's output went to a console tab.
+    assert!(app.terminals.titles().iter().any(|t| t.contains("Shop.Cli")), "{:?}", app.terminals.titles());
+    app.debugger.stop();
+    app.close_workspace();
+}
