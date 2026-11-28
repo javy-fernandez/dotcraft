@@ -253,6 +253,19 @@ fn a_remote_folder_opens_edits_saves_and_navigates_in_the_app() {
     app.insight.navigate(&app.docs.list[i], pos, NavKind::Declaration);
     pump(&mut app, "Greeter.cs", |a| a.docs.active_doc().is_some_and(|d| d.path == local("Lib/Greeter.cs")));
     assert_eq!(app.docs.active_doc().unwrap().editor.caret_line_col().0, 4);
+
+    // Rename from Program.cs: both files change, and Save All sends them back.
+    let program = local("App/Program.cs");
+    let i = app.docs.index_of(&program).unwrap();
+    let pos = app.docs.list[i].editor.buffer.rope().to_string().find("greeter.Hello(").unwrap() + "greeter.".len() + 1;
+    app.insight.rename(&app.docs.list[i], pos, "Greet");
+    pump(&mut app, "the rename", |a| a.docs.list.iter().all(|d| !d.editor.buffer.rope().to_string().contains("Hello(")));
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::SaveAll);
+    pump(&mut app, "the renamed files on the remote machine", |_| {
+        std::fs::read_to_string(root.join("Lib/Greeter.cs")).unwrap().contains("public string Greet(") && std::fs::read_to_string(root.join("App/Program.cs")).unwrap().contains("greeter.Greet(")
+    });
+    // Find in Files searches the local copy.
+    assert_eq!(app.remote.local_root(), Some(local("")));
     app.close_workspace();
     assert!(!app.remote.is_open());
 }

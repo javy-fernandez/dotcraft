@@ -1673,7 +1673,8 @@ impl DotCraftApp {
                 }
             }
             Action::FindInFiles | Action::ReplaceInFiles => {
-                if let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) {
+                // A remote folder is searched in its local copy (replacements go back on save).
+                if let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()).or_else(|| self.remote.local_root()) {
                     let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.is_empty() && !t.contains('\n'));
                     let fif = self.find_in_files.get_or_insert_with(|| crate::search::FindInFiles::new(&root, self.waker.clone(), String::new()));
                     if let Some(t) = text {

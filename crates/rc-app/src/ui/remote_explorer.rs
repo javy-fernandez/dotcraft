@@ -229,6 +229,12 @@ impl RemoteExplorer {
         self.backend.as_ref().map(|b| &b.mirror)
     }
 
+    /// The local copy of the open folder, once copied (Find in Files searches it).
+    pub fn local_root(&self) -> Option<PathBuf> {
+        let root = self.mirror()?.local(self.root.as_ref()?)?;
+        (!self.hashes.is_empty()).then_some(root)
+    }
+
     /// Closes the remote folder: the session ends (ssh or wsl.exe exits, the agent kills what
     /// it was running). Save and [`RemoteExplorer::flush`] first.
     pub fn disconnect(&mut self) {
