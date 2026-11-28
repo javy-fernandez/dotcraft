@@ -802,9 +802,28 @@ async fn keep_tail<R: AsyncRead + Unpin>(mut pipe: R, tail: Arc<Mutex<Vec<u8>>>)
 }
 
 fn tail_text(tail: &Mutex<Vec<u8>>) -> String {
-    String::from_utf8_lossy(&tail.lock().unwrap_or_else(|e| e.into_inner()))
+    launcher_text(&tail.lock().unwrap_or_else(|e| e.into_inner()))
         .trim()
         .to_string()
+}
+
+/// What ssh or wsl.exe printed. wsl.exe writes its own messages ("There is no distribution
+/// with the supplied name") in UTF-16LE; everything else is UTF-8.
+pub(crate) fn launcher_text(bytes: &[u8]) -> String {
+    let utf16 = bytes.len() >= 4
+        && bytes.len().is_multiple_of(2)
+        && bytes.iter().skip(1).step_by(2).filter(|b| **b == 0).count() * 2 > bytes.len() / 2;
+    if utf16 {
+        let units: Vec<u16> = bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_le_bytes(*pair))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
 }
 
 #[cfg(test)]
@@ -1236,6 +1255,23 @@ mod framing_tests {
 #[cfg(test)]
 mod session_tests {
     use super::*;
+
+    #[test]
+    fn wsl_messages_in_utf16_are_readable() {
+        let utf16: Vec<u8> = "There is no distribution with the supplied name.\r\n"
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        assert_eq!(
+            launcher_text(&utf16).trim(),
+            "There is no distribution with the supplied name."
+        );
+        assert_eq!(
+            launcher_text(b"Permission denied (publickey).\n"),
+            "Permission denied (publickey).\n"
+        );
+        assert_eq!(launcher_text("añb".as_bytes()), "añb");
+    }
 
     /// Needs the `ssh` client: a failed connection reports what ssh said, quickly.
     #[ignore]

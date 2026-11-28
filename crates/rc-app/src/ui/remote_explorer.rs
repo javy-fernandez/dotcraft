@@ -582,7 +582,12 @@ async fn serve(endpoint: Endpoint, connection: RemoteConnection, root: String, m
             out.send(Event::Progress(Phase::Deploy(step)));
         };
         if let Err(error) = deploy::ensure_agent(&endpoint, &HttpFetch, &Release::current(), &progress).await {
-            out.send(Event::DeployFailed(format!("{error:#}")));
+            // ssh could not log in, say: a connection problem, which installing by hand
+            // would not solve.
+            out.send(match error.downcast_ref::<deploy::Unreachable>() {
+                Some(unreachable) => Event::Lost(unreachable.to_string()),
+                None => Event::DeployFailed(format!("{error:#}")),
+            });
             return;
         }
     }

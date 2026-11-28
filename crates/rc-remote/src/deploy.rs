@@ -189,9 +189,22 @@ async fn run_command(mut cmd: Command, input: Option<Vec<u8>>, timeout: Duration
     Ok(ShellOutput {
         code: output.status.code(),
         stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        stderr: crate::launcher_text(&output.stderr).trim().to_string(),
     })
 }
+
+/// The remote machine could not be reached (ssh or wsl.exe failed before any script ran):
+/// a connection problem, not an install problem.
+#[derive(Debug)]
+pub struct Unreachable(pub String);
+
+impl std::fmt::Display for Unreachable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Unreachable {}
 
 /// What deployment is doing, for the connection dialog.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -333,11 +346,11 @@ fn classify(output: &ShellOutput, release: &Release, platform: Platform) -> Opti
 pub async fn ensure_agent<S: RemoteShell, F: Fetch>(shell: &S, fetch: &F, release: &Release, progress: &(dyn Fn(Step) + Sync)) -> Result<String> {
     release.check()?;
     progress(Step::Checking);
-    let output = shell.run(&probe_script(release), None, PROBE_TIMEOUT).await?;
+    let output = shell.run(&probe_script(release), None, PROBE_TIMEOUT).await.map_err(|e| Unreachable(format!("{e:#}")))?;
     let probe = parse_probe(&output.stdout);
     if probe.uname.is_empty() {
         let detail = if output.stderr.is_empty() { output.stdout.trim().to_string() } else { output.stderr };
-        bail!("could not reach the remote machine\n{detail}");
+        return Err(Unreachable(if detail.is_empty() { "could not reach the remote machine".into() } else { detail }).into());
     }
     if probe.installed {
         return Ok(release.agent_path());
@@ -472,6 +485,26 @@ mod tests {
         assert!(matches!(classify(&out(EXIT_NO_HASHER), &r, Platform::LinuxX64), Some(Failure::Recoverable(_))));
         assert!(matches!(classify(&out(EXIT_MISMATCH), &r, Platform::LinuxX64), Some(Failure::Fatal(m)) if m.contains("SHA-256")));
         assert!(matches!(classify(&out(1), &r, Platform::LinuxX64), Some(Failure::Fatal(_))));
+    }
+
+    /// ssh refused the login: nothing ran, and that is a connection problem.
+    #[tokio::test]
+    async fn an_unreachable_machine_is_not_an_install_failure() {
+        struct Refused;
+        impl RemoteShell for Refused {
+            async fn run(&self, _: &str, _: Option<Vec<u8>>, _: Duration) -> Result<ShellOutput> {
+                Ok(ShellOutput { code: Some(255), stdout: String::new(), stderr: "dev@box: Permission denied (publickey).".into() })
+            }
+        }
+        struct Offline;
+        impl Fetch for Offline {
+            async fn get(&self, _: &str) -> Result<Vec<u8>> {
+                bail!("offline")
+            }
+        }
+        let error = ensure_agent(&Refused, &Offline, &release(), &|_| {}).await.unwrap_err();
+        let unreachable = error.downcast_ref::<Unreachable>().expect("an Unreachable error");
+        assert_eq!(unreachable.0, "dev@box: Permission denied (publickey).");
     }
 
     #[test]
