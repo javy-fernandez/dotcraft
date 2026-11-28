@@ -15,6 +15,9 @@ use std::{
     time::Duration,
 };
 pub mod deploy;
+mod stream;
+
+pub use stream::{Killer, RemoteProcess};
 
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
@@ -23,14 +26,15 @@ use tokio::{
     task::JoinHandle,
 };
 
-pub const PROTOCOL_VERSION: u32 = 1;
+/// 2: process streams (`spawn`, `input`, `close_input`).
+pub const PROTOCOL_VERSION: u32 = 2;
 const MAX_BYTES: usize = 1024 * 1024;
 const MAX_LINE_BYTES: usize = 2 * 1024 * 1024;
 /// Longest a process may run: a first restore and build of a large solution, or its tests.
 pub const MAX_RUN_MS: u64 = 60 * 60 * 1000;
 
 /// `~/x` is `$HOME/x` on the agent's machine, so settings can name `~/.dotnet/dotnet`.
-fn expand_home(path: &str) -> String {
+pub(crate) fn expand_home(path: &str) -> String {
     match (path.strip_prefix("~/"), std::env::var("HOME")) {
         (Some(rest), Ok(home)) if !home.is_empty() => format!("{}/{rest}", home.trim_end_matches('/')),
         _ => path.to_string(),
@@ -82,6 +86,27 @@ pub enum Operation {
     Cancel {
         target_id: u64,
     },
+    /// Starts a process whose stdout and stderr stream back as [`Value::Output`] answers to
+    /// this request, ended by [`Value::Exited`]; `input` feeds its stdin and `cancel` kills
+    /// it (with its process group). `path` folders go first on its `PATH`; `~/` in the
+    /// program, arguments, folder and `path` is the agent's home.
+    Spawn {
+        program: String,
+        args: Vec<String>,
+        cwd: String,
+        env: Vec<(String, String)>,
+        #[serde(default)]
+        path: Vec<String>,
+    },
+    /// Bytes for the stdin of a spawned process (`target_id`); never answered.
+    Input {
+        target_id: u64,
+        data: String,
+    },
+    /// Closes the stdin of a spawned process; never answered.
+    CloseInput {
+        target_id: u64,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -110,6 +135,19 @@ pub enum Value {
         stderr: String,
     },
     Cancelled,
+    /// A spawned process started.
+    Started {
+        pid: Option<u32>,
+    },
+    /// Output of a spawned process: `fd` 1 (stdout) or 2 (stderr).
+    Output {
+        fd: u8,
+        data: String,
+    },
+    /// A spawned process ended; its last answer.
+    Exited {
+        code: Option<i32>,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -138,7 +176,7 @@ pub fn shell_word(word: &str) -> String {
 }
 
 /// Keeps Windows from flashing a console window for a process started by the GUI.
-fn no_window(#[allow(unused_mut)] mut cmd: Command) -> Command {
+pub(crate) fn no_window(#[allow(unused_mut)] mut cmd: Command) -> Command {
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     cmd
@@ -246,6 +284,8 @@ where
     let (tx, mut rx) = mpsc::unbounded_channel::<(Response, bool)>();
     let mut running: HashMap<u64, JoinHandle<()>> = HashMap::new();
     let mut cancelled = HashSet::new();
+    // The stdin of each spawned process; `None` closes it.
+    let mut inputs: HashMap<u64, mpsc::UnboundedSender<Option<Vec<u8>>>> = HashMap::new();
     loop {
         tokio::select! {
             line = read_line_bounded(&mut reader, MAX_LINE_BYTES) => {
@@ -267,7 +307,23 @@ where
                     tx.send((reply(req.id, Err(format!("unsupported protocol version {}", req.version))), false))?;
                     continue;
                 }
+                match &req.operation {
+                    Operation::Input { target_id, data } => {
+                        if let (Some(input), Ok(bytes)) = (inputs.get(target_id), STANDARD.decode(data)) {
+                            let _ = input.send(Some(bytes));
+                        }
+                        continue;
+                    }
+                    Operation::CloseInput { target_id } => {
+                        if let Some(input) = inputs.remove(target_id) {
+                            let _ = input.send(None);
+                        }
+                        continue;
+                    }
+                    _ => {}
+                }
                 if let Operation::Cancel { target_id } = &req.operation {
+                    inputs.remove(target_id);
                     if let Some(task) = running.remove(target_id) {
                         task.abort();
                         cancelled.insert(*target_id);
@@ -281,17 +337,28 @@ where
                     continue;
                 }
                 let output = tx.clone();
-                let task = tokio::spawn(async move {
-                    let result = perform(req.operation).await.map_err(|e| e.to_string());
-                    let _ = output.send((reply(req.id, result), true));
-                });
+                let task = match req.operation {
+                    Operation::Spawn { program, args, cwd, env, path } => {
+                        let (input, input_rx) = mpsc::unbounded_channel();
+                        inputs.insert(req.id, input);
+                        let spec = stream::Spec { program, args, cwd, env, path };
+                        tokio::spawn(stream::run(req.id, spec, input_rx, output))
+                    }
+                    operation => tokio::spawn(async move {
+                        let result = perform(operation).await.map_err(|e| e.to_string());
+                        let _ = output.send((reply(req.id, result), true));
+                    }),
+                };
                 running.insert(req.id, task);
             }
             Some((response, completion)) = rx.recv() => {
                 if cancelled.contains(&response.id) && !matches!(&response.result, Ok(Value::Cancelled)) {
                     continue;
                 }
-                if completion { running.remove(&response.id); }
+                if completion {
+                    running.remove(&response.id);
+                    inputs.remove(&response.id);
+                }
                 write.write_all(serde_json::to_string(&response)?.as_bytes()).await?;
                 write.write_all(b"\n").await?;
                 write.flush().await?;
@@ -332,7 +399,7 @@ async fn read_line_bounded<R: AsyncRead + Unpin>(
     }
 }
 
-fn reply(id: u64, result: std::result::Result<Value, String>) -> Response {
+pub(crate) fn reply(id: u64, result: std::result::Result<Value, String>) -> Response {
     Response {
         version: PROTOCOL_VERSION,
         id,
@@ -393,7 +460,9 @@ async fn perform(operation: Operation) -> Result<Value> {
             }
             run_process(expand_home(&program), args, expand_home(&cwd), env, timeout_ms).await
         }
-        Operation::Cancel { .. } => bail!("cancel is handled by the server"),
+        Operation::Cancel { .. } | Operation::Spawn { .. } | Operation::Input { .. } | Operation::CloseInput { .. } => {
+            bail!("handled by the server")
+        }
     }
 }
 
@@ -446,10 +515,10 @@ async fn run_process(
 }
 
 /// Kills the process group of a child when dropped while still armed.
-struct ProcessTree {
+pub(crate) struct ProcessTree {
     #[cfg_attr(not(unix), allow(dead_code))]
-    pid: Option<u32>,
-    armed: bool,
+    pub(crate) pid: Option<u32>,
+    pub(crate) armed: bool,
 }
 
 impl Drop for ProcessTree {
@@ -523,7 +592,13 @@ impl Drop for Capture {
 /// of up to 1 MiB each.
 const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
-type Waiters = Arc<Mutex<Option<HashMap<u64, oneshot::Sender<Response>>>>>;
+/// Who waits for the answers to a request: one answer, or every answer of a spawned process.
+enum Waiter {
+    Once(oneshot::Sender<Response>),
+    Stream(mpsc::UnboundedSender<Response>),
+}
+
+type Waiters = Arc<Mutex<Option<HashMap<u64, Waiter>>>>;
 
 /// A client for the agent. Requests can run side by side (browse while a build runs): a
 /// reader task hands each response to the request with its id. Clones share the connection.
@@ -585,9 +660,23 @@ async fn route_responses<R: AsyncRead + Unpin>(read: R, waiters: Waiters) {
         if response.version != PROTOCOL_VERSION {
             break;
         }
-        let waiter = lock(&waiters).as_mut().and_then(|map| map.remove(&response.id));
-        if let Some(waiter) = waiter {
-            let _ = waiter.send(response);
+        let mut map = lock(&waiters);
+        let Some(map) = map.as_mut() else { break };
+        // A process's answers go on until its last one.
+        let last = !matches!(&response.result, Ok(Value::Started { .. } | Value::Output { .. }));
+        match map.get(&response.id) {
+            Some(Waiter::Stream(tx)) => {
+                let _ = tx.send(response.clone());
+                if last {
+                    map.remove(&response.id);
+                }
+            }
+            Some(Waiter::Once(_)) => {
+                if let Some(Waiter::Once(tx)) = map.remove(&response.id) {
+                    let _ = tx.send(response);
+                }
+            }
+            None => {}
         }
     }
     lock(&waiters).take();
@@ -613,15 +702,26 @@ impl Client {
     }
 
     async fn send(&self, operation: Operation) -> Result<(u64, oneshot::Receiver<Response>)> {
+        let (tx, rx) = oneshot::channel();
+        let id = self.send_with(operation, Some(Waiter::Once(tx))).await?;
+        Ok((id, rx))
+    }
+
+    /// Sends a request; `waiter` hears its answers (none for `input`).
+    async fn send_with(&self, operation: Operation, waiter: Option<Waiter>) -> Result<u64> {
         let id = self
             .inner
             .next_id
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let (tx, rx) = oneshot::channel();
-        lock(&self.inner.waiters)
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("remote agent disconnected"))?
-            .insert(id, tx);
+        {
+            let mut map = lock(&self.inner.waiters);
+            let map = map
+                .as_mut()
+                .ok_or_else(|| anyhow::anyhow!("remote agent disconnected"))?;
+            if let Some(waiter) = waiter {
+                map.insert(id, waiter);
+            }
+        }
         let mut line = serde_json::to_vec(&Request {
             version: PROTOCOL_VERSION,
             id,
@@ -640,7 +740,29 @@ impl Client {
             }
             bail!("remote agent disconnected");
         }
-        Ok((id, rx))
+        Ok(id)
+    }
+
+    /// Starts a process on the remote machine (an [`Operation::Spawn`]) with its stdin,
+    /// stdout and stderr streamed over this connection.
+    pub async fn spawn(&self, operation: Operation) -> Result<RemoteProcess> {
+        anyhow::ensure!(matches!(operation, Operation::Spawn { .. }), "not a spawn request");
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let id = self.send_with(operation, Some(Waiter::Stream(tx))).await?;
+        let pid = match rx.recv().await {
+            Some(Response { result: Ok(Value::Started { pid }), .. }) => pid,
+            Some(response) => {
+                outcome(response)?;
+                bail!("unexpected remote process response");
+            }
+            None => bail!("remote agent disconnected"),
+        };
+        Ok(RemoteProcess::new(self.clone(), id, pid, rx))
+    }
+
+    /// Sends a request nobody waits an answer for (`input`, `close_input`, `cancel`).
+    pub(crate) async fn send_only(&self, operation: Operation) -> Result<()> {
+        self.send_with(operation, None).await.map(|_| ())
     }
 
     pub async fn request(&self, operation: Operation) -> Result<Value> {
@@ -1169,8 +1291,8 @@ mod framing_tests {
         let (mut lines, mut write, task) = agent();
         write
             .write_all(
-                b"{\"version\":1,\"id\":1,\"operation\":\"hello\"}\n\
-                  {\"version\":1,\"id\":2,\"operation\":\"hello\"}\r\n",
+                b"{\"version\":2,\"id\":1,\"operation\":\"hello\"}\n\
+                  {\"version\":2,\"id\":2,\"operation\":\"hello\"}\r\n",
             )
             .await
             .unwrap();
@@ -1184,13 +1306,13 @@ mod framing_tests {
     #[tokio::test]
     async fn a_request_split_across_writes_is_reassembled() {
         let (mut lines, mut write, task) = agent();
-        for byte in b"{\"version\":1,\"id\":3,\"operation\":\"hello\"}\n" {
+        for byte in b"{\"version\":2,\"id\":3,\"operation\":\"hello\"}\n" {
             write.write_all(&[*byte]).await.unwrap();
             write.flush().await.unwrap();
         }
         let reply = response(&mut lines).await;
         assert_eq!(reply.id, 3);
-        assert!(matches!(reply.result, Ok(Value::Hello { version: 1 })));
+        assert!(matches!(reply.result, Ok(Value::Hello { version: 2 })));
         write.shutdown().await.unwrap();
         task.await.unwrap().unwrap();
     }
@@ -1203,14 +1325,14 @@ mod framing_tests {
         assert_eq!(reply.id, 0);
         assert!(reply.result.is_err());
         write
-            .write_all(b"{\"version\":1,\"id\":9,\"operation\":\"teleport\"}\n")
+            .write_all(b"{\"version\":2,\"id\":9,\"operation\":\"teleport\"}\n")
             .await
             .unwrap();
         let reply = response(&mut lines).await;
         assert_eq!(reply.id, 9);
         assert!(reply.result.unwrap_err().contains("invalid request"));
         write
-            .write_all(b"{\"version\":1,\"id\":10,\"operation\":\"hello\"}\n")
+            .write_all(b"{\"version\":2,\"id\":10,\"operation\":\"hello\"}\n")
             .await
             .unwrap();
         assert!(response(&mut lines).await.result.is_ok());
@@ -1222,7 +1344,7 @@ mod framing_tests {
     async fn a_request_cut_off_by_the_end_of_the_stream_is_an_error() {
         let (_lines, mut write, task) = agent();
         write
-            .write_all(b"{\"version\":1,\"id\":1,\"operation\":")
+            .write_all(b"{\"version\":2,\"id\":1,\"operation\":")
             .await
             .unwrap();
         write.shutdown().await.unwrap();

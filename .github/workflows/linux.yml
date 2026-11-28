@@ -131,7 +131,7 @@ jobs:
           file "$bin"
           file "$bin" | grep -Eq 'statically linked|static-pie linked'
           # It starts and answers the handshake (stdin stays open until the answer is out).
-          { echo '{"version":1,"id":1,"operation":"hello"}'; sleep 2; } | "$bin" | tee hello.json
+          { echo '{"version":2,"id":1,"operation":"hello"}'; sleep 2; } | "$bin" | tee hello.json
           grep -q '"kind":"hello"' hello.json
           mkdir -p agent
           install -m 755 "$bin" agent/dotcraft-remote-agent

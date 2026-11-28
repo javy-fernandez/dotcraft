@@ -99,7 +99,7 @@ jobs:
           lipo -archs agent/dotcraft-remote-agent
           chmod 755 agent/dotcraft-remote-agent
           # It starts and answers the handshake (stdin stays open until the answer is out).
-          { echo '{"version":1,"id":1,"operation":"hello"}'; sleep 2; } | agent/dotcraft-remote-agent | tee hello.json
+          { echo '{"version":2,"id":1,"operation":"hello"}'; sleep 2; } | agent/dotcraft-remote-agent | tee hello.json
           grep -q '"kind":"hello"' hello.json
           archive="rc-remote-$version-macos-universal.tar.gz"
           tar -czf "$archive" -C agent dotcraft-remote-agent
