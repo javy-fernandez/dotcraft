@@ -1445,6 +1445,8 @@ impl DotCraftApp {
     /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
         match action {
+            // The editor area shows the remote file while a remote folder is open.
+            Action::Save | Action::SaveAll if self.remote.is_open() && self.docs.list.is_empty() => self.remote.save(),
             Action::Save => {
                 if let Some(i) = self.docs.active && !self.docs.list[i].editor.read_only {
                     let path = self.docs.list[i].path.clone();
@@ -1755,9 +1757,29 @@ impl DotCraftApp {
 
     /// A new terminal tab in `dir` (the workspace folder by default).
     pub fn open_terminal(&mut self, dir: Option<PathBuf>) {
+        // With a remote folder open, the terminal is a shell on that machine.
+        if let Some((program, args, title)) = self.remote.terminal_command() {
+            self.open_remote_session(program, args, title, false);
+            return;
+        }
         let cwd = dir.or_else(|| self.workspace.as_ref().map(|w| w.ws.root.clone()));
         match self.terminals.open(&rc_term::SpawnSpec::shell(cwd), self.waker.clone()) {
             Ok(_) => {
+                self.dock.show(ToolWindow::Terminal);
+                self.focus_terminal = true;
+            }
+            Err(e) => self.notify(trf("Could not start the terminal: {error}", &[("error", &e)]), true),
+        }
+    }
+
+    /// A terminal tab running an SSH or WSL session on the remote machine (a shell, or
+    /// `dotnet run` with `announce_exit`); closing the tab ends it there too.
+    pub fn open_remote_session(&mut self, program: String, args: Vec<String>, title: String, announce_exit: bool) {
+        let mut spec = rc_term::SpawnSpec::command(program, args, None);
+        spec.announce_exit = announce_exit;
+        match self.terminals.open(&spec, self.waker.clone()) {
+            Ok(id) => {
+                self.terminals.rename(id, Some(title));
                 self.dock.show(ToolWindow::Terminal);
                 self.focus_terminal = true;
             }

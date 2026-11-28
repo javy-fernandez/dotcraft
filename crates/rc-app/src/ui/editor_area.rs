@@ -122,7 +122,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     }
     if app.docs.list.is_empty() {
         if app.remote.is_open() {
-            crate::ui::remote_explorer::editor(app, ui);
+            crate::ui::remote_explorer::editor(app, ui, editor_actions);
         } else {
             empty_state(app, ui);
         }

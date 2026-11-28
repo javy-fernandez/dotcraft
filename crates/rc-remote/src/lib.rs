@@ -45,6 +45,11 @@ pub fn decode_data(data: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// The `data` of a write request.
+pub fn encode_data(bytes: &[u8]) -> String {
+    STANDARD.encode(bytes)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
     pub version: u32,

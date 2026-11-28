@@ -100,7 +100,11 @@ pub struct RemoteConnection {
     pub wsl: bool,
     /// SSH destination (`user@host` or a `Host` alias) or WSL distribution.
     pub host: String,
-    /// Path of `dotcraft-remote-agent` on the remote machine; may start with `~/`.
+    /// Use the agent at `agent` (a dev build, say) instead of the one DotCraft installs in
+    /// `~/.dotcraft/remote/<version>/`.
+    pub custom_agent: bool,
+    /// Path of `dotcraft-remote-agent` on the remote machine; may start with `~/`. Only
+    /// used with `custom_agent`.
     pub agent: String,
     /// Absolute POSIX folder on the remote machine.
     pub folder: String,

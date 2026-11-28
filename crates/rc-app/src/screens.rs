@@ -2210,25 +2210,36 @@ fn screens_remote() {
     let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
     std::fs::create_dir_all(&out).unwrap();
     let connection = rc_core::settings::RemoteConnection {
-        wsl: false,
         host: "dev@build-box".into(),
         agent: crate::ui::remote_explorer::DEFAULT_AGENT.into(),
         folder: "/home/dev/src/Shop".into(),
         dotnet: "dotnet".into(),
+        ..Default::default()
     };
     for dark in [true, false] {
         let suffix = if dark { "dark" } else { "light" };
-        // File › Open Remote Folder…, after a failed attempt.
+        // File › Open Remote Folder…, while DotCraft copies its agent over.
         let home = tempfile::tempdir().unwrap();
         let mut app = test_app(home.path(), dark);
         app.remote.form = connection.clone();
-        app.remote.form_error_for_test("remote agent disconnected\nbash: line 1: /home/dev/.cargo/bin/dotcraft-remote-agent: No such file or directory");
+        app.remote.connecting_for_test(rc_remote::deploy::Step::Uploading);
         app.dialog = Some(crate::ui::dialogs::Dialog::RemoteConnect);
         let mut h = harness(app, vec2(1280.0, 800.0));
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("remote-connect-{suffix}.png"))).unwrap();
+        // The agent could not be installed: the manual install, with Custom path.
+        h.state_mut().remote.cancel_connect();
+        h.state_mut().remote.form_error_for_test(
+            "could not download https://github.com/javy-fernandez/dotcraft/releases/download/v0.7.1/rc-remote-0.7.1-linux-arm64.tar.gz: curl: (6) Could not resolve host: github.com\ncould not download the agent's checksum",
+            true,
+        );
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("remote-deploy-failed-{suffix}.png"))).unwrap();
+        h.state_mut().remote.form.custom_agent = true;
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("remote-custom-agent-{suffix}.png"))).unwrap();
 
-        // The folder open: its tree in the Explorer, a file previewed in the editor area.
+        // The folder open: its tree in the Explorer, a file edited in the editor area.
         let home = tempfile::tempdir().unwrap();
         let mut app = test_app(home.path(), dark);
         app.remote.open_for_test(
@@ -2241,10 +2252,12 @@ fn screens_remote() {
                 ("/home/dev/src/Shop/Shop.Api", vec![("Controllers", true), ("Program.cs", false), ("Shop.Api.csproj", false), ("appsettings.json", false)]),
             ],
         );
-        app.remote.preview_for_test(
+        app.remote.file_for_test(
             "/home/dev/src/Shop/Shop.Api/Program.cs",
             "var builder = WebApplication.CreateBuilder(args);\n\nbuilder.Services.AddControllers();\n\nvar app = builder.Build();\n\napp.MapControllers();\napp.Run();\n",
         );
+        // An unsaved edit.
+        app.remote.file_editor_for_test().unwrap().apply_text_edits(vec![rc_text::Change::insert(0, "// Entry point\n")]);
         app.remote.sdks_for_test(&["8.0.428", "10.0.100"]);
         app.dock.show(crate::toolwindow::ToolWindow::Explorer);
         let mut h = harness(app, vec2(1280.0, 800.0));
