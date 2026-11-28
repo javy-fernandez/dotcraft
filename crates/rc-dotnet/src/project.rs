@@ -73,6 +73,8 @@ impl ProjectInfo {
                     if is_test_package(&name) {
                         info.is_test = true;
                     }
+                    // Aspire 9.2+ app hosts reference the hosting package without the SDK.
+                    info.aspire_host |= name.eq_ignore_ascii_case("Aspire.Hosting.AppHost");
                     if !name.is_empty() {
                         info.packages.push(PackageRef { name, version });
                     }
@@ -251,6 +253,10 @@ mod tests {
         assert!(parse(r#"<Project><Sdk Name="Microsoft.NET.Sdk.Web" /></Project>"#).is_executable());
         assert!(parse(r#"<Project Sdk="Microsoft.NET.Sdk.Worker"></Project>"#).is_executable());
         assert!(parse(r#"<Project Sdk="Microsoft.NET.Sdk"><Sdk Name="Aspire.AppHost.Sdk" Version="9.0.0" /></Project>"#).is_executable());
+        let hosting = parse(r#"<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup><ItemGroup><PackageReference Include="Aspire.Hosting.AppHost" Version="17.0.0" /></ItemGroup></Project>"#);
+        assert!(hosting.aspire_host && hosting.is_executable());
+        assert!(parse(r#"<Project Sdk="Aspire.AppHost.Sdk/13.0.0"></Project>"#).aspire_host);
+        assert!(!parse(r#"<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Aspire.Hosting.Redis" /></ItemGroup></Project>"#).aspire_host);
         assert!(!parse(r#"<Project Sdk="Microsoft.NET.Sdk.Razor"></Project>"#).is_executable());
         assert!(!parse(r#"<Project Sdk="Microsoft.NET.Sdk"></Project>"#).is_executable());
     }

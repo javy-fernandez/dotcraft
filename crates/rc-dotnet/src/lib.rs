@@ -8,6 +8,7 @@
 //! [`CancelToken`] and a callback instead.
 
 pub mod appsettings;
+pub mod aspire;
 pub mod build;
 pub mod counters;
 pub mod cpu_profile;
