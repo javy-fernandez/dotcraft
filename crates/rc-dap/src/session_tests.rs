@@ -227,6 +227,57 @@ fn handshake_order_stops_caches_watches_and_exit() {
 }
 
 #[test]
+fn evaluation_without_side_effects_holds_back_what_may_run_code() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, log) = fake(dir.path(), "late");
+    let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), Breakpoints::new(), Waker::noop());
+    s.set_eval_policy(EvalPolicy { implicit_calls: false, method_calls: false });
+    let harmless = s.add_watch("x * 10");
+    let property = s.add_watch("order.Customer");
+    let call = s.add_watch("Total()");
+    let mut ev = Vec::new();
+    pump_until(&mut s, &mut ev, stopped);
+    // The watches wait for the locals (x: int, order: Order) to be classified.
+    pump_until_state(&mut s, &mut ev, settled);
+    assert_eq!(result_of(watch_value(&s, harmless)), "10");
+    assert_eq!(watch_value(&s, property), WatchValue::SideEffects);
+    assert_eq!(watch_value(&s, call), WatchValue::SideEffects);
+    let evaluated = |log: &Path| requests(log).into_iter().filter(|r| r["command"] == "evaluate").map(|r| r["arguments"]["expression"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    assert_eq!(evaluated(&log), ["x * 10"]);
+    assert_eq!(s.may_evaluate("x"), Some(true));
+    assert_eq!(s.may_evaluate("order.Customer"), Some(false));
+
+    // Listing an object's members runs its getters: not without asking. Scopes are fine.
+    let locals = s.scopes(10).unwrap()[0].variables_reference;
+    assert!(!s.expansion_has_side_effects(locals));
+    let order = s.variables(locals).unwrap()[1].variables_reference;
+    assert!(s.expansion_has_side_effects(order));
+    s.request_variables(order);
+    assert!(!s.is_loading_variables(order));
+    s.expand_anyway(order);
+    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::VariablesLoaded { reference } if *reference == order));
+    assert_eq!(s.variables(order).unwrap()[0].name, "Customer");
+
+    // "Click to evaluate" sends it once; the next stop holds it back again.
+    s.evaluate_watch_anyway(property);
+    pump_until_state(&mut s, &mut ev, settled);
+    assert!(matches!(watch_value(&s, property), WatchValue::Error(_)));
+    assert_eq!(evaluated(&log), ["x * 10", "order.Customer"]);
+    s.continue_();
+    pump_until(&mut s, &mut ev, stopped);
+    pump_until_state(&mut s, &mut ev, settled);
+    assert_eq!(watch_value(&s, property), WatchValue::SideEffects);
+    assert_eq!(result_of(watch_value(&s, harmless)), "20");
+
+    // Allowing property evaluation again evaluates it; the call still waits.
+    s.set_eval_policy(EvalPolicy { implicit_calls: true, method_calls: false });
+    pump_until_state(&mut s, &mut ev, settled);
+    assert!(matches!(watch_value(&s, property), WatchValue::Error(_)));
+    assert_eq!(watch_value(&s, call), WatchValue::SideEffects);
+    s.stop();
+}
+
+#[test]
 fn attached_session_disconnects_without_terminating_the_target() {
     struct Target(std::process::Child);
     impl Drop for Target {

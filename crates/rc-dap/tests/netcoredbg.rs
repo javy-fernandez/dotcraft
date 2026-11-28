@@ -8,7 +8,7 @@
 
 use rc_core::Waker;
 use rc_dap::netcoredbg::{self, AdapterCommand};
-use rc_dap::{BreakpointSpec, Breakpoints, DebugEvent, DebugOptions, DebugSession, DebugTarget, EvalContext, OutputCategory, SessionState, StopReason, WatchValue};
+use rc_dap::{BreakpointSpec, Breakpoints, DebugEvent, DebugOptions, DebugSession, DebugTarget, EvalContext, EvalPolicy, OutputCategory, SessionState, StopReason, WatchValue};
 use rc_dotnet::{Dotnet, RunRequest};
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -202,6 +202,21 @@ fn debugs_the_cli_breakpoints_stack_variables_watches_steps_and_output() {
     let repl = r.eval("order");
     assert!(repl.variables_reference > 0);
     assert!(r.children(repl.variables_reference).iter().any(|v| v.name == "CouponCode"));
+
+    // Evaluation without side effects: netcoredbg's DAP front end always runs getters, so
+    // DotCraft holds back what may run code: decimal arithmetic (op_Addition), member reads
+    // and listing an object's members. Locals are read directly.
+    r.s.set_eval_policy(EvalPolicy { implicit_calls: false, method_calls: false });
+    let plain = r.s.add_watch("subtotal");
+    r.until("the watches under the policy", Duration::from_secs(20), |s| s.watches().iter().all(|w| !matches!(w.value, WatchValue::Evaluating)));
+    assert_eq!(r.s.watches()[0].value, WatchValue::SideEffects, "decimal + int calls op_Addition");
+    let WatchValue::Value(v) = &r.s.watches()[1].value else { panic!("{:?}", r.s.watches()) };
+    assert_eq!(v.result, "30.00");
+    assert_eq!(r.s.may_evaluate("order.ItemCount"), Some(false));
+    assert_eq!(r.s.may_evaluate("line"), Some(true));
+    assert!(r.s.expansion_has_side_effects(order.variables_reference));
+    r.s.remove_watch(plain);
+    r.s.set_eval_policy(EvalPolicy::default());
 
     // Step over stays in the loop; step into DiscountFor; step out back to the caller.
     r.s.remove_breakpoint(&calc, loop_line);
@@ -434,4 +449,42 @@ fn attaches_to_a_running_api_and_detaches() {
     let _ = app.kill();
     let _ = app.wait();
     assert!(again.starts_with("HTTP/1.1 200") && again.contains("\r\n\r\n2\r\nok\r\n"), "{again}");
+}
+
+/// What DotCraft can offer beyond the basics depends on the adapter: netcoredbg announces no
+/// data breakpoints and no memory reads in its capabilities and answers those requests with
+/// E_NOTIMPL (0x80004001), so the Debug window shows them disabled.
+#[test]
+fn netcoredbg_has_no_data_breakpoints_or_memory_reads() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let cmd = adapter();
+    let _rt = rc_core::Runtime::handle().enter();
+    let incoming = rc_core::Inbox::new(Waker::noop());
+    let client = rc_dap::DapClient::spawn(&cmd.program, &cmd.args(), None, &[], incoming.sender(), Waker::noop()).unwrap();
+    let wait = |mut p: rc_dap::Pending<serde_json::Value>| {
+        let start = Instant::now();
+        loop {
+            if let Some(r) = p.poll() {
+                return r;
+            }
+            assert!(start.elapsed() < Duration::from_secs(20), "no answer");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+    let init = serde_json::json!({"clientID": "dotcraft", "adapterID": "coreclr", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path", "supportsMemoryReferences": true});
+    let caps = wait(client.request("initialize", init)).unwrap();
+    for flag in ["supportsDataBreakpoints", "supportsReadMemoryRequest", "supportsWriteMemoryRequest"] {
+        assert!(caps.get(flag).is_none_or(|v| v == false), "{flag} in {caps}");
+    }
+    assert_eq!(caps["supportsSetExpression"], true);
+    let requests = [
+        ("dataBreakpointInfo", serde_json::json!({"name": "x", "variablesReference": 1})),
+        ("setDataBreakpoints", serde_json::json!({"breakpoints": []})),
+        ("readMemory", serde_json::json!({"memoryReference": "0x1000", "count": 16})),
+    ];
+    for (command, args) in requests {
+        let error = wait(client.request(command, args)).unwrap_err();
+        assert!(error.message.contains("0x80004001"), "{command}: {error}");
+    }
+    client.kill();
 }

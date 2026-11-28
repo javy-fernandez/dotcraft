@@ -14,6 +14,7 @@ use crate::client::{DapClient, DapError, Incoming, Pending, args};
 use crate::launch::{DebugOptions, DebugTarget, LaunchConfig, attach_arguments, launch_arguments, prepare};
 use crate::netcoredbg::AdapterCommand;
 use crate::protocol::*;
+use crate::side_effects::{EvalPolicy, side_effects};
 use rc_core::{Inbox, Runtime, Waker};
 use rc_dotnet::{BuildEvent, CancelToken, LaunchPlan};
 use serde_json::{Value, json};
@@ -178,6 +179,9 @@ pub enum WatchValue {
     Evaluating,
     Value(EvalValue),
     Error(String),
+    /// Not evaluated: it may run code in the program and the [`EvalPolicy`] forbids it
+    /// ([`DebugSession::evaluate_watch_anyway`] evaluates it once).
+    SideEffects,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -261,7 +265,7 @@ enum Purpose {
     Scopes { generation: u64, frame_id: i64 },
     Variables { generation: u64, key: VarKey },
     Watch { generation: u64, id: u64 },
-    Evaluate { id: u64, expression: String, context: EvalContext },
+    Evaluate { generation: u64, id: u64, expression: String, context: EvalContext },
     SetVariable { generation: u64, reference: i64, name: String },
     ExceptionInfo { generation: u64 },
     LogPoint { generation: u64, index: usize, part: usize },
@@ -329,6 +333,15 @@ pub struct DebugSession {
     selected_frame: Option<i64>,
     watches: Vec<Watch>,
     next_id: u64,
+    eval_policy: EvalPolicy,
+    /// Types of the values behind variable references fetched in this stop.
+    ref_types: HashMap<i64, String>,
+    /// Objects the user chose to expand although listing them runs their getters.
+    expand_anyway: HashSet<i64>,
+    /// Watches the user chose to evaluate in this stop despite the policy.
+    watches_anyway: HashSet<u64>,
+    /// Watches waiting for the frame's locals to decide whether they are harmless.
+    watches_waiting: HashSet<u64>,
     exception: Option<ExceptionInfo>,
     modules: Vec<Module>,
     debuggee_pid: Option<u32>,
@@ -380,6 +393,11 @@ impl DebugSession {
             selected_frame: None,
             watches: Vec::new(),
             next_id: 1,
+            eval_policy: EvalPolicy::default(),
+            ref_types: HashMap::new(),
+            expand_anyway: HashSet::new(),
+            watches_anyway: HashSet::new(),
+            watches_waiting: HashSet::new(),
             exception: None,
             modules: Vec::new(),
             debuggee_pid: None,
@@ -468,6 +486,15 @@ impl DebugSession {
         for msg in self.dap.drain() {
             self.on_incoming(msg);
             self.poll_responses();
+        }
+        if !self.watches_waiting.is_empty() {
+            let waiting: Vec<u64> = self.watches_waiting.drain().collect();
+            for id in waiting {
+                self.evaluate_watch(id);
+            }
+            if self.watches_waiting.is_empty() {
+                self.events.push(DebugEvent::WatchesUpdated);
+            }
         }
         std::mem::take(&mut self.events)
     }
@@ -747,6 +774,9 @@ impl DebugSession {
                 self.loading.remove(&(key.reference, key));
                 match r.and_then(|v| serde_json::from_value::<VariablesResponse>(v).map_err(|e| DapError::new(e.to_string()))) {
                     Ok(v) => {
+                        for var in &v.variables {
+                            self.note_type(var.variables_reference, var.type_name.as_deref());
+                        }
                         self.variables.insert(key, v.variables);
                         self.events.push(DebugEvent::VariablesLoaded { reference: key.reference });
                     }
@@ -762,14 +792,26 @@ impl DebugSession {
                 }
                 if let Some(w) = self.watches.iter_mut().find(|w| w.id == id) {
                     w.value = match r.and_then(|v| serde_json::from_value::<EvaluateResponse>(v).map_err(|e| DapError::new(e.to_string()))) {
-                        Ok(v) => WatchValue::Value(v),
+                        Ok(v) => {
+                            if v.variables_reference > 0
+                                && let Some(t) = &v.type_name
+                            {
+                                self.ref_types.insert(v.variables_reference, t.clone());
+                            }
+                            WatchValue::Value(v)
+                        }
                         Err(e) => WatchValue::Error(e.message),
                     };
                     self.events.push(DebugEvent::WatchesUpdated);
                 }
             }
-            Purpose::Evaluate { id, expression, context } => {
+            Purpose::Evaluate { generation, id, expression, context } => {
                 let result = r.and_then(|v| serde_json::from_value::<EvaluateResponse>(v).map_err(|e| DapError::new(e.to_string()))).map_err(|e| e.message);
+                if generation == self.generation
+                    && let Ok(v) = &result
+                {
+                    self.note_type(v.variables_reference, v.type_name.as_deref());
+                }
                 self.events.push(DebugEvent::Evaluated { id, expression, context, result });
             }
             Purpose::SetVariable { generation, reference, name } => {
@@ -1047,6 +1089,10 @@ impl DebugSession {
         self.selected_frame = None;
         self.exception = None;
         self.log_evals.clear();
+        self.ref_types.clear();
+        self.expand_anyway.clear();
+        self.watches_anyway.clear();
+        self.watches_waiting.clear();
         for w in &mut self.watches {
             w.value = WatchValue::NotEvaluated;
         }
@@ -1340,7 +1386,7 @@ impl DebugSession {
     }
 
     fn request_var_key(&mut self, key: VarKey) {
-        if key.reference <= 0 || !self.state.is_stopped() || self.variables.contains_key(&key) || self.loading.contains(&(key.reference, key)) {
+        if key.reference <= 0 || !self.state.is_stopped() || self.variables.contains_key(&key) || self.loading.contains(&(key.reference, key)) || self.expansion_has_side_effects(key.reference) {
             return;
         }
         let Some(c) = &self.client else { return };
@@ -1422,6 +1468,23 @@ impl DebugSession {
         let frame = self.selected_frame;
         let stopped = self.state.is_stopped();
         let generation = self.generation;
+        if stopped && !self.watches_anyway.contains(&id) {
+            let Some(expression) = self.watches.iter().find(|w| w.id == id).map(|w| w.expression.clone()) else { return };
+            let allowed = self.may_evaluate(&expression);
+            let Some(w) = self.watches.iter_mut().find(|w| w.id == id) else { return };
+            match allowed {
+                None => {
+                    w.value = WatchValue::Evaluating;
+                    self.watches_waiting.insert(id);
+                    return;
+                }
+                Some(false) => {
+                    w.value = WatchValue::SideEffects;
+                    return;
+                }
+                Some(true) => {}
+            }
+        }
         let Some(w) = self.watches.iter_mut().find(|w| w.id == id) else { return };
         let Some(c) = self.client.as_ref().filter(|_| stopped) else {
             w.value = WatchValue::NotEvaluated;
@@ -1432,6 +1495,87 @@ impl DebugSession {
         self.in_flight.push((p, Purpose::Watch { generation, id }));
     }
 
+    /// Evaluates a watch the policy held back ([`WatchValue::SideEffects`]), in this stop only.
+    pub fn evaluate_watch_anyway(&mut self, id: u64) {
+        if self.state.is_stopped() {
+            self.watches_anyway.insert(id);
+            self.evaluate_watch(id);
+            self.events.push(DebugEvent::WatchesUpdated);
+        }
+    }
+
+    // ---- Public API: evaluation without side effects ----------------------------------------
+
+    pub fn eval_policy(&self) -> EvalPolicy {
+        self.eval_policy
+    }
+
+    /// Changes what hovers, watches and the Variables tree may run; watches are evaluated
+    /// again under the new rules.
+    pub fn set_eval_policy(&mut self, policy: EvalPolicy) {
+        if self.eval_policy == policy {
+            return;
+        }
+        self.eval_policy = policy;
+        if self.state.is_stopped() {
+            self.evaluate_watches();
+        }
+    }
+
+    /// Whether the policy lets `expression` be evaluated in the selected frame without asking:
+    /// `None` while the frame's locals, needed to decide, are loading (they are requested).
+    pub fn may_evaluate(&mut self, expression: &str) -> Option<bool> {
+        if self.eval_policy.unrestricted() {
+            return Some(true);
+        }
+        let frame = self.selected_frame?;
+        let locals = self.frame_locals(frame)?;
+        Some(self.eval_policy.permits(side_effects(expression, &locals)))
+    }
+
+    /// Locals and arguments of `frame` with their types, once loaded (requested otherwise).
+    fn frame_locals(&mut self, frame: i64) -> Option<HashMap<String, String>> {
+        let Some(scopes) = self.scopes.get(&frame) else {
+            self.request_scopes(frame);
+            return None;
+        };
+        let reference = scopes.iter().find(|s| s.name.to_ascii_lowercase().contains("local")).or(scopes.first()).map_or(0, |s| s.variables_reference);
+        if reference <= 0 {
+            return Some(HashMap::new());
+        }
+        let Some(vars) = self.variables(reference) else {
+            self.request_variables(reference);
+            return None;
+        };
+        Some(vars.iter().map(|v| (v.name.clone(), v.type_name.clone().unwrap_or_default())).collect())
+    }
+
+    /// Whether listing the children of `reference` may run code the policy forbids: the
+    /// adapter reads every property of an object to list it. Scopes and arrays are read
+    /// directly; other objects wait for [`DebugSession::expand_anyway`].
+    pub fn expansion_has_side_effects(&self, reference: i64) -> bool {
+        if self.eval_policy.implicit_calls || self.expand_anyway.contains(&reference) {
+            return false;
+        }
+        let scope = self.scopes.values().flatten().any(|s| s.variables_reference == reference);
+        let array = self.ref_types.get(&reference).is_some_and(|t| t.ends_with(']'));
+        !scope && !array
+    }
+
+    /// Lists the children of `reference` although it runs their getters (this stop only).
+    pub fn expand_anyway(&mut self, reference: i64) {
+        self.expand_anyway.insert(reference);
+        self.request_variables(reference);
+    }
+
+    fn note_type(&mut self, reference: i64, type_name: Option<&str>) {
+        if reference > 0
+            && let Some(t) = type_name
+        {
+            self.ref_types.insert(reference, t.to_string());
+        }
+    }
+
     /// Evaluates in the selected frame (console, hover); the answer comes as
     /// [`DebugEvent::Evaluated`] with the returned id.
     pub fn evaluate(&mut self, expression: &str, context: EvalContext) -> u64 {
@@ -1439,7 +1583,7 @@ impl DebugSession {
         match &self.client {
             Some(c) if !self.state.is_ended() => {
                 let p = c.request("evaluate", args::evaluate(expression, self.selected_frame, context));
-                self.in_flight.push((p, Purpose::Evaluate { id, expression: expression.to_string(), context }));
+                self.in_flight.push((p, Purpose::Evaluate { generation: self.generation, id, expression: expression.to_string(), context }));
             }
             _ => self.events.push(DebugEvent::Evaluated { id, expression: expression.to_string(), context, result: Err("the debugger is not running".into()) }),
         }
