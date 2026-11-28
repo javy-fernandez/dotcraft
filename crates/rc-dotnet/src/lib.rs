@@ -9,6 +9,7 @@
 
 pub mod appsettings;
 pub mod aspire;
+pub mod avalonia_preview;
 pub mod build;
 pub mod counters;
 pub mod cpu_profile;
