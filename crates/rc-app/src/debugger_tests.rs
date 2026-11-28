@@ -158,6 +158,24 @@ fn debugs_the_cli_and_the_api_from_the_ide() {
     pump(&mut app, "the hover value", Duration::from_secs(30), |a| a.debugger.hover_result.is_some());
     assert!(app.debugger.hover_result.as_ref().unwrap().3.starts_with("line.Subtotal = 25.00"), "{:?}", app.debugger.hover_result);
 
+    // Without side effects: a member may be a property, so the hover waits for a click;
+    // locals are read directly; decimal arithmetic calls op_Addition, so the watch waits too.
+    app.debugger.eval_policy = rc_dap::EvalPolicy { implicit_calls: false, method_calls: false };
+    app.debugger.clear_hover();
+    app.debugger.hover(id, pos, egui::Pos2::ZERO, "line.Subtotal".into());
+    pump(&mut app, "the held hover", Duration::from_secs(30), |a| a.debugger.hover_held.is_some() || a.debugger.hover_result.is_some());
+    assert!(app.debugger.hover_result.is_none(), "{:?}", app.debugger.hover_result);
+    pump(&mut app, "the held watch", Duration::from_secs(30), |a| a.debugger.session.as_ref().unwrap().watches()[0].value == rc_dap::WatchValue::SideEffects);
+    app.debugger.hover_anyway();
+    pump(&mut app, "the hover evaluated on request", Duration::from_secs(30), |a| a.debugger.hover_result.is_some());
+    assert!(app.debugger.hover_result.as_ref().unwrap().3.starts_with("line.Subtotal = 25.00"), "{:?}", app.debugger.hover_result);
+    app.debugger.clear_hover();
+    app.debugger.hover(id, pos, egui::Pos2::ZERO, "subtotal".into());
+    pump(&mut app, "the local's hover", Duration::from_secs(30), |a| a.debugger.hover_result.is_some() || a.debugger.hover_held.is_some());
+    assert!(app.debugger.hover_result.as_ref().is_some_and(|h| h.3.starts_with("subtotal = 30.00")), "{:?}", app.debugger.hover_result);
+    app.debugger.eval_policy = rc_dap::EvalPolicy::default();
+    pump(&mut app, "the watch again", Duration::from_secs(30), |a| matches!(a.debugger.session.as_ref().unwrap().watches()[0].value, rc_dap::WatchValue::Value(_)));
+
     // Continue to the plain breakpoint: the loop condition is not met again.
     app.run_ide_action(&ctx, rc_editor::Action::Resume);
     until_stopped(&mut app, "the discount breakpoint");

@@ -1756,7 +1756,17 @@
     "You": "Vous",
     "1 line": "1 ligne",
     "{count} lines": "{count} lignes",
-    "Show code authors in Code Vision": "Afficher les auteurs du code dans Code Vision"
+    "Show code authors in Code Vision": "Afficher les auteurs du code dans Code Vision",
+    "Evaluation disabled: may have side effects (click to evaluate)": "Évaluation désactivée : peut avoir des effets de bord (cliquer pour évaluer)",
+    "Allow Property Evaluation and Implicit Function Calls": "Autoriser l'évaluation des propriétés et les appels de fonctions implicites",
+    "Allow Method Calls in Watches": "Autoriser les appels de méthodes dans les espions",
+    "Break When Value Changes": "Arrêter quand la valeur change",
+    "View Memory": "Afficher la mémoire",
+    "netcoredbg, the .NET debugger DotCraft uses, does not support data breakpoints": "netcoredbg, le débogueur .NET utilisé par DotCraft, ne prend pas en charge les points d'arrêt sur données",
+    "netcoredbg, the .NET debugger DotCraft uses, cannot read the program's memory": "netcoredbg, le débogueur .NET utilisé par DotCraft, ne peut pas lire la mémoire du programme",
+    "Allow property evaluation and other implicit function calls": "Autoriser l'évaluation des propriétés et les autres appels de fonctions implicites",
+    "Allow method calls in watches": "Autoriser les appels de méthodes dans les espions",
+    "When disallowed, hovers, watches and the Variables tree show a link to evaluate instead of values that may run code in the program, since netcoredbg cannot read properties without running their getters.": "Si ce n'est pas autorisé, les survols, les espions et l'arbre des variables affichent un lien pour évaluer au lieu des valeurs qui peuvent exécuter du code du programme, car netcoredbg ne peut pas lire les propriétés sans exécuter leurs accesseurs."
   },
   "launchprofileeditor": {
     "Add profile": "Ajouter un profil",

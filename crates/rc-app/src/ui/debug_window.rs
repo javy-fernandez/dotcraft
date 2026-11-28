@@ -125,6 +125,25 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right));
     variables(&mut ru, &mut app.debugger);
     ui.advance_cursor_after_rect(avail);
+    // The evaluation toggles of the Variables toolbar and context menu are settings.
+    let policy = app.debugger.eval_policy;
+    if policy != crate::debugger::eval_policy(&app.settings) {
+        let mut settings = app.settings.clone();
+        settings.debugger_property_evaluation = policy.implicit_calls;
+        settings.debugger_method_calls = policy.method_calls;
+        app.apply_settings(&ctx, settings);
+    }
+}
+
+/// Shown in place of a value the evaluation policy held back (Rider's lazy "Evaluate").
+pub fn held_text() -> &'static str {
+    tr("Evaluation disabled: may have side effects (click to evaluate)")
+}
+
+/// netcoredbg answers `dataBreakpointInfo`/`setDataBreakpoints` and `readMemory` with
+/// E_NOTIMPL and announces neither capability.
+fn unsupported_entry(ui: &mut Ui, text: &str, why: &str) {
+    theme::menu_entry(ui, None, text, None, false, false).on_disabled_hover_text(why);
 }
 
 fn parallel_stacks(ui: &mut Ui, dbg: &mut Debugger) {
@@ -259,13 +278,16 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
     let mut add = false;
     ui.horizontal(|ui| {
         ui.add_space(8.0);
-        let te = ui.add(egui::TextEdit::singleline(&mut dbg.new_watch).hint_text(tr("Add a watch (Enter)")).font(egui::TextStyle::Monospace).desired_width(ui.available_width() - 40.0));
+        let te = ui.add(egui::TextEdit::singleline(&mut dbg.new_watch).hint_text(tr("Add a watch (Enter)")).font(egui::TextStyle::Monospace).desired_width(ui.available_width() - 72.0));
         if te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             add = true;
             te.request_focus();
         }
         if theme::icon_button(ui, ico::ADD, !dbg.new_watch.trim().is_empty(), tr("Add Watch")).clicked() {
             add = true;
+        }
+        if theme::icon_toggle(ui, ico::PROPERTY, dbg.eval_policy.implicit_calls, tr("Allow Property Evaluation and Implicit Function Calls")).clicked() {
+            dbg.eval_policy.implicit_calls = !dbg.eval_policy.implicit_calls;
         }
     });
     if add && !dbg.new_watch.trim().is_empty() {
@@ -283,8 +305,10 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
             WatchValue::Error(e) => (e.clone(), None, 0, true),
             WatchValue::Evaluating => ("…".into(), None, 0, false),
             WatchValue::NotEvaluated => (tr("Cannot evaluate while running").into(), None, 0, true),
+            WatchValue::SideEffects => (held_text().into(), None, 0, false),
         };
-        rows.push(Row { depth: 0, key: format!("w:{}", w.expression), name: w.expression.clone(), value, ty, reference, error, watch: Some(w.id), scope: false });
+        let held = (w.value == WatchValue::SideEffects).then_some(Held::Watch(w.id));
+        rows.push(Row { depth: 0, key: format!("w:{}", w.expression), name: w.expression.clone(), value, ty, reference, error, watch: Some(w.id), scope: false, held });
     }
     if stopped && let Some(frame) = s.selected_frame().map(|f| f.id) {
         match s.scopes(frame) {
@@ -298,7 +322,7 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
                         children(s, &dbg.expanded, sc.variables_reference, &format!("s:{}", sc.name), 0, &mut rows);
                     } else {
                         let key = format!("s:{}", sc.name);
-                        rows.push(Row { depth: 0, key: key.clone(), name: sc.name.clone(), value: String::new(), ty: None, reference: sc.variables_reference, error: false, watch: None, scope: true });
+                        rows.push(Row { depth: 0, key: key.clone(), name: sc.name.clone(), value: String::new(), ty: None, reference: sc.variables_reference, error: false, watch: None, scope: true, held: None });
                         if dbg.expanded.contains(&key) {
                             children(s, &dbg.expanded, sc.variables_reference, &key, 1, &mut rows);
                         }
@@ -310,6 +334,8 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
     let mut toggle = None;
     let mut remove = None;
     let mut add_watch = None;
+    let mut anyway = None;
+    let mut policy = dbg.eval_policy;
     egui::ScrollArea::vertical().id_salt("dbg_vars").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         if rows.is_empty() {
@@ -322,19 +348,41 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
         }
         for row in &rows {
             let resp = paint_row(ui, row, dbg.expanded.contains(&row.key));
-            if resp.clicked() && row.reference > 0 {
-                toggle = Some(row.key.clone());
+            if resp.clicked() {
+                if let Some(held) = row.held {
+                    anyway = Some(held);
+                } else if row.reference > 0 {
+                    toggle = Some(row.key.clone());
+                }
+            }
+            if row.held.is_some() && resp.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
             }
             resp.context_menu(|ui| {
+                ui.set_min_width(240.0);
+                ui.set_max_width(400.0);
+                let value = !row.scope && !matches!(row.held, Some(Held::Expand(_)));
                 if let Some(id) = row.watch {
                     if theme::menu_item(ui, Some(ico::REMOVE), tr("Remove Watch"), false).clicked() {
                         remove = Some(id);
                     }
-                } else if !row.scope && theme::menu_item(ui, Some(ico::ADD_TO_WATCH), tr("Add to Watches"), false).clicked() {
+                } else if value && theme::menu_item(ui, Some(ico::ADD_TO_WATCH), tr("Add to Watches"), false).clicked() {
                     add_watch = Some(row.name.clone());
                 }
-                if !row.scope && theme::menu_item(ui, Some(ico::COPY), tr("Copy Value"), false).clicked() {
+                if value && row.held.is_none() && theme::menu_item(ui, Some(ico::COPY), tr("Copy Value"), false).clicked() {
                     ui.ctx().copy_text(row.value.clone());
+                }
+                if value && row.watch.is_none() {
+                    ui.separator();
+                    unsupported_entry(ui, tr("Break When Value Changes"), tr("netcoredbg, the .NET debugger DotCraft uses, does not support data breakpoints"));
+                    unsupported_entry(ui, tr("View Memory"), tr("netcoredbg, the .NET debugger DotCraft uses, cannot read the program's memory"));
+                }
+                ui.separator();
+                if theme::menu_item(ui, None, tr("Allow Property Evaluation and Implicit Function Calls"), policy.implicit_calls).clicked() {
+                    policy.implicit_calls = !policy.implicit_calls;
+                }
+                if theme::menu_item(ui, None, tr("Allow Method Calls in Watches"), policy.method_calls).clicked() {
+                    policy.method_calls = !policy.method_calls;
                 }
             });
         }
@@ -350,6 +398,12 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
     if let Some(e) = add_watch {
         s.add_watch(e);
     }
+    match anyway {
+        Some(Held::Watch(id)) => s.evaluate_watch_anyway(id),
+        Some(Held::Expand(reference)) => s.expand_anyway(reference),
+        None => {}
+    }
+    dbg.eval_policy = policy;
 }
 
 fn scopes_flat(name: &str) -> bool {
@@ -366,6 +420,15 @@ struct Row {
     error: bool,
     watch: Option<u64>,
     scope: bool,
+    /// Not evaluated because it may run code: clicking evaluates it.
+    held: Option<Held>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Held {
+    Watch(u64),
+    /// Listing the members of this object runs their getters.
+    Expand(i64),
 }
 
 /// Children of `reference` (requested when not loaded), recursing into expanded rows.
@@ -374,8 +437,12 @@ fn children(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<
         return;
     }
     let Some(vars) = s.variables(reference).map(|v| v.to_vec()) else {
+        if s.expansion_has_side_effects(reference) {
+            rows.push(Row { depth, key: format!("{parent}/!"), name: String::new(), value: held_text().into(), ty: None, reference: 0, error: false, watch: None, scope: false, held: Some(Held::Expand(reference)) });
+            return;
+        }
         s.request_variables(reference);
-        rows.push(Row { depth, key: format!("{parent}/…"), name: "…".into(), value: String::new(), ty: None, reference: 0, error: false, watch: None, scope: false });
+        rows.push(Row { depth, key: format!("{parent}/…"), name: "…".into(), value: String::new(), ty: None, reference: 0, error: false, watch: None, scope: false, held: None });
         return;
     };
     for v in vars {
@@ -385,13 +452,16 @@ fn children(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<
 
 fn push_var(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<String>, v: &Variable, parent: &str, depth: usize, rows: &mut Vec<Row>) {
     let key = format!("{parent}/{}", v.name);
-    rows.push(Row { depth, key: key.clone(), name: v.name.clone(), value: v.value.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false });
+    rows.push(Row { depth, key: key.clone(), name: v.name.clone(), value: v.value.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false, held: None });
     if v.variables_reference > 0 && expanded.contains(&key) {
         children(s, expanded, v.variables_reference, &key, depth + 1, rows);
     }
 }
 
 fn var_icon(row: &Row) -> Ico {
+    if matches!(row.held, Some(Held::Expand(_))) {
+        return ico::PROPERTY;
+    }
     if row.watch.is_some() {
         return ico::WATCH;
     }
@@ -413,6 +483,8 @@ fn var_icon(row: &Row) -> Ico {
 fn paint_row(ui: &mut Ui, row: &Row, open: bool) -> egui::Response {
     let p = rc_kit::pal(ui);
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
+    let label = if row.name.is_empty() { row.value.clone() } else { row.name.clone() };
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
     if resp.hovered() {
         ui.painter().rect_filled(r, 0.0, p.row_hover);
     }
@@ -427,7 +499,12 @@ fn paint_row(ui: &mut Ui, row: &Row, open: bool) -> egui::Response {
     let sc = theme::scheme(p.dark);
     let name_color = if row.watch.is_some() || row.scope { p.text } else { sc.field };
     job.append(&row.name, 0.0, egui::TextFormat::simple(font.clone(), name_color));
-    if !row.scope && !row.value.is_empty() {
+    if row.held.is_some() {
+        if !row.name.is_empty() {
+            job.append(" = ", 0.0, egui::TextFormat::simple(font.clone(), p.text));
+        }
+        job.append(&row.value, 0.0, egui::TextFormat::simple(FontId::proportional(12.5), sc.hyperlink));
+    } else if !row.scope && !row.value.is_empty() {
         job.append(" = ", 0.0, egui::TextFormat::simple(font.clone(), p.text));
         // netcoredbg shows objects as `{Full.Type.Name}`: show the short type once (Rider).
         let object = row.value.starts_with('{') && row.value.ends_with('}');
@@ -482,11 +559,12 @@ pub fn eval_tree(ui: &mut Ui, dbg: &mut Debugger, expression: &str, v: &EvalValu
     let Some(s) = &mut dbg.session else { return };
     let mut rows = Vec::new();
     let key = format!("e:{expression}");
-    rows.push(Row { depth: 0, key: key.clone(), name: expression.to_string(), value: v.result.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false });
+    rows.push(Row { depth: 0, key: key.clone(), name: expression.to_string(), value: v.result.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false, held: None });
     if v.variables_reference > 0 && dbg.expanded.contains(&key) {
         children(s, &dbg.expanded, v.variables_reference, &key, 1, &mut rows);
     }
     let mut toggle = None;
+    let mut anyway = None;
     egui::ScrollArea::vertical().id_salt("eval_tree").max_height(260.0).auto_shrink([false, true]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         for row in &rows {
@@ -494,11 +572,18 @@ pub fn eval_tree(ui: &mut Ui, dbg: &mut Debugger, expression: &str, v: &EvalValu
             if row.depth == 0 {
                 row_icon.watch = None;
             }
-            if paint_row(ui, &row_icon, dbg.expanded.contains(&row.key)).clicked() && row.reference > 0 {
-                toggle = Some(row.key.clone());
+            if paint_row(ui, &row_icon, dbg.expanded.contains(&row.key)).clicked() {
+                if let Some(Held::Expand(reference)) = row.held {
+                    anyway = Some(reference);
+                } else if row.reference > 0 {
+                    toggle = Some(row.key.clone());
+                }
             }
         }
     });
+    if let Some(reference) = anyway {
+        s.expand_anyway(reference);
+    }
     if let Some(k) = toggle
         && !dbg.expanded.remove(&k)
     {
@@ -507,7 +592,7 @@ pub fn eval_tree(ui: &mut Ui, dbg: &mut Debugger, expression: &str, v: &EvalValu
 }
 
 fn clone_row(r: &Row) -> Row {
-    Row { depth: r.depth, key: r.key.clone(), name: r.name.clone(), value: r.value.clone(), ty: r.ty.clone(), reference: r.reference, error: r.error, watch: r.watch, scope: r.scope }
+    Row { depth: r.depth, key: r.key.clone(), name: r.name.clone(), value: r.value.clone(), ty: r.ty.clone(), reference: r.reference, error: r.error, watch: r.watch, scope: r.scope, held: r.held }
 }
 
 #[cfg(test)]
@@ -544,6 +629,65 @@ mod tests {
             assert_eq!(restart.accesskit_node().is_disabled(), attached);
             assert!(harness.state().pending.is_empty());
         }
+    }
+
+    #[test]
+    fn held_values_evaluate_on_click_and_the_menu_toggles_the_policy() {
+        use egui_kittest::kittest::Queryable;
+        use rc_dap::{AdapterCommand, Breakpoints, DebugOptions, DebugSession, DebugTarget, EvalPolicy, LaunchConfig, WatchValue};
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.debugger_property_evaluation = false;
+        app.debugger.eval_policy = EvalPolicy { implicit_calls: false, method_calls: true };
+        // rc-dap's scripted adapter: stops with x (int) and order (an object) as locals.
+        let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../rc-dap/tests/fake_adapter.py");
+        let mut adapter = AdapterCommand::new("python3", rc_dap::netcoredbg::Origin::Settings);
+        adapter.prefix = vec!["-u".into(), script.display().to_string(), home.path().join("requests.jsonl").display().to_string(), "late".into()];
+        let target = DebugTarget::Launch(LaunchConfig { program: "/usr/bin/dotnet".into(), args: vec!["app.dll".into()], cwd: "/w".into(), env: Vec::new() });
+        let mut session = DebugSession::start(adapter, target, DebugOptions::default(), Breakpoints::new(), rc_core::Waker::noop());
+        session.add_watch("order.Customer");
+        app.debugger.session = Some(session);
+        app.debugger.expanded.insert("s:Locals/order".into());
+        let mut first = true;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1000.0, 400.0)).build_ui_state(
+            move |ui, app: &mut crate::app::DotCraftApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                app.debugger.update(&mut app.docs);
+                super::show(app, ui);
+            },
+            app,
+        );
+        let watch = |h: &egui_kittest::Harness<'_, crate::app::DotCraftApp>| h.state().debugger.session.as_ref().unwrap().watches()[0].value.clone();
+        let start = std::time::Instant::now();
+        while watch(&h) != WatchValue::SideEffects || h.query_by_label(super::held_text()).is_none() {
+            assert!(start.elapsed() < std::time::Duration::from_secs(10), "{:?}", watch(&h));
+            h.run_steps(1);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        // The object waits for a click before its getters run; so does the watch.
+        assert!(h.state().debugger.session.as_ref().unwrap().expansion_has_side_effects(h.state().debugger.session.as_ref().unwrap().variables(1001).unwrap()[1].variables_reference));
+        h.get_by_label(super::held_text()).click();
+        h.get_by_label("order.Customer").click();
+        let start = std::time::Instant::now();
+        while matches!(watch(&h), WatchValue::SideEffects | WatchValue::Evaluating) || h.query_by_label("Customer").is_none() {
+            assert!(start.elapsed() < std::time::Duration::from_secs(10), "{:?}", watch(&h));
+            h.run_steps(1);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        // The context menu's toggle is the setting.
+        h.get_by_label("x").click_secondary();
+        h.run_steps(2);
+        // The toolbar toggle has the same name; the menu entry is the button.
+        use egui_kittest::kittest::NodeT;
+        let entry = h.get_all_by_label(rc_kit::i18n::tr("Allow Property Evaluation and Implicit Function Calls")).find(|n| n.accesskit_node().role() == egui::accesskit::Role::Button).unwrap();
+        entry.click();
+        h.run_steps(3);
+        assert!(h.state().settings.debugger_property_evaluation && h.state().debugger.eval_policy.implicit_calls);
+        h.state_mut().debugger.stop();
     }
 
     #[test]

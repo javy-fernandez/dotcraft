@@ -1756,7 +1756,17 @@
     "You": "你",
     "1 line": "1 行",
     "{count} lines": "{count} 行",
-    "Show code authors in Code Vision": "在 Code Vision 中显示代码作者"
+    "Show code authors in Code Vision": "在 Code Vision 中显示代码作者",
+    "Evaluation disabled: may have side effects (click to evaluate)": "已禁用求值：可能有副作用（单击以求值）",
+    "Allow Property Evaluation and Implicit Function Calls": "允许属性求值和隐式函数调用",
+    "Allow Method Calls in Watches": "允许在监视中调用方法",
+    "Break When Value Changes": "值更改时中断",
+    "View Memory": "查看内存",
+    "netcoredbg, the .NET debugger DotCraft uses, does not support data breakpoints": "DotCraft 使用的 .NET 调试器 netcoredbg 不支持数据断点",
+    "netcoredbg, the .NET debugger DotCraft uses, cannot read the program's memory": "DotCraft 使用的 .NET 调试器 netcoredbg 无法读取程序的内存",
+    "Allow property evaluation and other implicit function calls": "允许属性求值和其他隐式函数调用",
+    "Allow method calls in watches": "允许在监视中调用方法",
+    "When disallowed, hovers, watches and the Variables tree show a link to evaluate instead of values that may run code in the program, since netcoredbg cannot read properties without running their getters.": "不允许时，悬停提示、监视和变量树会显示求值链接，而不是可能在程序中运行代码的值，因为 netcoredbg 无法在不运行 getter 的情况下读取属性。"
   },
   "launchprofileeditor": {
     "Add profile": "添加配置文件",

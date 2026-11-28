@@ -36,6 +36,11 @@ pub struct Settings {
     pub show_inlay_hints: bool,
     /// Show local variable values beside source lines while the debugger is paused.
     pub show_debug_inline_values: bool,
+    /// Debugger values may run property getters, indexers and user-defined operators (Rider's
+    /// "Allow property evaluation and other implicit function calls").
+    pub debugger_property_evaluation: bool,
+    /// Debugger watches may call methods, create objects and assign.
+    pub debugger_method_calls: bool,
     pub show_code_vision: bool,
     /// Code Vision's author label (Git blame of each declaration).
     pub show_code_vision_author: bool,
@@ -123,6 +128,8 @@ impl Default for Settings {
             ui_zoom: 1.0,
             show_inlay_hints: true,
             show_debug_inline_values: true,
+            debugger_property_evaluation: true,
+            debugger_method_calls: true,
             show_code_vision: true,
             show_code_vision_author: true,
             spellcheck_enabled: true,
@@ -204,7 +211,7 @@ mod tests {
         let s: Settings = serde_json::from_str(r#"{"editor_font_size": 15.0, "unknown": 1}"#).unwrap();
         assert_eq!(s.editor_font_size, 15.0);
         assert_eq!(s.right_margin, 120);
-        assert!(s.show_debug_inline_values);
+        assert!(s.show_debug_inline_values && s.debugger_property_evaluation && s.debugger_method_calls);
         assert_eq!(s.godot_path, None);
         assert_eq!(s.unity_editor_path, None);
         let s: Settings = serde_json::from_str(r#"{"unity_editor_path": "/opt/Unity/Editor/Unity"}"#).unwrap();

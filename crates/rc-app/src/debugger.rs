@@ -5,7 +5,7 @@
 use crate::docs::Docs;
 use crate::runner::{ConfigKind, RunConfig};
 use rc_core::{Inbox, Waker};
-use rc_dap::{BreakpointSpec, Breakpoints, DebugEvent, DebugOptions, DebugSession, DebugTarget, DownloadEvent, EvalContext, EvalValue, OutputCategory, SessionState};
+use rc_dap::{BreakpointSpec, Breakpoints, DebugEvent, DebugOptions, DebugSession, DebugTarget, DownloadEvent, EvalContext, EvalPolicy, EvalValue, OutputCategory, SessionState};
 use rc_kit::i18n::{tr, trf};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -20,6 +20,14 @@ pub enum DebugOutput {
 
 /// An Evaluate request: id, expression and its result once it arrives.
 pub type Evaluation = (u64, String, Option<Result<EvalValue, String>>);
+
+/// A hover expression not evaluated yet: (doc, pos, screen, expression).
+pub type HeldHover = (u64, usize, egui::Pos2, String);
+
+/// What hovers, watches and the Variables tree may run, from the settings.
+pub fn eval_policy(settings: &rc_core::Settings) -> EvalPolicy {
+    EvalPolicy { implicit_calls: settings.debugger_property_evaluation, method_calls: settings.debugger_method_calls }
+}
 
 enum PendingStart {
     Launch(RunConfig, rc_dotnet::RunRequest, PathBuf),
@@ -44,6 +52,12 @@ pub struct Debugger {
     /// Hover evaluation: (request id, doc, pos, screen, expression).
     hover: Option<(u64, u64, usize, egui::Pos2, String)>,
     pub hover_result: Option<(u64, usize, egui::Pos2, String)>,
+    /// A hover the evaluation policy held back: shown with "click to evaluate".
+    pub hover_held: Option<HeldHover>,
+    /// A hover waiting for the frame's locals to decide whether it is harmless.
+    hover_waiting: Option<HeldHover>,
+    /// Evaluation without side effects (synced to the session on every update).
+    pub eval_policy: EvalPolicy,
     /// Breakpoint conditions by (file, 0-based line).
     pub conditions: HashMap<(PathBuf, usize), String>,
     pub show_console: bool,
@@ -75,6 +89,9 @@ impl Debugger {
             eval: None,
             hover: None,
             hover_result: None,
+            hover_held: None,
+            hover_waiting: None,
+            eval_policy: EvalPolicy::default(),
             conditions: HashMap::new(),
             show_console: false,
             show_parallel_stacks: false,
@@ -84,6 +101,11 @@ impl Debugger {
             previous_inline: HashMap::new(),
             current_inline: HashMap::new(),
         }
+    }
+
+    pub fn with_policy(mut self, policy: EvalPolicy) -> Self {
+        self.eval_policy = policy;
+        self
     }
 
     pub fn active(&self) -> bool {
@@ -203,7 +225,7 @@ impl Debugger {
         self.expanded.clear();
         self.eval = None;
         self.hover = None;
-        self.hover_result = None;
+        self.clear_hover();
         self.temp = None;
         self.name = trf("Process {pid}", &[("pid", &pid.to_string())]);
         let console = crate::runner::Console::new(&self.waker);
@@ -277,15 +299,40 @@ impl Debugger {
         }
     }
 
-    /// Evaluates the expression under the mouse while stopped (hover values).
+    /// Evaluates the expression under the mouse while stopped (hover values), unless it may
+    /// run code the evaluation policy forbids: then it is held for "click to evaluate".
     pub fn hover(&mut self, doc: u64, pos: usize, screen: egui::Pos2, expression: String) {
+        self.hover_held = None;
+        self.hover_waiting = None;
         if expression.is_empty() || !self.stopped() {
             return;
         }
+        let Some(s) = &mut self.session else { return };
+        s.set_eval_policy(self.eval_policy);
+        match s.may_evaluate(&expression) {
+            Some(true) => {
+                let id = s.evaluate(&expression, EvalContext::Hover);
+                self.hover = Some((id, doc, pos, screen, expression));
+            }
+            Some(false) => self.hover_held = Some((doc, pos, screen, expression)),
+            None => self.hover_waiting = Some((doc, pos, screen, expression)),
+        }
+    }
+
+    /// Evaluates the held hover expression although it may run code.
+    pub fn hover_anyway(&mut self) {
+        let Some((doc, pos, screen, expression)) = self.hover_held.take() else { return };
         if let Some(s) = &mut self.session {
             let id = s.evaluate(&expression, EvalContext::Hover);
             self.hover = Some((id, doc, pos, screen, expression));
         }
+    }
+
+    /// The mouse left the hovered expression.
+    pub fn clear_hover(&mut self) {
+        self.hover_result = None;
+        self.hover_held = None;
+        self.hover_waiting = None;
     }
 
     pub fn evaluate(&mut self, expression: String) {
@@ -322,6 +369,12 @@ impl Debugger {
             }
         }
         self.sync_breakpoints(docs);
+        if let Some(s) = &mut self.session {
+            s.set_eval_policy(self.eval_policy);
+        }
+        if let Some((doc, pos, screen, expression)) = self.hover_waiting.take() {
+            self.hover(doc, pos, screen, expression);
+        }
         let temp = self.temp.clone();
         let Some(session) = &mut self.session else { return out };
         let events = session.pump();
@@ -377,6 +430,8 @@ impl Debugger {
                 }
                 DebugEvent::Continued => {
                     self.hover_result = None;
+                    self.hover_held = None;
+                    self.hover_waiting = None;
                 }
                 DebugEvent::Exited(code) => {
                     if let Some(c) = &self.console {

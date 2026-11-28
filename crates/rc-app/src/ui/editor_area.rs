@@ -319,7 +319,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
                     let expr = crate::debugger::expression_at(doc.editor.buffer.rope(), *pos);
                     app.debugger.hover(doc.editor.id, *pos, *screen, expr);
                 }
-                EditorEvent::HoverEnd | EditorEvent::Changed | EditorEvent::CaretMoved => app.debugger.hover_result = None,
+                EditorEvent::HoverEnd | EditorEvent::Changed | EditorEvent::CaretMoved => app.debugger.clear_hover(),
                 _ => {}
             }
         }
@@ -391,17 +391,7 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
             _ => {}
         }
     }
-    if let Some((d, _, screen, text)) = &app.debugger.hover_result
-        && *d == doc.editor.id
-    {
-        let p = rc_kit::pal(ui);
-        egui::Area::new(egui::Id::new("debug_hover")).order(egui::Order::Tooltip).fixed_pos(*screen + vec2(0.0, 14.0)).show(ui.ctx(), |ui| {
-            egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::symmetric(8, 5)).show(ui, |ui| {
-                ui.set_max_width(520.0);
-                ui.label(egui::RichText::new(text).monospace().size(12.5).color(p.text));
-            });
-        });
-    }
+    debug_hover(ui, &mut app.debugger, doc.editor.id);
     let mut insight_actions = Vec::new();
     for a in out.actions {
         match a {
@@ -620,6 +610,47 @@ fn annotation_tooltip(app: &mut DotCraftApp, ui: &Ui, active: usize, line: usize
 }
 
 /// Right-click in the editor (Rider): code actions and navigation for C#, editing, formatting.
+/// The debugger's value of the hovered expression, or "click to evaluate" when evaluating it
+/// may run code the evaluation policy forbids.
+fn debug_hover(ui: &Ui, dbg: &mut crate::debugger::Debugger, doc: u64) {
+    let held = dbg.hover_held.as_ref().filter(|h| h.0 == doc).map(|h| (h.2, h.3.clone(), true));
+    let shown = held.or_else(|| dbg.hover_result.as_ref().filter(|h| h.0 == doc).map(|h| (h.2, h.3.clone(), false)));
+    let flag = egui::Id::new("dotcraft_hover_popup_hovered");
+    let ours = egui::Id::new("debug_hover_keeps_popup");
+    let Some((screen, text, held)) = shown else {
+        // Release the editor's hover if this popup was holding it.
+        if ui.ctx().data_mut(|d| d.remove_temp::<bool>(ours)).is_some() {
+            ui.ctx().data_mut(|d| d.insert_temp(flag, false));
+        }
+        return;
+    };
+    let p = rc_kit::pal(ui);
+    let mut evaluate = false;
+    let area = egui::Area::new(egui::Id::new("debug_hover")).order(egui::Order::Tooltip).fixed_pos(screen + vec2(0.0, 14.0)).show(ui.ctx(), |ui| {
+        egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::symmetric(8, 5)).show(ui, |ui| {
+            ui.set_max_width(520.0);
+            if !held {
+                ui.label(egui::RichText::new(&text).monospace().size(12.5).color(p.text));
+                return;
+            }
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(format!("{text} =")).monospace().size(12.5).color(p.text));
+                let link = ui.add(egui::Label::new(egui::RichText::new(tr("Evaluation disabled: may have side effects (click to evaluate)")).size(12.5).color(theme::scheme(p.dark).hyperlink)).sense(egui::Sense::click()));
+                evaluate = link.on_hover_cursor(egui::CursorIcon::PointingHand).clicked();
+            });
+        });
+    });
+    // Keep the popup while the mouse moves onto it (the editor ends the hover otherwise).
+    let near = ui.ctx().pointer_hover_pos().is_some_and(|pos| area.response.rect.expand(16.0).contains(pos));
+    ui.ctx().data_mut(|d| {
+        d.insert_temp(flag, near);
+        d.insert_temp(ours, true);
+    });
+    if evaluate {
+        dbg.hover_anyway();
+    }
+}
+
 fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
     use crate::native_menu::{MenuCommand, forward_edit};
     let csharp = app.docs.active_doc().is_some_and(crate::insight::is_csharp);

@@ -245,7 +245,7 @@ fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &m
             let content_width = (layout.page - ui.spacing().scroll.allocated_width() - ui.spacing().scroll.bar_width - 12.0).max(40.0);
             egui::ScrollArea::new([!matches!(*page, SettingsPage::Tools | SettingsPage::VersionControl), true]).id_salt("settings_fixed_page").max_height(layout.height).min_scrolled_height(layout.height).max_width(layout.page).auto_shrink([false, false]).show(ui, |ui| ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
                 ui.set_width(content_width);
-                ui.set_height(layout.height);
+                ui.set_min_height(layout.height);
                 if *page == SettingsPage::Tools {
                     settings_tools(ui, draft, app);
                     return;
@@ -383,12 +383,12 @@ fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
     ui.add_space(10.0);
     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
     #[derive(PartialEq)]
-    enum Engine { None, Godot, Unity }
+    enum Engine { None, Godot, Unity, Debugger }
     for (label, value, engine) in [
         (tr(".NET CLI"), &mut draft.dotnet_path, Engine::None),
         (tr("Godot .NET executable"), &mut draft.godot_path, Engine::Godot),
         (tr("Roslyn language server"), &mut draft.roslyn_path, Engine::None),
-        (tr("netcoredbg debugger"), &mut draft.netcoredbg_path, Engine::None),
+        (tr("netcoredbg debugger"), &mut draft.netcoredbg_path, Engine::Debugger),
         (tr("Unity Editor (executable or editors folder)"), &mut draft.unity_editor_path, Engine::Unity),
     ] {
         let label_response = ui.label(label);
@@ -416,6 +416,14 @@ fn settings_tools(ui: &mut Ui, draft: &mut Settings, app: &mut DotCraftApp) {
             );
             let generation = tr("Unity generates the .sln and .csproj files only for the editors of its IDE packages: to update them, choose Visual Studio or Visual Studio Code there, click Regenerate project files and choose DotCraft again.");
             crate::ui::kit::note(ui, &format!("{setup}\n{generation}"));
+            ui.add_space(4.0);
+        }
+        if engine == Engine::Debugger {
+            // Rider's Debugger › Data Views options; netcoredbg itself always runs getters.
+            ui.add_space(4.0);
+            ui.checkbox(&mut draft.debugger_property_evaluation, tr("Allow property evaluation and other implicit function calls"));
+            ui.checkbox(&mut draft.debugger_method_calls, tr("Allow method calls in watches"));
+            crate::ui::kit::note(ui, tr("When disallowed, hovers, watches and the Variables tree show a link to evaluate instead of values that may run code in the program, since netcoredbg cannot read properties without running their getters."));
             ui.add_space(4.0);
         }
         if engine == Engine::Godot {

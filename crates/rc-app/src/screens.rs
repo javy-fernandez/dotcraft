@@ -2789,3 +2789,66 @@ fn screens_proto_and_grpc_client() {
         h.render().unwrap().save(out.join(format!("grpc-client-error-{suffix}.png"))).unwrap();
     }
 }
+
+/// Evaluation without side effects in the Debug window, against rc-dap's scripted adapter: a
+/// watch and an object held back ("click to evaluate"), a held hover, the Variables context
+/// menu (evaluation toggles and the entries netcoredbg cannot support) and the settings.
+#[test]
+#[ignore = "Requires a GPU and python3; writes target/snapshots/debugger-views-*.png"]
+fn screens_debugger_views() {
+    use rc_dap::{AdapterCommand, Breakpoints, DebugOptions, DebugSession, DebugTarget, EvalPolicy, LaunchConfig};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../rc-dap/tests/fake_adapter.py");
+    let calc = fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs");
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.settings.debugger_property_evaluation = false;
+        app.settings.roslyn_path = Some("/nonexistent".into());
+        app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+        app.debugger.eval_policy = EvalPolicy { implicit_calls: false, method_calls: true };
+        let mut adapter = AdapterCommand::new("python3", rc_dap::netcoredbg::Origin::Settings);
+        adapter.prefix = vec!["-u".into(), script.display().to_string(), home.path().join("requests.jsonl").display().to_string(), "late".into()];
+        let target = DebugTarget::Launch(LaunchConfig { program: "/usr/bin/dotnet".into(), args: vec!["app.dll".into()], cwd: "/w".into(), env: Vec::new() });
+        let mut session = DebugSession::start(adapter, target, DebugOptions::default(), Breakpoints::new(), Waker::noop());
+        session.set_eval_policy(app.debugger.eval_policy);
+        session.add_watch("x * 10");
+        session.add_watch("order.Customer");
+        app.debugger.session = Some(session);
+        app.debugger.name = "Shop.Cli".into();
+        app.debugger.expanded.insert("s:Locals/order".into());
+        app.open_file(&calc);
+        app.dock.show(crate::toolwindow::ToolWindow::Debug);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Debug, 300.0);
+        let mut h = harness(app, vec2(1200.0, 760.0));
+        run_frames(&mut h, "the stop", |a| {
+            let Some(s) = a.debugger.session.as_ref().filter(|s| s.state().is_stopped()) else { return false };
+            s.watches().iter().all(|w| !matches!(w.value, rc_dap::WatchValue::Evaluating)) && s.scopes(10).is_some_and(|sc| s.variables(sc[0].variables_reference).is_some())
+        });
+        let doc = h.state().docs.active_doc().unwrap().editor.id;
+        h.state_mut().debugger.hover_held = Some((doc, 0, egui::pos2(420.0, 300.0), "order.Customer".into()));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("debugger-views-{suffix}.png"))).unwrap();
+        h.state_mut().debugger.clear_hover();
+        h.get_by_label("order").click_secondary();
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("debugger-views-menu-{suffix}.png"))).unwrap();
+        h.key_press(egui::Key::Escape);
+        h.run_steps(2);
+        if dark {
+            h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(h.state().settings.clone()), page: crate::ui::dialogs::SettingsPage::Tools });
+            h.run_steps(4);
+            let browse = h.get_all_by_label(rc_kit::i18n::tr("Browse…")).next().unwrap().rect().center();
+            h.input_mut().events.push(egui::Event::PointerMoved(browse));
+            h.input_mut().events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, -260.0), phase: egui::TouchPhase::Move, modifiers: egui::Modifiers::NONE });
+            h.run_steps(20);
+            h.render().unwrap().save(out.join("debugger-views-settings-dark.png")).unwrap();
+            h.state_mut().dialog = None;
+        }
+        h.state_mut().debugger.stop();
+        h.run_steps(2);
+    }
+}

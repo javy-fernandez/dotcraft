@@ -1756,7 +1756,17 @@
     "You": "あなた",
     "1 line": "1 行",
     "{count} lines": "{count} 行",
-    "Show code authors in Code Vision": "Code Vision にコード作成者を表示"
+    "Show code authors in Code Vision": "Code Vision にコード作成者を表示",
+    "Evaluation disabled: may have side effects (click to evaluate)": "評価は無効です: 副作用の可能性があります (クリックして評価)",
+    "Allow Property Evaluation and Implicit Function Calls": "プロパティの評価と暗黙的な関数呼び出しを許可",
+    "Allow Method Calls in Watches": "ウォッチでのメソッド呼び出しを許可",
+    "Break When Value Changes": "値が変更されたら中断",
+    "View Memory": "メモリを表示",
+    "netcoredbg, the .NET debugger DotCraft uses, does not support data breakpoints": "DotCraft が使用する .NET デバッガー netcoredbg はデータブレークポイントをサポートしていません",
+    "netcoredbg, the .NET debugger DotCraft uses, cannot read the program's memory": "DotCraft が使用する .NET デバッガー netcoredbg はプログラムのメモリを読み取れません",
+    "Allow property evaluation and other implicit function calls": "プロパティの評価とその他の暗黙的な関数呼び出しを許可する",
+    "Allow method calls in watches": "ウォッチでのメソッド呼び出しを許可する",
+    "When disallowed, hovers, watches and the Variables tree show a link to evaluate instead of values that may run code in the program, since netcoredbg cannot read properties without running their getters.": "許可しない場合、ホバー、ウォッチ、変数ツリーはプログラムのコードを実行する可能性のある値の代わりに評価用のリンクを表示します。netcoredbg はゲッターを実行せずにプロパティを読み取れないためです。"
   },
   "launchprofileeditor": {
     "Add profile": "プロファイルを追加",

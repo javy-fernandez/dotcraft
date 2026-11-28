@@ -287,7 +287,7 @@ impl DotCraftApp {
             docker_runs: crate::docker_runs::DockerRuns::new(waker.clone()),
             continuous: crate::continuous_testing::ContinuousTesting::new(waker.clone()),
             benchmarks: crate::benchmarks::Benchmarks::new(waker.clone()),
-            debugger: crate::debugger::Debugger::new(waker.clone()),
+            debugger: crate::debugger::Debugger::new(waker.clone()).with_policy(crate::debugger::eval_policy(&settings)),
             window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
@@ -1895,6 +1895,7 @@ impl DotCraftApp {
             self.runner.add_godot_project(&root, self.settings.godot_path.as_deref());
         }
         self.editor_config = editor_config(&self.settings);
+        self.debugger.eval_policy = crate::debugger::eval_policy(&self.settings);
         if self.focus_mode == FocusMode::Presentation {
             self.editor_config.font.size = presentation_font_size(self.settings.editor_font_size);
         }

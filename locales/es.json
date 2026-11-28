@@ -1756,7 +1756,17 @@
     "You": "Tú",
     "1 line": "1 línea",
     "{count} lines": "{count} líneas",
-    "Show code authors in Code Vision": "Mostrar autores del código en Code Vision"
+    "Show code authors in Code Vision": "Mostrar autores del código en Code Vision",
+    "Evaluation disabled: may have side effects (click to evaluate)": "Evaluación desactivada: puede tener efectos secundarios (clic para evaluar)",
+    "Allow Property Evaluation and Implicit Function Calls": "Permitir evaluación de propiedades y llamadas implícitas a funciones",
+    "Allow Method Calls in Watches": "Permitir llamadas a métodos en inspecciones",
+    "Break When Value Changes": "Detener cuando cambie el valor",
+    "View Memory": "Ver memoria",
+    "netcoredbg, the .NET debugger DotCraft uses, does not support data breakpoints": "netcoredbg, el depurador de .NET que usa DotCraft, no admite puntos de interrupción de datos",
+    "netcoredbg, the .NET debugger DotCraft uses, cannot read the program's memory": "netcoredbg, el depurador de .NET que usa DotCraft, no puede leer la memoria del programa",
+    "Allow property evaluation and other implicit function calls": "Permitir la evaluación de propiedades y otras llamadas implícitas a funciones",
+    "Allow method calls in watches": "Permitir llamadas a métodos en las inspecciones",
+    "When disallowed, hovers, watches and the Variables tree show a link to evaluate instead of values that may run code in the program, since netcoredbg cannot read properties without running their getters.": "Si no se permite, las ventanas emergentes, las inspecciones y el árbol de variables muestran un enlace para evaluar en lugar de valores que pueden ejecutar código del programa, ya que netcoredbg no puede leer propiedades sin ejecutar sus getters."
   },
   "launchprofileeditor": {
     "Add profile": "Añadir perfil",
