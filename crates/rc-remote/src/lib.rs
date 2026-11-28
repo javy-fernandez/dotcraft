@@ -14,6 +14,8 @@ use std::{
     },
     time::Duration,
 };
+pub mod deploy;
+
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
     process::{Child, Command},
@@ -144,13 +146,12 @@ fn plain_argument(value: &str) -> bool {
 }
 
 impl Endpoint {
-    pub fn command(&self) -> Result<Command> {
-        let cmd = match self {
-            Endpoint::Ssh { host, agent } => {
-                if !plain_argument(host)
-                    || host.chars().any(char::is_whitespace)
-                    || !plain_argument(agent)
-                {
+    /// ssh (with its options and the host) or wsl.exe (with the distribution), ready for the
+    /// remote command.
+    fn launcher(&self) -> Result<Command> {
+        match self {
+            Endpoint::Ssh { host, .. } => {
+                if !plain_argument(host) || host.chars().any(char::is_whitespace) {
                     bail!("invalid SSH host or agent");
                 }
                 let mut cmd = Command::new("ssh");
@@ -169,27 +170,52 @@ impl Endpoint {
                     "ServerAliveCountMax=3",
                     "--",
                     host,
-                    &shell_word(agent),
                 ]);
-                cmd
+                Ok(cmd)
             }
-            Endpoint::Wsl {
-                distribution,
-                agent,
-            } => {
-                if !plain_argument(distribution) || !plain_argument(agent) {
+            Endpoint::Wsl { distribution, .. } => {
+                if !plain_argument(distribution) {
                     bail!("invalid WSL distribution or agent");
                 }
                 let mut cmd = Command::new("wsl.exe");
                 cmd.args(["--distribution", distribution]);
+                Ok(cmd)
+            }
+        }
+    }
+
+    pub fn command(&self) -> Result<Command> {
+        let mut cmd = self.launcher()?;
+        match self {
+            Endpoint::Ssh { agent, .. } => {
+                if !plain_argument(agent) {
+                    bail!("invalid SSH host or agent");
+                }
+                cmd.arg(shell_word(agent));
+            }
+            Endpoint::Wsl { agent, .. } => {
+                if !plain_argument(agent) {
+                    bail!("invalid WSL distribution or agent");
+                }
                 // `--exec` runs the program without a shell, so `~` is never expanded:
                 // start in the home folder and run the rest as a relative path instead.
                 match agent.strip_prefix("~/") {
                     Some(rest) => cmd.args(["--cd", "~", "--exec", &format!("./{rest}")]),
                     None => cmd.args(["--exec", agent]),
                 };
-                cmd
             }
+        }
+        Ok(no_window(cmd))
+    }
+
+    /// Runs a POSIX `sh` script on the remote machine (the agent path is not used): for
+    /// installing the agent. Over SSH the script goes through the user's login shell first,
+    /// quoted as one word.
+    pub fn shell_command(&self, script: &str) -> Result<Command> {
+        let mut cmd = self.launcher()?;
+        match self {
+            Endpoint::Ssh { .. } => cmd.arg(format!("sh -c {}", shell_word(script))),
+            Endpoint::Wsl { .. } => cmd.args(["--exec", "sh", "-c", script]),
         };
         Ok(no_window(cmd))
     }

@@ -239,3 +239,64 @@ async fn local_agent_runs_dotnet_discovery_build_and_test_commands() {
     drop(client);
     assert!(process.wait().await.unwrap().success());
 }
+
+/// The release archive layout (`dotcraft-remote-agent` at the top, as the release workflows
+/// pack it) deploys through the same steps as SSH, starts and answers the handshake.
+#[cfg(unix)]
+#[tokio::test]
+async fn the_deployed_agent_binary_starts_and_answers() {
+    use rc_remote::deploy::{AGENT_FILE, Fetch, LocalShell, Platform, Release, ensure_agent, sha256_hex};
+    struct Files(Vec<(String, Vec<u8>)>);
+    impl Fetch for Files {
+        async fn get(&self, url: &str) -> anyhow::Result<Vec<u8>> {
+            self.0
+                .iter()
+                .find(|(u, _)| u == url)
+                .map(|(_, b)| b.clone())
+                .ok_or_else(|| anyhow::anyhow!("404"))
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let (stage, home) = (dir.path().join("stage"), dir.path().join("home"));
+    std::fs::create_dir_all(&stage).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::copy(env!("CARGO_BIN_EXE_dotcraft-remote-agent"), stage.join(AGENT_FILE)).unwrap();
+    let archive = dir.path().join("agent.tar.gz");
+    let packed = std::process::Command::new("tar")
+        .arg("-czf")
+        .arg(&archive)
+        .arg("-C")
+        .arg(&stage)
+        .arg(AGENT_FILE)
+        .status()
+        .unwrap();
+    assert!(packed.success());
+    let bytes = std::fs::read(&archive).unwrap();
+    let uname = std::process::Command::new("uname").arg("-sm").output().unwrap();
+    let platform = Platform::from_uname(&String::from_utf8_lossy(&uname.stdout)).unwrap();
+    // An address the "remote" cannot download from: DotCraft copies the archive over.
+    let release = Release {
+        version: "0.0.0-test".into(),
+        base_url: format!("file://{}", dir.path().join("nowhere").display()),
+    };
+    let files = Files(vec![
+        (
+            release.checksum_url(platform),
+            format!("{}  {}\n", sha256_hex(&bytes), release.asset(platform)).into_bytes(),
+        ),
+        (release.url(platform), bytes),
+    ]);
+    let shell = LocalShell { home: home.clone(), like_ssh: true };
+    let agent = ensure_agent(&shell, &files, &release, &|_| {}).await.unwrap();
+    let mut process = Command::new(home.join(agent.strip_prefix("~/").unwrap()))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let client = Client::new(process.stdout.take().unwrap(), process.stdin.take().unwrap());
+    client.handshake().await.unwrap();
+    drop(client);
+    assert!(process.wait().await.unwrap().success());
+}
