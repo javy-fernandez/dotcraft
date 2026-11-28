@@ -117,19 +117,24 @@ Unity's cache folders at the project root (`Library`, `Temp`, `Logs`, `MemoryCap
 
 Play mode, building players and debugging are done in the Unity Editor: Unity runs scripts on Mono, which DotCraft's .NET debugger (netcoredbg) cannot attach to.
 
-### Remote development over SSH and WSL (preview)
+### Remote development over SSH and WSL
 
 **File › Open Remote Folder…** opens a folder on another machine over SSH, or inside a WSL distribution. DotCraft talks to a small agent there (`dotcraft-remote-agent`) through your `ssh` client and its configuration (keys, ssh-agent, `~/.ssh/config`, known_hosts) or through `wsl.exe`. It cannot answer password or new host key prompts, so connect once from a terminal first.
 
 The agent installs itself: on connect DotCraft asks the machine for its system (`uname`) and looks for `~/.dotcraft/remote/<version>/`, where `<version>` is DotCraft's own, so app and agent always match. When it is missing, the machine downloads `rc-remote-<version>-<platform>.tar.gz` from the GitHub release with curl or wget; if it cannot reach GitHub, DotCraft downloads the archive and copies it over the connection. Either way the archive must match its published SHA-256 before it is unpacked. Agents exist for Linux x64 and ARM64 (statically linked, any distribution) and macOS. To use another agent, a dev build for instance, choose **Agent › Custom path** in the dialog; the dialog shows how to build one by hand with `cargo install --locked --git https://github.com/javy-fernandez/dotcraft --tag v<version> rc-remote`.
 
+The back end runs on the remote machine, like Rider's: the C# language server (Roslyn) and the debugger (netcoredbg) are installed there the first time, in `~/.dotcraft/remote/roslyn/<version>/` and `~/.dotcraft/remote/netcoredbg/<release>/` (DotCraft downloads them for the remote platform and copies them over; netcoredbg is the release the remote glibc runs), and they work on the remote files with the remote SDK. Everything goes through the one agent connection, which streams process input and output.
+
 With the folder open:
 
-- The Explorer browses the remote folder. Files open in the editor with syntax highlighting, and **File › Save** (⌘S / Ctrl+S) writes them on the remote machine; switching to another file or closing the folder saves your edits too. Files up to 1 MiB.
-- **Build** and **Test** run `dotnet build` and `dotnet test` there, on the open project or solution, and show their output; **Stop** ends the whole process tree on the remote machine.
+- DotCraft copies the folder (without `bin`, `obj`, `.git` and tool caches) to a local mirror, so files open in ordinary editor tabs. A file is fetched again when it opens, and every save goes back to the remote machine; a save that would overwrite a change made there meanwhile is refused.
+- Code insight comes from Roslyn on the remote machine: diagnostics, completion, hover, parameter info, go to declaration (other files, framework sources), find usages, rename across files, quick fixes and formatting.
+- **Build**, **Test** and **SDK Info** run `dotnet` there on the selected project or solution, with the output streamed into a console tab; **Stop** ends the whole process tree on the remote machine. Paths in the output open the files.
+- **Debug** builds the selected project there and debugs it with the remote netcoredbg in the Debug window: breakpoints set in the editor, stepping, the stack, variables, watches and evaluation.
 - **Run** starts `dotnet run` in a terminal tab over SSH or WSL, with live output and input; closing the tab stops it. The Terminal tool window opens shells on the remote machine, in the folder.
+- **Find in Files** searches the local copy; replacements are saved back like edits.
 
-Still local only: Roslyn code intelligence (completion, navigation, diagnostics), debugging, Git, Find in Files and Search Everywhere.
+Not remote yet: Git (use git in a remote terminal), Search Everywhere, run configurations and launch profiles (Debug launches the project's program directly), and files changed on the remote machine are not reloaded until they are opened again. Roslyn needs the .NET 10 runtime on the remote machine.
 
 ## Requirements
 
@@ -137,7 +142,7 @@ Still local only: Roslyn code intelligence (completion, navigation, diagnostics)
 - The [.NET SDK](https://dotnet.microsoft.com/download) 8 or later. DotCraft looks in the default install locations and on `PATH`; another location can be set in **Settings › Tools**.
 - Git on `PATH` for the Git features.
 - For Unity projects, optionally the Unity Editor installed with Unity Hub (to use **Open in Unity Editor**).
-- For remote folders, an OpenSSH client (or WSL on Windows). The remote machine runs Linux (x64 or ARM64) or macOS with the .NET SDK and `tar`; curl or wget and `sha256sum` or `shasum` let it download the agent itself.
+- For remote folders, an OpenSSH client (or WSL on Windows). The remote machine runs Linux (x64 or ARM64) or macOS with the .NET SDK (and the .NET 10 runtime for code insight) and `tar`; curl or wget and `sha256sum` or `shasum` let it download the agent itself.
 - An internet connection the first time you open a C# file or start debugging, unless the language server and netcoredbg are already installed (their paths can be set in **Settings › Tools**).
 
 The interface is available in English, Spanish, German, French, Japanese, Polish, Brazilian Portuguese and Simplified Chinese.

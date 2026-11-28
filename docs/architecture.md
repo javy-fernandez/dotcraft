@@ -51,10 +51,21 @@ or on the shared tokio runtime and reports back through channels that wake the U
   same launcher (`Endpoint::shell_command`): probe `uname -sm` and
   `~/.dotcraft/remote/<version>/`, then install the release asset (downloaded by the remote
   with curl/wget, else fetched here with reqwest and piped over stdin), checked against its
-  `.sha256` and moved into place last. The agent serves list/read/write/run/cancel requests
-  (1 MiB per file or output stream); Run and the Terminal are `ssh -t` / `wsl.exe` sessions in
-  `rc-term`, not agent requests. `deploy::LocalShell` runs the same scripts on this machine
-  for tests. The release workflows publish `rc-remote-<version>-{linux-x64,linux-arm64,
+  `.sha256` and moved into place last. Besides list/read/write/run/cancel, protocol 2 has
+  process streams (`spawn`, `input`, `close_input`; output comes back as `output` answers to the
+  spawn request, ended by `exited`), multiplexed with every other request; `rc_remote::Client::
+  spawn` turns one into tokio `AsyncRead`/`AsyncWrite` pipes. `remote_backend.rs` builds on
+  them: the folder is copied once (a remote `tar`) into an `rc_core::mirror::Mirror` (remote
+  `/a/b` is `<data>/remote/<host>/a/b`), files are fetched on open and pushed back from the
+  mirror's file watcher (refused when the remote file changed since), and Roslyn and
+  netcoredbg are installed under `~/.dotcraft/remote/` and run over streams with
+  `rc_lsp::Client::connect` / `rc_dap::DapClient::connect`, whose message maps
+  (`rc_lsp::remote::UriMap`, `rc_dap::remote::PathMap`) rewrite paths between the mirror and
+  the remote machine. `Insight::start_remote` and `DebugSession::start_with` take those
+  connections; the rest of the editor, insight and debugger code only sees mirror paths.
+  Run and the Terminal are `ssh -t` / `wsl.exe` sessions in `rc-term`. Tests serve the agent
+  in-process (`remote_backend::test_support`) and use `deploy::LocalShell` for the install
+  scripts. The release workflows publish `rc-remote-<version>-{linux-x64,linux-arm64,
   macos-universal}.tar.gz` and their `.sha256`.
 - **Hidden folders.** `rc_core::workspace::is_hidden_in` decides what the explorer, the file
   index, Find in Files and the watcher skip: `HIDDEN_DIRS` everywhere, plus
