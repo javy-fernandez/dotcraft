@@ -527,14 +527,110 @@ fn screens_git() {
     h.render().unwrap().save(out.join("git-dark.png")).unwrap();
     {
         let app = h.state_mut();
-        let (path, text) = (calc.clone(), app.docs.active_doc().unwrap().editor.buffer.rope().to_string());
-        app.vcs.toggle_blame(&path, text, &mut app.docs);
+        app.vcs.toggle_blame(&calc, &mut app.docs);
     }
     run_frames(&mut h, "blame", |a| a.docs.active_doc().unwrap().editor.annotations.is_some());
     h.render().unwrap().save(out.join("blame-dark.png")).unwrap();
     h.state_mut().vcs.open_diff("src/Shop.Core/PriceCalculator.cs");
     run_frames(&mut h, "diff", |a| a.vcs.diff.is_some());
     h.render().unwrap().save(out.join("diff-dark.png")).unwrap();
+}
+
+/// A click (or right-click) at `p`, as kittest input.
+fn click_at(h: &mut Harness<'static, DotCraftApp>, p: egui::Pos2, button: egui::PointerButton) {
+    h.input_mut().events.push(egui::Event::PointerMoved(p));
+    h.run_steps(1);
+    for pressed in [true, false] {
+        h.input_mut().events.push(egui::Event::PointerButton { pos: p, button, pressed, modifiers: egui::Modifiers::NONE });
+        h.run_steps(1);
+    }
+    h.run_steps(3);
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes Git blame captures (gutter menu, annotations, Code Vision authors) to target/snapshots"]
+fn screens_blame() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(repo.path()).unwrap().join("Shop");
+    assert!(std::process::Command::new("cp").args(["-R", fixtures().join("Shop").to_str().unwrap(), root.to_str().unwrap()]).status().unwrap().success());
+    let run = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    run(&["init", "-q", "-b", "main"]);
+    run(&["config", "user.name", "Ada Lovelace"]);
+    run(&["config", "user.email", "ada@example.com"]);
+    run(&["add", "."]);
+    run(&["commit", "-q", "--date", "2026-10-01T09:00:00+0200", "-m", "Initial shop"]);
+    // Grace changes the shipping rule: Calculate and the class get a second author.
+    let calc = root.join("src/Shop.Core/PriceCalculator.cs");
+    let text = std::fs::read_to_string(&calc).unwrap();
+    std::fs::write(&calc, text.replace("taxable >= FreeShippingThreshold ? 0m", "subtotal >= FreeShippingThreshold ? 0m")).unwrap();
+    run(&["-c", "user.name=Grace Hopper", "-c", "user.email=grace@example.com", "commit", "-q", "--date", "2026-11-20T16:30:00+0100", "-am", "Ship free from the subtotal\n\nThe threshold ignores discounts, so coupons never cost free shipping."]);
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root.join("Shop.sln"));
+    app.open_file(&calc);
+    // An unsaved edit in DiscountFor: its label says "You".
+    {
+        let doc = app.docs.active_doc_mut().unwrap();
+        let t = doc.editor.buffer.rope().to_string();
+        let at = doc.editor.buffer.rope().byte_to_char(t.find("return 5m;").unwrap() + "return ".len());
+        doc.editor.replace(at, at + 2, "5.00m");
+    }
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    let authors = |a: &DotCraftApp| a.docs.active_doc().unwrap().editor.code_vision.iter().filter(|v| v.kind == rc_editor::CodeVisionKind::Author).count();
+    run_frames(&mut h, "author labels", |a| authors(a) >= 4 && !a.vcs.log.is_empty());
+    // The class's label, hovered: its authors.
+    h.state_mut().docs.active_doc_mut().unwrap().editor.goto(9, 0);
+    h.run_steps(4);
+    let caret = h.state().caret_screen.unwrap();
+    let row = h.state().editor_config.font.size * 1.32 * h.state().editor_config.font.line_spacing;
+    h.input_mut().events.push(egui::Event::PointerMoved(egui::pos2(caret.x + 24.0, caret.y - row * 1.5)));
+    h.run_steps(60);
+    h.render().unwrap().save(out.join("blame-authors-dark.png")).unwrap();
+
+    // Right-click on a line number: the gutter menu.
+    h.state_mut().docs.active_doc_mut().unwrap().editor.goto(19, 0);
+    h.run_steps(4);
+    let caret = h.state().caret_screen.unwrap();
+    click_at(&mut h, egui::pos2(caret.x - 56.0, caret.y - 6.0), egui::PointerButton::Secondary);
+    let label = rc_kit::i18n::tr("Annotate with Git Blame");
+    h.get_by_label(label);
+    h.render().unwrap().save(out.join("blame-gutter-menu-dark.png")).unwrap();
+    h.get_by_label(label).click();
+    run_frames(&mut h, "annotations", |a| a.docs.active_doc().unwrap().editor.annotations.is_some());
+
+    // Hovering an annotation shows its commit (sweep left from the text to the column).
+    h.state_mut().docs.active_doc_mut().unwrap().editor.goto(29, 0);
+    h.run_steps(4);
+    let caret = h.state().caret_screen.unwrap();
+    let tooltip = egui::Id::new("blame_tooltip");
+    let mut x = caret.x - 60.0;
+    while x > 0.0 && h.ctx.memory(|m| m.area_rect(tooltip)).is_none() {
+        h.input_mut().events.push(egui::Event::PointerMoved(egui::pos2(x, caret.y - 6.0)));
+        h.run_steps(2);
+        x -= 12.0;
+    }
+    assert!(h.ctx.memory(|m| m.area_rect(tooltip)).is_some(), "no blame tooltip");
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("blame-annotations-dark.png")).unwrap();
+    // Right-click on the annotation column: Close Annotations.
+    click_at(&mut h, egui::pos2(x + 12.0, caret.y - 6.0), egui::PointerButton::Secondary);
+    h.get_by_label(rc_kit::i18n::tr("Close Annotations"));
+    h.render().unwrap().save(out.join("blame-annotation-menu-dark.png")).unwrap();
+    h.get_by_label(rc_kit::i18n::tr("Close Annotations")).click();
+    h.run_steps(3);
+    assert!(h.state().docs.active_doc().unwrap().editor.annotations.is_none());
+    // The editor's own menu: Git › Annotate with Git Blame.
+    click_at(&mut h, egui::pos2(caret.x + 300.0, caret.y - 6.0), egui::PointerButton::Secondary);
+    // (The menu's entry, not the Git tool window's stripe button.)
+    h.get_all_by_label(rc_kit::i18n::tr("Git")).find(|n| n.rect().left() > caret.x).unwrap().click();
+    h.run_steps(6);
+    h.get_by_label(rc_kit::i18n::tr("Annotate with Git Blame"));
+    h.render().unwrap().save(out.join("blame-editor-menu-dark.png")).unwrap();
 }
 
 #[test]
