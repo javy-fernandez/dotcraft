@@ -42,6 +42,9 @@ or on the shared tokio runtime and reports back through channels that wake the U
   NUnit / MSTest projects; `TenProjects`: ten libraries in a `.slnx`).
 - **Commits.** One commit per finished task, short one-line English messages, capitalized
   (e.g. "Add TRX parser"), no attribution trailers. Code comments in English too.
+- **Blame.** `vcs_blame.rs` blames the editor's text (`git blame --contents -`) once per text
+  version and HEAD, for the annotation column and Code Vision's author labels (declaration
+  ranges from tree-sitter, so they work before Roslyn is ready).
 - **Hidden folders.** `rc_core::workspace::is_hidden_in` decides what the explorer, the file
   index, Find in Files and the watcher skip: `HIDDEN_DIRS` everywhere, plus
   `rc_core::unity::GENERATED_DIRS` only directly below a Unity project root (`Assets` and

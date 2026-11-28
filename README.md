@@ -76,6 +76,8 @@ The debugger uses [netcoredbg](https://github.com/Samsung/netcoredbg) (MIT), dow
 
 ### Git
 
+Right-click the line numbers (or use **Git › Annotate with Git Blame**) to show who last changed each line; hover an annotation for its commit, click it to find the commit in the Git log, and right-click the column to close it. Code Vision shows the last author of each C# declaration, with "+N" when others changed it too (**Settings › Editor › Show code authors in Code Vision**).
+
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/diff-dark.png" alt="Side-by-side diff of a changed file"></td>
