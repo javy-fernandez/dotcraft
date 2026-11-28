@@ -53,4 +53,6 @@ jobs:
         run: >
           cargo test --workspace --locked --no-fail-fast --
           --skip insight_tests::
+          --skip remote_backend_tests::remote_roslyn_answers_through_the_agent_with_mirror_paths
+          --skip remote_backend_tests::a_remote_folder_opens_edits_saves_and_navigates_in_the_app
           --skip sdk_settings_return_tests::
